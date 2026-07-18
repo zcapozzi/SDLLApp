@@ -12,12 +12,7 @@ main_bp = Blueprint('main', __name__)
 @main_bp.route('/health')
 def health():
     """Health check endpoint for Railway/load balancers."""
-    try:
-        # Quick database check
-        db.session.execute(db.text('SELECT 1'))
-        return jsonify({'status': 'healthy', 'database': 'connected'}), 200
-    except Exception as e:
-        return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+    return jsonify({'status': 'healthy'}), 200
 
 
 @main_bp.route('/')
