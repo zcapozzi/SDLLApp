@@ -5,7 +5,12 @@
       "Bash(grep:*)",
       "Bash(dir /a \"C:\\\\Users\\\\zcapo\\\\Documents\\\\workspace\\\\claude\\\\SDLLApp\")",
       "Bash(gh repo view:*)",
-      "Bash(gh auth status:*)"
+      "Bash(gh auth status:*)",
+      "Bash(gh repo create:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(openssl rand:*)"
     ]
   }
 }
