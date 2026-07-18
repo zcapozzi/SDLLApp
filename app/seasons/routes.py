@@ -800,6 +800,16 @@ def manage_leagues(year, is_spring):
             LeagueSeason.ensure_leagues_for_season(year, is_spring, league_names)
             flash(f'Synced {len(league_names)} leagues', 'success')
 
+        elif action == 'toggle_active':
+            league_id = int(request.form.get('league_id'))
+            config = LeagueSeason.query.get(league_id)
+            if config and config.year == year and config.is_spring == is_spring:
+                config.active = 0 if config.active else 1
+                db.session.commit()
+                status = 'enabled' if config.active else 'disabled'
+                logger.info(f'{config.league} {status} for {season_name}')
+                flash(f'{config.league} {status} for this season', 'success')
+
         # Redirect with anchor to scroll back to the league row (for game generation actions)
         redirect_url = url_for('seasons.manage_leagues', year=year, is_spring=is_spring)
         if action in ('generate_regular_games', 'generate_playoff_games', 'clear_regular_games', 'clear_playoff_games', 'generate_bracket') and 'league_id' in request.form:
@@ -812,8 +822,14 @@ def manage_leagues(year, is_spring):
     league_names = set(t.league for t in teams if t.league)
     LeagueSeason.ensure_leagues_for_season(year, is_spring, league_names)
 
-    # Get all league configs
-    league_configs = LeagueSeason.get_by_season(year, is_spring)
+    # Get all league configs (including inactive ones for this view)
+    league_configs = LeagueSeason.query.filter_by(
+        year=year,
+        is_spring=is_spring
+    ).order_by(LeagueSeason.league).all()
+
+    # Get League objects to access spring/fall names
+    all_leagues = {l.display_name: l for l in League.get_all_active()}
 
     # Count regular teams and placeholders per league
     teams_by_league = {}
@@ -836,6 +852,7 @@ def manage_leagues(year, is_spring):
         is_spring=is_spring,
         season_name=season_name,
         league_configs=league_configs,
+        all_leagues=all_leagues,
         teams_by_league=teams_by_league,
         placeholders_by_league=placeholders_by_league,
         games_by_league=games_by_league,

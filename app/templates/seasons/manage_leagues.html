@@ -31,6 +31,7 @@
         <thead>
             <tr>
                 <th>League</th>
+                <th style="width: 60px; text-align: center;">Active</th>
                 <th style="width: 60px; text-align: center;">Teams</th>
                 <th style="width: 80px; text-align: center;">Games/Team</th>
                 <th style="width: 120px; text-align: center;">Games Created</th>
@@ -44,8 +45,28 @@
             {% set game_counts = games_by_league.get(config.league, {}) %}
             {% set regular_count = game_counts.get('regular', 0) %}
             {% set playoff_count = game_counts.get('playoff', 0) %}
-            <tr>
-                <td><strong>{{ config.league }}</strong></td>
+            {% set league_obj = all_leagues.get(config.league) %}
+            <tr style="{% if not config.active %}opacity: 0.5; background: #f8f8f8;{% endif %}">
+                <td>
+                    <strong>{{ config.league }}</strong>
+                    {% if league_obj and league_obj.fall_display_name and not is_spring %}
+                    <br><span class="text-muted" style="font-size: 0.85em;">Fall: {{ league_obj.fall_display_name }}</span>
+                    {% elif league_obj and league_obj.fall_display_name and is_spring %}
+                    <br><span class="text-muted" style="font-size: 0.85em;">Fall name: {{ league_obj.fall_display_name }}</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: center;">
+                    <form method="POST" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="toggle_active">
+                        <input type="hidden" name="league_id" value="{{ config.ID }}">
+                        <button type="submit" class="btn btn-sm {% if config.active %}btn-primary{% else %}btn-outline{% endif %}"
+                                style="padding: 2px 8px; min-width: 50px;"
+                                title="{% if config.active %}Click to disable this league for the season{% else %}Click to enable this league for the season{% endif %}">
+                            {% if config.active %}On{% else %}Off{% endif %}
+                        </button>
+                    </form>
+                </td>
                 <td style="text-align: center;">{{ teams_by_league.get(config.league, 0) }}</td>
                 <td style="text-align: center;">{{ config.regular_season_games or 10 }}</td>
                 <td style="text-align: center;">
@@ -84,11 +105,13 @@
 </div>
 
 <!-- Game Generation Section -->
-{% if league_configs %}
+{% set active_configs = league_configs | selectattr('active') | list %}
+{% if active_configs %}
 <div class="card" style="margin-top: 20px;">
     <h3 style="margin-bottom: 15px;">Generate Game Slots</h3>
     <p class="text-muted" style="margin-bottom: 20px;">
         Generate empty game slots that can then be scheduled into field allocations.
+        <em>(Only showing active leagues)</em>
     </p>
 
     <table>
@@ -102,7 +125,7 @@
             </tr>
         </thead>
         <tbody>
-            {% for config in league_configs %}
+            {% for config in active_configs %}
             {% set team_count = teams_by_league.get(config.league, 0) %}
             {% set game_counts = games_by_league.get(config.league, {}) %}
             {% set regular_count = game_counts.get('regular', 0) %}
@@ -174,6 +197,7 @@
     <h3 style="margin-bottom: 15px;">Seed Placeholders</h3>
     <p class="text-muted" style="margin-bottom: 20px;">
         Generate seed placeholders before creating playoff games.
+        <em>(Only showing active leagues)</em>
     </p>
     <table>
         <thead>
@@ -185,7 +209,7 @@
             </tr>
         </thead>
         <tbody>
-            {% for config in league_configs %}
+            {% for config in active_configs %}
             {% set placeholder_count = placeholders_by_league.get(config.league, 0) %}
             <tr>
                 <td><strong>{{ config.league }}</strong></td>
