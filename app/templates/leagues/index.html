@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Leagues{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Leagues</h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('leagues.pitch_types') }}" class="btn btn-outline">Pitch Types</a>
+        <a href="{{ url_for('leagues.seasonal_names') }}" class="btn btn-outline">Seasonal Names</a>
+        <a href="{{ url_for('leagues.time_restrictions') }}" class="btn btn-primary">Time Restrictions</a>
+    </div>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Spring Name</th>
+                <th>Fall Name</th>
+                <th>Pitch Type</th>
+                <th>Time Restrictions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for league in leagues %}
+            <tr>
+                <td><strong>{{ league.display_name }}</strong></td>
+                <td>
+                    {% if league.fall_display_name %}
+                    <strong>{{ league.fall_display_name }}</strong>
+                    {% else %}
+                    <span class="text-muted">(same)</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if league.pitch_type == 'tee_ball' %}
+                    <span class="badge" style="background: #9b59b6; color: white;">Tee Ball</span>
+                    {% elif league.pitch_type == 'machine_pitch' %}
+                    <span class="badge" style="background: #3498db; color: white;">Machine Pitch</span>
+                    {% else %}
+                    <span class="badge" style="background: rgb(34, 139, 34); color: white;">Kid Pitch</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if league.earliest_start_time or league.latest_start_time %}
+                    <span class="badge" style="background: #e67e22; color: white;">{{ league.time_restriction_display }}</span>
+                    {% else %}
+                    <span class="text-muted">Any time</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Field Restrictions{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Field League Restrictions</h1>
+    <div>
+        <a href="{{ url_for('fields.index') }}" class="btn btn-outline">All Fields</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <p class="text-muted">
+        Configure which leagues can use each field. This helps with scheduling by preventing games from being assigned to incompatible fields.
+    </p>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Field</th>
+                <th style="width: 120px;">Ownership</th>
+                <th style="width: 300px;">League Restriction</th>
+                <th style="width: 120px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for field in fields %}
+            <tr id="field-{{ field.ID }}">
+                <td><strong>{{ field.location_title }}</strong></td>
+                <td>
+                    {% if field.derived_ownership == 'sdll' %}
+                    <span class="badge" style="background: rgb(34, 139, 34); color: white;">SDLL</span>
+                    {% elif field.derived_ownership == 'away' %}
+                    <span class="badge badge-fall">Away</span>
+                    {% elif field.derived_ownership == 'mixed' %}
+                    <span class="badge" style="background: #9b59b6; color: white;">Mixed</span>
+                    {% else %}
+                    <span class="text-muted">No slots</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if field.restriction_type == 'anyone' %}
+                    <span class="text-muted">Anyone</span>
+                    {% elif field.restriction_type == 'exclude' %}
+                    <span class="badge" style="background: #e74c3c; color: white;">Exclude:</span>
+                    {{ field.restricted_leagues_list | join(', ') }}
+                    {% elif field.restriction_type == 'only' %}
+                    <span class="badge" style="background: #3498db; color: white;">Only:</span>
+                    {{ field.restricted_leagues_list | join(', ') }}
+                    {% endif %}
+                </td>
+                <td>
+                    <button type="button" class="btn btn-outline btn-sm"
+                            onclick="editRestriction({{ field.ID }}, '{{ field.location_title }}', '{{ field.restriction_type }}', {{ field.restricted_leagues_list | tojson }})">
+                        Edit
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Edit Restriction Modal -->
+<div id="edit-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+     background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+    <div class="card" style="max-width: 500px; margin: auto; max-height: 80vh; overflow-y: auto;">
+        <h3 style="margin-bottom: 20px;">Edit Field Restrictions</h3>
+        <p class="text-muted" style="margin-bottom: 15px;">
+            Field: <strong id="modal-field-name"></strong>
+        </p>
+        <form method="POST" id="edit-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="field_id" id="edit-field-id">
+
+            <div class="form-group">
+                <label for="restriction_type">Restriction Type</label>
+                <select id="restriction_type" name="restriction_type" class="form-control" required
+                        onchange="toggleLeagueSelect()">
+                    <option value="anyone">Anyone - No restrictions</option>
+                    <option value="exclude">Anyone EXCEPT these leagues</option>
+                    <option value="only">ONLY these leagues</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="leagues-container" style="display: none;">
+                <label>Select Leagues</label>
+                <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 10px;">
+                    {% for league in leagues %}
+                    <label style="display: block; margin-bottom: 8px; cursor: pointer;">
+                        <input type="checkbox" name="restricted_leagues" value="{{ league.display_name }}"
+                               style="margin-right: 8px;">
+                        {{ league.display_name }}
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function editRestriction(fieldId, fieldName, restrictionType, restrictedLeagues) {
+    document.getElementById('edit-field-id').value = fieldId;
+    document.getElementById('modal-field-name').textContent = fieldName;
+    document.getElementById('restriction_type').value = restrictionType;
+
+    // Clear all checkboxes first
+    var checkboxes = document.querySelectorAll('input[name="restricted_leagues"]');
+    checkboxes.forEach(function(cb) {
+        cb.checked = false;
+    });
+
+    // Check the appropriate ones
+    if (restrictedLeagues && restrictedLeagues.length > 0) {
+        restrictedLeagues.forEach(function(league) {
+            checkboxes.forEach(function(cb) {
+                if (cb.value === league) {
+                    cb.checked = true;
+                }
+            });
+        });
+    }
+
+    toggleLeagueSelect();
+    document.getElementById('edit-modal').style.display = 'flex';
+}
+
+function toggleLeagueSelect() {
+    var type = document.getElementById('restriction_type').value;
+    var container = document.getElementById('leagues-container');
+    container.style.display = (type === 'anyone') ? 'none' : 'block';
+}
+
+function closeModal() {
+    document.getElementById('edit-modal').style.display = 'none';
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeModal();
+});
+</script>
+{% endblock %}

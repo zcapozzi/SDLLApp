@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}Reset Season - {{ season_name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>
+        <span class="badge badge-{{ 'spring' if is_spring else 'fall' }}">{{ season_name }}</span>
+        Reset Season Data
+    </h1>
+    <div>
+        <a href="{{ url_for('seasons.view', year=year, is_spring=is_spring) }}" class="btn btn-outline">Back to Season</a>
+    </div>
+</div>
+
+<!-- Current Data Summary -->
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-bottom: 15px;">Current Data</h3>
+    <table>
+        <tbody>
+            <tr>
+                <td style="width: 200px;"><strong>Teams</strong></td>
+                <td>{{ counts.teams }} regular teams</td>
+            </tr>
+            <tr>
+                <td><strong>Playoff Placeholders</strong></td>
+                <td>{{ counts.placeholders }} placeholders (seeds, bracket positions)</td>
+            </tr>
+            <tr>
+                <td><strong>Games</strong></td>
+                <td>{{ counts.games }} games scheduled</td>
+            </tr>
+            <tr>
+                <td><strong>Field Slots</strong></td>
+                <td>{{ counts.slots }} field allocations</td>
+            </tr>
+            <tr>
+                <td><strong>League Configs</strong></td>
+                <td>{{ counts.league_configs }} league settings</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Delete Options -->
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-bottom: 15px;">Delete Options</h3>
+    <p class="text-muted" style="margin-bottom: 20px;">
+        Choose what to delete. Some options cascade to related data.
+    </p>
+
+    <div style="display: flex; flex-direction: column; gap: 15px;">
+
+        <!-- Delete Games Only -->
+        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong>Delete Games Only</strong>
+                    <p class="text-muted" style="margin: 5px 0 0 0; font-size: 0.9em;">
+                        Removes {{ counts.games }} scheduled games. Teams and field slots remain.
+                    </p>
+                </div>
+                <button type="button" class="btn btn-outline"
+                        onclick="confirmDelete('delete_games', 'Delete {{ counts.games }} games?', false)"
+                        {% if counts.games == 0 %}disabled{% endif %}>
+                    Delete Games
+                </button>
+            </div>
+        </div>
+
+        <!-- Delete Field Slots Only -->
+        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong>Delete Field Slots Only</strong>
+                    <p class="text-muted" style="margin: 5px 0 0 0; font-size: 0.9em;">
+                        Removes {{ counts.slots }} field allocations. Teams and games remain.
+                    </p>
+                </div>
+                <button type="button" class="btn btn-outline"
+                        onclick="confirmDelete('delete_slots', 'Delete {{ counts.slots }} field slots?', false)"
+                        {% if counts.slots == 0 %}disabled{% endif %}>
+                    Delete Slots
+                </button>
+            </div>
+        </div>
+
+        <!-- Delete Playoff Placeholders Only -->
+        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong>Delete Playoff Placeholders Only</strong>
+                    <p class="text-muted" style="margin: 5px 0 0 0; font-size: 0.9em;">
+                        Removes {{ counts.placeholders }} seed/bracket placeholders. Regular teams remain.
+                    </p>
+                </div>
+                <button type="button" class="btn btn-outline"
+                        onclick="confirmDelete('delete_placeholders', 'Delete {{ counts.placeholders }} playoff placeholders?', false)"
+                        {% if counts.placeholders == 0 %}disabled{% endif %}>
+                    Delete Placeholders
+                </button>
+            </div>
+        </div>
+
+        <!-- Delete Teams (Cascades) -->
+        <div style="border: 1px solid #e74c3c; border-radius: 8px; padding: 15px; background: #fdf2f2;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong style="color: #c0392b;">Delete All Teams</strong>
+                    <p class="text-muted" style="margin: 5px 0 0 0; font-size: 0.9em;">
+                        <span style="color: #e74c3c;">Cascades:</span> Also deletes {{ counts.games }} games (teams are required for games).<br>
+                        Removes {{ counts.teams }} teams + {{ counts.placeholders }} placeholders. Field slots and league configs remain.
+                    </p>
+                </div>
+                <button type="button" class="btn" style="background: #e74c3c; color: white;"
+                        onclick="confirmDelete('delete_teams', 'Delete {{ counts.teams }} teams, {{ counts.placeholders }} placeholders, and {{ counts.games }} games?', true)"
+                        {% if counts.teams == 0 and counts.placeholders == 0 %}disabled{% endif %}>
+                    Delete Teams
+                </button>
+            </div>
+        </div>
+
+        <!-- Delete Entire Season -->
+        <div style="border: 2px solid #c0392b; border-radius: 8px; padding: 15px; background: #f9e6e6;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong style="color: #c0392b;">Delete Entire Season</strong>
+                    <p class="text-muted" style="margin: 5px 0 0 0; font-size: 0.9em;">
+                        <span style="color: #e74c3c;">Removes everything:</span> {{ counts.teams }} teams, {{ counts.placeholders }} placeholders,
+                        {{ counts.games }} games, {{ counts.slots }} field slots, {{ counts.league_configs }} league configs.<br>
+                        The season will no longer appear in lists.
+                    </p>
+                </div>
+                <button type="button" class="btn" style="background: #c0392b; color: white;"
+                        onclick="confirmDelete('delete_season', 'DELETE ENTIRE SEASON {{ season_name }}? This removes all teams, games, slots, and settings.', true)">
+                    Delete Season
+                </button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Hard Delete Option -->
+<div class="card">
+    <h3 style="margin-bottom: 15px;">Delete Mode</h3>
+    <p class="text-muted">
+        By default, deletions are "soft" (records marked inactive but recoverable via database).
+        Check the box below for permanent deletion.
+    </p>
+    <label style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+        <input type="checkbox" id="hard-delete-checkbox">
+        <span><strong>Permanent delete</strong> - Records cannot be recovered</span>
+    </label>
+</div>
+
+<!-- Confirmation Modal -->
+<div id="confirm-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+     background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+    <div class="card" style="max-width: 450px; margin: auto;">
+        <h3 style="margin-bottom: 15px; color: #c0392b;">Confirm Deletion</h3>
+        <p id="confirm-message" style="margin-bottom: 20px;"></p>
+        <p id="hard-delete-warning" style="color: #e74c3c; display: none; margin-bottom: 15px;">
+            <strong>Permanent delete is enabled.</strong> This cannot be undone.
+        </p>
+        <form method="POST" id="delete-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" id="delete-action">
+            <input type="hidden" name="hard_delete" id="hard-delete-input" value="no">
+            <div style="display: flex; gap: 10px;">
+                <button type="submit" class="btn" style="background: #c0392b; color: white;">Yes, Delete</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function confirmDelete(action, message, isDangerous) {
+    document.getElementById('delete-action').value = action;
+    document.getElementById('confirm-message').textContent = message;
+
+    var hardDelete = document.getElementById('hard-delete-checkbox').checked;
+    document.getElementById('hard-delete-input').value = hardDelete ? 'yes' : 'no';
+    document.getElementById('hard-delete-warning').style.display = hardDelete ? 'block' : 'none';
+
+    document.getElementById('confirm-modal').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('confirm-modal').style.display = 'none';
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeModal();
+});
+</script>
+{% endblock %}

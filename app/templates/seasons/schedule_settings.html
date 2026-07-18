@@ -1,0 +1,352 @@
+{% extends "base.html" %}
+
+{% block title %}Schedule Settings - {{ season_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .day-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+    }
+    .day-cell {
+        text-align: center;
+        padding: 8px 4px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        border: 2px solid transparent;
+        transition: all 0.15s;
+    }
+    .day-cell.empty {
+        background: #f5f5f5;
+        color: #999;
+    }
+    .day-cell.practice {
+        background: #3498db;
+        color: white;
+    }
+    .day-cell.game {
+        background: rgb(34, 139, 34);
+        color: white;
+    }
+    .day-cell:hover {
+        border-color: #333;
+    }
+    .day-header {
+        text-align: center;
+        font-weight: bold;
+        padding: 4px;
+        font-size: 11px;
+        color: white;
+    }
+    .day-header.weekend {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 3px;
+    }
+    .day-cell.weekend-col {
+        box-shadow: inset 0 0 0 1px rgba(255, 140, 0, 0.3);
+    }
+    .day-cell.weekend-col.empty {
+        background: #fff5e6;
+    }
+    .status-ready {
+        color: rgb(34, 139, 34);
+    }
+    .status-missing {
+        color: #e74c3c;
+    }
+    .legend {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+    }
+    .legend-box {
+        width: 16px;
+        height: 16px;
+        border-radius: 3px;
+    }
+    .dirty-indicator {
+        display: none;
+        width: 8px;
+        height: 8px;
+        background: #e67e22;
+        border-radius: 50%;
+        margin-left: 5px;
+    }
+    tr.dirty .dirty-indicator {
+        display: inline-block;
+    }
+    tr.dirty {
+        background: #fffbf0;
+    }
+    .save-bar {
+        position: sticky;
+        bottom: 0;
+        background: white;
+        padding: 15px 20px;
+        border-top: 2px solid rgb(34, 139, 34);
+        display: none;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    }
+    .save-bar.visible {
+        display: flex;
+    }
+    .save-bar .changes-count {
+        color: #666;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Schedule Settings - {{ season_name }}</h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('seasons.manage_leagues', year=year, is_spring=is_spring) }}" class="btn btn-outline">League Settings</a>
+        <a href="{{ url_for('seasons.view', year=year, is_spring=is_spring) }}" class="btn btn-outline">View Season</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <p class="text-muted">
+        Configure practice and game days for each league, plus set the first practice date and opening day.
+        Click days to cycle through: <strong>-</strong> (none) → <strong>P</strong> (practice) → <strong>G</strong> (game).
+        Changes are saved when you click <strong>Save Changes</strong>.
+    </p>
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-box" style="background: #f5f5f5; border: 1px solid #ddd;"></div>
+            <span>No Activity</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-box" style="background: #3498db;"></div>
+            <span>Practice</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-box" style="background: rgb(34, 139, 34);"></div>
+            <span>Game</span>
+        </div>
+        <div class="legend-item" style="margin-left: 20px;">
+            <div class="legend-box" style="background: #e67e22; width: 8px; height: 8px; border-radius: 50%;"></div>
+            <span>Unsaved changes</span>
+        </div>
+    </div>
+</div>
+
+<form method="POST" id="settings-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="bulk_update">
+
+    <div class="card">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 180px;">League</th>
+                    <th style="width: 280px;">
+                        <div class="day-grid">
+                            {% for abbrev in day_abbrevs %}
+                            <div class="day-header {{ 'weekend' if loop.index0 >= 5 else '' }}">{{ abbrev }}</div>
+                            {% endfor %}
+                        </div>
+                    </th>
+                    <th style="width: 140px;">First Practice</th>
+                    <th style="width: 140px;">Opening Day</th>
+                    <th style="width: 120px;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for config in league_configs %}
+                <tr id="league-{{ config.ID }}" data-league-id="{{ config.ID }}">
+                    <td>
+                        <strong>{{ config.league }}</strong>
+                        <span class="dirty-indicator" title="Unsaved changes"></span>
+                    </td>
+                    <td>
+                        <div class="day-grid">
+                            {% for i in range(7) %}
+                            {% set day_type = config.day_types[i] %}
+                            {% set is_weekend = i >= 5 %}
+                            <div class="day-cell {{ day_type or 'empty' }}{{ ' weekend-col' if is_weekend else '' }}"
+                                 onclick="cycleDay({{ config.ID }}, {{ i }}, this)"
+                                 data-day="{{ i }}"
+                                 data-type="{{ day_type or '' }}"
+                                 data-original="{{ day_type or '' }}">
+                                {% if day_type == 'practice' %}P{% elif day_type == 'game' %}G{% else %}-{% endif %}
+                            </div>
+                            <input type="hidden" name="league_{{ config.ID }}_day_{{ i }}"
+                                   id="day-{{ config.ID }}-{{ i }}"
+                                   value="{{ day_type or '' }}">
+                            {% endfor %}
+                        </div>
+                    </td>
+                    <td>
+                        <input type="date" name="league_{{ config.ID }}_first_practice"
+                               value="{{ config.first_practice_date.strftime('%Y-%m-%d') if config.first_practice_date else '' }}"
+                               data-original="{{ config.first_practice_date.strftime('%Y-%m-%d') if config.first_practice_date else '' }}"
+                               style="width: 130px; font-size: 12px;"
+                               onchange="markDirty({{ config.ID }})">
+                    </td>
+                    <td>
+                        <input type="date" name="league_{{ config.ID }}_opening_day"
+                               value="{{ config.opening_day_date.strftime('%Y-%m-%d') if config.opening_day_date else '' }}"
+                               data-original="{{ config.opening_day_date.strftime('%Y-%m-%d') if config.opening_day_date else '' }}"
+                               style="width: 130px; font-size: 12px;"
+                               onchange="markDirty({{ config.ID }})">
+                    </td>
+                    <td>
+                        {% if config.schedule_ready %}
+                        <span class="status-ready">Ready</span>
+                        {% else %}
+                        <span class="status-missing text-small">{{ config.schedule_status }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="save-bar" id="save-bar">
+        <span class="changes-count"><span id="changes-count">0</span> league(s) with unsaved changes</span>
+        <div style="display: flex; gap: 10px;">
+            <button type="button" class="btn btn-outline" onclick="resetChanges()">Reset</button>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+    </div>
+</form>
+
+<script>
+var dirtyLeagues = new Set();
+
+function cycleDay(configId, dayIndex, element) {
+    var currentType = element.dataset.type;
+    var newType, newLabel, newClass;
+
+    // Cycle: empty -> practice -> game -> empty
+    if (currentType === '' || currentType === null) {
+        newType = 'practice';
+        newLabel = 'P';
+        newClass = 'practice';
+    } else if (currentType === 'practice') {
+        newType = 'game';
+        newLabel = 'G';
+        newClass = 'game';
+    } else {
+        newType = '';
+        newLabel = '-';
+        newClass = 'empty';
+    }
+
+    // Update visual (preserve weekend-col class if present)
+    var isWeekend = element.classList.contains('weekend-col');
+    element.dataset.type = newType;
+    element.textContent = newLabel;
+    element.className = 'day-cell ' + newClass + (isWeekend ? ' weekend-col' : '');
+
+    // Update hidden input
+    document.getElementById('day-' + configId + '-' + dayIndex).value = newType;
+
+    // Mark as dirty
+    markDirty(configId);
+}
+
+function markDirty(configId) {
+    var row = document.getElementById('league-' + configId);
+    row.classList.add('dirty');
+    dirtyLeagues.add(configId);
+    updateSaveBar();
+}
+
+function updateSaveBar() {
+    var saveBar = document.getElementById('save-bar');
+    var countSpan = document.getElementById('changes-count');
+
+    if (dirtyLeagues.size > 0) {
+        saveBar.classList.add('visible');
+        countSpan.textContent = dirtyLeagues.size;
+    } else {
+        saveBar.classList.remove('visible');
+    }
+}
+
+function resetChanges() {
+    // Reset all day cells to original values
+    document.querySelectorAll('.day-cell').forEach(function(cell) {
+        var original = cell.dataset.original;
+        var configId = cell.closest('tr').dataset.leagueId;
+        var dayIndex = cell.dataset.day;
+        var isWeekend = cell.classList.contains('weekend-col');
+        var weekendClass = isWeekend ? ' weekend-col' : '';
+
+        cell.dataset.type = original;
+        if (original === 'practice') {
+            cell.textContent = 'P';
+            cell.className = 'day-cell practice' + weekendClass;
+        } else if (original === 'game') {
+            cell.textContent = 'G';
+            cell.className = 'day-cell game' + weekendClass;
+        } else {
+            cell.textContent = '-';
+            cell.className = 'day-cell empty' + weekendClass;
+        }
+
+        document.getElementById('day-' + configId + '-' + dayIndex).value = original;
+    });
+
+    // Reset date inputs
+    document.querySelectorAll('input[type="date"]').forEach(function(input) {
+        input.value = input.dataset.original;
+    });
+
+    // Clear dirty state
+    document.querySelectorAll('tr.dirty').forEach(function(row) {
+        row.classList.remove('dirty');
+    });
+
+    dirtyLeagues.clear();
+    updateSaveBar();
+}
+
+// Validate and submit form
+document.getElementById('settings-form').addEventListener('submit', function(e) {
+    // Validate: first practice cannot be after opening day
+    var errors = [];
+    document.querySelectorAll('tr[data-league-id]').forEach(function(row) {
+        var leagueId = row.dataset.leagueId;
+        var leagueName = row.querySelector('td strong').textContent;
+        var firstPractice = row.querySelector('input[name="league_' + leagueId + '_first_practice"]').value;
+        var openingDay = row.querySelector('input[name="league_' + leagueId + '_opening_day"]').value;
+
+        if (firstPractice && openingDay && firstPractice > openingDay) {
+            errors.push(leagueName + ': First practice cannot be after opening day');
+        }
+    });
+
+    if (errors.length > 0) {
+        e.preventDefault();
+        alert('Validation errors:\n\n' + errors.join('\n'));
+        return false;
+    }
+
+    // Clear dirty state (so beforeunload doesn't fire)
+    dirtyLeagues.clear();
+});
+
+// Warn before leaving with unsaved changes
+window.addEventListener('beforeunload', function(e) {
+    if (dirtyLeagues.size > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
+</script>
+{% endblock %}

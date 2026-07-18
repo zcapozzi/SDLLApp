@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Schedule Settings{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 30px;">Schedule Settings</h1>
+
+<div class="card">
+    <p style="margin-bottom: 20px;">Select a season to configure practice days, game days, first practice date, and opening day for each league.</p>
+
+    {% if seasons %}
+    <table>
+        <thead>
+            <tr>
+                <th>Season</th>
+                <th>Teams</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for season in seasons %}
+            <tr>
+                <td>
+                    <span class="badge badge-{{ 'spring' if season.is_spring else 'fall' }}">
+                        {{ season.name }}
+                    </span>
+                </td>
+                <td>{{ season.team_count }} teams</td>
+                <td style="text-align: right;">
+                    <a href="{{ url_for('seasons.schedule_settings', year=season.year, is_spring=season.is_spring) }}"
+                       class="btn btn-primary btn-sm">Configure</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #666;">No seasons found. Create a season first.</p>
+    {% endif %}
+</div>
+{% endblock %}

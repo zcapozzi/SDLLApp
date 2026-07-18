@@ -1,0 +1,7 @@
+{
+    "default": "ON",
+    "auth": "ON",
+    "seasons": "ON",
+    "games": "ON",
+    "notifications": "EXTREME"
+}

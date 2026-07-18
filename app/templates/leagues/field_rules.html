@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}League Field Rules{% endblock %}
+
+{% block extra_css %}
+<style>
+    .league-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        background: white;
+    }
+    .league-card h3 {
+        margin-top: 0;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid rgb(34, 139, 34);
+    }
+    .field-section {
+        margin-bottom: 20px;
+    }
+    .field-section h4 {
+        margin: 0 0 10px 0;
+        font-size: 14px;
+        color: #666;
+    }
+    .field-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 8px;
+    }
+    .field-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        background: #f8f8f8;
+        border-radius: 4px;
+        font-size: 13px;
+    }
+    .field-checkbox:hover {
+        background: #f0f0f0;
+    }
+    .field-checkbox input[type="checkbox"] {
+        margin: 0;
+    }
+    .field-checkbox.selected {
+        background: rgba(34, 139, 34, 0.1);
+        border: 1px solid rgba(34, 139, 34, 0.3);
+    }
+    .current-rules {
+        font-size: 13px;
+        color: #666;
+        margin-top: 5px;
+    }
+    .current-rules strong {
+        color: #333;
+    }
+    .section-help {
+        font-size: 12px;
+        color: #888;
+        margin-bottom: 10px;
+    }
+    .btn-row {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 20px;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+    }
+    .preference-list {
+        min-height: 40px;
+        border: 2px dashed #ddd;
+        border-radius: 4px;
+        padding: 10px;
+        background: #fafafa;
+    }
+    .preference-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        background: rgb(34, 139, 34);
+        color: white;
+        border-radius: 4px;
+        font-size: 12px;
+        margin: 2px;
+    }
+    .preference-item .rank {
+        background: rgba(255,255,255,0.3);
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-weight: bold;
+    }
+    .preference-item .remove {
+        cursor: pointer;
+        margin-left: 5px;
+        opacity: 0.8;
+    }
+    .preference-item .remove:hover {
+        opacity: 1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>League Field Rules</h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('leagues.time_restrictions') }}" class="btn btn-outline">Time Restrictions</a>
+        <a href="{{ url_for('fields.index') }}" class="btn btn-outline">All Fields</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <p class="text-muted" style="margin: 0;">
+        Configure where each league can play <strong>games</strong> and <strong>practices</strong>.
+        Leave sections empty to allow any field. These rules are used by the schedule generator.
+    </p>
+</div>
+
+{% for league in leagues %}
+<div class="league-card" id="league-{{ league.ID }}">
+    <h3>{{ league.display_name }}</h3>
+
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="league_id" value="{{ league.ID }}">
+
+        <!-- Game Fields -->
+        <div class="field-section">
+            <h4>Allowed Game Fields</h4>
+            <p class="section-help">Which fields can this league play games at? Leave all unchecked for "any field".</p>
+            <div class="current-rules">
+                Current: <strong>{{ league.game_fields_display }}</strong>
+            </div>
+            <div class="field-grid" style="margin-top: 10px;">
+                {% for field in fields %}
+                {% if field %}
+                <label class="field-checkbox {{ 'selected' if field.ID in league.allowed_game_field_ids else '' }}">
+                    <input type="checkbox" name="game_fields" value="{{ field.ID }}"
+                           {{ 'checked' if field.ID in league.allowed_game_field_ids else '' }}
+                           onchange="this.parentElement.classList.toggle('selected', this.checked)">
+                    {{ field.location_title }}
+                </label>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Practice Fields -->
+        <div class="field-section">
+            <h4>Allowed Practice Fields</h4>
+            <p class="section-help">Which fields can this league practice at? Leave all unchecked for "any field".</p>
+            <div class="current-rules">
+                Current: <strong>{{ league.practice_fields_display }}</strong>
+            </div>
+            <div class="field-grid" style="margin-top: 10px;">
+                {% for field in fields %}
+                {% if field %}
+                <label class="field-checkbox {{ 'selected' if field.ID in league.allowed_practice_field_ids else '' }}">
+                    <input type="checkbox" name="practice_fields" value="{{ field.ID }}"
+                           {{ 'checked' if field.ID in league.allowed_practice_field_ids else '' }}
+                           onchange="this.parentElement.classList.toggle('selected', this.checked)">
+                    {{ field.location_title }}
+                </label>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Preferred Fields (for optimization) -->
+        <div class="field-section">
+            <h4>Preferred Fields (in order)</h4>
+            <p class="section-help">
+                Select fields in order of preference. The scheduler will try to use preferred fields first.
+                Hold Ctrl/Cmd to select multiple in order.
+            </p>
+            <div class="current-rules">
+                Current:
+                <strong>
+                    {% if league.preferred_field_ids %}
+                        {% for field in fields %}
+                            {% if field and field.ID in league.preferred_field_ids %}
+                                {{ loop.index }}. {{ field.location_title }}{% if not loop.last %}, {% endif %}
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        No preferences
+                    {% endif %}
+                </strong>
+            </div>
+            <select name="preferred_fields" multiple size="5" style="width: 100%; margin-top: 10px;">
+                {% for field in fields %}
+                {% if field %}
+                <option value="{{ field.ID }}" {{ 'selected' if field.ID in league.preferred_field_ids else '' }}>
+                    {{ field.location_title }}
+                </option>
+                {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="btn-row">
+            <button type="submit" class="btn btn-primary">Save Rules for {{ league.display_name }}</button>
+        </div>
+    </form>
+</div>
+{% endfor %}
+{% endblock %}

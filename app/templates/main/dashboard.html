@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 30px;">Welcome, {{ current_user.name or 'User' }}</h1>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+    <!-- Upcoming Games Card -->
+    <div class="card dashboard-card">
+        <h2 style="color: rgb(34, 139, 34); margin-bottom: 20px;">Upcoming Games</h2>
+        {% if upcoming_games %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>League</th>
+                        <th>Location</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for game in upcoming_games[:5] %}
+                    <tr>
+                        <td>{{ game.game_date.strftime('%b %d, %H:%M') if game.game_date else 'TBD' }}</td>
+                        <td>{{ game.league }}</td>
+                        <td>{{ game.location }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if upcoming_games|length > 5 %}
+            <p style="text-align: center; margin-top: 15px;">
+                <a href="{{ url_for('games.upcoming') }}" class="btn btn-secondary">
+                    View All {{ upcoming_games|length }} Games
+                </a>
+            </p>
+            {% endif %}
+        {% else %}
+            <p style="color: #666;">No upcoming games scheduled.</p>
+        {% endif %}
+    </div>
+
+    <!-- Seasons Overview Card -->
+    <div class="card dashboard-card accent">
+        <h2 style="color: rgb(255, 140, 0); margin-bottom: 20px;">Seasons</h2>
+        {% if seasons %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Season</th>
+                        <th>Teams</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for season in seasons[:5] %}
+                    <tr>
+                        <td>
+                            <span class="badge badge-{{ 'spring' if season.is_spring else 'fall' }}">
+                                {{ season.name }}
+                            </span>
+                        </td>
+                        <td>{{ season.team_count }}</td>
+                        <td>
+                            <a href="{{ url_for('seasons.view', year=season.year, is_spring=season.is_spring) }}">
+                                View
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <p style="text-align: center; margin-top: 15px;">
+                <a href="{{ url_for('seasons.index') }}" class="btn btn-primary">
+                    All Seasons
+                </a>
+                {% if current_user.can_edit_schedule() %}
+                <a href="{{ url_for('seasons.copy_wizard') }}" class="btn btn-secondary">
+                    Copy Season
+                </a>
+                {% endif %}
+            </p>
+        {% else %}
+            <p style="color: #666;">No seasons found.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Quick Actions -->
+{% if current_user.can_edit_schedule() or current_user.can_manage_umpires() %}
+<div class="card" style="margin-top: 20px;">
+    <h2 style="margin-bottom: 20px;">Quick Actions</h2>
+    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+        {% if current_user.can_edit_schedule() %}
+        <a href="{{ url_for('seasons.copy_wizard') }}" class="btn btn-primary">Copy Season</a>
+        {% endif %}
+        <a href="{{ url_for('games.index') }}" class="btn btn-secondary">Browse Games</a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

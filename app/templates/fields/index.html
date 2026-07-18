@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Fields{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Fields</h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('fields.properties') }}" class="btn btn-outline">Field Properties</a>
+        <a href="{{ url_for('fields.allocations') }}" class="btn btn-primary">Field Allocations</a>
+    </div>
+</div>
+
+{% if current_user.can_edit_schedule() %}
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-top: 0; margin-bottom: 15px;">Add Field</h3>
+    <form method="POST" style="display: flex; gap: 10px; align-items: flex-end;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add_field">
+        <div class="form-group" style="margin-bottom: 0; flex: 1;">
+            <label for="field_name">Field Name</label>
+            <input type="text" id="field_name" name="field_name" class="form-control"
+                   placeholder="e.g., Pearsontown" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Add Field</button>
+    </form>
+</div>
+{% endif %}
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Field Name</th>
+                <th>Usage</th>
+                <th>Practice Capacity</th>
+                <th>Ownership</th>
+                {% if current_user.can_edit_schedule() %}
+                <th style="width: 80px;"></th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for field in fields %}
+            {% if field %}
+            <tr>
+                <td><strong>{{ field.location_title }}</strong></td>
+                <td>
+                    <span class="text-small">{{ field.usage_type_display if field.usage_type else 'Games & Practices' }}</span>
+                </td>
+                <td>
+                    <span class="text-small">{{ field.capacity_display if field.practice_capacity else '1 team' }}</span>
+                </td>
+                <td>
+                    {% if current_user.can_edit_schedule() %}
+                    <form method="POST" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="toggle_ownership">
+                        <input type="hidden" name="field_id" value="{{ field.ID }}">
+                        <button type="submit" class="btn btn-sm" style="min-width: 70px; {{ 'background: rgb(34, 139, 34); color: white;' if field.is_owned else 'background: #eee; color: #666;' }}">
+                            {{ 'SDLL' if field.is_owned else 'Away' }}
+                        </button>
+                    </form>
+                    {% else %}
+                        {% if field.is_owned %}
+                            <span style="color: rgb(34, 139, 34);">SDLL</span>
+                        {% else %}
+                            <span style="color: #999;">Away</span>
+                        {% endif %}
+                    {% endif %}
+                </td>
+                {% if current_user.can_edit_schedule() %}
+                <td style="text-align: right;">
+                    <form method="POST" style="display: inline;"
+                          onsubmit="return confirm('Delete {{ field.location_title }}?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="delete_field">
+                        <input type="hidden" name="field_id" value="{{ field.ID }}">
+                        <button type="submit" class="btn btn-sm" style="background: #dc3545; color: white;">X</button>
+                    </form>
+                </td>
+                {% endif %}
+            </tr>
+            {% endif %}
+            {% else %}
+            <tr>
+                <td colspan="{{ 5 if current_user.can_edit_schedule() else 4 }}" style="text-align: center; color: #666;">
+                    No fields found.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

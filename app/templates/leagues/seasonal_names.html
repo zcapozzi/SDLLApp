@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}League Seasonal Names{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>League Seasonal Names</h1>
+    <div>
+        <a href="{{ url_for('leagues.index') }}" class="btn btn-outline">All Leagues</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <p class="text-muted">
+        Some leagues have different names in Spring vs Fall (e.g., BB AAA becomes BB Grapefruit in Fall).
+        Set the Fall name here; leave blank if the name is the same in both seasons.
+    </p>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Spring Name</th>
+                <th style="width: 200px;">Fall Name</th>
+                <th style="width: 100px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for league in leagues %}
+            <tr id="league-{{ league.ID }}">
+                <td><strong>{{ league.display_name }}</strong></td>
+                <td>
+                    {% if league.fall_display_name %}
+                    <span class="badge badge-fall">{{ league.fall_display_name }}</span>
+                    {% else %}
+                    <span class="text-muted">(same as Spring)</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <button type="button" class="btn btn-outline btn-sm"
+                            onclick="editName({{ league.ID }}, '{{ league.display_name }}', '{{ league.fall_display_name or '' }}')">
+                        Edit
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Edit Name Modal -->
+<div id="edit-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+     background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+    <div class="card" style="max-width: 450px; margin: auto;">
+        <h3 style="margin-bottom: 20px;">Edit Fall Name</h3>
+        <p class="text-muted" style="margin-bottom: 15px;">
+            Spring Name: <strong id="modal-spring-name"></strong>
+        </p>
+        <form method="POST" id="edit-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="league_id" id="edit-league-id">
+
+            <div class="form-group">
+                <label for="fall_display_name">Fall Name</label>
+                <input type="text" id="fall_display_name" name="fall_display_name" class="form-control"
+                       placeholder="Leave blank if same as Spring">
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+                <button type="button" class="btn btn-outline" style="margin-left: auto;"
+                        onclick="clearFallName()">Clear</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function editName(leagueId, springName, fallName) {
+    document.getElementById('edit-league-id').value = leagueId;
+    document.getElementById('modal-spring-name').textContent = springName;
+    document.getElementById('fall_display_name').value = fallName;
+    document.getElementById('edit-modal').style.display = 'flex';
+}
+
+function clearFallName() {
+    document.getElementById('fall_display_name').value = '';
+}
+
+function closeModal() {
+    document.getElementById('edit-modal').style.display = 'none';
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeModal();
+});
+</script>
+{% endblock %}

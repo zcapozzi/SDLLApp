@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Schedule Generator - {{ season_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .prereq-status {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        text-align: center;
+        line-height: 20px;
+        font-size: 12px;
+        margin-right: 8px;
+    }
+    .prereq-ok {
+        background-color: rgb(34, 139, 34);
+        color: white;
+    }
+    .prereq-missing {
+        background-color: #dc3545;
+        color: white;
+    }
+    .prereq-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .prereq-list li {
+        padding: 8px 0;
+        border-bottom: 1px solid #eee;
+    }
+    .prereq-list li:last-child {
+        border-bottom: none;
+    }
+    .league-card {
+        border-left: 4px solid #ddd;
+        padding-left: 15px;
+        margin-bottom: 20px;
+    }
+    .league-card.ready {
+        border-left-color: rgb(34, 139, 34);
+    }
+    .league-card.not-ready {
+        border-left-color: #dc3545;
+    }
+    .prereq-detail {
+        color: #666;
+        font-size: 13px;
+        margin-left: 28px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Schedule Generator</h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('seasons.view', year=year, is_spring=is_spring) }}" class="btn btn-outline">Back to Season</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <h2 style="margin-top: 0;">{{ season_name }}</h2>
+    <p class="text-muted">
+        The schedule generator creates practices, scrimmages, and games based on your league settings,
+        field allocations, and team rosters.
+    </p>
+</div>
+
+<!-- Prerequisites by League -->
+<div class="card">
+    <h3 style="margin-top: 0;">Prerequisites by League</h3>
+    <p class="text-muted text-small">All prerequisites must be met before generating a schedule.</p>
+
+    {% for config in league_configs %}
+    {% set prereqs = prerequisites.get(config.league, {}) %}
+    <div class="league-card {{ 'ready' if prereqs.ready else 'not-ready' }}">
+        <h4 style="margin-top: 0; margin-bottom: 10px;">
+            {{ config.league }}
+            {% if prereqs.ready %}
+                <span class="badge badge-spring" style="font-size: 11px;">Ready</span>
+            {% else %}
+                <span class="badge" style="background: #dc3545; color: white; font-size: 11px;">Not Ready</span>
+            {% endif %}
+        </h4>
+
+        <ul class="prereq-list">
+            <li>
+                <span class="prereq-status {{ 'prereq-ok' if prereqs.has_teams else 'prereq-missing' }}">
+                    {{ '&#10003;' if prereqs.has_teams else '!' }}
+                </span>
+                Teams ({{ prereqs.team_count or 0 }} teams)
+                {% if not prereqs.has_teams %}
+                <div class="prereq-detail">Need at least 2 teams. <a href="{{ url_for('seasons.manage_teams', year=year, is_spring=is_spring) }}">Add teams</a></div>
+                {% endif %}
+            </li>
+            <li>
+                <span class="prereq-status {{ 'prereq-ok' if prereqs.has_slots else 'prereq-missing' }}">
+                    {{ '&#10003;' if prereqs.has_slots else '!' }}
+                </span>
+                Field Slots ({{ prereqs.slot_count or 0 }} slots)
+                {% if not prereqs.has_slots %}
+                <div class="prereq-detail">No field allocations. <a href="{{ url_for('fields.manage_allocations', year=year, is_spring=is_spring) }}">Create allocations</a></div>
+                {% endif %}
+            </li>
+            <li>
+                <span class="prereq-status {{ 'prereq-ok' if prereqs.has_dates else 'prereq-missing' }}">
+                    {{ '&#10003;' if prereqs.has_dates else '!' }}
+                </span>
+                Key Dates
+                {% if prereqs.has_dates %}
+                <div class="prereq-detail">
+                    First Practice: {{ prereqs.first_practice.strftime('%b %d, %Y') if prereqs.first_practice else 'Not set' }} |
+                    Opening Day: {{ prereqs.opening_day.strftime('%b %d, %Y') if prereqs.opening_day else 'Not set' }}
+                </div>
+                {% else %}
+                <div class="prereq-detail">Set first practice and opening day. <a href="{{ url_for('seasons.schedule_settings', year=year, is_spring=is_spring) }}">Schedule Settings</a></div>
+                {% endif %}
+            </li>
+            <li>
+                <span class="prereq-status {{ 'prereq-ok' if prereqs.has_days else 'prereq-missing' }}">
+                    {{ '&#10003;' if prereqs.has_days else '!' }}
+                </span>
+                Practice/Game Days
+                {% if prereqs.has_days %}
+                <div class="prereq-detail">
+                    Practice: {{ prereqs.practice_days or 'None' }} |
+                    Games: {{ prereqs.game_days or 'None' }}
+                </div>
+                {% else %}
+                <div class="prereq-detail">Configure practice and game days. <a href="{{ url_for('seasons.schedule_settings', year=year, is_spring=is_spring) }}">Schedule Settings</a></div>
+                {% endif %}
+            </li>
+        </ul>
+    </div>
+    {% else %}
+    <p class="text-muted">No leagues configured for this season.</p>
+    {% endfor %}
+</div>
+
+<!-- Generate Button -->
+<div class="card">
+    <h3 style="margin-top: 0;">Generate Schedule</h3>
+
+    {% set any_ready = prerequisites.values() | selectattr('ready') | list | length > 0 %}
+
+    {% if has_proposal %}
+    <div style="background: rgba(255, 140, 0, 0.1); padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+        <strong>You have an unsaved proposed schedule.</strong>
+        <a href="{{ url_for('scheduler.review', year=year, is_spring=is_spring) }}">Review it</a> or generate a new one.
+    </div>
+    {% endif %}
+
+    {% if any_ready %}
+    <form method="POST" action="{{ url_for('scheduler.generate', year=year, is_spring=is_spring) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <p class="text-muted text-small">
+            Click below to generate a proposed schedule. You'll be able to review and edit it before saving.
+        </p>
+
+        <button type="submit" class="btn btn-primary">Generate Proposed Schedule</button>
+
+        {% if has_proposal %}
+        <a href="{{ url_for('scheduler.clear', year=year, is_spring=is_spring) }}"
+           class="btn btn-outline"
+           onclick="return confirm('Clear the current proposal?');"
+           style="margin-left: 10px;">Clear Proposal</a>
+        {% endif %}
+    </form>
+    {% else %}
+    <p class="text-muted">
+        No leagues are ready for schedule generation. Please complete the prerequisites above.
+    </p>
+    {% endif %}
+</div>
+
+<!-- Validate Existing Schedule -->
+<div class="card">
+    <h3 style="margin-top: 0;">Validate Existing Schedule</h3>
+    <p class="text-muted text-small">
+        Check the current schedule for rule violations. Useful after manual edits or rainout rescheduling.
+    </p>
+    <form method="POST" action="{{ url_for('scheduler.validate_existing', year=year, is_spring=is_spring) }}" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline">Validate Current Schedule</button>
+    </form>
+</div>
+{% endblock %}

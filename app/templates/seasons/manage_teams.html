@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Teams - {{ season_name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>
+        <span class="badge badge-{{ 'spring' if is_spring else 'fall' }}">{{ season_name }}</span>
+        Teams
+    </h1>
+    <div>
+        <a href="{{ url_for('seasons.view', year=year, is_spring=is_spring) }}" class="btn btn-outline">View Season</a>
+        <a href="{{ url_for('seasons.setup') }}" class="btn btn-secondary">Back to Setup</a>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 350px 1fr; gap: 30px;">
+    <!-- Add Teams Panel -->
+    <div>
+        <!-- Add Multiple Teams (Primary action) -->
+        <div class="card">
+            <h3 style="margin-bottom: 15px;">Add Teams to League</h3>
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="add_multiple">
+
+                <div class="form-group">
+                    <label for="league_multi">League</label>
+                    <select id="league_multi" name="league" class="form-control" required>
+                        {% for league in leagues %}
+                        <option value="{{ league.display_name }}">{{ league.display_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="team_count">Number of Teams</label>
+                    <input type="number" id="team_count" name="team_count" class="form-control"
+                           value="4" min="1" max="20" required>
+                </div>
+
+                <p class="text-muted text-small">
+                    Creates placeholder teams (e.g., "BB Majors Team 1").
+                    Names are assigned later when coaches are set.
+                </p>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Add Teams</button>
+            </form>
+        </div>
+
+        <!-- Add Placeholder Team -->
+        <div class="card" style="margin-top: 20px;">
+            <h3 style="margin-bottom: 15px;">Add Playoff Placeholder</h3>
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="add_team">
+                <input type="hidden" name="is_placeholder" value="1">
+
+                <div class="form-group">
+                    <label for="league">League</label>
+                    <select id="league" name="league" class="form-control" required>
+                        {% for league in leagues %}
+                        <option value="{{ league.display_name }}">{{ league.display_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="display_name">Placeholder Name</label>
+                    <input type="text" id="display_name" name="display_name" class="form-control"
+                           placeholder="e.g., Seed 1, Winner Game 3" required>
+                </div>
+
+                <button type="submit" class="btn btn-secondary" style="width: 100%;">Add Placeholder</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Current Teams -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2>Current Teams ({{ team_count }})</h2>
+        </div>
+
+        {% if teams_by_league %}
+            {% for league, teams in teams_by_league.items() %}
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: rgb(34, 139, 34); border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">
+                    {{ league }} ({{ teams|length }})
+                </h3>
+                <table style="margin-top: 10px;">
+                    <thead>
+                        <tr>
+                            <th>Placeholder</th>
+                            <th>Team Name</th>
+                            <th style="width: 100px;">Status</th>
+                            <th style="width: 220px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for team in teams %}
+                        <tr>
+                            <td style="color: #666;">{{ team.display_name }}</td>
+                            <td>
+                                {% if team.team_name %}
+                                <strong style="color: rgb(34, 139, 34);">{{ team.team_name }}</strong>
+                                {% else %}
+                                <span class="text-muted">Not set</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if team.is_placeholder %}
+                                <span class="badge" style="background: #eee; color: #666;">Playoff</span>
+                                {% elif team.team_name %}
+                                <span class="badge badge-spring">Named</span>
+                                {% else %}
+                                <span class="badge" style="background: #fff3cd; color: #856404;">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-outline btn-sm"
+                                        onclick="setTeamName({{ team.team_ID }}, '{{ team.team_name or '' }}', '{{ team.display_name }}')">
+                                    Set Name
+                                </button>
+                                <form method="POST" style="display: inline;"
+                                      onsubmit="return confirm('Remove this team?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="action" value="delete_team">
+                                    <input type="hidden" name="team_id" value="{{ team.team_ID }}">
+                                    <button type="submit" class="btn btn-sm"
+                                            style="background: #c33; color: white;">Remove</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endfor %}
+        {% else %}
+        <p class="text-muted" style="text-align: center; padding: 40px;">
+            No teams yet. Add teams using the forms on the left.
+        </p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Set Team Name Modal -->
+<div id="name-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+     background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+    <div class="card" style="max-width: 400px; margin: auto;">
+        <h3 style="margin-bottom: 20px;">Set Team Name</h3>
+        <p class="text-muted text-small" style="margin-bottom: 15px;">
+            Placeholder: <strong id="modal-placeholder"></strong>
+        </p>
+        <form method="POST" id="name-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="set_team_name">
+            <input type="hidden" name="team_id" id="name-team-id">
+
+            <div class="form-group">
+                <label for="team_name">Team Name</label>
+                <input type="text" id="team_name" name="team_name" class="form-control"
+                       placeholder="e.g., Thunderbolts, Blue Jays">
+                <p class="text-muted text-small" style="margin-top: 5px;">
+                    Leave blank to show placeholder name.
+                </p>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="button" class="btn btn-outline" onclick="closeNameModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function setTeamName(teamId, currentName, placeholder) {
+    document.getElementById('name-team-id').value = teamId;
+    document.getElementById('team_name').value = currentName;
+    document.getElementById('modal-placeholder').textContent = placeholder;
+    document.getElementById('name-modal').style.display = 'flex';
+}
+
+function closeNameModal() {
+    document.getElementById('name-modal').style.display = 'none';
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeNameModal();
+});
+</script>
+{% endblock %}

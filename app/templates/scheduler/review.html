@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+
+{% block title %}Review Schedule - {{ season_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    .summary-item {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 4px;
+        text-align: center;
+    }
+    .summary-item .number {
+        font-size: 28px;
+        font-weight: 700;
+        color: rgb(34, 139, 34);
+    }
+    .summary-item .label {
+        font-size: 13px;
+        color: #666;
+    }
+    .summary-item.warning .number {
+        color: rgb(255, 140, 0);
+    }
+    .summary-item.error .number {
+        color: #dc3545;
+    }
+
+    .violation-card {
+        border-left: 4px solid #dc3545;
+        padding: 10px 15px;
+        margin-bottom: 10px;
+        background: rgba(220, 53, 69, 0.05);
+    }
+    .violation-card.soft {
+        border-left-color: rgb(255, 140, 0);
+        background: rgba(255, 140, 0, 0.05);
+    }
+    .violation-code {
+        font-weight: 700;
+        font-size: 13px;
+    }
+    .violation-name {
+        font-size: 12px;
+        color: #666;
+    }
+
+    .warning-card {
+        border-left: 4px solid rgb(255, 140, 0);
+        padding: 10px 15px;
+        margin-bottom: 10px;
+        background: rgba(255, 140, 0, 0.05);
+    }
+
+    .filter-bar {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .filter-bar select {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .view-toggle {
+        display: inline-flex;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .view-toggle a {
+        padding: 8px 16px;
+        text-decoration: none;
+        color: #333;
+        background: #fff;
+        border-right: 1px solid #ddd;
+    }
+    .view-toggle a:last-child {
+        border-right: none;
+    }
+    .view-toggle a:hover {
+        background: #f5f5f5;
+    }
+    .view-toggle a.active {
+        background: rgb(34, 139, 34);
+        color: white;
+    }
+
+    .date-header {
+        background: rgb(34, 139, 34);
+        color: white;
+        padding: 10px 15px;
+        margin-top: 20px;
+        margin-bottom: 0;
+        border-radius: 4px 4px 0 0;
+    }
+    .date-games {
+        border: 1px solid #ddd;
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        margin-bottom: 15px;
+    }
+    .game-row {
+        padding: 10px 15px;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+    .game-row:last-child {
+        border-bottom: none;
+    }
+    .game-row:hover {
+        background: rgba(34, 139, 34, 0.05);
+    }
+
+    .game-type-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: uppercase;
+        min-width: 70px;
+        text-align: center;
+    }
+    .game-type-badge.regular { background: #e8f5e9; color: #2e7d32; }
+    .game-type-badge.practice { background: #f3e5f5; color: #7b1fa2; }
+    .game-type-badge.scrimmage { background: #e3f2fd; color: #1565c0; }
+
+    .game-time {
+        min-width: 80px;
+        font-weight: 500;
+    }
+    .game-teams {
+        flex: 1;
+    }
+    .game-field {
+        color: #666;
+        font-size: 13px;
+        min-width: 120px;
+    }
+    .game-league {
+        color: #666;
+        font-size: 12px;
+        min-width: 80px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Review Proposed Schedule</h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('scheduler.index', year=year, is_spring=is_spring) }}" class="btn btn-outline">Back</a>
+    </div>
+</div>
+
+<!-- Summary -->
+<div class="card">
+    <h3 style="margin-top: 0;">{{ season_name }} - Summary</h3>
+    <div class="summary-grid">
+        <div class="summary-item">
+            <div class="number">{{ summary.total_games }}</div>
+            <div class="label">Games</div>
+        </div>
+        <div class="summary-item">
+            <div class="number">{{ summary.total_practices }}</div>
+            <div class="label">Practices</div>
+        </div>
+        <div class="summary-item">
+            <div class="number">{{ summary.total_scrimmages }}</div>
+            <div class="label">Scrimmages</div>
+        </div>
+        <div class="summary-item {{ 'error' if summary.hard_violations > 0 else '' }}">
+            <div class="number">{{ summary.hard_violations }}</div>
+            <div class="label">Hard Violations</div>
+        </div>
+        <div class="summary-item {{ 'warning' if summary.soft_violations > 0 else '' }}">
+            <div class="number">{{ summary.soft_violations }}</div>
+            <div class="label">Soft Violations</div>
+        </div>
+    </div>
+</div>
+
+<!-- Violations -->
+{% if violations %}
+<div class="card">
+    <h3 style="margin-top: 0;">Rule Violations</h3>
+    {% for v in violations %}
+    <div class="violation-card {{ 'soft' if v.severity == 'soft' else '' }}">
+        <span class="violation-code">[{{ v.rule_code }}]</span>
+        <span class="violation-name">{{ v.rule_name }}</span>
+        <div style="margin-top: 5px;">{{ v.message }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Warnings -->
+{% if warnings %}
+<div class="card">
+    <h3 style="margin-top: 0;">Warnings</h3>
+    {% for w in warnings %}
+    <div class="warning-card">
+        {{ w.message }}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Filters -->
+<div class="card">
+    <div class="filter-bar">
+        <div class="view-toggle">
+            <a href="{{ url_for('scheduler.review', year=year, is_spring=is_spring, view='calendar', league=filter_league, type=filter_type) }}"
+               class="{{ 'active' if view_mode == 'calendar' else '' }}">Calendar</a>
+            <a href="{{ url_for('scheduler.review', year=year, is_spring=is_spring, view='list', league=filter_league, type=filter_type) }}"
+               class="{{ 'active' if view_mode == 'list' else '' }}">List</a>
+        </div>
+
+        <form method="GET" style="display: flex; gap: 10px; align-items: center;">
+            <input type="hidden" name="view" value="{{ view_mode }}">
+            <select name="league" onchange="this.form.submit()">
+                <option value="">All Leagues</option>
+                {% for league in leagues %}
+                <option value="{{ league }}" {{ 'selected' if filter_league == league else '' }}>{{ league }}</option>
+                {% endfor %}
+            </select>
+            <select name="type" onchange="this.form.submit()">
+                <option value="">All Types</option>
+                <option value="games" {{ 'selected' if filter_type == 'games' else '' }}>Games Only</option>
+                <option value="practices" {{ 'selected' if filter_type == 'practices' else '' }}>Practices Only</option>
+                <option value="scrimmages" {{ 'selected' if filter_type == 'scrimmages' else '' }}>Scrimmages Only</option>
+            </select>
+        </form>
+
+        <span class="text-muted text-small">Showing {{ games | length }} items</span>
+    </div>
+</div>
+
+<!-- Schedule Display -->
+{% if view_mode == 'calendar' %}
+<!-- Calendar View (grouped by date) -->
+<div class="card">
+    {% for date_str, day_games in games_by_date | dictsort %}
+    {% set date_obj = day_games[0].game_date[:10] %}
+    <div class="date-header">
+        {{ date_str }}
+    </div>
+    <div class="date-games">
+        {% for game in day_games | sort(attribute='game_date') %}
+        <div class="game-row">
+            <span class="game-type-badge {{ game.game_type }}">{{ game.game_type }}</span>
+            <span class="game-time">
+                {% if game.game_date %}
+                {{ game.game_date[11:16] }}
+                {% endif %}
+            </span>
+            <span class="game-teams">
+                {% if game.game_type == 'practice' %}
+                    <strong>{{ game.home_team_name or 'TBD' }}</strong>
+                {% else %}
+                    <strong>{{ game.home_team_name or 'TBD' }}</strong> vs {{ game.away_team_name or 'TBD' }}
+                {% endif %}
+            </span>
+            <span class="game-field">{{ game.field_name or 'TBD' }}</span>
+            <span class="game-league">{{ game.league }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted">No games match your filters.</p>
+    {% endfor %}
+</div>
+
+{% else %}
+<!-- List View -->
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Type</th>
+                <th>League</th>
+                <th>Home</th>
+                <th>Away</th>
+                <th>Field</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in games | sort(attribute='game_date') %}
+            <tr>
+                <td>{{ game.game_date[:10] if game.game_date else 'TBD' }}</td>
+                <td>{{ game.game_date[11:16] if game.game_date else '' }}</td>
+                <td><span class="game-type-badge {{ game.game_type }}">{{ game.game_type }}</span></td>
+                <td>{{ game.league }}</td>
+                <td>{{ game.home_team_name or 'TBD' }}</td>
+                <td>{{ game.away_team_name or '-' }}</td>
+                <td>{{ game.field_name or 'TBD' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7" class="text-muted" style="text-align: center;">No games match your filters.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Action Buttons -->
+<div class="card" style="display: flex; gap: 15px; align-items: center;">
+    {% if summary.hard_violations == 0 %}
+    <form method="POST" action="{{ url_for('scheduler.save', year=year, is_spring=is_spring) }}" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-primary" onclick="return confirm('Save this schedule? This will create {{ games | length }} games/practices.');">
+            Save Schedule
+        </button>
+    </form>
+    {% else %}
+    <form method="POST" action="{{ url_for('scheduler.save', year=year, is_spring=is_spring) }}" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="force_save" value="1">
+        <button type="submit" class="btn btn-secondary" onclick="return confirm('WARNING: There are {{ summary.hard_violations }} hard rule violations. Save anyway?');">
+            Force Save ({{ summary.hard_violations }} violations)
+        </button>
+    </form>
+    {% endif %}
+
+    <a href="{{ url_for('scheduler.generate', year=year, is_spring=is_spring) }}"
+       class="btn btn-outline"
+       onclick="return confirm('Regenerate? This will discard the current proposal.');">
+        Regenerate
+    </a>
+
+    <form method="POST" action="{{ url_for('scheduler.clear', year=year, is_spring=is_spring) }}" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline" onclick="return confirm('Discard this proposal?');">
+            Discard
+        </button>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Season Setup{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 30px;">Season Setup</h1>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+    <!-- Create New Season -->
+    <div class="card">
+        <h2 style="color: rgb(34, 139, 34); margin-bottom: 20px;">Create New Season</h2>
+        <p class="text-muted text-small" style="margin-bottom: 20px;">
+            Start a new season from scratch, then add teams manually.
+        </p>
+
+        <form method="POST" action="{{ url_for('seasons.setup') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="create_season">
+
+            <div class="form-group">
+                <label for="year">Year</label>
+                <input type="number" id="year" name="year" class="form-control"
+                       value="2026" min="2020" max="2030" required>
+            </div>
+
+            <div class="form-group">
+                <label for="is_spring">Season</label>
+                <select id="is_spring" name="is_spring" class="form-control" required>
+                    <option value="0">Fall</option>
+                    <option value="1">Spring</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Create Season</button>
+        </form>
+    </div>
+
+    <!-- Copy Existing Season -->
+    <div class="card">
+        <h2 style="color: rgb(255, 140, 0); margin-bottom: 20px;">Copy Existing Season</h2>
+        <p class="text-muted text-small" style="margin-bottom: 20px;">
+            Copy teams (and optionally games) from a previous season.
+        </p>
+
+        <a href="{{ url_for('seasons.copy_wizard') }}" class="btn btn-secondary">
+            Open Copy Wizard
+        </a>
+    </div>
+</div>
+
+<!-- Existing Seasons -->
+<div class="card" style="margin-top: 30px;">
+    <h2 style="margin-bottom: 20px;">Existing Seasons</h2>
+
+    {% if seasons %}
+    <table>
+        <thead>
+            <tr>
+                <th>Season</th>
+                <th>Teams</th>
+                <th>Games</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for season in seasons %}
+            <tr>
+                <td>
+                    <span class="badge badge-{{ 'spring' if season.is_spring else 'fall' }}">
+                        {{ season.name }}
+                    </span>
+                </td>
+                <td>{{ season.team_count }}</td>
+                <td>{{ season.game_count }}</td>
+                <td>
+                    <a href="{{ url_for('seasons.view', year=season.year, is_spring=season.is_spring) }}"
+                       class="btn btn-outline btn-sm">View</a>
+                    <a href="{{ url_for('seasons.manage_teams', year=season.year, is_spring=season.is_spring) }}"
+                       class="btn btn-primary btn-sm">Manage Teams</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted">No seasons found. Create your first season above.</p>
+    {% endif %}
+</div>
+
+<!-- Quick Reference: Leagues -->
+<div class="card" style="margin-top: 30px;">
+    <h2 style="margin-bottom: 20px;">Available Leagues</h2>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+        {% for league in leagues %}
+        <span class="badge" style="background-color: #eee; color: #333;">
+            {{ league.display_name }}
+        </span>
+        {% else %}
+        <p class="text-muted">No leagues configured.</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

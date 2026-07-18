@@ -1,0 +1,119 @@
+
+div.vertical-fill{ height: 100%; }
+
+.width05{
+    width:5%;
+}
+.width95-100{
+    width:95%;
+}
+.width95-100.expanded{
+    width:100%;
+}
+
+body{ margin:0px; }
+div{ padding: 5px 0px; }
+span{ padding: 5px; }
+div.viewbox{ width:1024px; min-height:700px; padding:0; margin:auto; }
+
+.no-padding{ padding:0px; }
+
+.on-desktop-margin-top-80{ margin-top: 80px; }
+.on-desktop-margin-top-100{ margin-top: 100px; }
+
+.text-paragraph{ line-height: 24px; }
+
+.width-135{ width:135px; }
+.width-150{ width:150px; }
+.width-160{ width:160px; }
+.width-200{ width:200px; }
+
+.font-8{ font-size:8px; }
+.font-9{ font-size:9px; }
+.font-10{ font-size:10px; }
+.font-11{ font-size:11px; }
+.font-12{ font-size:12px; }
+.font-14{ font-size:14px; }
+.font-13{ font-size:13px; }
+.font-15{ font-size:15px; }
+.font-16{ font-size:16px; }
+.font-18{ font-size:18px; }
+.font-20{ font-size:20px; }
+.font-22{ font-size:22px; }
+.font-24{ font-size:24px; }
+.font-26{ font-size:26px; }
+.font-28{ font-size:28px; }
+.font-30{ font-size:30px; }
+.font-36{ font-size:36px; }
+.font-40{ font-size:40px; }
+.font-44{ font-size:44px; }
+.font-48{ font-size:48px; }
+.font-60{ font-size:60px; }
+
+.lh-48{ line-height: 48px; }
+.lh-40{ line-height: 40px; }
+.lh-36{ line-height: 36px; }
+.lh-30{ line-height: 30px; }
+.lh-28{ line-height: 28px; }
+.lh-26{ line-height: 26px; }
+.lh-24{ line-height: 24px; }
+.lh-22{ line-height: 22px; }
+.lh-20{ line-height: 20px; }
+.lh-18{ line-height: 18px; }
+
+input.small{ width:40px; }
+input.medium{ width:100px; }
+input.large{ width:160px; }
+input.col-12{ width:100%; }
+select.small{ width:40px; }
+select.medium{ width:100px; }
+select.large{ width:160px; }
+
+div.page-title{ padding-top:20px; }
+
+@media only screen and (max-width: 800px) {
+    
+    div.viewbox{ width:98%; margin:0 1%; min-height:400px; }
+    .font-60{ font-size:45px; }
+    .font-48{ font-size:36px; }
+    .font-44{ font-size:33px; }
+    .font-40{ font-size:30px; }
+    .font-36{ font-size:27px; }
+    .font-30{ font-size:22px; }
+    .font-28{ font-size:21px; }
+    .font-26{ font-size:19px; }
+    .font-24{ font-size:18px; }
+    .font-22{ font-size:17px; }
+    .font-20{ font-size:16px; }
+    .font-18{ font-size:15px; }
+    .font-13{ font-size:10px; }
+    .font-14{ font-size:11px; }
+    .font-15{ font-size:12px; }
+    .font-16{ font-size:13px; }
+    .font-12{ font-size:9px; }
+    .font-11{ font-size:8px; }
+    .font-10{ font-size:7px; }
+    .font-9{ font-size:6px; }
+    .font-8{ font-size:6px; }
+    
+    
+    .lh-48{ line-height: 40px; }
+    .lh-40{ line-height: 33.3px; }
+    .lh-36{ line-height: 30px; }
+    .lh-30{ line-height: 25px; }
+    .lh-28{ line-height: 23px; }
+    .lh-26{ line-height: 21px; }
+    .lh-24{ line-height: 20px; }
+    .lh-22{ line-height: 18px; }
+    .lh-20{ line-height: 16px; }
+    .lh-18{ line-height: 14px; }
+    
+    
+    .width-135{ width:108px; }
+    .width-150{ width:120px; }
+    .width-160{ width:128px; }
+    .width-200{ width:160px; }
+	
+	.on-desktop-margin-top-80{ margin-top: 0px; }
+	.on-desktop-margin-top-100{ margin-top: 0px; }
+}

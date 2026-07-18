@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}Playoffs - {{ league_name }} - {{ season_name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>
+        <span class="badge badge-{{ 'spring' if is_spring else 'fall' }}">{{ season_name }}</span>
+        {{ league_name }} Playoffs
+    </h1>
+    <div>
+        <a href="{{ url_for('seasons.manage_leagues', year=year, is_spring=is_spring) }}" class="btn btn-outline">Back to League Settings</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-bottom: 15px;">Playoff Format</h3>
+    <p>
+        <strong>Format:</strong> {{ config.playoff_format_display }}<br>
+        <strong>Teams Qualifying:</strong> {% if config.playoff_teams == 0 or config.playoff_teams is none %}All ({{ config.actual_playoff_teams }}){% else %}{{ config.playoff_teams }}{% endif %}
+        {% if config.notes %}
+        <br><strong>Notes:</strong> {{ config.notes }}
+        {% endif %}
+    </p>
+</div>
+
+<!-- Seed Placeholders -->
+<div class="card" style="margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h3>Seed Assignments ({{ seed_placeholders|length }})</h3>
+        <form method="POST" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="regenerate_seeds">
+            <button type="submit" class="btn btn-outline btn-sm"
+                    onclick="return confirm('This will delete unresolved seeds and create new ones. Continue?')">
+                Regenerate Seeds
+            </button>
+        </form>
+    </div>
+
+    {% if seed_placeholders %}
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 100px;">Seed</th>
+                <th>Assigned Team</th>
+                <th style="width: 250px;">Assign To</th>
+                <th style="width: 100px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for placeholder in seed_placeholders %}
+            <tr>
+                <td>
+                    <span class="badge" style="background: rgb(34, 139, 34); color: white;">
+                        Seed {{ placeholder.seed_number }}
+                    </span>
+                </td>
+                <td>
+                    {% if placeholder.resolved_team_id %}
+                        <strong>{{ placeholder.resolved_display_name }}</strong>
+                        <span class="text-muted">(resolved)</span>
+                    {% else %}
+                        <span class="text-muted">Not assigned</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <form method="POST" style="display: flex; gap: 5px;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="resolve_placeholder">
+                        <input type="hidden" name="placeholder_id" value="{{ placeholder.team_ID }}">
+                        <select name="actual_team_id" class="form-control" style="flex: 1;">
+                            <option value="">-- Select Team --</option>
+                            {% for team in regular_teams %}
+                            <option value="{{ team.team_ID }}"
+                                    {% if placeholder.resolved_team_id == team.team_ID %}selected{% endif %}>
+                                {{ team.computed_display_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn-primary btn-sm">Set</button>
+                    </form>
+                </td>
+                <td style="white-space: nowrap;">
+                    {% if placeholder.resolved_team_id %}
+                    <form method="POST" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="resolve_placeholder">
+                        <input type="hidden" name="placeholder_id" value="{{ placeholder.team_ID }}">
+                        <input type="hidden" name="actual_team_id" value="">
+                        <button type="submit" class="btn btn-outline btn-sm">Clear</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted" style="text-align: center; padding: 20px;">
+        No seed placeholders yet. Click "Regenerate Seeds" to create them.
+    </p>
+    {% endif %}
+</div>
+
+<!-- Bracket Placeholders -->
+<div class="card" style="margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h3>Bracket Positions ({{ bracket_placeholders|length }})</h3>
+        <form method="POST" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="regenerate_brackets">
+            <button type="submit" class="btn btn-outline btn-sm"
+                    onclick="return confirm('This will delete unresolved bracket positions and create new ones. Continue?')">
+                Regenerate Brackets
+            </button>
+        </form>
+    </div>
+
+    {% if bracket_placeholders %}
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 150px;">Position</th>
+                <th>Resolved To</th>
+                <th style="width: 250px;">Assign To</th>
+                <th style="width: 100px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for placeholder in bracket_placeholders %}
+            <tr>
+                <td>
+                    <span class="badge badge-fall">
+                        {{ placeholder.display_name }}
+                    </span>
+                </td>
+                <td>
+                    {% if placeholder.resolved_team_id %}
+                        <strong>{{ placeholder.resolved_display_name }}</strong>
+                        <span class="text-muted">(resolved)</span>
+                    {% else %}
+                        <span class="text-muted">TBD - game not played</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <form method="POST" style="display: flex; gap: 5px;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="resolve_placeholder">
+                        <input type="hidden" name="placeholder_id" value="{{ placeholder.team_ID }}">
+                        <select name="actual_team_id" class="form-control" style="flex: 1;">
+                            <option value="">-- Select Team --</option>
+                            {% for team in regular_teams %}
+                            <option value="{{ team.team_ID }}"
+                                    {% if placeholder.resolved_team_id == team.team_ID %}selected{% endif %}>
+                                {{ team.computed_display_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn-primary btn-sm">Set</button>
+                    </form>
+                </td>
+                <td style="white-space: nowrap;">
+                    {% if placeholder.resolved_team_id %}
+                    <form method="POST" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="resolve_placeholder">
+                        <input type="hidden" name="placeholder_id" value="{{ placeholder.team_ID }}">
+                        <input type="hidden" name="actual_team_id" value="">
+                        <button type="submit" class="btn btn-outline btn-sm">Clear</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted" style="text-align: center; padding: 20px;">
+        No bracket placeholders yet. Click "Regenerate Brackets" to create them based on the playoff format.
+    </p>
+    {% endif %}
+</div>
+
+<!-- Help Section -->
+<div class="card">
+    <h3 style="margin-bottom: 15px;">How Playoff Resolution Works</h3>
+    <ol style="margin-left: 20px; color: #666;">
+        <li><strong>Seeds</strong> - Assign teams to seeds (Seed 1, Seed 2, etc.) based on regular season standings</li>
+        <li><strong>Bracket Positions</strong> - These are filled in as playoff games are played</li>
+        <li><strong>Schedule Games</strong> - When scheduling playoff games, use "Seed 1 vs Seed 4" etc.</li>
+        <li><strong>Resolve Winners</strong> - After each game, set the winner to fill the next bracket position</li>
+    </ol>
+    <p class="text-muted" style="margin-top: 15px;">
+        <strong>Tip:</strong> You can schedule games against seeds before assigning teams. Once you resolve "Seed 1" to an actual team, games scheduled against "Seed 1" will show the real team name.
+    </p>
+</div>
+{% endblock %}

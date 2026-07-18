@@ -1,0 +1,379 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Field Allocations - {{ season_name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>
+        <span class="badge badge-{{ 'spring' if is_spring else 'fall' }}">{{ season_name }}</span>
+        Field Allocations
+    </h1>
+    <div>
+        <a href="{{ url_for('fields.view_allocations', year=year, is_spring=is_spring) }}" class="btn btn-outline">View</a>
+        <a href="{{ url_for('fields.allocations') }}" class="btn btn-secondary">All Seasons</a>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 350px 1fr; gap: 30px;">
+    <!-- Add Slot Panel -->
+    <div class="card">
+        <h3 style="margin-bottom: 15px;">Add Time Slot</h3>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="add_slot">
+
+            <div class="form-group">
+                <label for="field_id">Field</label>
+                <select id="field_id" name="field_id" class="form-control" required>
+                    {% for field in fields %}
+                    <option value="{{ field.ID }}">{{ field.location_title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="day_of_week">Day of Week</label>
+                <select id="day_of_week" name="day_of_week" class="form-control" required>
+                    {% for i in range(7) %}
+                    <option value="{{ i }}">{{ days[i] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div class="form-group">
+                    <label for="start_time">Start Time</label>
+                    <input type="time" id="start_time" name="start_time" class="form-control"
+                           value="17:30" required>
+                </div>
+                <div class="form-group">
+                    <label for="end_time">End Time</label>
+                    <input type="time" id="end_time" name="end_time" class="form-control"
+                           value="19:00" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="league">League (optional)</label>
+                <select id="league" name="league" class="form-control">
+                    <option value="">Any League</option>
+                    {% for league in leagues %}
+                    <option value="{{ league.display_name }}">{{ league.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" name="is_owned" value="1" checked
+                           style="width: 18px; height: 18px;">
+                    <span>SDLL Owned</span>
+                </label>
+                <p class="text-muted text-small" style="margin-top: 5px;">
+                    Uncheck for slots where another league is home team.
+                </p>
+            </div>
+
+            <div class="form-group">
+                <label for="notes">Notes (optional)</label>
+                <input type="text" id="notes" name="notes" class="form-control"
+                       placeholder="e.g., Parks & Rec allocation">
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Add Slot</button>
+        </form>
+    </div>
+
+    <!-- Current Slots -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2>Current Slots ({{ slot_count }})</h2>
+            <div style="display: flex; gap: 15px; align-items: center;">
+                <div style="display: flex; gap: 5px;">
+                    <a href="{{ url_for('fields.manage_allocations', year=year, is_spring=is_spring, group_by=group_by, ownership='all') }}"
+                       class="btn btn-sm {% if ownership == 'all' %}btn-primary{% else %}btn-outline{% endif %}">
+                        All
+                    </a>
+                    <a href="{{ url_for('fields.manage_allocations', year=year, is_spring=is_spring, group_by=group_by, ownership='owned') }}"
+                       class="btn btn-sm {% if ownership == 'owned' %}btn-primary{% else %}btn-outline{% endif %}">
+                        SDLL
+                    </a>
+                    <a href="{{ url_for('fields.manage_allocations', year=year, is_spring=is_spring, group_by=group_by, ownership='away') }}"
+                       class="btn btn-sm {% if ownership == 'away' %}btn-primary{% else %}btn-outline{% endif %}">
+                        Away
+                    </a>
+                </div>
+                <span style="color: #ccc;">|</span>
+                <div style="display: flex; gap: 5px;">
+                    <a href="{{ url_for('fields.manage_allocations', year=year, is_spring=is_spring, group_by='field', ownership=ownership) }}"
+                       class="btn btn-sm {% if group_by == 'field' %}btn-primary{% else %}btn-outline{% endif %}">
+                        By Field
+                    </a>
+                    <a href="{{ url_for('fields.manage_allocations', year=year, is_spring=is_spring, group_by='day', ownership=ownership) }}"
+                       class="btn btn-sm {% if group_by == 'day' %}btn-primary{% else %}btn-outline{% endif %}">
+                        By Day
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        {% if group_by == 'field' %}
+            <!-- Group by Field -->
+            {% if slots_by_field %}
+                {% for field_name, field_data in slots_by_field.items() %}
+                <div style="margin-bottom: 30px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">
+                        <h3 style="color: rgb(34, 139, 34); margin: 0;">
+                            {{ field_name }} ({{ field_data.slots|length }})
+                        </h3>
+                        <div style="display: flex; gap: 5px;">
+                            <form method="POST" style="display: inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="set_field_ownership">
+                                <input type="hidden" name="field_id" value="{{ field_data.field_id }}">
+                                <input type="hidden" name="is_owned" value="1">
+                                <button type="submit" class="btn btn-sm {% if field_data.slots|selectattr('is_owned')|list|length == field_data.slots|length %}btn-primary{% else %}btn-outline{% endif %}"
+                                        title="Set all slots at this field as SDLL owned">
+                                    SDLL
+                                </button>
+                            </form>
+                            <form method="POST" style="display: inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="set_field_ownership">
+                                <input type="hidden" name="field_id" value="{{ field_data.field_id }}">
+                                <input type="hidden" name="is_owned" value="0">
+                                <button type="submit" class="btn btn-sm {% if field_data.slots|rejectattr('is_owned')|list|length == field_data.slots|length %}btn-secondary{% else %}btn-outline{% endif %}"
+                                        title="Set all slots at this field as Away">
+                                    Away
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    <table style="margin-top: 10px;">
+                        <thead>
+                            <tr>
+                                <th style="width: 80px;">Day</th>
+                                <th style="width: 140px;">Time</th>
+                                <th style="width: 70px;">Owner</th>
+                                <th>League</th>
+                                <th style="width: 120px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for slot in field_data.slots %}
+                            <tr{% if not slot.is_owned %} style="background-color: #fff8e1;"{% endif %}>
+                                <td>{{ slot.day_abbrev }}</td>
+                                <td>{{ slot.time_display }}</td>
+                                <td>
+                                    {% if slot.is_owned %}
+                                    <span class="badge badge-spring">SDLL</span>
+                                    {% else %}
+                                    <span class="badge" style="background: #f5f5f5; color: #666;">Away</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if slot.league %}
+                                    <span class="badge" style="background: rgb(34, 139, 34); color: white;">{{ slot.league }}</span>
+                                    {% else %}
+                                    <span class="text-muted">Any</span>
+                                    {% endif %}
+                                </td>
+                                <td style="white-space: nowrap;">
+                                    <button type="button" class="btn btn-outline btn-sm"
+                                            onclick="editSlot({{ slot.slot_ID }}, {{ slot.day_of_week }}, '{{ slot.start_time.strftime('%H:%M') }}', '{{ slot.end_time.strftime('%H:%M') }}', '{{ slot.league or '' }}', {{ slot.is_owned }}, '{{ slot.notes or '' }}')">
+                                        Edit
+                                    </button>
+                                    <button type="button" class="btn btn-sm" style="background: #c33; color: white;"
+                                            onclick="confirmDelete({{ slot.slot_ID }}, '{{ slot.field.location_title }}', '{{ slot.day_abbrev }}', '{{ slot.time_display }}')">
+                                        X
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endfor %}
+            {% else %}
+            <p class="text-muted" style="text-align: center; padding: 40px;">
+                No slots yet. Add slots using the form on the left, or
+                <a href="{{ url_for('fields.copy_allocations') }}">copy from another season</a>.
+            </p>
+            {% endif %}
+        {% else %}
+            <!-- Group by Day -->
+            {% if slots_by_day %}
+                {% for day_name, day_data in slots_by_day.items() %}
+                <div style="margin-bottom: 30px;">
+                    <h3 style="color: rgb(34, 139, 34); border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">
+                        {{ day_name }} ({{ day_data.slots|length }})
+                    </h3>
+                    <table style="margin-top: 10px;">
+                        <thead>
+                            <tr>
+                                <th>Field</th>
+                                <th style="width: 140px;">Time</th>
+                                <th style="width: 70px;">Owner</th>
+                                <th>League</th>
+                                <th style="width: 120px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for slot in day_data.slots|sort(attribute='start_time') %}
+                            <tr{% if not slot.is_owned %} style="background-color: #fff8e1;"{% endif %}>
+                                <td>{{ slot.field.location_title if slot.field else 'Unknown' }}</td>
+                                <td>{{ slot.time_display }}</td>
+                                <td>
+                                    {% if slot.is_owned %}
+                                    <span class="badge badge-spring">SDLL</span>
+                                    {% else %}
+                                    <span class="badge" style="background: #f5f5f5; color: #666;">Away</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if slot.league %}
+                                    <span class="badge" style="background: rgb(34, 139, 34); color: white;">{{ slot.league }}</span>
+                                    {% else %}
+                                    <span class="text-muted">Any</span>
+                                    {% endif %}
+                                </td>
+                                <td style="white-space: nowrap;">
+                                    <button type="button" class="btn btn-outline btn-sm"
+                                            onclick="editSlot({{ slot.slot_ID }}, {{ slot.day_of_week }}, '{{ slot.start_time.strftime('%H:%M') }}', '{{ slot.end_time.strftime('%H:%M') }}', '{{ slot.league or '' }}', {{ slot.is_owned }}, '{{ slot.notes or '' }}')">
+                                        Edit
+                                    </button>
+                                    <button type="button" class="btn btn-sm" style="background: #c33; color: white;"
+                                            onclick="confirmDelete({{ slot.slot_ID }}, '{{ slot.field.location_title }}', '{{ slot.day_abbrev }}', '{{ slot.time_display }}')">
+                                        X
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endfor %}
+            {% else %}
+            <p class="text-muted" style="text-align: center; padding: 40px;">
+                No slots yet. Add slots using the form on the left, or
+                <a href="{{ url_for('fields.copy_allocations') }}">copy from another season</a>.
+            </p>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+<!-- Edit Slot Modal -->
+<div id="edit-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+     background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+    <div class="card" style="max-width: 400px; margin: auto;">
+        <h3 style="margin-bottom: 20px;">Edit Time Slot</h3>
+        <form method="POST" id="edit-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="update_slot">
+            <input type="hidden" name="slot_id" id="edit-slot-id">
+
+            <div class="form-group">
+                <label for="edit-day">Day of Week</label>
+                <select id="edit-day" name="day_of_week" class="form-control" required>
+                    {% for i in range(7) %}
+                    <option value="{{ i }}">{{ days[i] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div class="form-group">
+                    <label for="edit-start">Start Time</label>
+                    <input type="time" id="edit-start" name="start_time" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-end">End Time</label>
+                    <input type="time" id="edit-end" name="end_time" class="form-control" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="edit-league">League</label>
+                <select id="edit-league" name="league" class="form-control">
+                    <option value="">Any League</option>
+                    {% for league in leagues %}
+                    <option value="{{ league.display_name }}">{{ league.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="edit-is-owned" name="is_owned" value="1"
+                           style="width: 18px; height: 18px;">
+                    <span>SDLL Owned</span>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label for="edit-notes">Notes</label>
+                <input type="text" id="edit-notes" name="notes" class="form-control">
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="button" class="btn btn-outline" onclick="closeEditModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="delete-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+     background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+    <div class="card" style="max-width: 400px; margin: auto;">
+        <h3 style="margin-bottom: 20px;">Remove Time Slot?</h3>
+        <p id="delete-description" style="margin-bottom: 20px;"></p>
+        <form method="POST" id="delete-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="delete_slot">
+            <input type="hidden" name="slot_id" id="delete-slot-id">
+            <div style="display: flex; gap: 10px;">
+                <button type="submit" class="btn" style="background: #c33; color: white;">Remove</button>
+                <button type="button" class="btn btn-outline" onclick="closeDeleteModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function editSlot(slotId, day, startTime, endTime, league, isOwned, notes) {
+    document.getElementById('edit-slot-id').value = slotId;
+    document.getElementById('edit-day').value = day;
+    document.getElementById('edit-start').value = startTime;
+    document.getElementById('edit-end').value = endTime;
+    document.getElementById('edit-league').value = league;
+    document.getElementById('edit-is-owned').checked = isOwned == 1;
+    document.getElementById('edit-notes').value = notes;
+    document.getElementById('edit-modal').style.display = 'flex';
+}
+
+function closeEditModal() {
+    document.getElementById('edit-modal').style.display = 'none';
+}
+
+function confirmDelete(slotId, fieldName, day, time) {
+    document.getElementById('delete-slot-id').value = slotId;
+    document.getElementById('delete-description').textContent =
+        'Are you sure you want to remove the slot at ' + fieldName + ' on ' + day + ' ' + time + '?';
+    document.getElementById('delete-modal').style.display = 'flex';
+}
+
+function closeDeleteModal() {
+    document.getElementById('delete-modal').style.display = 'none';
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeEditModal();
+        closeDeleteModal();
+    }
+});
+</script>
+{% endblock %}

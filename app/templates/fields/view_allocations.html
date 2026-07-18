@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Field Allocations - {{ season_name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>
+        <span class="badge badge-{{ 'spring' if is_spring else 'fall' }}">{{ season_name }}</span>
+        Field Allocations
+    </h1>
+    <div>
+        {% if current_user.can_edit_schedule() %}
+        <a href="{{ url_for('fields.manage_allocations', year=year, is_spring=is_spring) }}" class="btn btn-primary">Manage</a>
+        {% endif %}
+        <a href="{{ url_for('fields.allocations') }}" class="btn btn-outline">All Seasons</a>
+    </div>
+</div>
+
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>{{ slot_count }} Time Slots across {{ slots_by_field|length }} Fields</h2>
+    </div>
+
+    {% if slots_by_field %}
+        {% for field_name, slots in slots_by_field.items() %}
+        <div style="margin-bottom: 30px;">
+            <h3 style="color: rgb(34, 139, 34); border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">
+                {{ field_name }} ({{ slots|length }} slots)
+            </h3>
+            <table style="margin-top: 10px;">
+                <thead>
+                    <tr>
+                        <th style="width: 100px;">Day</th>
+                        <th style="width: 160px;">Time</th>
+                        <th style="width: 70px;">Owner</th>
+                        <th>League</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for slot in slots %}
+                    <tr{% if not slot.is_owned %} style="background-color: #fff8e1;"{% endif %}>
+                        <td>{{ slot.day_name }}</td>
+                        <td>{{ slot.time_display }}</td>
+                        <td>
+                            {% if slot.is_owned %}
+                            <span class="badge badge-spring">SDLL</span>
+                            {% else %}
+                            <span class="badge" style="background: #f5f5f5; color: #666;">Away</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if slot.league %}
+                            <span class="badge" style="background: rgb(34, 139, 34); color: white;">{{ slot.league }}</span>
+                            {% else %}
+                            <span class="text-muted">Any</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted text-small">{{ slot.notes or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    {% else %}
+    <p class="text-muted" style="text-align: center; padding: 40px;">
+        No field allocations for this season.
+        {% if current_user.can_edit_schedule() %}
+        <a href="{{ url_for('fields.manage_allocations', year=year, is_spring=is_spring) }}">Add some</a>.
+        {% endif %}
+    </p>
+    {% endif %}
+</div>
+{% endblock %}

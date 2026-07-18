@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Game Details{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Game #{{ game.ID }}</h1>
+    <a href="{{ url_for('games.index') }}" class="btn btn-secondary">Back to Games</a>
+</div>
+
+<div class="card">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+        <div>
+            <h3 style="color: #666; font-size: 12px; text-transform: uppercase; margin-bottom: 5px;">Date & Time</h3>
+            <p style="font-size: 18px;">
+                {{ game.game_date.strftime('%A, %B %d, %Y') if game.game_date else 'TBD' }}<br>
+                <span style="color: rgb(34, 139, 34);">
+                    {{ game.game_date.strftime('%I:%M %p') if game.game_date else '' }}
+                </span>
+            </p>
+        </div>
+
+        <div>
+            <h3 style="color: #666; font-size: 12px; text-transform: uppercase; margin-bottom: 5px;">Location</h3>
+            <p style="font-size: 18px;">{{ game.location or 'TBD' }}</p>
+        </div>
+
+        <div>
+            <h3 style="color: #666; font-size: 12px; text-transform: uppercase; margin-bottom: 5px;">League</h3>
+            <p style="font-size: 18px;">{{ game.league }}</p>
+        </div>
+
+        <div>
+            <h3 style="color: #666; font-size: 12px; text-transform: uppercase; margin-bottom: 5px;">Status</h3>
+            <p style="font-size: 18px;">
+                <span class="status-{{ game.status }}">{{ game.status }}</span>
+            </p>
+        </div>
+    </div>
+
+    <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+
+    <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 20px; text-align: center;">
+        <div>
+            <h3 style="color: #666; font-size: 12px; text-transform: uppercase; margin-bottom: 10px;">Home Team</h3>
+            <p style="font-size: 24px; font-weight: 700; color: rgb(34, 139, 34);">
+                {{ game.home_team.display_name if game.home_team else 'TBD' }}
+            </p>
+        </div>
+
+        <div style="align-self: center;">
+            <span style="font-size: 24px; color: #999;">vs</span>
+        </div>
+
+        <div>
+            <h3 style="color: #666; font-size: 12px; text-transform: uppercase; margin-bottom: 10px;">Away Team</h3>
+            <p style="font-size: 24px; font-weight: 700; color: rgb(255, 140, 0);">
+                {{ game.away_team.display_name if game.away_team else 'TBD' }}
+            </p>
+        </div>
+    </div>
+
+    <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px;">
+        <div>
+            <h3 style="color: #666; font-size: 12px; text-transform: uppercase; margin-bottom: 5px;">Duration</h3>
+            <p>{{ game.duration_in_hours or '?' }} hours</p>
+        </div>
+
+        <div>
+            <h3 style="color: #666; font-size: 12px; text-transform: uppercase; margin-bottom: 5px;">Season</h3>
+            <p>
+                <span class="badge badge-{{ 'spring' if game.is_spring else 'fall' }}">
+                    {{ 'Spring' if game.is_spring else 'Fall' }} {{ game.year }}
+                </span>
+            </p>
+        </div>
+
+        <div>
+            <h3 style="color: #666; font-size: 12px; text-transform: uppercase; margin-bottom: 5px;">Type</h3>
+            <p>
+                {% if game.is_scrimmage %}Scrimmage
+                {% elif game.is_doubleheader %}Doubleheader
+                {% else %}Regular{% endif %}
+            </p>
+        </div>
+
+        {% if game.assignr_id %}
+        <div>
+            <h3 style="color: #666; font-size: 12px; text-transform: uppercase; margin-bottom: 5px;">Assignr ID</h3>
+            <p>{{ game.assignr_id }}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

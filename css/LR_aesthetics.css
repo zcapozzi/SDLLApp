@@ -1,0 +1,94 @@
+
+span{ font-family:Arial; }
+a{ box-shadow:none!important; }
+img { cursor:pointer; padding:none; margin:none; }
+
+.red{ background-color:red; }
+.pink { background-color: #FEE; color:red; }
+.navy{ color: #008; }
+
+.bold { font-weight:700; } 
+text.white { fill: white; }
+
+.highlight-row img{
+	content:url("/static/img/Gray_Plus_Skinny150Highlight.png");
+}
+.highlight-row:hover img{
+	content:url("/static/img/Gray_Plus_Skinny150HighlightMouseover.png");
+}
+
+
+.highlight-row{ color: black; background-color: #EEF; }
+.highlight-row:hover{ background-color: #DDF; }
+
+rect.green{ fill: #2A2; }
+rect.red{ fill: #B22; }
+
+.green-text{ color: #3B3; }
+.red-text{ color: #E33; }
+text.green-text{ fill: #3B3; }
+text.red-text{ fill: #E33; }
+
+.mono{ font-family: Consolas; }
+
+span.cart-unavailable{
+    color: red;
+    text-decoration: line-through;
+    font-weight: 400;
+}
+
+span.site-blue{ color: rgb(24, 154, 211); }
+div.site-blue{ color: rgb(24, 154, 211); }
+.error{ color:red; }
+
+.blurred {
+    filter: blur(3px);
+    user-select: none;
+    pointer-events: none;
+}
+
+.bbottom{ border-bottom:solid 1px black; }
+.bbottom.light { border-bottom:solid 1px #888; }
+.bbottom.very-light { border-bottom:solid 1px #CCC; }
+
+.btop{ border-top:solid 1px black; }
+.btop.light { border-top:solid 1px #888; }
+.btop.very-light { border-top:solid 1px #CCC; }
+
+.interior-top-borders{
+    border-top:solid 1px #AAA;
+}
+.interior-top-borders:first-child {border-top:none;}
+
+span.error{ color:red; display:inline-block; }
+span.msg-blue{ color:blue; }
+span.msg{ color:blue; }
+span.msg{ display:inline-block; }
+
+.italic{ font-style: italic; }
+
+.shot-charting-visible{
+	transition: opacity .5s;
+	transition-delay: .001s;
+	opacity: 1;
+}
+
+.shot-charting-invisible{
+	opacity: 0;
+}
+
+.normal{ color: #333; fill: #333; }
+.light{ color: #888; fill: #888; }
+.lightish{ color: #555; fill: #555; }
+
+.gradient-shaded{ 
+    background: rgb(24,154,211);
+    padding-left:20px;
+    border-radius:10px;
+    background: linear-gradient(90deg, rgba(113,199,236,1) 0%, rgba(255,255,255,1) 100%);
+}
+.contents { display:contents; }
+
+@media only screen and (max-width: 800px) {
+    
+}

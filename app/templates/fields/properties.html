@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Field Properties{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-toggle {
+        display: inline-flex;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .filter-toggle a {
+        padding: 8px 16px;
+        text-decoration: none;
+        color: #333;
+        background: #fff;
+        border-right: 1px solid #ddd;
+    }
+    .filter-toggle a:last-child {
+        border-right: none;
+    }
+    .filter-toggle a:hover {
+        background: #f5f5f5;
+    }
+    .filter-toggle a.active {
+        background: rgb(34, 139, 34);
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Field Properties</h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('leagues.field_rules') }}" class="btn btn-outline">League Field Rules</a>
+        <a href="{{ url_for('fields.index') }}" class="btn btn-outline">All Fields</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+    <p class="text-muted" style="margin: 0;">
+        Configure field usage type and practice capacity for the schedule generator.
+    </p>
+    <div class="filter-toggle">
+        <a href="{{ url_for('fields.properties', ownership='sdll') }}" class="{{ 'active' if ownership_filter == 'sdll' else '' }}">SDLL</a>
+        <a href="{{ url_for('fields.properties', ownership='away') }}" class="{{ 'active' if ownership_filter == 'away' else '' }}">Away</a>
+        <a href="{{ url_for('fields.properties', ownership='all') }}" class="{{ 'active' if ownership_filter == 'all' else '' }}">All</a>
+    </div>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Field</th>
+                <th style="width: 180px;">Usage Type</th>
+                <th style="width: 140px;">Practice Capacity</th>
+                <th style="width: 140px;">Late Slot Capacity</th>
+                <th style="width: 100px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for field in fields %}
+            {% if field %}
+            <tr id="field-{{ field.ID }}">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="field_id" value="{{ field.ID }}">
+                    <td><strong>{{ field.location_title }}</strong></td>
+                    <td>
+                        <select name="usage_type" class="form-control" style="width: 100%;">
+                            {% for value, label in usage_types %}
+                            <option value="{{ value }}" {{ 'selected' if field.usage_type == value else '' }}>
+                                {{ label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <select name="practice_capacity" class="form-control" style="width: 100%;">
+                            {% for i in range(1, 5) %}
+                            <option value="{{ i }}" {{ 'selected' if field.practice_capacity == i else '' }}>
+                                {{ i }} team{{ 's' if i > 1 else '' }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <select name="practice_capacity_late" class="form-control" style="width: 100%;">
+                            <option value="" {{ 'selected' if not field.practice_capacity_late else '' }}>Same</option>
+                            {% for i in range(1, 5) %}
+                            <option value="{{ i }}" {{ 'selected' if field.practice_capacity_late == i else '' }}>
+                                {{ i }} team{{ 's' if i > 1 else '' }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                    </td>
+                </form>
+            </tr>
+            {% endif %}
+            {% else %}
+            <tr>
+                <td colspan="5" style="text-align: center; color: #666;">No fields found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">Usage Types</h3>
+    <ul style="margin-bottom: 0;">
+        <li><strong>Games & Practices</strong> - Field can be used for both (default)</li>
+        <li><strong>Games Only</strong> - No practices scheduled here</li>
+        <li><strong>Practice Only</strong> - No games scheduled here (e.g., Shepard, Southern Boundaries 1)</li>
+    </ul>
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">Practice Capacity</h3>
+    <ul style="margin-bottom: 0;">
+        <li><strong>Practice Capacity</strong> - How many teams can practice at the same time</li>
+        <li><strong>Late Slot Capacity</strong> - Different capacity for late time slots (e.g., 7:30 PM). Set to "Same" if capacity doesn't change.</li>
+    </ul>
+    <p class="text-muted" style="margin-bottom: 0; margin-top: 10px;">
+        Example: Parkwood can hold 2 teams at 5:30 PM but only 1 team at 7:30 PM.
+    </p>
+</div>
+{% endblock %}

@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+
+{% block title %}League Settings - {{ season_name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>
+        <span class="badge badge-{{ 'spring' if is_spring else 'fall' }}">{{ season_name }}</span>
+        League Settings
+    </h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('seasons.schedule_settings', year=year, is_spring=is_spring) }}" class="btn btn-primary">Schedule Settings</a>
+        <a href="{{ url_for('seasons.view', year=year, is_spring=is_spring) }}" class="btn btn-outline">View Season</a>
+    </div>
+</div>
+
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>League Configuration ({{ league_configs|length }} leagues)</h2>
+        <form method="POST" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="sync_leagues">
+            <button type="submit" class="btn btn-outline btn-sm" title="Add any missing leagues from teams">
+                Sync Leagues
+            </button>
+        </form>
+    </div>
+
+    {% if league_configs %}
+    <table>
+        <thead>
+            <tr>
+                <th>League</th>
+                <th style="width: 60px; text-align: center;">Teams</th>
+                <th style="width: 80px; text-align: center;">Games/Team</th>
+                <th style="width: 120px; text-align: center;">Games Created</th>
+                <th style="width: 150px;">Playoff Format</th>
+                <th style="width: 60px; text-align: center;">Qualify</th>
+                <th style="width: 220px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for config in league_configs %}
+            {% set game_counts = games_by_league.get(config.league, {}) %}
+            {% set regular_count = game_counts.get('regular', 0) %}
+            {% set playoff_count = game_counts.get('playoff', 0) %}
+            <tr>
+                <td><strong>{{ config.league }}</strong></td>
+                <td style="text-align: center;">{{ teams_by_league.get(config.league, 0) }}</td>
+                <td style="text-align: center;">{{ config.regular_season_games or 10 }}</td>
+                <td style="text-align: center;">
+                    {% if regular_count > 0 or playoff_count > 0 %}
+                    <span class="badge" style="background: rgb(34, 139, 34); color: white;">{{ regular_count }} reg</span>
+                    <span class="badge badge-fall">{{ playoff_count }} playoff</span>
+                    {% else %}
+                    <span class="text-muted">None</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="badge" style="background: #666; color: white;">
+                        {{ config.playoff_format_display }}
+                    </span>
+                </td>
+                <td style="text-align: center;">{% if config.playoff_teams == 0 or config.playoff_teams is none %}All{% else %}{{ config.playoff_teams }}{% endif %}</td>
+                <td style="white-space: nowrap;">
+                    <button type="button" class="btn btn-outline btn-sm"
+                            onclick="editLeague({{ config.ID }}, '{{ config.league }}', '{{ config.playoff_format }}', {{ config.playoff_teams or 0 }}, {{ config.regular_season_games or 10 }}, '{{ config.notes or '' }}', {{ teams_by_league.get(config.league, 0) }})">
+                        Edit
+                    </button>
+                    <a href="{{ url_for('seasons.manage_playoffs', year=year, is_spring=is_spring, league_name=config.league) }}"
+                       class="btn btn-secondary btn-sm" title="Manage playoff placeholders and resolution">
+                        Playoffs
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted" style="text-align: center; padding: 40px;">
+        No leagues configured yet. Add teams to this season first, then leagues will appear here.
+    </p>
+    {% endif %}
+</div>
+
+<!-- Game Generation Section -->
+{% if league_configs %}
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-bottom: 15px;">Generate Game Slots</h3>
+    <p class="text-muted" style="margin-bottom: 20px;">
+        Generate empty game slots that can then be scheduled into field allocations.
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>League</th>
+                <th style="width: 120px; text-align: center;">Teams</th>
+                <th style="width: 150px; text-align: center;">Expected Games</th>
+                <th style="width: 150px; text-align: center;">Current Games</th>
+                <th style="width: 250px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for config in league_configs %}
+            {% set team_count = teams_by_league.get(config.league, 0) %}
+            {% set game_counts = games_by_league.get(config.league, {}) %}
+            {% set regular_count = game_counts.get('regular', 0) %}
+            {% set playoff_count = game_counts.get('playoff', 0) %}
+            {% set expected_regular = ((team_count * (config.regular_season_games or 10)) // 2) if team_count > 1 else 0 %}
+            {% set expected_playoff = config.playoff_game_count %}
+            <tr id="league-{{ config.ID }}">
+                <td><strong>{{ config.league }}</strong></td>
+                <td style="text-align: center;">{{ team_count }}</td>
+                <td style="text-align: center;">
+                    <span title="Regular season">{{ expected_regular }} reg</span> +
+                    <span title="Playoffs">{{ expected_playoff }} playoff</span>
+                </td>
+                <td style="text-align: center;">
+                    <span style="color: {% if regular_count >= expected_regular %}green{% else %}orange{% endif %};">{{ regular_count }} reg</span> +
+                    <span style="color: {% if playoff_count >= expected_playoff %}green{% else %}orange{% endif %};">{{ playoff_count }} playoff</span>
+                </td>
+                <td style="white-space: nowrap;">
+                    <form method="POST" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="generate_regular_games">
+                        <input type="hidden" name="league_id" value="{{ config.ID }}">
+                        <button type="submit" class="btn btn-primary btn-sm"
+                                {% if team_count < 2 %}disabled title="Need at least 2 teams"{% else %}title="Generate {{ expected_regular }} regular season game slots"{% endif %}>
+                            + Regular
+                        </button>
+                    </form>
+                    {% if regular_count > 0 %}
+                    <form method="POST" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="clear_regular_games">
+                        <input type="hidden" name="league_id" value="{{ config.ID }}">
+                        <button type="submit" class="btn btn-outline btn-sm" style="color: #c0392b; border-color: #c0392b;"
+                                onclick="return confirm('Clear {{ regular_count }} regular season games for {{ config.league }}?')"
+                                title="Clear regular season games">
+                            Clear
+                        </button>
+                    </form>
+                    {% endif %}
+                    <form method="POST" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="generate_playoff_games">
+                        <input type="hidden" name="league_id" value="{{ config.ID }}">
+                        <button type="submit" class="btn btn-secondary btn-sm"
+                                {% if team_count < 2 %}disabled title="Need at least 2 teams"{% else %}title="Generate {{ expected_playoff }} playoff games (auto-creates seed placeholders if needed)"{% endif %}>
+                            + Playoff
+                        </button>
+                    </form>
+                    {% if playoff_count > 0 %}
+                    <form method="POST" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="clear_playoff_games">
+                        <input type="hidden" name="league_id" value="{{ config.ID }}">
+                        <button type="submit" class="btn btn-outline btn-sm" style="color: #c0392b; border-color: #c0392b;"
+                                onclick="return confirm('Clear {{ playoff_count }} playoff games for {{ config.league }}?')"
+                                title="Clear playoff games">
+                            Clear
+                        </button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-bottom: 15px;">Seed Placeholders</h3>
+    <p class="text-muted" style="margin-bottom: 20px;">
+        Generate seed placeholders before creating playoff games.
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>League</th>
+                <th style="width: 100px; text-align: center;">Qualify</th>
+                <th style="width: 150px; text-align: center;">Placeholders</th>
+                <th style="width: 200px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for config in league_configs %}
+            {% set placeholder_count = placeholders_by_league.get(config.league, 0) %}
+            <tr>
+                <td><strong>{{ config.league }}</strong></td>
+                <td style="text-align: center;">{% if config.playoff_teams == 0 or config.playoff_teams is none %}All ({{ config.actual_playoff_teams }}){% else %}{{ config.playoff_teams }}{% endif %}</td>
+                <td style="text-align: center;">
+                    {% if placeholder_count > 0 %}
+                    <span class="badge badge-fall">{{ placeholder_count }} created</span>
+                    {% else %}
+                    <span class="text-muted">None</span>
+                    {% endif %}
+                </td>
+                <td style="white-space: nowrap;">
+                    <form method="POST" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="generate_bracket">
+                        <input type="hidden" name="league_id" value="{{ config.ID }}">
+                        <button type="submit" class="btn btn-outline btn-sm"
+                                title="Generate seed and bracket placeholders">
+                            Generate Placeholders
+                        </button>
+                    </form>
+                    <a href="{{ url_for('seasons.manage_playoffs', year=year, is_spring=is_spring, league_name=config.league) }}"
+                       class="btn btn-outline btn-sm">
+                        Manage
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-bottom: 15px;">Playoff Format Reference</h3>
+    <table>
+        <tbody>
+            <tr>
+                <td style="width: 200px;"><strong>Single Elimination</strong></td>
+                <td class="text-muted">n-1 games (4 teams = 3 games). One loss and you're out.</td>
+            </tr>
+            <tr>
+                <td><strong>Double Elimination</strong></td>
+                <td class="text-muted">~2n-2 games (4 teams = 6 games). Must lose twice to be eliminated.</td>
+            </tr>
+            <tr>
+                <td><strong>Round Robin + Knockout</strong></td>
+                <td class="text-muted">Everyone plays each other, then top teams do knockout rounds.</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Edit League Modal -->
+<div id="edit-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+     background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+    <div class="card" style="max-width: 450px; margin: auto;">
+        <h3 style="margin-bottom: 20px;">Edit League Settings</h3>
+        <p class="text-muted" style="margin-bottom: 15px;">
+            League: <strong id="modal-league-name"></strong>
+        </p>
+        <form method="POST" id="edit-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="update_format">
+            <input type="hidden" name="league_id" id="edit-league-id">
+
+            <div class="form-group">
+                <label for="regular_season_games">Games Per Team (Regular Season)</label>
+                <select id="regular_season_games" name="regular_season_games" class="form-control" required>
+                    <option value="6">6 games</option>
+                    <option value="8">8 games</option>
+                    <option value="10">10 games</option>
+                    <option value="12">12 games</option>
+                    <option value="14">14 games</option>
+                    <option value="16">16 games</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="playoff_format">Playoff Format</label>
+                <select id="playoff_format" name="playoff_format" class="form-control" required>
+                    {% for value, label in playoff_formats %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="playoff_teams">Teams Qualifying for Playoffs</label>
+                <select id="playoff_teams" name="playoff_teams" class="form-control" required>
+                    <!-- Options populated dynamically by JavaScript -->
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="edit-notes">Notes (optional)</label>
+                <input type="text" id="edit-notes" name="notes" class="form-control"
+                       placeholder="e.g., Top 4 teams qualify">
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="button" class="btn btn-outline" onclick="closeEditModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function editLeague(leagueId, leagueName, playoffFormat, playoffTeams, regularSeasonGames, notes, teamCount) {
+    document.getElementById('edit-league-id').value = leagueId;
+    document.getElementById('modal-league-name').textContent = leagueName;
+    document.getElementById('playoff_format').value = playoffFormat;
+    document.getElementById('regular_season_games').value = regularSeasonGames;
+    document.getElementById('edit-notes').value = notes;
+
+    // Populate playoff_teams dropdown based on team count
+    var select = document.getElementById('playoff_teams');
+    select.innerHTML = '';
+
+    // Add "All teams" option
+    var allOption = document.createElement('option');
+    allOption.value = '0';
+    allOption.textContent = 'All teams (' + teamCount + ')';
+    select.appendChild(allOption);
+
+    // Add options from 2 to teamCount-1 (no need for teamCount, that's "All")
+    for (var i = 2; i < teamCount; i++) {
+        var option = document.createElement('option');
+        option.value = i;
+        option.textContent = i + ' teams';
+        select.appendChild(option);
+    }
+
+    // Set selected value
+    select.value = playoffTeams;
+
+    document.getElementById('edit-modal').style.display = 'flex';
+}
+
+function closeEditModal() {
+    document.getElementById('edit-modal').style.display = 'none';
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeEditModal();
+});
+</script>
+{% endblock %}

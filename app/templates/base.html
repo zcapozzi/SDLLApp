@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SDLL{% endblock %} - South Durham Little League</title>
+
+    <!-- CSS Files -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/LR_structural.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/LR_spacing.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/LR_elements.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/LR_aesthetics.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/oswald.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sdll_theme.css') }}">
+
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5; }
+
+        /* Navbar */
+        .navbar { display: flex; align-items: center; padding: 15px 20px; background-color: rgb(34, 139, 34); }
+        .navbar-brand { font-size: 20px; font-weight: 700; text-decoration: none; color: white; }
+        .navbar-nav { display: flex; margin-left: auto; gap: 5px; align-items: center; }
+        .nav-item { position: relative; }
+        .nav-link {
+            text-decoration: none;
+            font-weight: 500;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 4px;
+            display: block;
+        }
+        .nav-link:hover { background-color: rgba(255,255,255,0.15); }
+
+        /* Dropdown */
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: white;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            min-width: 180px;
+            z-index: 1000;
+            padding: 8px 0;
+        }
+        .nav-item:hover .dropdown-menu { display: block; }
+        .dropdown-menu a,
+        .dropdown-menu a:visited,
+        .dropdown-menu a:link {
+            display: block;
+            padding: 10px 20px;
+            color: #333 !important;
+            text-decoration: none;
+            font-size: 14px;
+            background-color: transparent;
+        }
+        .dropdown-menu a:hover {
+            background-color: rgba(34, 139, 34, 0.1);
+            color: rgb(34, 139, 34) !important;
+        }
+        .dropdown-divider { border-top: 1px solid #eee; margin: 8px 0; }
+
+        /* Main content */
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .btn { display: inline-block; padding: 10px 20px; border-radius: 4px; text-decoration: none; border: none; cursor: pointer; font-size: 14px; font-weight: 500; }
+        .btn-primary { background-color: rgb(34, 139, 34); color: white; }
+        .btn-primary:hover { background-color: rgb(28, 112, 28); }
+        .btn-secondary { background-color: rgb(255, 140, 0); color: white; }
+        .btn-secondary:hover { background-color: rgb(220, 120, 0); }
+        .btn-outline { background-color: transparent; border: 1px solid rgb(34, 139, 34); color: rgb(34, 139, 34); }
+        .btn-outline:hover { background-color: rgb(34, 139, 34); color: white; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        .flash-message { padding: 12px 20px; margin-bottom: 20px; border-radius: 4px; }
+        .flash-success { background-color: rgba(34, 139, 34, 0.1); border-left: 4px solid rgb(34, 139, 34); }
+        .flash-error { background-color: rgba(200, 50, 50, 0.1); border-left: 4px solid #c33; }
+        .flash-info { background-color: rgba(255, 140, 0, 0.1); border-left: 4px solid rgb(255, 140, 0); }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
+        .form-control { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .form-control:focus { border-color: rgb(34, 139, 34); outline: none; box-shadow: 0 0 0 2px rgba(34, 139, 34, 0.2); }
+        table { width: 100%; border-collapse: collapse; }
+        table th, table td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        table th { background-color: rgb(34, 139, 34); color: white; }
+        table tr:hover { background-color: rgba(34, 139, 34, 0.05); }
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+        .badge-spring { background-color: rgb(34, 139, 34); color: white; }
+        .badge-fall { background-color: rgb(255, 140, 0); color: white; }
+        .text-muted { color: #666; }
+        .text-small { font-size: 13px; }
+        .mt-2 { margin-top: 20px; }
+        .mb-2 { margin-bottom: 20px; }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .navbar { flex-direction: column; gap: 10px; }
+            .navbar-nav { margin-left: 0; flex-wrap: wrap; justify-content: center; }
+            .dropdown-menu { position: static; box-shadow: none; }
+            .nav-item:hover .dropdown-menu { display: block; }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% if current_user.is_authenticated %}
+    <nav class="navbar">
+        <a href="{{ url_for('main.dashboard') }}" class="navbar-brand">SDLL</a>
+        <div class="navbar-nav">
+            <div class="nav-item">
+                <a href="{{ url_for('main.dashboard') }}" class="nav-link">Dashboard</a>
+            </div>
+
+            <div class="nav-item">
+                <a href="#" class="nav-link">Schedule ▾</a>
+                <div class="dropdown-menu">
+                    <a href="{{ url_for('games.upcoming') }}">Upcoming Games</a>
+                    <a href="{{ url_for('games.index') }}">All Games</a>
+                    {% if current_user.can_edit_schedule() %}
+                    <div class="dropdown-divider"></div>
+                    <a href="{{ url_for('seasons.schedule_settings_picker') }}">Schedule Settings</a>
+                    <a href="{{ url_for('leagues.field_rules') }}">League Field Rules</a>
+                    <a href="{{ url_for('fields.properties') }}">Field Properties</a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="nav-item">
+                <a href="#" class="nav-link">Seasons ▾</a>
+                <div class="dropdown-menu">
+                    <a href="{{ url_for('seasons.index') }}">All Seasons</a>
+                    {% if current_user.can_edit_schedule() %}
+                    <div class="dropdown-divider"></div>
+                    <a href="{{ url_for('seasons.setup') }}">Season Setup</a>
+                    <a href="{{ url_for('seasons.copy_wizard') }}">Copy Season</a>
+                    <a href="{{ url_for('fields.copy_allocations') }}">Copy Allocations</a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="nav-item">
+                <a href="#" class="nav-link">Fields ▾</a>
+                <div class="dropdown-menu">
+                    <a href="{{ url_for('fields.index') }}">All Fields</a>
+                    <a href="{{ url_for('fields.properties') }}">Field Properties</a>
+                    <a href="{{ url_for('fields.allocations') }}">Field Allocations</a>
+                    {% if current_user.can_edit_schedule() %}
+                    <div class="dropdown-divider"></div>
+                    <a href="{{ url_for('fields.copy_allocations') }}">Copy Allocations</a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="nav-item">
+                <a href="#" class="nav-link">Leagues ▾</a>
+                <div class="dropdown-menu">
+                    <a href="{{ url_for('leagues.index') }}">All Leagues</a>
+                    <a href="{{ url_for('leagues.field_rules') }}">Field Rules</a>
+                    <a href="{{ url_for('leagues.time_restrictions') }}">Time Restrictions</a>
+                    <div class="dropdown-divider"></div>
+                    <a href="{{ url_for('leagues.pitch_types') }}">Pitch Types</a>
+                    <a href="{{ url_for('leagues.seasonal_names') }}">Seasonal Names</a>
+                </div>
+            </div>
+
+            <div class="nav-item">
+                <a href="#" class="nav-link">Umpires ▾</a>
+                <div class="dropdown-menu">
+                    <a href="#">Assignments</a>
+                    <a href="#">Directory</a>
+                    <a href="#">Organizations</a>
+                </div>
+            </div>
+
+            <div class="nav-item">
+                <a href="#" class="nav-link">People ▾</a>
+                <div class="dropdown-menu">
+                    <a href="#">Coaches</a>
+                    <a href="#">Contacts</a>
+                </div>
+            </div>
+
+            {% if current_user.is_admin() %}
+            <div class="nav-item">
+                <a href="#" class="nav-link">Admin ▾</a>
+                <div class="dropdown-menu">
+                    <a href="#">Users</a>
+                    <a href="#">Settings</a>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="nav-item">
+                <a href="{{ url_for('auth.logout') }}" class="nav-link">Logout</a>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-message flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Seasons{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Seasons</h1>
+    {% if current_user.can_edit_schedule() %}
+    <a href="{{ url_for('seasons.copy_wizard') }}" class="btn btn-primary">Copy Season</a>
+    {% endif %}
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Season</th>
+                <th>Teams</th>
+                <th>Games</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for season in seasons %}
+            <tr>
+                <td>
+                    <span class="badge badge-{{ 'spring' if season.is_spring else 'fall' }}">
+                        {{ season.name }}
+                    </span>
+                </td>
+                <td>{{ season.team_count }}</td>
+                <td>{{ season.game_count }}</td>
+                <td>
+                    <a href="{{ url_for('seasons.view', year=season.year, is_spring=season.is_spring) }}"
+                       class="btn btn-secondary" style="padding: 5px 15px; font-size: 12px;">
+                        View
+                    </a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4" style="text-align: center; color: #666;">
+                    No seasons found.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

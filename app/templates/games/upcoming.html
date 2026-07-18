@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Upcoming Games{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 30px;">Upcoming Games</h1>
+
+<div class="card">
+    {% if games %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>League</th>
+                <th>Location</th>
+                <th>Home</th>
+                <th>Away</th>
+                <th>Duration</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in games %}
+            <tr>
+                <td>{{ game.game_date.strftime('%a, %b %d at %I:%M %p') if game.game_date else 'TBD' }}</td>
+                <td>{{ game.league }}</td>
+                <td>{{ game.location }}</td>
+                <td>{{ game.home_team.display_name if game.home_team else 'TBD' }}</td>
+                <td>{{ game.away_team.display_name if game.away_team else 'TBD' }}</td>
+                <td>{{ game.duration_in_hours }}h</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: #666; padding: 40px;">
+        No upcoming games scheduled.
+    </p>
+    {% endif %}
+</div>
+{% endblock %}

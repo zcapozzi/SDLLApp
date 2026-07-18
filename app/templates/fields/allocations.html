@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Field Allocations{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Field Allocations</h1>
+    <div>
+        <a href="{{ url_for('fields.index') }}" class="btn btn-outline">All Fields</a>
+        {% if current_user.can_edit_schedule() and seasons %}
+        <a href="{{ url_for('fields.copy_allocations') }}" class="btn btn-secondary">Copy Allocations</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if seasons %}
+<div class="card">
+    <h2 style="margin-bottom: 20px;">Seasons with Field Allocations</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Season</th>
+                <th style="text-align: center;">Fields</th>
+                <th style="text-align: center;">Time Slots</th>
+                <th style="width: 200px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for season in seasons %}
+            <tr>
+                <td>
+                    <span class="badge badge-{{ 'spring' if season.is_spring else 'fall' }}">
+                        {{ season.name }}
+                    </span>
+                </td>
+                <td style="text-align: center;">{{ season.field_count }}</td>
+                <td style="text-align: center;">{{ season.slot_count }}</td>
+                <td>
+                    <a href="{{ url_for('fields.view_allocations', year=season.year, is_spring=season.is_spring) }}"
+                       class="btn btn-outline btn-sm">View</a>
+                    {% if current_user.can_edit_schedule() %}
+                    <a href="{{ url_for('fields.manage_allocations', year=season.year, is_spring=season.is_spring) }}"
+                       class="btn btn-primary btn-sm">Manage</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card" style="text-align: center; padding: 40px;">
+    <p class="text-muted">No field allocations have been set up yet.</p>
+    <p class="text-muted text-small">
+        Use the derive script to create allocations from existing game data:
+    </p>
+    <code style="display: block; margin: 20px auto; padding: 15px; background: #f5f5f5; border-radius: 5px; max-width: 600px;">
+        python scripts/derive_field_slots.py --year 2025 --season fall
+    </code>
+</div>
+{% endif %}
+
+{% if available_seasons %}
+<div class="card" style="margin-top: 30px;">
+    <h2 style="margin-bottom: 20px;">Seasons Without Allocations</h2>
+    <p class="text-muted text-small" style="margin-bottom: 15px;">
+        These seasons have teams but no field allocations yet. Copy from another season or use the derive script.
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>Season</th>
+                <th style="width: 200px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for season in available_seasons %}
+            <tr>
+                <td>
+                    <span class="badge badge-{{ 'spring' if season.is_spring else 'fall' }}">
+                        {{ season.name }}
+                    </span>
+                </td>
+                <td>
+                    {% if current_user.can_edit_schedule() %}
+                    <a href="{{ url_for('fields.manage_allocations', year=season.year, is_spring=season.is_spring) }}"
+                       class="btn btn-primary btn-sm">Create Allocations</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

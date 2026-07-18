@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Copy Field Allocations{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Copy Field Allocations</h1>
+    <a href="{{ url_for('fields.allocations') }}" class="btn btn-outline">Back</a>
+</div>
+
+<div class="card" style="max-width: 600px;">
+    {% if source_options %}
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="form-group">
+            <label for="source">Copy From</label>
+            <select id="source" name="source" class="form-control" required onchange="updateSourceFields()">
+                {% for option in source_options %}
+                <option value="{{ option.year }}-{{ option.is_spring }}"
+                        data-year="{{ option.year }}" data-is-spring="{{ option.is_spring }}">
+                    {{ option.name }} ({{ option.slot_count }} slots)
+                </option>
+                {% endfor %}
+            </select>
+            <input type="hidden" id="source_year" name="source_year">
+            <input type="hidden" id="source_is_spring" name="source_is_spring">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div class="form-group">
+                <label for="target_year">Target Year</label>
+                <input type="number" id="target_year" name="target_year" class="form-control"
+                       value="{{ source_options[0].year + 1 if source_options else 2026 }}"
+                       min="2020" max="2030" required>
+            </div>
+            <div class="form-group">
+                <label for="target_is_spring">Target Season</label>
+                <select id="target_is_spring" name="target_is_spring" class="form-control" required>
+                    <option value="0">Fall</option>
+                    <option value="1">Spring</option>
+                </select>
+            </div>
+        </div>
+
+        <p class="text-muted text-small" style="margin: 20px 0;">
+            This will copy all field slot allocations from the source season to the target season.
+            The time slots will be identical - same fields, same days, same times.
+        </p>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%;">
+            Copy Allocations
+        </button>
+    </form>
+
+    <script>
+    function updateSourceFields() {
+        var select = document.getElementById('source');
+        var option = select.options[select.selectedIndex];
+        document.getElementById('source_year').value = option.dataset.year;
+        document.getElementById('source_is_spring').value = option.dataset.isSpring;
+    }
+    // Initialize on page load
+    updateSourceFields();
+    </script>
+
+    {% else %}
+    <p class="text-muted" style="text-align: center; padding: 40px;">
+        No seasons with field allocations to copy from.
+    </p>
+    <p class="text-muted text-small" style="text-align: center;">
+        First derive allocations from game data:
+    </p>
+    <code style="display: block; margin: 20px auto; padding: 15px; background: #f5f5f5; border-radius: 5px;">
+        python scripts/derive_field_slots.py --year 2025 --season fall
+    </code>
+    {% endif %}
+</div>
+{% endblock %}
