@@ -89,7 +89,8 @@
                     </td>
                     <td>
                         <select name="practice_capacity_late" class="form-control" style="width: 100%;">
-                            <option value="" {{ 'selected' if not field.practice_capacity_late else '' }}>Same</option>
+                            <option value="" {{ 'selected' if field.practice_capacity_late is none else '' }}>Same</option>
+                            <option value="0" {{ 'selected' if field.practice_capacity_late == 0 else '' }}>No Practices</option>
                             {% for i in range(1, 5) %}
                             <option value="{{ i }}" {{ 'selected' if field.practice_capacity_late == i else '' }}>
                                 {{ i }} team{{ 's' if i > 1 else '' }}
@@ -125,10 +126,16 @@
     <h3 style="margin-top: 0;">Practice Capacity</h3>
     <ul style="margin-bottom: 0;">
         <li><strong>Practice Capacity</strong> - How many teams can practice at the same time</li>
-        <li><strong>Late Slot Capacity</strong> - Different capacity for late time slots (e.g., 7:30 PM). Set to "Same" if capacity doesn't change.</li>
+        <li><strong>Late Slot Capacity</strong> - Different capacity for late time slots (e.g., 7:30 PM):
+            <ul style="margin-top: 5px;">
+                <li><strong>Same</strong> - Use the same capacity as the early slot</li>
+                <li><strong>No Practices</strong> - Don't use this field for late practices</li>
+                <li><strong>1-4 teams</strong> - Specific capacity for late slots</li>
+            </ul>
+        </li>
     </ul>
     <p class="text-muted" style="margin-bottom: 0; margin-top: 10px;">
-        Example: Parkwood can hold 2 teams at 5:30 PM but only 1 team at 7:30 PM.
+        Example: Parkwood can hold 2 teams at 5:30 PM but only 1 team at 7:30 PM. Southern Boundaries 2 has no lights, so set Late Slot to "No Practices".
     </p>
 </div>
 {% endblock %}

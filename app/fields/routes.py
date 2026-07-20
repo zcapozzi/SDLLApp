@@ -409,13 +409,17 @@ def properties():
         field_id = int(request.form.get('field_id'))
         usage_type = request.form.get('usage_type')
         practice_capacity = request.form.get('practice_capacity', type=int) or 1
-        practice_capacity_late = request.form.get('practice_capacity_late', type=int) or None
+
+        # Handle late capacity: empty string = None (same), otherwise use the int value (including 0)
+        late_capacity_str = request.form.get('practice_capacity_late', '')
+        practice_capacity_late = int(late_capacity_str) if late_capacity_str != '' else None
 
         field = Field.query.get(field_id)
         if field:
             field.usage_type = usage_type
             field.practice_capacity = practice_capacity
-            field.practice_capacity_late = practice_capacity_late if practice_capacity_late != practice_capacity else None
+            # Store None if "Same" selected, otherwise store the value (including 0 for "No Practices")
+            field.practice_capacity_late = practice_capacity_late
             db.session.commit()
             logger.info(f'Updated properties for {field.location_title}: {field.usage_type_display}')
             flash(f'Updated properties for {field.location_title}', 'success')
