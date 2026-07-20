@@ -990,11 +990,15 @@ def schedule_settings(year, is_spring):
     # GET - show schedule settings
     league_configs = LeagueSeason.get_by_season(year, is_spring)
 
+    # Get League objects to access spring/fall names
+    all_leagues = {l.display_name: l for l in League.get_all_active()}
+
     return render_template(
         'seasons/schedule_settings.html',
         year=year,
         is_spring=is_spring,
         season_name=season_name,
         league_configs=league_configs,
+        all_leagues=all_leagues,
         day_abbrevs=LeagueSeason.DAY_ABBREVS
     )

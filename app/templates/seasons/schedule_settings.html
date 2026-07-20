@@ -165,9 +165,15 @@
             </thead>
             <tbody>
                 {% for config in league_configs %}
+                {% set league_obj = all_leagues.get(config.league) %}
                 <tr id="league-{{ config.ID }}" data-league-id="{{ config.ID }}">
                     <td>
+                        {% if not is_spring and league_obj and league_obj.fall_display_name %}
+                        <strong>{{ league_obj.fall_display_name }}</strong>
+                        <br><span class="text-muted" style="font-size: 0.8em;">Spring: {{ config.league }}</span>
+                        {% else %}
                         <strong>{{ config.league }}</strong>
+                        {% endif %}
                         <span class="dirty-indicator" title="Unsaved changes"></span>
                     </td>
                     <td>
