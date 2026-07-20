@@ -70,37 +70,111 @@
         padding-top: 15px;
         border-top: 1px solid #eee;
     }
-    .preference-list {
-        min-height: 40px;
+
+    /* Drag and drop styles */
+    .preference-container {
+        display: flex;
+        gap: 20px;
+        margin-top: 10px;
+    }
+    .field-pool {
+        flex: 1;
+        min-height: 120px;
         border: 2px dashed #ddd;
-        border-radius: 4px;
+        border-radius: 8px;
         padding: 10px;
         background: #fafafa;
     }
-    .preference-item {
+    .field-pool h5 {
+        margin: 0 0 10px 0;
+        font-size: 12px;
+        color: #888;
+        text-transform: uppercase;
+    }
+    .preference-zone {
+        flex: 1;
+        min-height: 120px;
+        border: 2px dashed rgb(34, 139, 34);
+        border-radius: 8px;
+        padding: 10px;
+        background: rgba(34, 139, 34, 0.05);
+    }
+    .preference-zone h5 {
+        margin: 0 0 10px 0;
+        font-size: 12px;
+        color: rgb(34, 139, 34);
+        text-transform: uppercase;
+    }
+    .preference-zone.drag-over {
+        background: rgba(34, 139, 34, 0.15);
+        border-style: solid;
+    }
+    .field-pool.drag-over {
+        background: #f0f0f0;
+        border-style: solid;
+    }
+    .draggable-field {
         display: inline-flex;
         align-items: center;
-        gap: 5px;
-        padding: 4px 10px;
+        gap: 8px;
+        padding: 8px 12px;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 13px;
+        margin: 4px;
+        cursor: grab;
+        user-select: none;
+        transition: all 0.15s;
+    }
+    .draggable-field:hover {
+        border-color: #999;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .draggable-field.dragging {
+        opacity: 0.5;
+        cursor: grabbing;
+    }
+    .draggable-field.in-preferences {
         background: rgb(34, 139, 34);
         color: white;
-        border-radius: 4px;
-        font-size: 12px;
-        margin: 2px;
+        border-color: rgb(34, 139, 34);
     }
-    .preference-item .rank {
+    .draggable-field .rank {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
         background: rgba(255,255,255,0.3);
-        padding: 2px 6px;
-        border-radius: 3px;
+        border-radius: 50%;
+        font-size: 11px;
         font-weight: bold;
     }
-    .preference-item .remove {
-        cursor: pointer;
-        margin-left: 5px;
-        opacity: 0.8;
+    .draggable-field .drag-handle {
+        color: #999;
+        font-size: 14px;
     }
-    .preference-item .remove:hover {
-        opacity: 1;
+    .draggable-field.in-preferences .drag-handle {
+        color: rgba(255,255,255,0.7);
+    }
+    .drop-indicator {
+        width: 3px;
+        height: 36px;
+        background: rgb(34, 139, 34);
+        border-radius: 2px;
+        display: none;
+        margin: 4px 0;
+    }
+    .drop-indicator.visible {
+        display: inline-block;
+    }
+    .empty-message {
+        color: #999;
+        font-size: 12px;
+        font-style: italic;
+        padding: 10px;
+        text-align: center;
     }
 </style>
 {% endblock %}
@@ -125,7 +199,7 @@
 <div class="league-card" id="league-{{ league.ID }}">
     <h3>{{ league.display_name }}</h3>
 
-    <form method="POST">
+    <form method="POST" id="form-{{ league.ID }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="league_id" value="{{ league.ID }}">
 
@@ -133,9 +207,6 @@
         <div class="field-section">
             <h4>Allowed Game Fields</h4>
             <p class="section-help">Which fields can this league play games at? Leave all unchecked for "any field".</p>
-            <div class="current-rules">
-                Current: <strong>{{ league.game_fields_display }}</strong>
-            </div>
             <div class="field-grid" style="margin-top: 10px;">
                 {% for field in fields %}
                 {% if field %}
@@ -154,9 +225,6 @@
         <div class="field-section">
             <h4>Allowed Practice Fields</h4>
             <p class="section-help">Which fields can this league practice at? Leave all unchecked for "any field".</p>
-            <div class="current-rules">
-                Current: <strong>{{ league.practice_fields_display }}</strong>
-            </div>
             <div class="field-grid" style="margin-top: 10px;">
                 {% for field in fields %}
                 {% if field %}
@@ -171,36 +239,73 @@
             </div>
         </div>
 
-        <!-- Preferred Fields (for optimization) -->
+        <!-- Preferred Fields (Drag & Drop) -->
         <div class="field-section">
-            <h4>Preferred Fields (in order)</h4>
+            <h4>Preferred Fields (drag to reorder)</h4>
             <p class="section-help">
-                Select fields in order of preference. The scheduler will try to use preferred fields first.
-                Hold Ctrl/Cmd to select multiple in order.
+                Drag fields from the pool to set preferences. The scheduler will try to use #1 first, then #2, etc.
             </p>
-            <div class="current-rules">
-                Current:
-                <strong>
-                    {% if league.preferred_field_ids %}
+
+            <div class="preference-container">
+                <div class="field-pool" id="pool-{{ league.ID }}"
+                     ondragover="handleDragOver(event)"
+                     ondragleave="handleDragLeave(event)"
+                     ondrop="handleDrop(event, {{ league.ID }}, 'pool')">
+                    <h5>Available Fields</h5>
+                    <div class="pool-fields">
                         {% for field in fields %}
-                            {% if field and field.ID in league.preferred_field_ids %}
-                                {{ loop.index }}. {{ field.location_title }}{% if not loop.last %}, {% endif %}
-                            {% endif %}
+                        {% if field and field.ID not in league.preferred_field_ids %}
+                        <div class="draggable-field"
+                             draggable="true"
+                             data-field-id="{{ field.ID }}"
+                             data-field-name="{{ field.location_title }}"
+                             data-league-id="{{ league.ID }}"
+                             ondragstart="handleDragStart(event)"
+                             ondragend="handleDragEnd(event)">
+                            <span class="drag-handle">⋮⋮</span>
+                            <span class="name">{{ field.location_title }}</span>
+                        </div>
+                        {% endif %}
                         {% endfor %}
-                    {% else %}
-                        No preferences
-                    {% endif %}
-                </strong>
+                    </div>
+                </div>
+
+                <div class="preference-zone" id="prefs-{{ league.ID }}"
+                     ondragover="handleDragOver(event)"
+                     ondragleave="handleDragLeave(event)"
+                     ondrop="handleDrop(event, {{ league.ID }}, 'prefs')">
+                    <h5>Preferences (in order)</h5>
+                    <div class="pref-fields">
+                        {% for field_id in league.preferred_field_ids %}
+                        {% for field in fields %}
+                        {% if field and field.ID == field_id %}
+                        <div class="draggable-field in-preferences"
+                             draggable="true"
+                             data-field-id="{{ field.ID }}"
+                             data-field-name="{{ field.location_title }}"
+                             data-league-id="{{ league.ID }}"
+                             ondragstart="handleDragStart(event)"
+                             ondragend="handleDragEnd(event)">
+                            <span class="rank">{{ loop.index }}</span>
+                            <span class="drag-handle">⋮⋮</span>
+                            <span class="name">{{ field.location_title }}</span>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                        {% endfor %}
+                        {% if not league.preferred_field_ids %}
+                        <div class="empty-message">Drag fields here to set preferences</div>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
-            <select name="preferred_fields" multiple size="5" style="width: 100%; margin-top: 10px;">
-                {% for field in fields %}
-                {% if field %}
-                <option value="{{ field.ID }}" {{ 'selected' if field.ID in league.preferred_field_ids else '' }}>
-                    {{ field.location_title }}
-                </option>
-                {% endif %}
+
+            <!-- Hidden inputs for form submission -->
+            <div id="pref-inputs-{{ league.ID }}">
+                {% for field_id in league.preferred_field_ids %}
+                <input type="hidden" name="preferred_fields" value="{{ field_id }}">
                 {% endfor %}
-            </select>
+            </div>
         </div>
 
         <div class="btn-row">
@@ -209,4 +314,140 @@
     </form>
 </div>
 {% endfor %}
+
+<script>
+let draggedElement = null;
+
+function handleDragStart(e) {
+    draggedElement = e.target;
+    e.target.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', e.target.dataset.fieldId);
+}
+
+function handleDragEnd(e) {
+    e.target.classList.remove('dragging');
+    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    draggedElement = null;
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+
+    const zone = e.currentTarget;
+    zone.classList.add('drag-over');
+
+    // Find insertion point for reordering within preference zone
+    if (zone.classList.contains('preference-zone')) {
+        const prefFields = zone.querySelector('.pref-fields');
+        const afterElement = getDragAfterElement(prefFields, e.clientY);
+        // Could add visual indicator here
+    }
+}
+
+function handleDragLeave(e) {
+    // Only remove if actually leaving the zone (not entering a child)
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+        e.currentTarget.classList.remove('drag-over');
+    }
+}
+
+function handleDrop(e, leagueId, targetType) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+
+    if (!draggedElement) return;
+
+    const fieldId = draggedElement.dataset.fieldId;
+    const fieldName = draggedElement.dataset.fieldName;
+
+    if (targetType === 'prefs') {
+        // Moving to preferences
+        const prefZone = document.getElementById('prefs-' + leagueId);
+        const prefFields = prefZone.querySelector('.pref-fields');
+
+        // Remove empty message if present
+        const emptyMsg = prefFields.querySelector('.empty-message');
+        if (emptyMsg) emptyMsg.remove();
+
+        // Find insertion point
+        const afterElement = getDragAfterElement(prefFields, e.clientY);
+
+        // Create or move the element
+        draggedElement.classList.add('in-preferences');
+
+        if (afterElement) {
+            prefFields.insertBefore(draggedElement, afterElement);
+        } else {
+            prefFields.appendChild(draggedElement);
+        }
+
+    } else if (targetType === 'pool') {
+        // Moving back to pool
+        const pool = document.getElementById('pool-' + leagueId);
+        const poolFields = pool.querySelector('.pool-fields');
+
+        draggedElement.classList.remove('in-preferences');
+        // Remove rank span if present
+        const rank = draggedElement.querySelector('.rank');
+        if (rank) rank.remove();
+
+        poolFields.appendChild(draggedElement);
+
+        // Check if preference zone is now empty
+        const prefZone = document.getElementById('prefs-' + leagueId);
+        const prefFields = prefZone.querySelector('.pref-fields');
+        if (prefFields.querySelectorAll('.draggable-field').length === 0) {
+            prefFields.innerHTML = '<div class="empty-message">Drag fields here to set preferences</div>';
+        }
+    }
+
+    // Update ranks and hidden inputs
+    updatePreferences(leagueId);
+}
+
+function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.draggable-field:not(.dragging)')];
+
+    return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+
+        if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+        } else {
+            return closest;
+        }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+function updatePreferences(leagueId) {
+    const prefZone = document.getElementById('prefs-' + leagueId);
+    const prefFields = prefZone.querySelectorAll('.draggable-field');
+    const inputContainer = document.getElementById('pref-inputs-' + leagueId);
+
+    // Clear existing inputs
+    inputContainer.innerHTML = '';
+
+    // Update ranks and create hidden inputs
+    prefFields.forEach((field, index) => {
+        // Update rank display
+        let rank = field.querySelector('.rank');
+        if (!rank) {
+            rank = document.createElement('span');
+            rank.className = 'rank';
+            field.insertBefore(rank, field.firstChild);
+        }
+        rank.textContent = index + 1;
+
+        // Create hidden input
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'preferred_fields';
+        input.value = field.dataset.fieldId;
+        inputContainer.appendChild(input);
+    });
+}
+</script>
 {% endblock %}
