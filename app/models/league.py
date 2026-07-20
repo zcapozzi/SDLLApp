@@ -13,6 +13,7 @@ class League(db.Model):
     display_name = db.Column(db.String(100))        # Spring/canonical name
     fall_display_name = db.Column(db.String(100))   # Fall name (NULL = use display_name)
     pitch_type = db.Column(db.String(20), default='kid_pitch')  # tee_ball, machine_pitch, kid_pitch
+    sort_order = db.Column(db.Integer, default=100)  # Lower numbers sort first (youngest to oldest)
     only_assignr_groups = db.Column(db.String(1000))
     earliest_start_time = db.Column(db.Time)  # NULL = no restriction
     latest_start_time = db.Column(db.Time)    # NULL = no restriction
@@ -39,8 +40,8 @@ class League(db.Model):
 
     @classmethod
     def get_all_active(cls):
-        """Get all active leagues"""
-        return cls.query.filter_by(active=1).order_by(cls.display_name).all()
+        """Get all active leagues, ordered by sort_order (youngest to oldest)"""
+        return cls.query.filter_by(active=1).order_by(cls.sort_order, cls.display_name).all()
 
     @classmethod
     def get_by_name(cls, name):
