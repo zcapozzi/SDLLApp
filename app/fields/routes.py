@@ -442,3 +442,53 @@ def properties():
         usage_types=Field.USAGE_TYPES,
         ownership_filter=ownership_filter
     )
+
+
+@fields_bp.route('/time-restrictions', methods=['GET', 'POST'])
+@login_required
+def time_restrictions():
+    """Manage field game time restrictions"""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to manage field time restrictions.', 'error')
+        return redirect(url_for('fields.index'))
+
+    ownership_filter = request.args.get('ownership', 'sdll')
+
+    if request.method == 'POST':
+        from datetime import datetime
+
+        field_id = int(request.form.get('field_id'))
+        field = Field.query.get(field_id)
+
+        if field:
+            # Parse time inputs (empty string = None)
+            def parse_time(val):
+                if not val:
+                    return None
+                return datetime.strptime(val, '%H:%M').time()
+
+            field.game_earliest_weekday = parse_time(request.form.get('earliest_weekday'))
+            field.game_latest_weekday = parse_time(request.form.get('latest_weekday'))
+            field.game_earliest_weekend = parse_time(request.form.get('earliest_weekend'))
+            field.game_latest_weekend = parse_time(request.form.get('latest_weekend'))
+
+            db.session.commit()
+            logger.info(f'Updated time restrictions for {field.location_title}')
+            flash(f'Updated time restrictions for {field.location_title}', 'success')
+
+        return redirect(url_for('fields.time_restrictions', ownership=ownership_filter) + f'#field-{field_id}')
+
+    # GET - filter fields by ownership
+    query = Field.query.filter_by(active=1)
+    if ownership_filter == 'sdll':
+        query = query.filter_by(is_owned=1)
+    elif ownership_filter == 'away':
+        query = query.filter_by(is_owned=0)
+
+    fields = query.order_by(Field.location_title).all()
+
+    return render_template(
+        'fields/time_restrictions.html',
+        fields=fields,
+        ownership_filter=ownership_filter
+    )

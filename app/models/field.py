@@ -1,5 +1,6 @@
 """Field model - maps to sdll_fields table"""
 
+from datetime import time
 from app.extensions import db
 
 
@@ -18,6 +19,13 @@ class Field(db.Model):
     usage_type = db.Column(db.String(20), default='both')  # 'both', 'games_only', 'practice_only'
     practice_capacity = db.Column(db.Integer, default=1)   # Teams that can practice simultaneously
     practice_capacity_late = db.Column(db.Integer)         # Capacity for late slots (NULL = same as practice_capacity)
+
+    # Game time restrictions (NULL = no restriction)
+    # These apply to GAMES only, not practices
+    game_earliest_weekday = db.Column(db.Time)   # Earliest game start Mon-Fri
+    game_latest_weekday = db.Column(db.Time)     # Latest game start Mon-Fri
+    game_earliest_weekend = db.Column(db.Time)   # Earliest game start Sat-Sun
+    game_latest_weekend = db.Column(db.Time)     # Latest game start Sat-Sun
 
     # Restriction type constants
     RESTRICTION_ANYONE = 'anyone'
@@ -151,6 +159,91 @@ class Field(db.Model):
         elif cap > 1:
             return f"{cap} teams"
         return "1 team"
+
+    def can_play_game_at_time(self, start_time, day_of_week):
+        """Check if a game can start at the given time on the given day.
+
+        Args:
+            start_time: datetime.time object
+            day_of_week: 0=Monday, 6=Sunday
+
+        Returns:
+            bool: True if game can be played at this time
+        """
+        is_weekend = day_of_week >= 5  # Saturday=5, Sunday=6
+
+        if is_weekend:
+            earliest = self.game_earliest_weekend
+            latest = self.game_latest_weekend
+        else:
+            earliest = self.game_earliest_weekday
+            latest = self.game_latest_weekday
+
+        # No restrictions = allowed
+        if earliest is None and latest is None:
+            return True
+
+        if earliest is not None and start_time < earliest:
+            return False
+
+        if latest is not None and start_time > latest:
+            return False
+
+        return True
+
+    @property
+    def has_game_time_restrictions(self):
+        """Check if this field has any game time restrictions"""
+        return any([
+            self.game_earliest_weekday,
+            self.game_latest_weekday,
+            self.game_earliest_weekend,
+            self.game_latest_weekend
+        ])
+
+    @property
+    def game_time_restriction_display(self):
+        """Human-readable game time restrictions"""
+        parts = []
+
+        # Weekday restrictions
+        if self.game_earliest_weekday or self.game_latest_weekday:
+            weekday = self._format_time_range(
+                self.game_earliest_weekday,
+                self.game_latest_weekday
+            )
+            parts.append(f"Weekdays: {weekday}")
+
+        # Weekend restrictions
+        if self.game_earliest_weekend or self.game_latest_weekend:
+            weekend = self._format_time_range(
+                self.game_earliest_weekend,
+                self.game_latest_weekend
+            )
+            parts.append(f"Weekends: {weekend}")
+
+        if not parts:
+            return "No restrictions"
+
+        return "; ".join(parts)
+
+    def _format_time_range(self, earliest, latest):
+        """Format a time range for display"""
+        def fmt(t):
+            if t is None:
+                return None
+            return t.strftime('%I:%M %p').lstrip('0')
+
+        e = fmt(earliest)
+        l = fmt(latest)
+
+        if e and l:
+            return f"{e} - {l}"
+        elif e:
+            return f"After {e}"
+        elif l:
+            return f"Before {l}"
+        return "Any time"
 
     @property
     def derived_ownership(self):

@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}Field Time Restrictions{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-toggle {
+        display: inline-flex;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .filter-toggle a {
+        padding: 8px 16px;
+        text-decoration: none;
+        color: #333;
+        background: #fff;
+        border-right: 1px solid #ddd;
+    }
+    .filter-toggle a:last-child {
+        border-right: none;
+    }
+    .filter-toggle a:hover {
+        background: #f5f5f5;
+    }
+    .filter-toggle a.active {
+        background: rgb(34, 139, 34);
+        color: white;
+    }
+    .restriction-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+    .restriction-badge.weekday {
+        background: #3498db;
+        color: white;
+    }
+    .restriction-badge.weekend {
+        background: #9b59b6;
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Field Time Restrictions</h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('fields.properties') }}" class="btn btn-outline">Field Properties</a>
+        <a href="{{ url_for('fields.index') }}" class="btn btn-outline">All Fields</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+    <p class="text-muted" style="margin: 0;">
+        Configure when <strong>games</strong> can be scheduled at each field. These restrictions do NOT apply to practices.
+        <br><small>Example: Cedar Falls can only have games 6:30 PM - 8:30 PM on weekdays due to field availability.</small>
+    </p>
+    <div class="filter-toggle">
+        <a href="{{ url_for('fields.time_restrictions', ownership='sdll') }}" class="{{ 'active' if ownership_filter == 'sdll' else '' }}">SDLL</a>
+        <a href="{{ url_for('fields.time_restrictions', ownership='away') }}" class="{{ 'active' if ownership_filter == 'away' else '' }}">Away</a>
+        <a href="{{ url_for('fields.time_restrictions', ownership='all') }}" class="{{ 'active' if ownership_filter == 'all' else '' }}">All</a>
+    </div>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Field</th>
+                <th style="width: 220px;">Weekday Restrictions</th>
+                <th style="width: 220px;">Weekend Restrictions</th>
+                <th style="width: 100px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for field in fields %}
+            <tr id="field-{{ field.ID }}">
+                <td><strong>{{ field.location_title }}</strong></td>
+                <td>
+                    {% if field.game_earliest_weekday or field.game_latest_weekday %}
+                    <span class="restriction-badge weekday">
+                        {{ field._format_time_range(field.game_earliest_weekday, field.game_latest_weekday) }}
+                    </span>
+                    {% else %}
+                    <span class="text-muted">No restrictions</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if field.game_earliest_weekend or field.game_latest_weekend %}
+                    <span class="restriction-badge weekend">
+                        {{ field._format_time_range(field.game_earliest_weekend, field.game_latest_weekend) }}
+                    </span>
+                    {% else %}
+                    <span class="text-muted">No restrictions</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <button type="button" class="btn btn-outline btn-sm"
+                            onclick="editRestriction({{ field.ID }}, '{{ field.location_title }}', '{{ field.game_earliest_weekday.strftime('%H:%M') if field.game_earliest_weekday else '' }}', '{{ field.game_latest_weekday.strftime('%H:%M') if field.game_latest_weekday else '' }}', '{{ field.game_earliest_weekend.strftime('%H:%M') if field.game_earliest_weekend else '' }}', '{{ field.game_latest_weekend.strftime('%H:%M') if field.game_latest_weekend else '' }}')">
+                        Edit
+                    </button>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4" style="text-align: center; color: #666;">No fields found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">How This Works</h3>
+    <ul style="margin-bottom: 0;">
+        <li><strong>Games only</strong> - These restrictions apply to games, not practices</li>
+        <li><strong>Weekday</strong> = Monday through Friday</li>
+        <li><strong>Weekend</strong> = Saturday and Sunday</li>
+        <li><strong>No restrictions</strong> = Games can be scheduled at any time</li>
+    </ul>
+</div>
+
+<!-- Edit Modal -->
+<div id="edit-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+     background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+    <div class="card" style="max-width: 500px; margin: auto;">
+        <h3 style="margin-bottom: 20px;">Edit Game Time Restrictions</h3>
+        <p class="text-muted" style="margin-bottom: 15px;">
+            Field: <strong id="modal-field-name"></strong>
+        </p>
+        <form method="POST" id="edit-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="field_id" id="edit-field-id">
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <!-- Weekday Column -->
+                <div>
+                    <h4 style="margin: 0 0 15px 0; color: #3498db;">Weekdays (Mon-Fri)</h4>
+                    <div class="form-group">
+                        <label for="earliest_weekday">Earliest Start</label>
+                        <input type="time" id="earliest_weekday" name="earliest_weekday" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="latest_weekday">Latest Start</label>
+                        <input type="time" id="latest_weekday" name="latest_weekday" class="form-control">
+                    </div>
+                    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="setWeekdayPreset('', '')">Clear</button>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="setWeekdayPreset('18:30', '20:30')">6:30-8:30</button>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="setWeekdayPreset('17:30', '')">After 5:30</button>
+                    </div>
+                </div>
+
+                <!-- Weekend Column -->
+                <div>
+                    <h4 style="margin: 0 0 15px 0; color: #9b59b6;">Weekends (Sat-Sun)</h4>
+                    <div class="form-group">
+                        <label for="earliest_weekend">Earliest Start</label>
+                        <input type="time" id="earliest_weekend" name="earliest_weekend" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="latest_weekend">Latest Start</label>
+                        <input type="time" id="latest_weekend" name="latest_weekend" class="form-control">
+                    </div>
+                    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="setWeekendPreset('', '')">Clear</button>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="setWeekendPreset('09:00', '18:00')">9AM-6PM</button>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function editRestriction(fieldId, fieldName, earliestWeekday, latestWeekday, earliestWeekend, latestWeekend) {
+    document.getElementById('edit-field-id').value = fieldId;
+    document.getElementById('modal-field-name').textContent = fieldName;
+    document.getElementById('earliest_weekday').value = earliestWeekday;
+    document.getElementById('latest_weekday').value = latestWeekday;
+    document.getElementById('earliest_weekend').value = earliestWeekend;
+    document.getElementById('latest_weekend').value = latestWeekend;
+    document.getElementById('edit-modal').style.display = 'flex';
+}
+
+function setWeekdayPreset(earliest, latest) {
+    document.getElementById('earliest_weekday').value = earliest;
+    document.getElementById('latest_weekday').value = latest;
+}
+
+function setWeekendPreset(earliest, latest) {
+    document.getElementById('earliest_weekend').value = earliest;
+    document.getElementById('latest_weekend').value = latest;
+}
+
+function closeModal() {
+    document.getElementById('edit-modal').style.display = 'none';
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeModal();
+});
+</script>
+{% endblock %}
