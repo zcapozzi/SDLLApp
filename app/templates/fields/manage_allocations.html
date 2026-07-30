@@ -121,7 +121,7 @@
             <!-- Group by Field -->
             {% if slots_by_field %}
                 {% for field_name, field_data in slots_by_field.items() %}
-                <div style="margin-bottom: 30px;">
+                <div id="field-{{ field_data.field_id }}" style="margin-bottom: 30px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">
                         <h3 style="color: rgb(34, 139, 34); margin: 0;">
                             {{ field_name }} ({{ field_data.slots|length }})
@@ -204,7 +204,7 @@
             <!-- Group by Day -->
             {% if slots_by_day %}
                 {% for day_name, day_data in slots_by_day.items() %}
-                <div style="margin-bottom: 30px;">
+                <div id="day-{{ day_data.day_of_week }}" style="margin-bottom: 30px;">
                     <h3 style="color: rgb(34, 139, 34); border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">
                         {{ day_name }} ({{ day_data.slots|length }})
                     </h3>

@@ -176,6 +176,7 @@ def manage_allocations(year, is_spring):
 
     if request.method == 'POST':
         action = request.form.get('action')
+        anchor = None  # Track which element to scroll to
 
         if action == 'add_slot':
             field_id = int(request.form.get('field_id'))
@@ -208,11 +209,13 @@ def manage_allocations(year, is_spring):
             field = Field.query.get(field_id)
             logger.info(f'Added slot: {field.location_title} {FieldSlot.DAY_NAMES[day_of_week]} {start_time_str}')
             flash(f'Added slot: {field.location_title} {FieldSlot.DAY_NAMES[day_of_week]} {start_time_str}', 'success')
+            anchor = f'field-{field_id}'
 
         elif action == 'delete_slot':
             slot_id = int(request.form.get('slot_id'))
             slot = FieldSlot.query.get(slot_id)
             if slot and slot.year == year and slot.is_spring == is_spring:
+                anchor = f'field-{slot.field_ID}'
                 slot.active = 0
                 db.session.commit()
                 logger.info(f'Deleted slot {slot_id}')
@@ -222,6 +225,7 @@ def manage_allocations(year, is_spring):
             slot_id = int(request.form.get('slot_id'))
             slot = FieldSlot.query.get(slot_id)
             if slot and slot.year == year and slot.is_spring == is_spring:
+                anchor = f'field-{slot.field_ID}'
                 slot.day_of_week = int(request.form.get('day_of_week'))
                 slot.start_time = time.fromisoformat(request.form.get('start_time'))
                 slot.end_time = time.fromisoformat(request.form.get('end_time'))
@@ -250,15 +254,19 @@ def manage_allocations(year, is_spring):
             status = 'SDLL owned' if is_owned else 'Away'
             logger.info(f'Set {count} slots at {field.location_title} to {status}')
             flash(f'Set {count} slots at {field.location_title} to {status}', 'success')
+            anchor = f'field-{field_id}'
 
-        # Preserve filter/group settings on redirect
-        return redirect(url_for(
+        # Preserve filter/group settings on redirect, scroll to edited element
+        redirect_url = url_for(
             'fields.manage_allocations',
             year=year,
             is_spring=is_spring,
             group_by=request.args.get('group_by', 'field'),
             ownership=request.args.get('ownership', 'all')
-        ))
+        )
+        if anchor:
+            redirect_url += f'#{anchor}'
+        return redirect(redirect_url)
 
     # GET - show management page
     group_by = request.args.get('group_by', 'field')  # 'field' or 'day'
