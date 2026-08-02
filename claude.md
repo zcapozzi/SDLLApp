@@ -38,3 +38,50 @@ I have dumped the current database that I'm using in a command-line project to D
 # Sending Updates to admins
 
 Review `sendMessage.md` for instructions on keeping admins up to date on progress or otherwise sending out emails and text messages
+
+# Development Guidelines
+
+## Scroll-Back After Form Submissions
+
+When a page has forms that submit and redirect back to the same page (common pattern for inline editing), the page MUST scroll back to where the user made the edit. This provides better UX by not forcing users to scroll back down after every edit.
+
+### Implementation Pattern
+
+1. **Route**: Track which element was edited and append an anchor to the redirect URL
+   ```python
+   if request.method == 'POST':
+       action = request.form.get('action')
+       anchor = None  # Track which element to scroll to
+
+       if action == 'update_item':
+           item_id = int(request.form.get('item_id'))
+           # ... do the update ...
+           anchor = f'item-{item_id}'
+
+       redirect_url = url_for('blueprint.route_name')
+       if anchor:
+           redirect_url += f'#{anchor}'
+       return redirect(redirect_url)
+   ```
+
+2. **Template**: Add IDs to the elements that can be edited
+   ```html
+   {% for item in items %}
+   <tr id="item-{{ item.id }}">
+       <!-- form fields here -->
+   </tr>
+   {% endfor %}
+   ```
+
+### Pages with Scroll-Back Implemented
+- Field Properties (`/fields/properties`) - `#field-{id}`
+- Field Time Restrictions (`/fields/time-restrictions`) - `#field-{id}`
+- Field Allocations (`/fields/allocations/<year>/<is_spring>/manage`) - `#field-{id}`
+- Fields Index (`/fields/`) - `#field-{id}`
+- Schedule Settings (`/seasons/<year>/<is_spring>/schedule-settings`) - `#league-{id}`
+- Manage Leagues (`/seasons/<year>/<is_spring>/leagues`) - `#league-{id}`
+- Manage Teams (`/seasons/<year>/<is_spring>/teams`) - `#league-{name}`
+- Manage Playoffs (`/seasons/<year>/<is_spring>/playoffs/<league>`) - `#placeholder-{id}`, `#seeds-section`, `#brackets-section`
+
+### When Adding New Forms
+Any new page with inline editing that redirects to itself MUST implement scroll-back following this pattern.

@@ -46,7 +46,7 @@
             {% set regular_count = game_counts.get('regular', 0) %}
             {% set playoff_count = game_counts.get('playoff', 0) %}
             {% set league_obj = all_leagues.get(config.league) %}
-            <tr style="{% if not config.active %}opacity: 0.5; background: #f8f8f8;{% endif %}">
+            <tr id="league-{{ config.ID }}" style="{% if not config.active %}opacity: 0.5; background: #f8f8f8;{% endif %}">
                 <td>
                     <strong>{{ config.league }}</strong>
                     {% if league_obj and league_obj.fall_display_name and not is_spring %}

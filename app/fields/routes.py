@@ -20,6 +20,7 @@ def index():
     """List all fields"""
     if request.method == 'POST' and current_user.can_edit_schedule():
         action = request.form.get('action')
+        anchor = None  # Track which element to scroll to
 
         if action == 'add_field':
             field_name = request.form.get('field_name', '').strip()
@@ -39,6 +40,7 @@ def index():
                     db.session.commit()
                     logger.info(f'Added field: {field_name}')
                     flash(f'Added field: {field_name}', 'success')
+                    anchor = f'field-{field.ID}'
             else:
                 flash('Field name is required', 'error')
 
@@ -50,6 +52,7 @@ def index():
                 db.session.commit()
                 logger.info(f'Deleted field: {field.location_title}')
                 flash(f'Deleted field: {field.location_title}', 'success')
+                # Can't scroll to deleted item, just go to top of list
 
         elif action == 'toggle_ownership':
             field_id = int(request.form.get('field_id'))
@@ -59,8 +62,12 @@ def index():
                 db.session.commit()
                 status = 'SDLL' if field.is_owned else 'Away'
                 logger.info(f'Set {field.location_title} ownership to {status}')
+                anchor = f'field-{field_id}'
 
-        return redirect(url_for('fields.index'))
+        redirect_url = url_for('fields.index')
+        if anchor:
+            redirect_url += f'#{anchor}'
+        return redirect(redirect_url)
 
     fields = Field.get_all_active()
     return render_template('fields/index.html', fields=fields)

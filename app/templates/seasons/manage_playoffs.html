@@ -25,7 +25,7 @@
 </div>
 
 <!-- Seed Placeholders -->
-<div class="card" style="margin-bottom: 20px;">
+<div id="seeds-section" class="card" style="margin-bottom: 20px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
         <h3>Seed Assignments ({{ seed_placeholders|length }})</h3>
         <form method="POST" style="display: inline;">
@@ -50,7 +50,7 @@
         </thead>
         <tbody>
             {% for placeholder in seed_placeholders %}
-            <tr>
+            <tr id="placeholder-{{ placeholder.team_ID }}">
                 <td>
                     <span class="badge" style="background: rgb(34, 139, 34); color: white;">
                         Seed {{ placeholder.seed_number }}
@@ -104,7 +104,7 @@
 </div>
 
 <!-- Bracket Placeholders -->
-<div class="card" style="margin-bottom: 20px;">
+<div id="brackets-section" class="card" style="margin-bottom: 20px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
         <h3>Bracket Positions ({{ bracket_placeholders|length }})</h3>
         <form method="POST" style="display: inline;">
@@ -129,7 +129,7 @@
         </thead>
         <tbody>
             {% for placeholder in bracket_placeholders %}
-            <tr>
+            <tr id="placeholder-{{ placeholder.team_ID }}">
                 <td>
                     <span class="badge badge-fall">
                         {{ placeholder.display_name }}

@@ -153,6 +153,7 @@ def manage_teams(year, is_spring):
 
     if request.method == 'POST':
         action = request.form.get('action')
+        anchor = None  # Track which element to scroll to
 
         if action == 'add_team':
             league = request.form.get('league')
@@ -171,6 +172,7 @@ def manage_teams(year, is_spring):
             db.session.commit()
             logger.info(f'Added team {display_name} to {season_name}')
             flash(f'Added team: {display_name}', 'success')
+            anchor = f'league-{league.replace(" ", "-")}'
 
         elif action == 'add_multiple':
             league = request.form.get('league')
@@ -200,11 +202,13 @@ def manage_teams(year, is_spring):
             db.session.commit()
             logger.info(f'Added {count} teams to {league} in {season_name}')
             flash(f'Added {count} teams to {league}', 'success')
+            anchor = f'league-{league.replace(" ", "-")}'
 
         elif action == 'delete_team':
             team_id = int(request.form.get('team_id'))
             team = TeamSeason.query.get(team_id)
             if team and team.year == year and team.is_spring == is_spring:
+                anchor = f'league-{team.league.replace(" ", "-")}'
                 team.active = 0  # Soft delete
                 db.session.commit()
                 logger.info(f'Deleted team {team.display_name} from {season_name}')
@@ -220,6 +224,7 @@ def manage_teams(year, is_spring):
                 db.session.commit()
                 logger.info(f'Renamed team {old_name} to {new_name}')
                 flash(f'Renamed team to: {new_name}', 'success')
+                anchor = f'league-{team.league.replace(" ", "-")}'
 
         elif action == 'set_team_name':
             team_id = int(request.form.get('team_id'))
@@ -234,8 +239,12 @@ def manage_teams(year, is_spring):
                 else:
                     logger.info(f'Cleared team name for {team.display_name}')
                     flash(f'Team name cleared (will show placeholder)', 'success')
+                anchor = f'league-{team.league.replace(" ", "-")}'
 
-        return redirect(url_for('seasons.manage_teams', year=year, is_spring=is_spring))
+        redirect_url = url_for('seasons.manage_teams', year=year, is_spring=is_spring)
+        if anchor:
+            redirect_url += f'#{anchor}'
+        return redirect(redirect_url)
 
     # GET - show teams
     teams = TeamSeason.get_by_season(year, is_spring)
@@ -580,6 +589,7 @@ def manage_playoffs(year, is_spring, league_name):
 
     if request.method == 'POST':
         action = request.form.get('action')
+        anchor = None  # Track which element to scroll to
 
         if action == 'resolve_placeholder':
             placeholder_id = int(request.form.get('placeholder_id'))
@@ -587,6 +597,7 @@ def manage_playoffs(year, is_spring, league_name):
 
             placeholder = TeamSeason.query.get(placeholder_id)
             if placeholder and placeholder.is_placeholder:
+                anchor = f'placeholder-{placeholder_id}'
                 if actual_team_id:
                     placeholder.resolved_team_id = int(actual_team_id)
                     db.session.commit()
@@ -603,6 +614,8 @@ def manage_playoffs(year, is_spring, league_name):
             placeholder_id = int(request.form.get('placeholder_id'))
             placeholder = TeamSeason.query.get(placeholder_id)
             if placeholder and placeholder.is_placeholder:
+                # Can't scroll to deleted item, scroll to section instead
+                anchor = 'seeds-section' if placeholder.seed_number else 'brackets-section'
                 placeholder.active = 0
                 db.session.commit()
                 logger.info(f'Deleted placeholder {placeholder.display_name}')
@@ -628,6 +641,7 @@ def manage_playoffs(year, is_spring, league_name):
                 year, is_spring, league_name, config.actual_playoff_teams
             )
             flash(f'Regenerated {len(seeds)} seed placeholders', 'success')
+            anchor = 'seeds-section'
 
         elif action == 'regenerate_brackets':
             # Clear existing unresolved bracket placeholders and regenerate
@@ -649,8 +663,12 @@ def manage_playoffs(year, is_spring, league_name):
                 year, is_spring, league_name, config.playoff_format, config.actual_playoff_teams
             )
             flash(f'Regenerated {len(brackets)} bracket placeholders', 'success')
+            anchor = 'brackets-section'
 
-        return redirect(url_for('seasons.manage_playoffs', year=year, is_spring=is_spring, league_name=league_name))
+        redirect_url = url_for('seasons.manage_playoffs', year=year, is_spring=is_spring, league_name=league_name)
+        if anchor:
+            redirect_url += f'#{anchor}'
+        return redirect(redirect_url)
 
     # GET - show placeholders and resolution UI
     placeholders = TeamSeason.get_playoff_placeholders(year, is_spring, league_name)
@@ -810,9 +828,9 @@ def manage_leagues(year, is_spring):
                 logger.info(f'{config.league} {status} for {season_name}')
                 flash(f'{config.league} {status} for this season', 'success')
 
-        # Redirect with anchor to scroll back to the league row (for game generation actions)
+        # Redirect with anchor to scroll back to the league row
         redirect_url = url_for('seasons.manage_leagues', year=year, is_spring=is_spring)
-        if action in ('generate_regular_games', 'generate_playoff_games', 'clear_regular_games', 'clear_playoff_games', 'generate_bracket') and 'league_id' in request.form:
+        if 'league_id' in request.form:
             redirect_url += f'#league-{request.form.get("league_id")}'
         return redirect(redirect_url)
 

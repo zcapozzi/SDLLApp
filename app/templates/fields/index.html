@@ -43,7 +43,7 @@
         <tbody>
             {% for field in fields %}
             {% if field %}
-            <tr>
+            <tr id="field-{{ field.ID }}">
                 <td><strong>{{ field.location_title }}</strong></td>
                 <td>
                     <span class="text-small">{{ field.usage_type_display if field.usage_type else 'Games & Practices' }}</span>

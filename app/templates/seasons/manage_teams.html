@@ -84,7 +84,7 @@
 
         {% if teams_by_league %}
             {% for league, teams in teams_by_league.items() %}
-            <div style="margin-bottom: 30px;">
+            <div id="league-{{ league|replace(' ', '-') }}" style="margin-bottom: 30px;">
                 <h3 style="color: rgb(34, 139, 34); border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">
                     {{ league }} ({{ teams|length }})
                 </h3>
