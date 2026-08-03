@@ -117,11 +117,20 @@
                 <div class="dropdown-menu">
                     <a href="{{ url_for('games.upcoming') }}">Upcoming Games</a>
                     <a href="{{ url_for('games.index') }}">All Games</a>
-                    {% if current_user.can_edit_schedule() %}
+                    {% if current_user.can_edit_schedule() and current_season_year %}
                     <div class="dropdown-divider"></div>
+                    <a href="{{ url_for('scheduler.index', year=current_season_year, is_spring=current_season_is_spring) }}">
+                        <strong>Generate {{ current_season_name }}</strong>
+                    </a>
+                    <a href="{{ url_for('seasons.schedule_settings', year=current_season_year, is_spring=current_season_is_spring) }}">
+                        Settings: {{ current_season_name }}
+                    </a>
+                    <div class="dropdown-divider"></div>
+                    <a href="{{ url_for('scheduler.picker') }}">Other Seasons...</a>
+                    {% elif current_user.can_edit_schedule() %}
+                    <div class="dropdown-divider"></div>
+                    <a href="{{ url_for('scheduler.picker') }}">Schedule Generator</a>
                     <a href="{{ url_for('seasons.schedule_settings_picker') }}">Schedule Settings</a>
-                    <a href="{{ url_for('leagues.field_rules') }}">League Field Rules</a>
-                    <a href="{{ url_for('fields.properties') }}">Field Properties</a>
                     {% endif %}
                 </div>
             </div>
@@ -134,7 +143,6 @@
                     <div class="dropdown-divider"></div>
                     <a href="{{ url_for('seasons.setup') }}">Season Setup</a>
                     <a href="{{ url_for('seasons.copy_wizard') }}">Copy Season</a>
-                    <a href="{{ url_for('fields.copy_allocations') }}">Copy Allocations</a>
                     {% endif %}
                 </div>
             </div>
@@ -143,11 +151,11 @@
                 <a href="#" class="nav-link">Fields ▾</a>
                 <div class="dropdown-menu">
                     <a href="{{ url_for('fields.index') }}">All Fields</a>
-                    <a href="{{ url_for('fields.properties') }}">Field Properties</a>
-                    <a href="{{ url_for('fields.time_restrictions') }}">Time Restrictions</a>
-                    <a href="{{ url_for('fields.allocations') }}">Field Allocations</a>
+                    <a href="{{ url_for('fields.allocations') }}">Allocations</a>
                     {% if current_user.can_edit_schedule() %}
                     <div class="dropdown-divider"></div>
+                    <a href="{{ url_for('fields.properties') }}">Properties</a>
+                    <a href="{{ url_for('fields.time_restrictions') }}">Time Restrictions</a>
                     <a href="{{ url_for('fields.copy_allocations') }}">Copy Allocations</a>
                     {% endif %}
                 </div>
@@ -157,28 +165,13 @@
                 <a href="#" class="nav-link">Leagues ▾</a>
                 <div class="dropdown-menu">
                     <a href="{{ url_for('leagues.index') }}">All Leagues</a>
+                    {% if current_user.can_edit_schedule() %}
+                    <div class="dropdown-divider"></div>
                     <a href="{{ url_for('leagues.field_rules') }}">Field Rules</a>
                     <a href="{{ url_for('leagues.time_restrictions') }}">Time Restrictions</a>
-                    <div class="dropdown-divider"></div>
                     <a href="{{ url_for('leagues.pitch_types') }}">Pitch Types</a>
                     <a href="{{ url_for('leagues.seasonal_names') }}">Seasonal Names</a>
-                </div>
-            </div>
-
-            <div class="nav-item">
-                <a href="#" class="nav-link">Umpires ▾</a>
-                <div class="dropdown-menu">
-                    <a href="#">Assignments</a>
-                    <a href="#">Directory</a>
-                    <a href="#">Organizations</a>
-                </div>
-            </div>
-
-            <div class="nav-item">
-                <a href="#" class="nav-link">People ▾</a>
-                <div class="dropdown-menu">
-                    <a href="#">Coaches</a>
-                    <a href="#">Contacts</a>
+                    {% endif %}
                 </div>
             </div>
 

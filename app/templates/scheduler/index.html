@@ -45,10 +45,32 @@
     .league-card.not-ready {
         border-left-color: #dc3545;
     }
+    .league-card.locked {
+        border-left-color: #666;
+        background: rgba(0,0,0,0.03);
+    }
     .prereq-detail {
         color: #666;
         font-size: 13px;
         margin-left: 28px;
+    }
+    .phase-indicator {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+        margin-left: 10px;
+    }
+    .phase-setup { background: #e3f2fd; color: #1565c0; }
+    .phase-draft { background: #fff3e0; color: #e65100; }
+    .phase-locked { background: #eeeeee; color: #424242; }
+    .lock-banner {
+        background: rgba(100, 100, 100, 0.1);
+        border: 1px solid #999;
+        padding: 15px 20px;
+        border-radius: 4px;
+        margin-bottom: 20px;
     }
 </style>
 {% endblock %}
@@ -57,32 +79,65 @@
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
     <h1>Schedule Generator</h1>
     <div style="display: flex; gap: 10px;">
-        <a href="{{ url_for('seasons.view', year=year, is_spring=is_spring) }}" class="btn btn-outline">Back to Season</a>
+        <a href="{{ url_for('scheduler.picker') }}" class="btn btn-outline">Change Season</a>
+        <a href="{{ url_for('seasons.view', year=year, is_spring=is_spring) }}" class="btn btn-outline">View Season</a>
     </div>
 </div>
 
 <div class="card" style="margin-bottom: 20px;">
     <h2 style="margin-top: 0;">{{ season_name }}</h2>
     <p class="text-muted">
-        The schedule generator creates practices, scrimmages, and games based on your league settings,
-        field allocations, and team rosters.
+        The schedule generator uses a three-phase workflow: <strong>Setup</strong> (create empty slots),
+        <strong>Draft</strong> (fill in matchups/dates/fields), and <strong>Locked</strong> (accept and protect).
     </p>
 </div>
 
+{% if is_locked %}
+<!-- Lock Banner -->
+<div class="lock-banner">
+    <strong>Schedule is Locked</strong>
+    <p class="text-muted text-small" style="margin: 5px 0 0 0;">
+        The schedule has been accepted and locked. You can make manual edits to individual games,
+        but the "Generate" and "Start Fresh" buttons are disabled. Only an admin can unlock.
+    </p>
+    {% if current_user.is_admin() %}
+    <form method="POST" action="{{ url_for('scheduler.unlock', year=year, is_spring=is_spring) }}"
+          style="margin-top: 15px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="text" name="confirm" placeholder='Type "UNLOCK" to confirm'
+                   class="form-control" style="width: 200px;">
+            <button type="submit" class="btn btn-outline" style="border-color: #dc3545; color: #dc3545;">
+                Unlock Schedule
+            </button>
+        </div>
+        <p class="text-muted text-small" style="margin-top: 5px;">
+            Warning: Unlocking allows regeneration which may change existing game assignments.
+        </p>
+    </form>
+    {% endif %}
+</div>
+{% endif %}
+
 <!-- Prerequisites by League -->
 <div class="card">
-    <h3 style="margin-top: 0;">Prerequisites by League</h3>
-    <p class="text-muted text-small">All prerequisites must be met before generating a schedule.</p>
+    <h3 style="margin-top: 0;">Leagues</h3>
+    <p class="text-muted text-small">Configure each league before generating the schedule.</p>
 
     {% for config in league_configs %}
     {% set prereqs = prerequisites.get(config.league, {}) %}
-    <div class="league-card {{ 'ready' if prereqs.ready else 'not-ready' }}">
+    {% set phase = 'locked' if prereqs.locked else ('draft' if prereqs.has_game_slots else 'setup') %}
+    <div class="league-card {{ 'locked' if prereqs.locked else ('ready' if prereqs.ready else 'not-ready') }}" id="league-{{ config.league | replace(' ', '-') }}">
         <h4 style="margin-top: 0; margin-bottom: 10px;">
             {{ config.league }}
-            {% if prereqs.ready %}
-                <span class="badge badge-spring" style="font-size: 11px;">Ready</span>
+            {% if prereqs.locked %}
+                <span class="phase-indicator phase-locked">Phase 3: Locked</span>
+            {% elif prereqs.has_game_slots and prereqs.filled_slot_count > 0 %}
+                <span class="phase-indicator phase-draft">Phase 2: Draft</span>
+            {% elif prereqs.has_game_slots %}
+                <span class="phase-indicator phase-setup">Slots Created</span>
             {% else %}
-                <span class="badge" style="background: #dc3545; color: white; font-size: 11px;">Not Ready</span>
+                <span class="badge" style="background: #dc3545; color: white; font-size: 11px;">Setup Needed</span>
             {% endif %}
         </h4>
 
@@ -133,6 +188,31 @@
                 <div class="prereq-detail">Configure practice and game days. <a href="{{ url_for('seasons.schedule_settings', year=year, is_spring=is_spring) }}">Schedule Settings</a></div>
                 {% endif %}
             </li>
+            <li>
+                <span class="prereq-status {{ 'prereq-ok' if prereqs.has_game_slots else 'prereq-missing' }}">
+                    {{ '&#10003;' if prereqs.has_game_slots else '!' }}
+                </span>
+                Game Slots
+                {% if prereqs.has_game_slots %}
+                <div class="prereq-detail">
+                    {{ prereqs.game_slot_count }} total slots
+                    ({{ prereqs.filled_slot_count }} filled, {{ prereqs.empty_slot_count }} empty)
+                </div>
+                {% else %}
+                <div class="prereq-detail">
+                    No game slots created yet.
+                    {% if prereqs.ready and not prereqs.locked %}
+                    <form method="POST" action="{{ url_for('scheduler.create_slots', year=year, is_spring=is_spring) }}" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="league" value="{{ config.league }}">
+                        <button type="submit" class="btn btn-sm btn-primary" style="margin-left: 10px;">
+                            Create Game Slots
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </li>
         </ul>
     </div>
     {% else %}
@@ -145,6 +225,7 @@
     <h3 style="margin-top: 0;">Generate Schedule</h3>
 
     {% set any_ready = prerequisites.values() | selectattr('ready') | list | length > 0 %}
+    {% set any_has_slots = prerequisites.values() | selectattr('has_game_slots') | list | length > 0 %}
 
     {% if has_proposal %}
     <div style="background: rgba(255, 140, 0, 0.1); padding: 15px; border-radius: 4px; margin-bottom: 15px;">
@@ -153,23 +234,41 @@
     </div>
     {% endif %}
 
-    {% if any_ready %}
-    <form method="POST" action="{{ url_for('scheduler.generate', year=year, is_spring=is_spring) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if is_locked %}
+    <p class="text-muted">
+        Schedule is locked. Unlock it to enable generation controls.
+    </p>
+    {% elif any_ready %}
+    <p class="text-muted text-small">
+        Click below to generate a proposed schedule. You'll be able to review and edit it before saving.
+    </p>
 
-        <p class="text-muted text-small">
-            Click below to generate a proposed schedule. You'll be able to review and edit it before saving.
-        </p>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <form method="POST" action="{{ url_for('scheduler.generate', year=year, is_spring=is_spring) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-primary">Generate Proposed Schedule</button>
+        </form>
 
-        <button type="submit" class="btn btn-primary">Generate Proposed Schedule</button>
+        {% if any_has_slots %}
+        <form method="POST" action="{{ url_for('scheduler.start_fresh', year=year, is_spring=is_spring) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-secondary"
+                    onclick="return confirm('This will clear all existing game assignments and regenerate from scratch. Continue?');">
+                Start Fresh
+            </button>
+        </form>
+        {% endif %}
 
         {% if has_proposal %}
-        <a href="{{ url_for('scheduler.clear', year=year, is_spring=is_spring) }}"
-           class="btn btn-outline"
-           onclick="return confirm('Clear the current proposal?');"
-           style="margin-left: 10px;">Clear Proposal</a>
+        <form method="POST" action="{{ url_for('scheduler.clear', year=year, is_spring=is_spring) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline"
+                    onclick="return confirm('Clear the current proposal?');">
+                Clear Proposal
+            </button>
+        </form>
         {% endif %}
-    </form>
+    </div>
     {% else %}
     <p class="text-muted">
         No leagues are ready for schedule generation. Please complete the prerequisites above.

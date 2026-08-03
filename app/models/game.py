@@ -117,6 +117,142 @@ class Game(db.Model):
         return new_games
 
     @classmethod
+    def generate_game_slots(cls, year, is_spring, league, num_games, game_type='regular'):
+        """
+        Create empty game slots (Phase 1 - Setup).
+
+        Creates Game records with only year/is_spring/league/game_type set.
+        Teams, dates, and fields are NULL - to be filled in Phase 2 (Draft).
+
+        Args:
+            year: Season year
+            is_spring: Whether spring season
+            league: League name
+            num_games: Number of game slots to create
+            game_type: 'regular', 'playoff', or 'practice'
+
+        Returns:
+            List of created Game objects (empty slots)
+        """
+        new_games = []
+        for _ in range(num_games):
+            game = cls(
+                active=1,
+                league=league,
+                year=year,
+                is_spring=is_spring,
+                game_type=game_type,
+                status='scheduled',
+                date_added=datetime.utcnow()
+                # home_ID, away_ID, game_date, location all NULL
+            )
+            db.session.add(game)
+            new_games.append(game)
+
+        db.session.commit()
+        return new_games
+
+    @classmethod
+    def generate_practice_slots(cls, year, is_spring, league, num_practices):
+        """
+        Create empty practice slots (Phase 1 - Setup).
+
+        Similar to game slots but for practices.
+
+        Args:
+            year: Season year
+            is_spring: Whether spring season
+            league: League name
+            num_practices: Number of practice slots to create
+
+        Returns:
+            List of created Game objects (empty practice slots)
+        """
+        return cls.generate_game_slots(year, is_spring, league, num_practices, game_type='practice')
+
+    @classmethod
+    def get_empty_slots(cls, year, is_spring, league=None, game_type=None):
+        """
+        Get game slots that have no team assignments yet.
+
+        Args:
+            year: Season year
+            is_spring: Whether spring season
+            league: Optional league filter
+            game_type: Optional game_type filter
+
+        Returns:
+            List of Game objects with no home_ID assigned
+        """
+        query = cls.query.filter_by(
+            year=year,
+            is_spring=is_spring,
+            active=1
+        ).filter(cls.home_ID.is_(None))
+
+        if league:
+            query = query.filter_by(league=league)
+        if game_type:
+            query = query.filter_by(game_type=game_type)
+
+        return query.order_by(cls.ID).all()
+
+    @classmethod
+    def get_filled_slots(cls, year, is_spring, league=None, game_type=None):
+        """
+        Get game slots that have team assignments.
+
+        Args:
+            year: Season year
+            is_spring: Whether spring season
+            league: Optional league filter
+            game_type: Optional game_type filter
+
+        Returns:
+            List of Game objects with home_ID assigned
+        """
+        query = cls.query.filter_by(
+            year=year,
+            is_spring=is_spring,
+            active=1
+        ).filter(cls.home_ID.isnot(None))
+
+        if league:
+            query = query.filter_by(league=league)
+        if game_type:
+            query = query.filter_by(game_type=game_type)
+
+        return query.order_by(cls.game_date, cls.ID).all()
+
+    @classmethod
+    def clear_slot_assignments(cls, year, is_spring, league=None):
+        """
+        Clear all team/date/field assignments from game slots (for Start Fresh).
+
+        Args:
+            year: Season year
+            is_spring: Whether spring season
+            league: Optional league filter (clears only that league)
+        """
+        query = cls.query.filter_by(
+            year=year,
+            is_spring=is_spring,
+            active=1
+        )
+        if league:
+            query = query.filter_by(league=league)
+
+        games = query.all()
+        for game in games:
+            game.home_ID = None
+            game.away_ID = None
+            game.game_date = None
+            game.location = None
+
+        db.session.commit()
+        return len(games)
+
+    @classmethod
     def generate_regular_season_games(cls, year, is_spring, league, teams, games_per_team):
         """
         Generate regular season game slots with team matchups.

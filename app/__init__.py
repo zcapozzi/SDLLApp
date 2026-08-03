@@ -60,6 +60,34 @@ def create_app(config_name=None):
     def load_user(user_id):
         return User.query.get(int(user_id))
 
+    # Context processor for current season (used in navbar)
+    @app.context_processor
+    def inject_current_season():
+        """Make current season available to all templates."""
+        from .models.league_season import LeagueSeason
+        from datetime import date
+
+        # Get the most recent season with league configs
+        current_season = db.session.query(
+            LeagueSeason.year,
+            LeagueSeason.is_spring
+        ).filter_by(active=1).order_by(
+            LeagueSeason.year.desc(),
+            LeagueSeason.is_spring.desc()
+        ).first()
+
+        if current_season:
+            return {
+                'current_season_year': current_season.year,
+                'current_season_is_spring': current_season.is_spring,
+                'current_season_name': f'{"Spring" if current_season.is_spring else "Fall"} {current_season.year}'
+            }
+        return {
+            'current_season_year': None,
+            'current_season_is_spring': None,
+            'current_season_name': None
+        }
+
     # Global error handler - logs full traceback to stdout for Railway
     @app.errorhandler(Exception)
     def handle_exception(e):

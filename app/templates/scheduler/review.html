@@ -320,35 +320,71 @@
 {% endif %}
 
 <!-- Action Buttons -->
-<div class="card" style="display: flex; gap: 15px; align-items: center;">
-    {% if summary.hard_violations == 0 %}
-    <form method="POST" action="{{ url_for('scheduler.save', year=year, is_spring=is_spring) }}" style="display: inline;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-primary" onclick="return confirm('Save this schedule? This will create {{ games | length }} games/practices.');">
-            Save Schedule
-        </button>
-    </form>
-    {% else %}
-    <form method="POST" action="{{ url_for('scheduler.save', year=year, is_spring=is_spring) }}" style="display: inline;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="force_save" value="1">
-        <button type="submit" class="btn btn-secondary" onclick="return confirm('WARNING: There are {{ summary.hard_violations }} hard rule violations. Save anyway?');">
-            Force Save ({{ summary.hard_violations }} violations)
-        </button>
-    </form>
-    {% endif %}
+<div class="card">
+    <h3 style="margin-top: 0;">Actions</h3>
 
-    <a href="{{ url_for('scheduler.generate', year=year, is_spring=is_spring) }}"
-       class="btn btn-outline"
-       onclick="return confirm('Regenerate? This will discard the current proposal.');">
-        Regenerate
-    </a>
+    <div style="display: flex; gap: 15px; align-items: flex-start; flex-wrap: wrap;">
+        {% if summary.hard_violations == 0 %}
+        <form method="POST" action="{{ url_for('scheduler.save', year=year, is_spring=is_spring) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div style="margin-bottom: 10px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" name="lock_schedule" value="1" checked>
+                    <span>Lock schedule after saving</span>
+                </label>
+                <span class="text-muted text-small" style="margin-left: 24px;">
+                    Prevents regeneration until admin unlocks
+                </span>
+            </div>
+            <button type="submit" class="btn btn-primary"
+                    onclick="return confirm('Save this schedule? This will update {{ games | length }} games/practices.');">
+                Save &amp; Lock Schedule
+            </button>
+        </form>
+        {% else %}
+        <form method="POST" action="{{ url_for('scheduler.save', year=year, is_spring=is_spring) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="force_save" value="1">
+            <div style="margin-bottom: 10px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" name="lock_schedule" value="1">
+                    <span>Lock schedule after saving</span>
+                </label>
+                <span class="text-muted text-small" style="margin-left: 24px;">
+                    Not recommended with violations
+                </span>
+            </div>
+            <button type="submit" class="btn btn-secondary"
+                    onclick="return confirm('WARNING: There are {{ summary.hard_violations }} hard rule violations. Save anyway?');">
+                Force Save ({{ summary.hard_violations }} violations)
+            </button>
+        </form>
+        {% endif %}
 
-    <form method="POST" action="{{ url_for('scheduler.clear', year=year, is_spring=is_spring) }}" style="display: inline;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-outline" onclick="return confirm('Discard this proposal?');">
-            Discard
-        </button>
-    </form>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            <form method="POST" action="{{ url_for('scheduler.generate', year=year, is_spring=is_spring) }}" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline"
+                        onclick="return confirm('Regenerate? This will try different arrangements.');">
+                    Regenerate
+                </button>
+            </form>
+
+            <form method="POST" action="{{ url_for('scheduler.start_fresh', year=year, is_spring=is_spring) }}" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline"
+                        onclick="return confirm('Start Fresh? This will clear all assignments and regenerate from scratch.');">
+                    Start Fresh
+                </button>
+            </form>
+
+            <form method="POST" action="{{ url_for('scheduler.clear', year=year, is_spring=is_spring) }}" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline" onclick="return confirm('Discard this proposal?');">
+                    Discard
+                </button>
+            </form>
+        </div>
+    </div>
 </div>
 {% endblock %}

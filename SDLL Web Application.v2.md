@@ -119,8 +119,14 @@ Around the same time, we get our field allocations from Durham Parks and Rec. We
 - Field league restrictions (Anyone/Exclude/Only)
 - League time restrictions (earliest/latest start times for younger leagues)
 
-### Stage 3: Games
-We specify a number of games per team per league and whether or not we are going to have playoffs. We need to specify the format of the playoffs to determine the number of games.
+### Stage 3: Games (Three-Phase Workflow)
+We specify a number of games per team per league and whether or not we are going to have playoffs. The scheduling uses a three-phase workflow:
+
+| Phase | Name | Description | Can Regenerate? |
+|-------|------|-------------|-----------------|
+| 1 | **Setup** | Create empty game slots (count based on teams × games/team ÷ 2) | N/A |
+| 2 | **Draft** | Auto-scheduler fills matchups + dates + fields | Yes, unlimited |
+| 3 | **Locked** | Schedule accepted, manual edits only | No (admin unlock required) |
 
 **Implemented:**
 - Configure games per team (6, 8, 10, 12, 14, 16)
@@ -128,11 +134,14 @@ We specify a number of games per team per league and whether or not we are going
 - Playoff format configuration (Single Elimination, Double Elimination, Round Robin + Knockout)
 - Auto-generate playoff games using seed placeholders
 - Game types: regular, playoff, practice
-
-**Not Yet Implemented:**
+- Three-phase scheduling workflow (Setup → Draft → Locked)
+- Schedule Generator UI with prerequisites tracking
+- "Start Fresh" to clear all assignments and regenerate
+- Schedule locking/unlocking (admin only)
 - Assign games to specific field slots (date/time/location)
+- Balance home/away per team
 - Balance early vs late game times per team
-- Conflict detection (overlapping games at same field)
+- Validation rules (hard and soft)
 
 ### Stage 4: In-Season Changes
 Throughout the season, reschedules happen due to rain and other stuff. When that happens, the game record remains, but we need to change the date/time/location.

@@ -33,6 +33,11 @@ class LeagueSeason(db.Model):
     first_practice_date = db.Column(db.Date)
     opening_day_date = db.Column(db.Date)
 
+    # Schedule lock settings (Phase 3 - prevents regeneration once accepted)
+    schedule_locked = db.Column(db.Boolean, default=False)
+    schedule_locked_at = db.Column(db.DateTime, nullable=True)
+    schedule_locked_by = db.Column(db.BigInteger, nullable=True)  # user ID who locked
+
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
     updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(),
                           onupdate=db.func.current_timestamp())
@@ -309,3 +314,50 @@ class LeagueSeason(db.Model):
         if issues:
             return ", ".join(issues)
         return "Ready"
+
+    def lock_schedule(self, user_id):
+        """Lock the schedule to prevent regeneration.
+
+        Args:
+            user_id: ID of the user locking the schedule
+        """
+        from datetime import datetime
+        self.schedule_locked = True
+        self.schedule_locked_at = datetime.utcnow()
+        self.schedule_locked_by = user_id
+        db.session.commit()
+
+    def unlock_schedule(self):
+        """Unlock the schedule to allow regeneration."""
+        self.schedule_locked = False
+        self.schedule_locked_at = None
+        self.schedule_locked_by = None
+        db.session.commit()
+
+    @classmethod
+    def is_season_locked(cls, year, is_spring):
+        """Check if any league in the season has a locked schedule."""
+        configs = cls.get_by_season(year, is_spring)
+        return any(c.schedule_locked for c in configs)
+
+    @classmethod
+    def lock_all_for_season(cls, year, is_spring, user_id):
+        """Lock all league schedules for a season."""
+        from datetime import datetime
+        configs = cls.get_by_season(year, is_spring)
+        now = datetime.utcnow()
+        for config in configs:
+            config.schedule_locked = True
+            config.schedule_locked_at = now
+            config.schedule_locked_by = user_id
+        db.session.commit()
+
+    @classmethod
+    def unlock_all_for_season(cls, year, is_spring):
+        """Unlock all league schedules for a season."""
+        configs = cls.get_by_season(year, is_spring)
+        for config in configs:
+            config.schedule_locked = False
+            config.schedule_locked_at = None
+            config.schedule_locked_by = None
+        db.session.commit()

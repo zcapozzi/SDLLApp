@@ -1,4 +1,10 @@
-"""Scheduler routes for generating and managing proposed schedules."""
+"""Scheduler routes for generating and managing proposed schedules.
+
+Three-phase workflow:
+- Phase 1 (Setup): Create empty game slots via create_slots route
+- Phase 2 (Draft): Generate fills in matchups/dates/fields, can regenerate
+- Phase 3 (Locked): Save & Lock freezes schedule, manual edits only
+"""
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_login import login_required, current_user
@@ -29,15 +35,22 @@ def index(year, is_spring):
     # Get league configurations
     league_configs = LeagueSeason.get_by_season(year, is_spring)
 
+    # Check if season schedule is locked
+    is_locked = LeagueSeason.is_season_locked(year, is_spring)
+
     # Check prerequisites for each league
     prerequisites = {}
     for config in league_configs:
         prereqs = {
             'has_teams': False,
             'has_slots': False,
+            'has_game_slots': False,
             'has_dates': False,
             'has_days': False,
-            'ready': False
+            'ready': False,
+            'locked': config.schedule_locked,
+            'locked_at': config.schedule_locked_at,
+            'locked_by': config.schedule_locked_by
         }
 
         # Check teams
@@ -54,6 +67,22 @@ def index(year, is_spring):
         ).count()
         prereqs['has_slots'] = slots > 0
         prereqs['slot_count'] = slots
+
+        # Check if game slots exist (Phase 1 complete)
+        game_slots = Game.query.filter_by(
+            year=year, is_spring=is_spring, league=config.league,
+            active=1, game_type='regular'
+        ).count()
+        prereqs['has_game_slots'] = game_slots > 0
+        prereqs['game_slot_count'] = game_slots
+
+        # Check how many are filled vs empty
+        empty_slots = Game.query.filter_by(
+            year=year, is_spring=is_spring, league=config.league,
+            active=1, game_type='regular'
+        ).filter(Game.home_ID.is_(None)).count()
+        prereqs['empty_slot_count'] = empty_slots
+        prereqs['filled_slot_count'] = game_slots - empty_slots
 
         # Check dates
         prereqs['has_dates'] = bool(config.first_practice_date and config.opening_day_date)
@@ -85,26 +114,92 @@ def index(year, is_spring):
         season_name=season_name,
         league_configs=league_configs,
         prerequisites=prerequisites,
-        has_proposal=has_proposal
+        has_proposal=has_proposal,
+        is_locked=is_locked
     )
+
+
+@scheduler_bp.route('/<int:year>/<int:is_spring>/create-slots', methods=['POST'])
+@login_required
+def create_slots(year, is_spring):
+    """Phase 1: Create empty game slots for a league."""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to create game slots.', 'error')
+        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+    league = request.form.get('league')
+
+    if not league:
+        flash('No league specified.', 'error')
+        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+    # Check if schedule is locked
+    config = LeagueSeason.query.filter_by(
+        year=year, is_spring=is_spring, league=league, active=1
+    ).first()
+
+    if config and config.schedule_locked:
+        flash(f'{league} schedule is locked. Unlock it first to make changes.', 'error')
+        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+    # Get number of teams
+    teams = TeamSeason.query.filter_by(
+        year=year, is_spring=is_spring, league=league, active=1, is_placeholder=0
+    ).all()
+
+    if len(teams) < 2:
+        flash(f'{league}: Need at least 2 teams to create game slots.', 'error')
+        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+    # Calculate number of games needed
+    games_per_team = config.regular_season_games if config else 10
+    num_games = (len(teams) * games_per_team) // 2
+
+    # Check if slots already exist
+    existing = Game.query.filter_by(
+        year=year, is_spring=is_spring, league=league, active=1, game_type='regular'
+    ).count()
+
+    if existing > 0:
+        flash(f'{league}: {existing} game slots already exist. Delete them first or use "Start Fresh".', 'warning')
+        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+    try:
+        new_games = Game.generate_game_slots(year, is_spring, league, num_games, game_type='regular')
+        logger.info(f'Created {len(new_games)} empty game slots for {league} in {season_name}')
+        flash(f'Created {len(new_games)} empty game slots for {league}. Now generate to fill them.', 'success')
+    except Exception as e:
+        logger.info(f'Failed to create game slots: {str(e)}')
+        flash(f'Error creating game slots: {str(e)}', 'error')
+
+    return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
 
 
 @scheduler_bp.route('/<int:year>/<int:is_spring>/generate', methods=['POST'])
 @login_required
 def generate(year, is_spring):
-    """Generate a proposed schedule."""
+    """Phase 2: Generate a proposed schedule (fills in matchups, dates, fields)."""
     if not current_user.can_edit_schedule():
         flash('You do not have permission to generate schedules.', 'error')
         return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
 
+    # Check if schedule is locked
+    if LeagueSeason.is_season_locked(year, is_spring):
+        flash('Schedule is locked. Unlock it first to regenerate.', 'error')
+        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    # Check if this is a "start fresh" request
+    start_fresh = request.form.get('start_fresh') == '1'
 
     # Optionally filter to specific leagues
     selected_leagues = request.form.getlist('leagues')
 
     try:
         generator = ScheduleGenerator(year, is_spring)
-        result = generator.generate()
+        result = generator.generate(start_fresh=start_fresh)
 
         # Store in session for review
         proposed_key = f'proposed_schedule_{year}_{is_spring}'
@@ -118,8 +213,9 @@ def generate(year, is_spring):
             for warning in result['warnings']:
                 flash(warning['message'], 'warning')
 
+        action = 'Regenerated (start fresh)' if start_fresh else 'Generated'
         flash(
-            f'Generated {summary["total_games"]} games, {summary["total_practices"]} practices, '
+            f'{action} {summary["total_games"]} games, {summary["total_practices"]} practices, '
             f'{summary["total_scrimmages"]} scrimmages. '
             f'{summary["hard_violations"]} hard violations, {summary["soft_violations"]} soft violations.',
             'success' if summary['hard_violations'] == 0 else 'warning'
@@ -202,7 +298,7 @@ def review(year, is_spring):
 @scheduler_bp.route('/<int:year>/<int:is_spring>/save', methods=['POST'])
 @login_required
 def save(year, is_spring):
-    """Save the proposed schedule to the database."""
+    """Phase 3: Save the proposed schedule and lock it."""
     if not current_user.can_edit_schedule():
         flash('You do not have permission to save schedules.', 'error')
         return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
@@ -223,9 +319,31 @@ def save(year, is_spring):
         flash(f'Cannot save: {len(hard_violations)} hard rule violations. Fix them or check "Force save" to proceed.', 'error')
         return redirect(url_for('scheduler.review', year=year, is_spring=is_spring))
 
+    # Check if locking is requested (default yes)
+    should_lock = request.form.get('lock_schedule', '1') == '1'
+
     try:
         saved_count = 0
+        updated_count = 0
+
+        # First, apply assignments to existing game records
+        assignments = proposal.get('assignments', {})
+        for game_id, assignment in assignments.items():
+            game = Game.query.get(int(game_id))
+            if game:
+                game.home_ID = assignment['home_id']
+                game.away_ID = assignment['away_id']
+                if assignment['game_date']:
+                    game.game_date = datetime.fromisoformat(assignment['game_date'])
+                game.location = assignment['field_id']
+                updated_count += 1
+
+        # Then, create new games for any proposed that don't have existing records
         for proposed_game in proposal['games']:
+            # Skip if this was an assignment to existing record
+            if proposed_game['id'] in [int(k) for k in assignments.keys()]:
+                continue
+
             # Parse the game date
             game_date = None
             if proposed_game['game_date']:
@@ -256,11 +374,20 @@ def save(year, is_spring):
 
         db.session.commit()
 
+        # Lock the schedule if requested
+        if should_lock:
+            LeagueSeason.lock_all_for_season(year, is_spring, current_user.ID)
+            logger.info(f'Locked schedule for {season_name}')
+
         # Clear the proposal from session
         del session[proposed_key]
 
-        logger.info(f'Saved {saved_count} games for {season_name}')
-        flash(f'Successfully saved {saved_count} games/practices to the schedule!', 'success')
+        logger.info(f'Saved {saved_count} new games, updated {updated_count} existing games for {season_name}')
+
+        if should_lock:
+            flash(f'Successfully saved schedule ({saved_count} new, {updated_count} updated) and locked it!', 'success')
+        else:
+            flash(f'Successfully saved schedule ({saved_count} new, {updated_count} updated).', 'success')
 
         return redirect(url_for('seasons.view', year=year, is_spring=is_spring))
 
@@ -353,3 +480,98 @@ def api_proposal(year, is_spring):
         return jsonify({'error': 'No proposal found'}), 404
 
     return jsonify(proposal)
+
+
+@scheduler_bp.route('/<int:year>/<int:is_spring>/unlock', methods=['POST'])
+@login_required
+def unlock(year, is_spring):
+    """Unlock the schedule to allow regeneration (admin only)."""
+    if not current_user.is_admin():
+        flash('Only administrators can unlock schedules.', 'error')
+        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    # Confirm action
+    confirm = request.form.get('confirm')
+    if confirm != 'UNLOCK':
+        flash('You must type UNLOCK to confirm this action.', 'error')
+        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+    try:
+        LeagueSeason.unlock_all_for_season(year, is_spring)
+        logger.info(f'Unlocked schedule for {season_name} by user {current_user.ID}')
+        flash(f'Schedule for {season_name} has been unlocked. You can now regenerate.', 'success')
+    except Exception as e:
+        logger.info(f'Failed to unlock schedule: {str(e)}')
+        flash(f'Error unlocking schedule: {str(e)}', 'error')
+
+    return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+
+@scheduler_bp.route('/<int:year>/<int:is_spring>/start-fresh', methods=['POST'])
+@login_required
+def start_fresh(year, is_spring):
+    """Clear all assignments and regenerate from scratch."""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to modify schedules.', 'error')
+        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+    # Check if schedule is locked
+    if LeagueSeason.is_season_locked(year, is_spring):
+        flash('Schedule is locked. Unlock it first to start fresh.', 'error')
+        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    try:
+        # Clear existing assignments
+        cleared = Game.clear_slot_assignments(year, is_spring)
+        logger.info(f'Cleared {cleared} game assignments for {season_name}')
+
+        # Regenerate
+        generator = ScheduleGenerator(year, is_spring)
+        result = generator.generate(start_fresh=True)
+
+        # Store in session for review
+        proposed_key = f'proposed_schedule_{year}_{is_spring}'
+        session[proposed_key] = result
+
+        summary = result['summary']
+        flash(
+            f'Started fresh: Cleared {cleared} existing assignments. '
+            f'Generated {summary["total_games"]} games, {summary["total_practices"]} practices. '
+            f'{summary["hard_violations"]} hard violations, {summary["soft_violations"]} soft violations.',
+            'success' if summary['hard_violations'] == 0 else 'warning'
+        )
+
+        return redirect(url_for('scheduler.review', year=year, is_spring=is_spring))
+
+    except Exception as e:
+        logger.info(f'Start fresh failed: {str(e)}')
+        flash(f'Error starting fresh: {str(e)}', 'error')
+        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+
+@scheduler_bp.route('/')
+@login_required
+def picker():
+    """Season picker for the scheduler."""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to use the scheduler.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    # Get all seasons with LeagueSeason configs
+    from sqlalchemy import distinct
+    seasons = db.session.query(
+        distinct(LeagueSeason.year),
+        LeagueSeason.is_spring
+    ).filter_by(active=1).order_by(
+        LeagueSeason.year.desc(),
+        LeagueSeason.is_spring.desc()
+    ).all()
+
+    return render_template(
+        'scheduler/picker.html',
+        seasons=seasons
+    )

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Schedule Generator{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Schedule Generator</h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline">Back to Dashboard</a>
+    </div>
+</div>
+
+<div class="card">
+    <h3 style="margin-top: 0;">Select a Season</h3>
+    <p class="text-muted text-small">
+        Choose a season to generate or manage its schedule. The schedule generator creates
+        game matchups, assigns dates/times, and allocates fields based on your configuration.
+    </p>
+
+    {% if seasons %}
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-top: 20px;">
+        {% for year, is_spring in seasons %}
+        <a href="{{ url_for('scheduler.index', year=year, is_spring=is_spring) }}"
+           class="card" style="text-decoration: none; color: inherit; text-align: center; padding: 25px;">
+            <span class="badge {{ 'badge-spring' if is_spring else 'badge-fall' }}" style="font-size: 14px;">
+                {{ 'Spring' if is_spring else 'Fall' }}
+            </span>
+            <div style="font-size: 28px; font-weight: 700; margin-top: 10px;">{{ year }}</div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted" style="margin-top: 20px;">
+        No seasons with league configurations found.
+        <a href="{{ url_for('seasons.setup') }}">Create a season</a> first.
+    </p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h3 style="margin-top: 0;">Three-Phase Workflow</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Phase</th>
+                <th>Name</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><span class="badge badge-spring">1</span></td>
+                <td><strong>Setup</strong></td>
+                <td>Create empty game slots based on teams and games per team</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-fall">2</span></td>
+                <td><strong>Draft</strong></td>
+                <td>Auto-scheduler fills in matchups, dates, and fields. Can regenerate until satisfied.</td>
+            </tr>
+            <tr>
+                <td><span class="badge" style="background: #666;">3</span></td>
+                <td><strong>Locked</strong></td>
+                <td>Schedule accepted. Only manual edits allowed. Admin unlock required to regenerate.</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}

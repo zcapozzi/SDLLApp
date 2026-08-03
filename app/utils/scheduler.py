@@ -360,7 +360,13 @@ class ScheduleValidator:
 
 
 class ScheduleGenerator:
-    """Generates proposed schedules for a season."""
+    """Generates proposed schedules for a season.
+
+    Three-phase workflow:
+    - Phase 1 (Setup): Empty game slots created via Game.generate_game_slots()
+    - Phase 2 (Draft): This class fills in matchups + dates + fields
+    - Phase 3 (Locked): Schedule accepted, manual edits only
+    """
 
     def __init__(self, year, is_spring):
         self.year = year
@@ -369,16 +375,24 @@ class ScheduleGenerator:
         self.violations = []
         self.warnings = []
         self._next_id = 1
+        self._slot_assignments = {}  # Maps game_id to proposed assignment
 
-    def generate(self):
+    def generate(self, start_fresh=False):
         """Generate a complete proposed schedule.
 
+        This fills in existing game slots with matchups, dates, and fields.
+        Does NOT create new game records - those should exist already.
+
+        Args:
+            start_fresh: If True, treats all slots as unassigned (ignores existing assignments)
+
         Returns:
-            dict with 'games', 'violations', 'warnings'
+            dict with 'games', 'violations', 'warnings', 'assignments'
         """
         self.proposed_games = []
         self.violations = []
         self.warnings = []
+        self._slot_assignments = {}
 
         # Validate prerequisites
         if not self._validate_prerequisites():
@@ -387,8 +401,18 @@ class ScheduleGenerator:
         # Get league configurations
         league_configs = LeagueSeason.get_by_season(self.year, self.is_spring)
 
+        # Check for locked schedules
+        locked_leagues = [c.league for c in league_configs if c.schedule_locked]
+        if locked_leagues:
+            self.warnings.append({
+                'type': 'schedule_locked',
+                'message': f'The following leagues have locked schedules and will be skipped: {", ".join(locked_leagues)}'
+            })
+            # Filter out locked leagues
+            league_configs = [c for c in league_configs if not c.schedule_locked]
+
         for config in league_configs:
-            self._generate_for_league(config)
+            self._generate_for_league(config, start_fresh)
 
         # Validate the generated schedule
         validator = ScheduleValidator(self.year, self.is_spring)
@@ -440,8 +464,13 @@ class ScheduleGenerator:
 
         return len(self.warnings) == 0
 
-    def _generate_for_league(self, config):
-        """Generate schedule for a single league."""
+    def _generate_for_league(self, config, start_fresh=False):
+        """Generate schedule for a single league.
+
+        Args:
+            config: LeagueSeason configuration
+            start_fresh: If True, treats all slots as unassigned
+        """
         league_name = config.league
 
         # Get teams for this league
@@ -466,16 +495,34 @@ class ScheduleGenerator:
         # Get available field slots
         all_slots = FieldSlot.get_by_season(self.year, self.is_spring)
 
+        # Get existing game slots for this league
+        existing_games = Game.query.filter_by(
+            year=self.year,
+            is_spring=self.is_spring,
+            league=league_name,
+            active=1
+        ).all()
+
+        # Separate by type
+        regular_slots = [g for g in existing_games if g.game_type == 'regular']
+        practice_slots = [g for g in existing_games if g.game_type == 'practice']
+        playoff_slots = [g for g in existing_games if g.game_type == 'playoff']
+
+        # If start_fresh, treat all as unassigned
+        if start_fresh:
+            for game in existing_games:
+                game._temp_clear = True  # Mark for proposal
+
         # Phase 1: Pre-opening day (practices and scrimmages)
-        self._generate_pre_opening(config, teams, league, all_slots)
+        self._generate_pre_opening(config, teams, league, all_slots, practice_slots, start_fresh)
 
         # Phase 2: Games (opening day onwards)
-        self._generate_games(config, teams, league, all_slots)
+        self._generate_games(config, teams, league, all_slots, regular_slots, start_fresh)
 
         # Phase 3: Post-opening day practices
-        self._generate_post_opening_practices(config, teams, league, all_slots)
+        self._generate_post_opening_practices(config, teams, league, all_slots, practice_slots, start_fresh)
 
-    def _generate_pre_opening(self, config, teams, league, all_slots):
+    def _generate_pre_opening(self, config, teams, league, all_slots, practice_slots=None, start_fresh=False):
         """Generate practices and scrimmages before opening day."""
         if not config.first_practice_date or not config.opening_day_date:
             return
@@ -504,13 +551,16 @@ class ScheduleGenerator:
 
         # Generate practices for each date (except scrimmage day)
         for practice_date in practice_dates:
-            self._assign_practices_for_date(config, teams, league, all_slots, practice_date)
+            self._assign_practices_for_date(config, teams, league, all_slots, practice_date, practice_slots, start_fresh)
 
         # Generate scrimmages on scrimmage day
         self._generate_scrimmages(config, teams, league, all_slots, scrimmage_date)
 
-    def _generate_games(self, config, teams, league, all_slots):
-        """Generate regular season games from opening day onwards."""
+    def _generate_games(self, config, teams, league, all_slots, existing_slots=None, start_fresh=False):
+        """Generate regular season games from opening day onwards.
+
+        If existing_slots is provided, fills those slots instead of creating new ones.
+        """
         if not config.opening_day_date:
             return
 
@@ -537,10 +587,10 @@ class ScheduleGenerator:
         # Get available slots for each date
         slots_by_date = self._group_slots_by_date(all_slots, game_dates, league, 'game')
 
-        # Assign games to slots
-        self._assign_games_to_slots(config, matchups, slots_by_date, league)
+        # Assign games to slots, using existing game records if available
+        self._assign_games_to_slots(config, matchups, slots_by_date, league, existing_slots, start_fresh)
 
-    def _generate_post_opening_practices(self, config, teams, league, all_slots):
+    def _generate_post_opening_practices(self, config, teams, league, all_slots, practice_slots=None, start_fresh=False):
         """Generate practices after opening day (on P days only)."""
         if not config.opening_day_date:
             return
@@ -555,7 +605,7 @@ class ScheduleGenerator:
 
         while current_date <= end_date:
             if current_date.weekday() in practice_days:
-                self._assign_practices_for_date(config, teams, league, all_slots, current_date)
+                self._assign_practices_for_date(config, teams, league, all_slots, current_date, practice_slots, start_fresh)
             current_date += timedelta(days=1)
 
     def _generate_round_robin(self, teams, games_per_team):
@@ -636,7 +686,7 @@ class ScheduleGenerator:
                 'message': f'{config.league}: Odd number of teams - {shuffled[-1].display_name} has no scrimmage partner.'
             })
 
-    def _assign_practices_for_date(self, config, teams, league, all_slots, practice_date):
+    def _assign_practices_for_date(self, config, teams, league, all_slots, practice_date, existing_slots=None, start_fresh=False):
         """Assign practices for all teams on a given date."""
         day_of_week = practice_date.weekday()
 
@@ -688,15 +738,28 @@ class ScheduleGenerator:
             self._next_id += 1
             self.proposed_games.append(practice)
 
-    def _assign_games_to_slots(self, config, matchups, slots_by_date, league):
-        """Assign game matchups to available slots."""
+    def _assign_games_to_slots(self, config, matchups, slots_by_date, league, existing_game_records=None, start_fresh=False):
+        """Assign game matchups to available slots.
+
+        If existing_game_records is provided, creates assignments that map to those
+        existing Game records instead of creating new ProposedGame objects.
+        """
         matchup_idx = 0
+        existing_idx = 0
 
         # Track home/away counts for balancing
         home_counts = defaultdict(int)
         away_counts = defaultdict(int)
         early_counts = defaultdict(int)
         late_counts = defaultdict(int)
+
+        # Filter existing records to those needing assignment
+        records_to_fill = []
+        if existing_game_records:
+            for g in existing_game_records:
+                # If start_fresh or no assignment yet
+                if start_fresh or g.home_ID is None:
+                    records_to_fill.append(g)
 
         for game_date, slots in sorted(slots_by_date.items()):
             for slot in slots:
@@ -724,8 +787,24 @@ class ScheduleGenerator:
                     game_date=game_datetime
                 )
                 game.slot = slot
-                game.id = self._next_id
-                self._next_id += 1
+
+                # Link to existing game record if available
+                if existing_idx < len(records_to_fill):
+                    existing_game = records_to_fill[existing_idx]
+                    game.id = existing_game.ID  # Use existing game ID
+                    game.existing_record = existing_game
+                    self._slot_assignments[existing_game.ID] = {
+                        'game_id': existing_game.ID,
+                        'home_id': home.team_ID,
+                        'away_id': away.team_ID,
+                        'game_date': game_datetime.isoformat() if game_datetime else None,
+                        'field_id': slot.field.ID if slot and slot.field else None
+                    }
+                    existing_idx += 1
+                else:
+                    game.id = self._next_id
+                    self._next_id += 1
+
                 self.proposed_games.append(game)
 
                 # Update tracking
@@ -827,11 +906,13 @@ class ScheduleGenerator:
             'games': [g.to_dict() for g in self.proposed_games],
             'violations': [v.to_dict() for v in self.violations],
             'warnings': self.warnings,
+            'assignments': self._slot_assignments,  # Maps existing game IDs to proposed values
             'summary': {
                 'total_games': len([g for g in self.proposed_games if g.game_type in ('regular', 'playoff')]),
                 'total_practices': len([g for g in self.proposed_games if g.game_type == 'practice']),
                 'total_scrimmages': len([g for g in self.proposed_games if g.game_type == 'scrimmage']),
                 'hard_violations': len([v for v in self.violations if v.severity == ScheduleViolation.HARD]),
-                'soft_violations': len([v for v in self.violations if v.severity == ScheduleViolation.SOFT])
+                'soft_violations': len([v for v in self.violations if v.severity == ScheduleViolation.SOFT]),
+                'existing_games_updated': len(self._slot_assignments)
             }
         }
