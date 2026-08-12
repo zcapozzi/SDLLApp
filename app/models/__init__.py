@@ -7,3 +7,4 @@ from .field import Field
 from .field_slot import FieldSlot
 from .league import League
 from .league_season import LeagueSeason
+from .organization import Organization

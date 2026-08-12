@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}External Teams{% endblock %}
+
+{% block extra_css %}
+<style>
+    .org-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        background: white;
+    }
+    .org-card.home-org {
+        border-color: rgb(34, 139, 34);
+        background: rgba(34, 139, 34, 0.02);
+    }
+    .org-card h3 {
+        margin: 0 0 5px 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .org-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        background: rgb(34, 139, 34);
+        color: white;
+    }
+    .org-badge.external {
+        background: #ff9800;
+    }
+    .teams-list {
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+    }
+    .team-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 10px;
+        background: #f8f8f8;
+        border-radius: 4px;
+        margin-bottom: 8px;
+    }
+    .add-form {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+    }
+    .add-form .form-group {
+        margin-bottom: 0;
+    }
+    .add-form input, .add-form select {
+        padding: 8px 12px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>External Teams & Organizations</h1>
+    <a href="{{ url_for('games.manage', year=current_year, is_spring=current_is_spring) }}" class="btn btn-outline">Back to Games</a>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <p class="text-muted" style="margin: 0;">
+        Manage external organizations (like Bull City, Morrisville) and their teams for inter-league games.
+        External teams can be assigned as opponents when editing games.
+    </p>
+</div>
+
+<!-- Add Organization Form -->
+<div class="card" style="margin-bottom: 30px;">
+    <h3 style="margin-top: 0; margin-bottom: 15px;">Add New Organization</h3>
+    <form method="POST" class="add-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add_organization">
+        <div class="form-group">
+            <label>Organization Name</label>
+            <input type="text" name="name" class="form-control" placeholder="e.g., Bull City Little League" required>
+        </div>
+        <div class="form-group">
+            <label>Short Name</label>
+            <input type="text" name="short_name" class="form-control" placeholder="e.g., Bull City" style="width: 150px;">
+        </div>
+        <div class="form-group">
+            <label>Location</label>
+            <input type="text" name="location" class="form-control" placeholder="e.g., Durham, NC" style="width: 150px;">
+        </div>
+        <button type="submit" class="btn btn-primary">Add Organization</button>
+    </form>
+</div>
+
+<!-- Organizations List -->
+<h2 style="margin-bottom: 15px;">Organizations</h2>
+
+{% for org in organizations %}
+<div class="org-card {{ 'home-org' if org.is_home_org else '' }}" id="org-{{ org.ID }}">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div>
+            <h3>
+                {{ org.name }}
+                {% if org.is_home_org %}
+                <span class="org-badge">Home</span>
+                {% else %}
+                <span class="org-badge external">External</span>
+                {% endif %}
+            </h3>
+            {% if org.short_name %}
+            <span class="text-muted">{{ org.short_name }}</span>
+            {% endif %}
+            {% if org.location %}
+            <span class="text-muted"> - {{ org.location }}</span>
+            {% endif %}
+        </div>
+        {% if not org.is_home_org %}
+        <form method="POST" style="display: inline;" onsubmit="return confirm('Delete {{ org.name }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="delete_organization">
+            <input type="hidden" name="org_id" value="{{ org.ID }}">
+            <button type="submit" class="btn btn-sm" style="background: #ffebee; color: #c62828;">Delete</button>
+        </form>
+        {% endif %}
+    </div>
+
+    {% if not org.is_home_org %}
+    <div class="teams-list">
+        <strong>Teams ({{ 'Spring' if current_is_spring else 'Fall' }} {{ current_year }}):</strong>
+
+        <!-- Existing teams -->
+        {% set org_teams = org.teams|selectattr('year', 'equalto', current_year)|selectattr('is_spring', 'equalto', current_is_spring)|selectattr('active', 'equalto', 1)|list %}
+        {% if org_teams %}
+        <div style="margin: 10px 0;">
+            {% for team in org_teams %}
+            <div class="team-item">
+                <span>{{ team.computed_display_name }} <span class="text-muted">({{ team.league }})</span></span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted text-small" style="margin: 10px 0;">No teams for this season yet.</p>
+        {% endif %}
+
+        <!-- Add team form -->
+        <form method="POST" class="add-form" style="margin-top: 10px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="add_team">
+            <input type="hidden" name="org_id" value="{{ org.ID }}">
+            <input type="hidden" name="year" value="{{ current_year }}">
+            <input type="hidden" name="is_spring" value="{{ current_is_spring }}">
+            <div class="form-group">
+                <input type="text" name="team_name" class="form-control" placeholder="Team name" required style="width: 200px;">
+            </div>
+            <div class="form-group">
+                <input type="text" name="league" class="form-control" placeholder="League (optional)" style="width: 150px;">
+            </div>
+            <button type="submit" class="btn btn-outline btn-sm">Add Team</button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% else %}
+<p class="text-muted">No organizations found. Add one above.</p>
+{% endfor %}
+
+{% endblock %}

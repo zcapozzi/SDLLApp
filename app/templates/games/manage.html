@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Games - {{ season_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .game-row {
+        border-bottom: 1px solid #eee;
+    }
+    .game-row:hover {
+        background: #f8f8f8;
+    }
+    .game-row.practice {
+        background: #faf5ff;
+    }
+    .game-row.scrimmage {
+        background: #f0f7ff;
+    }
+    .game-row.playoff {
+        background: #fff8f0;
+    }
+    .type-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+    .type-regular { background: #e8f5e9; color: #2e7d32; }
+    .type-practice { background: #f3e5f5; color: #7b1fa2; }
+    .type-playoff { background: #fff3e0; color: #e65100; }
+    .type-scrimmage { background: #e3f2fd; color: #1565c0; }
+    .status-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+    }
+    .status-scheduled { background: #e3f2fd; color: #1565c0; }
+    .status-completed { background: #e8f5e9; color: #2e7d32; }
+    .status-postponed { background: #fff3e0; color: #e65100; }
+    .status-cancelled { background: #ffebee; color: #c62828; }
+    .filter-bar {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    .filter-bar select {
+        padding: 6px 10px;
+    }
+    .date-separator {
+        background: rgb(34, 139, 34);
+        color: white;
+        padding: 8px 15px;
+        font-weight: bold;
+        margin-top: 20px;
+    }
+    .date-separator:first-child {
+        margin-top: 0;
+    }
+    .edit-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 2000;
+        align-items: center;
+        justify-content: center;
+    }
+    .edit-modal .card {
+        max-width: 550px;
+        width: 90%;
+        margin: auto;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+    }
+    .form-group {
+        margin-bottom: 15px;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+        color: #333;
+    }
+    .form-group .form-control {
+        width: 100%;
+    }
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+    }
+    .btn-row {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+    }
+    .external-badge {
+        display: inline-block;
+        padding: 1px 5px;
+        background: #ff9800;
+        color: white;
+        border-radius: 3px;
+        font-size: 10px;
+        margin-left: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>
+        <span class="badge badge-{{ 'spring' if is_spring else 'fall' }}">{{ season_name }}</span>
+        Manage Games
+    </h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('games.external_teams') }}" class="btn btn-outline">External Teams</a>
+        <a href="{{ url_for('games.index', year=year, is_spring=is_spring) }}" class="btn btn-outline">View Only</a>
+        <a href="{{ url_for('scheduler.index', year=year, is_spring=is_spring) }}" class="btn btn-outline">Scheduler</a>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card" style="margin-bottom: 20px;">
+    <div class="filter-bar">
+        <label>League:
+            <select onchange="applyFilter('league', this.value)" class="form-control">
+                <option value="">All Leagues</option>
+                {% for l in leagues %}
+                <option value="{{ l }}" {{ 'selected' if current_filters.league == l else '' }}>{{ l }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Type:
+            <select onchange="applyFilter('game_mode', this.value)" class="form-control">
+                <option value="all" {{ 'selected' if current_filters.game_mode == 'all' else '' }}>All</option>
+                <option value="games" {{ 'selected' if current_filters.game_mode == 'games' else '' }}>Games Only</option>
+                <option value="practices" {{ 'selected' if current_filters.game_mode == 'practices' else '' }}>Practices Only</option>
+            </select>
+        </label>
+        <span class="text-muted">{{ games|length }} items</span>
+    </div>
+</div>
+
+<!-- Games Table -->
+<div class="card">
+    {% set current_date = None %}
+    {% for game in games %}
+        {% set game_date_str = game.game_date.strftime('%A, %B %d, %Y') if game.game_date else 'No Date' %}
+        {% if game_date_str != current_date %}
+            {% set current_date = game_date_str %}
+            <div class="date-separator">{{ game_date_str }}</div>
+        {% endif %}
+
+        <div class="game-row {{ 'practice' if game.game_type == 'practice' else ('scrimmage' if game.is_scrimmage else ('playoff' if game.game_type == 'playoff' else '')) }}"
+             id="game-{{ game.ID }}"
+             style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px;">
+            <div style="flex: 1;">
+                <div style="margin-bottom: 5px;">
+                    <span class="type-badge type-{{ game.game_type }}">
+                        {% if game.is_scrimmage %}Scrimmage{% else %}{{ game.game_type|title }}{% endif %}
+                    </span>
+                    <span class="status-badge status-{{ game.status }}">{{ game.status }}</span>
+                    <strong style="margin-left: 10px;">{{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}</strong>
+                    <span class="text-muted">at {{ game.location or 'TBD' }}</span>
+                </div>
+                <div>
+                    <strong>{{ game.league }}</strong>:
+                    {% if game.home_team %}
+                        {{ game.home_team.computed_display_name }}
+                        {% if game.home_team.is_external %}<span class="external-badge">{{ game.home_team.organization.short_name }}</span>{% endif %}
+                    {% else %}
+                        <em class="text-muted">TBD</em>
+                    {% endif %}
+                    {% if game.away_team %}
+                        vs {{ game.away_team.computed_display_name }}
+                        {% if game.away_team.is_external %}<span class="external-badge">{{ game.away_team.organization.short_name }}</span>{% endif %}
+                    {% elif game.game_type != 'practice' %}
+                        vs <em class="text-muted">TBD</em>
+                    {% endif %}
+                </div>
+            </div>
+            <div>
+                <button type="button" class="btn btn-outline btn-sm"
+                        onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.location or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage }}, '{{ game.league }}')">
+                    Edit
+                </button>
+            </div>
+        </div>
+    {% else %}
+        <p class="text-muted" style="padding: 20px; text-align: center;">No games found for this season.</p>
+    {% endfor %}
+</div>
+
+<!-- Edit Modal -->
+<div id="edit-modal" class="edit-modal">
+    <div class="card">
+        <h3 style="margin-bottom: 20px;">Edit Game</h3>
+        <form method="POST" id="edit-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="update_game">
+            <input type="hidden" name="game_id" id="edit-game-id">
+
+            <!-- Game Type -->
+            <div class="form-group">
+                <label>Type</label>
+                <select name="game_type" id="edit-game-type" class="form-control" onchange="toggleAwayTeam()">
+                    <option value="regular">Regular Game</option>
+                    <option value="playoff">Playoff Game</option>
+                    <option value="practice">Practice</option>
+                </select>
+            </div>
+
+            <!-- Date/Time -->
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" name="game_date" id="edit-game-date" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Time</label>
+                    <input type="time" name="game_time" id="edit-game-time" class="form-control">
+                </div>
+            </div>
+
+            <!-- Field -->
+            <div class="form-group">
+                <label>Field</label>
+                <select name="location" id="edit-game-location" class="form-control">
+                    <option value="">-- Select Field --</option>
+                    {% for field in fields %}
+                    <option value="{{ field.location_title }}">{{ field.location_title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Home Team -->
+            <div class="form-group">
+                <label>Home Team</label>
+                <select name="home_id" id="edit-home-team" class="form-control">
+                    <option value="">-- Select --</option>
+                    {% for team in teams %}
+                    <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
+                        {{ team.computed_display_name }}{% if team.is_external %} ({{ team.organization.short_name }}){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Away Team (hidden for practice) -->
+            <div class="form-group" id="away-team-group">
+                <label>Away Team</label>
+                <select name="away_id" id="edit-away-team" class="form-control">
+                    <option value="">-- None (Practice) --</option>
+                    {% for team in teams %}
+                    <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
+                        {{ team.computed_display_name }}{% if team.is_external %} ({{ team.organization.short_name }}){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Status -->
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status" id="edit-status" class="form-control">
+                        <option value="scheduled">Scheduled</option>
+                        <option value="completed">Completed</option>
+                        <option value="postponed">Postponed</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="is_scrimmage" id="edit-is-scrimmage">
+                        <span>Scrimmage (no umpire)</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="btn-row">
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+                <button type="button" class="btn btn-outline" onclick="closeEditModal()">Cancel</button>
+                <button type="button" class="btn" style="background: #c33; color: white; margin-left: auto;"
+                        onclick="deleteGame()">Delete</button>
+            </div>
+        </form>
+
+        <!-- Hidden delete form -->
+        <form method="POST" id="delete-form" style="display: none;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="delete_game">
+            <input type="hidden" name="game_id" id="delete-game-id">
+        </form>
+    </div>
+</div>
+
+<script>
+function applyFilter(name, value) {
+    const url = new URL(window.location);
+    if (value) {
+        url.searchParams.set(name, value);
+    } else {
+        url.searchParams.delete(name);
+    }
+    window.location = url;
+}
+
+function openEditModal(gameId, gameDate, gameTime, location, homeId, awayId, status, gameType, isScrimmage, league) {
+    document.getElementById('edit-game-id').value = gameId;
+    document.getElementById('delete-game-id').value = gameId;
+    document.getElementById('edit-game-date').value = gameDate;
+    document.getElementById('edit-game-time').value = gameTime;
+    document.getElementById('edit-game-location').value = location;
+    document.getElementById('edit-home-team').value = homeId || '';
+    document.getElementById('edit-away-team').value = awayId || '';
+    document.getElementById('edit-status').value = status;
+    document.getElementById('edit-game-type').value = gameType;
+    document.getElementById('edit-is-scrimmage').checked = isScrimmage == 1;
+
+    toggleAwayTeam();
+    document.getElementById('edit-modal').style.display = 'flex';
+}
+
+function closeEditModal() {
+    document.getElementById('edit-modal').style.display = 'none';
+}
+
+function toggleAwayTeam() {
+    var gameType = document.getElementById('edit-game-type').value;
+    var awayGroup = document.getElementById('away-team-group');
+    if (gameType === 'practice') {
+        awayGroup.style.display = 'none';
+        document.getElementById('edit-away-team').value = '';
+    } else {
+        awayGroup.style.display = 'block';
+    }
+}
+
+function deleteGame() {
+    if (confirm('Are you sure you want to delete this game?')) {
+        document.getElementById('delete-form').submit();
+    }
+}
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeEditModal();
+    }
+});
+
+// Close modal on background click
+document.getElementById('edit-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeEditModal();
+    }
+});
+</script>
+{% endblock %}

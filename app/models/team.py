@@ -25,6 +25,9 @@ class TeamSeason(db.Model):
     resolved_team_id = db.Column(db.BigInteger)  # Actual team that fills this placeholder
     is_spring = db.Column(db.SmallInteger)  # 0=Fall, 1=Spring
 
+    # Organization - NULL means SDLL (home org), set for external teams
+    organization_id = db.Column(db.BigInteger, db.ForeignKey('sdll_organizations.ID'), nullable=True)
+
     # Future: coach_id will link to sdll_coach_seasons
     # coach_id = db.Column(db.BigInteger, db.ForeignKey('sdll_coach_seasons.ID'))
 
@@ -42,9 +45,17 @@ class TeamSeason(db.Model):
         lazy='dynamic'
     )
 
+    # Relationship to organization (for external teams)
+    organization = db.relationship('Organization', backref='teams')
+
     def __repr__(self):
         season = 'Spring' if self.is_spring else 'Fall'
         return f'<TeamSeason {self.display_name} ({season} {self.year})>'
+
+    @property
+    def is_external(self):
+        """Check if this is an external (non-SDLL) team"""
+        return self.organization_id is not None
 
     @property
     def season_name(self):
@@ -70,6 +81,14 @@ class TeamSeason(db.Model):
         # if self.coach and self.coach.last_name:
         #     return f"Team {self.coach.last_name}"
         return self.display_name
+
+    @property
+    def display_name_with_org(self):
+        """Get display name with organization suffix for external teams"""
+        name = self.computed_display_name
+        if self.is_external and self.organization:
+            return f"{name} ({self.organization.display_name})"
+        return name
 
     @classmethod
     def get_by_season(cls, year, is_spring):

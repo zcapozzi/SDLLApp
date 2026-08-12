@@ -118,6 +118,11 @@
                     <a href="{{ url_for('games.upcoming') }}">Upcoming Games</a>
                     <a href="{{ url_for('games.index') }}">All Games</a>
                     {% if current_user.can_edit_schedule() and current_season_year %}
+                    <a href="{{ url_for('games.manage', year=current_season_year, is_spring=current_season_is_spring) }}">
+                        <strong>Manage Games</strong>
+                    </a>
+                    {% endif %}
+                    {% if current_user.can_edit_schedule() and current_season_year %}
                     <div class="dropdown-divider"></div>
                     <a href="{{ url_for('scheduler.index', year=current_season_year, is_spring=current_season_is_spring) }}">
                         <strong>Generate {{ current_season_name }}</strong>
