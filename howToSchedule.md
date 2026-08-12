@@ -76,20 +76,18 @@ These rules represent fundamental fairness requirements. A schedule that violate
 
 ---
 
-### Rule gap: No Back-to-Back Against Same Opponent
+### Rule gap: No games at the same time on the same field
 
-**Description:** The same two teams cannot play each other in consecutive games without at least one game against a different opponent in between.
+**Description:** Each field can only have a single game at a time; there cannot be two games scheduled on the same slot at the same field
 
-**Why it matters:** Prevents repetitive matchups that feel unfair and reduces the variety of competition.
+**Why it matters:** One game at a time
 
 **Validation logic:**
-- Sort games by date for each league
-- Track last game index for each matchup
-- If consecutive games involve the same pair, flag violation
+- Confirm that each slot only has a single game
 
 **Example violation:**
-- Week 1: Team A vs Team B
-- Week 2: Team A vs Team B (same matchup back-to-back)
+- Week 1: Team A vs Team B play 5:30 at Herndon 1
+- Week 2: Team C vs Team D also play 5:30 at Herndon 1
 
 ---
 
@@ -195,11 +193,19 @@ Before generating a schedule, each league must have:
 
 1. **First Practice Date** - When practices begin
 2. **Opening Day Date** - When games begin
-3. **Game Days** - Which days of the week have games (e.g., Tue, Thu)
-4. **Practice Days** - Which days of the week have practices (e.g., Mon, Wed)
-5. **Regular Season Games** - Number of games per team (default: 10)
-6. **Playoff Format** - Single elimination, double elimination, or round robin + knockout
-7. **Playoff Teams** - Number of teams that qualify (0 = all teams)
+3. **Regular Season End Date** - All regular season games must be completed by this date
+4. **Season End Date** - All playoff games must be completed by this date
+5. **Game Days** - Which days of the week have games (e.g., Tue, Thu)
+6. **Practice Days** - Which days of the week have practices (e.g., Mon, Wed)
+7. **Regular Season Games** - Number of games per team (default: 10)
+8. **Playoff Format** - Single elimination, double elimination, or round robin + knockout
+9. **Playoff Teams** - Number of teams that qualify (0 = all teams)
+
+### Date Ordering Requirement
+Dates must be in chronological order:
+```
+First Practice Date < Opening Day Date < Regular Season End Date < Season End Date
+```
 
 ### Pre-Opening Day Period
 - First practice to day before opening day

@@ -951,16 +951,31 @@ def schedule_settings(year, is_spring):
                 # Update dates
                 first_practice = request.form.get(f'league_{config.ID}_first_practice')
                 opening_day = request.form.get(f'league_{config.ID}_opening_day')
+                regular_season_end = request.form.get(f'league_{config.ID}_regular_season_end')
+                season_end = request.form.get(f'league_{config.ID}_season_end')
 
                 first_practice_date = datetime.strptime(first_practice, '%Y-%m-%d').date() if first_practice else None
                 opening_day_date = datetime.strptime(opening_day, '%Y-%m-%d').date() if opening_day else None
+                regular_season_end_date = datetime.strptime(regular_season_end, '%Y-%m-%d').date() if regular_season_end else None
+                season_end_date = datetime.strptime(season_end, '%Y-%m-%d').date() if season_end else None
 
-                # Validate: first practice cannot be after opening day
+                # Validate date ordering
+                has_error = False
                 if first_practice_date and opening_day_date and first_practice_date > opening_day_date:
                     validation_errors.append(f'{config.league}: First practice cannot be after opening day')
-                else:
+                    has_error = True
+                if opening_day_date and regular_season_end_date and opening_day_date > regular_season_end_date:
+                    validation_errors.append(f'{config.league}: Opening day cannot be after regular season end')
+                    has_error = True
+                if regular_season_end_date and season_end_date and regular_season_end_date > season_end_date:
+                    validation_errors.append(f'{config.league}: Regular season end cannot be after season end')
+                    has_error = True
+
+                if not has_error:
                     config.first_practice_date = first_practice_date
                     config.opening_day_date = opening_day_date
+                    config.regular_season_end_date = regular_season_end_date
+                    config.season_end_date = season_end_date
                     updated_count += 1
 
             if validation_errors:

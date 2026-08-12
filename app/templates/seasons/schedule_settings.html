@@ -158,9 +158,11 @@
                             {% endfor %}
                         </div>
                     </th>
-                    <th style="width: 140px;">First Practice</th>
-                    <th style="width: 140px;">Opening Day</th>
-                    <th style="width: 120px;">Status</th>
+                    <th style="width: 125px;">First Practice</th>
+                    <th style="width: 125px;">Opening Day</th>
+                    <th style="width: 125px;">Reg. Season End</th>
+                    <th style="width: 125px;">Season End</th>
+                    <th style="width: 100px;">Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -198,14 +200,28 @@
                         <input type="date" name="league_{{ config.ID }}_first_practice"
                                value="{{ config.first_practice_date.strftime('%Y-%m-%d') if config.first_practice_date else '' }}"
                                data-original="{{ config.first_practice_date.strftime('%Y-%m-%d') if config.first_practice_date else '' }}"
-                               style="width: 130px; font-size: 12px;"
+                               style="width: 115px; font-size: 12px;"
                                onchange="markDirty({{ config.ID }})">
                     </td>
                     <td>
                         <input type="date" name="league_{{ config.ID }}_opening_day"
                                value="{{ config.opening_day_date.strftime('%Y-%m-%d') if config.opening_day_date else '' }}"
                                data-original="{{ config.opening_day_date.strftime('%Y-%m-%d') if config.opening_day_date else '' }}"
-                               style="width: 130px; font-size: 12px;"
+                               style="width: 115px; font-size: 12px;"
+                               onchange="markDirty({{ config.ID }})">
+                    </td>
+                    <td>
+                        <input type="date" name="league_{{ config.ID }}_regular_season_end"
+                               value="{{ config.regular_season_end_date.strftime('%Y-%m-%d') if config.regular_season_end_date else '' }}"
+                               data-original="{{ config.regular_season_end_date.strftime('%Y-%m-%d') if config.regular_season_end_date else '' }}"
+                               style="width: 115px; font-size: 12px;"
+                               onchange="markDirty({{ config.ID }})">
+                    </td>
+                    <td>
+                        <input type="date" name="league_{{ config.ID }}_season_end"
+                               value="{{ config.season_end_date.strftime('%Y-%m-%d') if config.season_end_date else '' }}"
+                               data-original="{{ config.season_end_date.strftime('%Y-%m-%d') if config.season_end_date else '' }}"
+                               style="width: 115px; font-size: 12px;"
                                onchange="markDirty({{ config.ID }})">
                     </td>
                     <td>
@@ -324,16 +340,24 @@ function resetChanges() {
 
 // Validate and submit form
 document.getElementById('settings-form').addEventListener('submit', function(e) {
-    // Validate: first practice cannot be after opening day
+    // Validate date ordering
     var errors = [];
     document.querySelectorAll('tr[data-league-id]').forEach(function(row) {
         var leagueId = row.dataset.leagueId;
         var leagueName = row.querySelector('td strong').textContent;
         var firstPractice = row.querySelector('input[name="league_' + leagueId + '_first_practice"]').value;
         var openingDay = row.querySelector('input[name="league_' + leagueId + '_opening_day"]').value;
+        var regSeasonEnd = row.querySelector('input[name="league_' + leagueId + '_regular_season_end"]').value;
+        var seasonEnd = row.querySelector('input[name="league_' + leagueId + '_season_end"]').value;
 
         if (firstPractice && openingDay && firstPractice > openingDay) {
             errors.push(leagueName + ': First practice cannot be after opening day');
+        }
+        if (openingDay && regSeasonEnd && openingDay > regSeasonEnd) {
+            errors.push(leagueName + ': Opening day cannot be after regular season end');
+        }
+        if (regSeasonEnd && seasonEnd && regSeasonEnd > seasonEnd) {
+            errors.push(leagueName + ': Regular season end cannot be after season end');
         }
     });
 

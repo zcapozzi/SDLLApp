@@ -32,6 +32,8 @@ class LeagueSeason(db.Model):
     sunday_type = db.Column(db.String(10))
     first_practice_date = db.Column(db.Date)
     opening_day_date = db.Column(db.Date)
+    regular_season_end_date = db.Column(db.Date)  # All regular season games must finish by this date
+    season_end_date = db.Column(db.Date)          # All playoff games must finish by this date
 
     # Schedule lock settings (Phase 3 - prevents regeneration once accepted)
     schedule_locked = db.Column(db.Boolean, default=False)
@@ -298,7 +300,10 @@ class LeagueSeason(db.Model):
     def schedule_ready(self):
         """Check if this league has all required schedule settings"""
         has_game_day = any(getattr(self, col) == self.DAY_TYPE_GAME for col in self.DAY_COLUMNS)
-        has_dates = self.first_practice_date is not None and self.opening_day_date is not None
+        has_dates = (self.first_practice_date is not None and
+                     self.opening_day_date is not None and
+                     self.regular_season_end_date is not None and
+                     self.season_end_date is not None)
         return has_game_day and has_dates
 
     @property
@@ -311,6 +316,10 @@ class LeagueSeason(db.Model):
             issues.append("No first practice date")
         if not self.opening_day_date:
             issues.append("No opening day")
+        if not self.regular_season_end_date:
+            issues.append("No regular season end")
+        if not self.season_end_date:
+            issues.append("No season end")
         if issues:
             return ", ".join(issues)
         return "Ready"
