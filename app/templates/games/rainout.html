@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+
+{% block title %}Handle Rainout - {{ season_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .date-picker-section {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    .date-input-group {
+        flex: 1;
+    }
+    .quick-dates {
+        flex: 2;
+    }
+    .quick-dates h4 {
+        margin: 0 0 10px 0;
+        color: #666;
+        font-size: 14px;
+    }
+    .date-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .date-chip {
+        display: inline-block;
+        padding: 6px 12px;
+        background: #f5f5f5;
+        border: 1px solid #ddd;
+        border-radius: 20px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .date-chip:hover {
+        background: #e8f5e9;
+        border-color: rgb(34, 139, 34);
+    }
+    .date-chip.selected {
+        background: rgb(34, 139, 34);
+        color: white;
+        border-color: rgb(34, 139, 34);
+    }
+    .date-chip .count {
+        display: inline-block;
+        background: rgba(0,0,0,0.1);
+        padding: 2px 6px;
+        border-radius: 10px;
+        font-size: 11px;
+        margin-left: 5px;
+    }
+    .date-chip.selected .count {
+        background: rgba(255,255,255,0.3);
+    }
+    .affected-games {
+        margin-top: 30px;
+    }
+    .game-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px;
+        border-bottom: 1px solid #eee;
+        background: white;
+    }
+    .game-row:hover {
+        background: #fafafa;
+    }
+    .game-info {
+        flex: 1;
+    }
+    .game-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+    .reschedule-form {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+    .practice-date-select {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        max-width: 300px;
+    }
+    .practice-date-btn {
+        padding: 4px 8px;
+        background: #f3e5f5;
+        border: 1px solid #ce93d8;
+        border-radius: 4px;
+        font-size: 11px;
+        cursor: pointer;
+    }
+    .practice-date-btn:hover {
+        background: #e1bee7;
+    }
+    .bulk-actions {
+        display: flex;
+        gap: 15px;
+        padding: 15px;
+        background: #fff3e0;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        align-items: center;
+    }
+    .status-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+    }
+    .status-scheduled { background: #e3f2fd; color: #1565c0; }
+    .status-postponed { background: #fff3e0; color: #e65100; }
+    .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: #666;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>
+        <span class="badge badge-{{ 'spring' if is_spring else 'fall' }}">{{ season_name }}</span>
+        Handle Rainout
+    </h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('games.calendar', year=year, is_spring=is_spring) }}" class="btn btn-outline">Calendar View</a>
+        <a href="{{ url_for('games.manage', year=year, is_spring=is_spring) }}" class="btn btn-outline">Manage Games</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <p class="text-muted" style="margin: 0;">
+        Select a date that was rained out to see affected games and reschedule them.
+        You can postpone all games at once or reschedule individual games to practice dates.
+    </p>
+</div>
+
+<!-- Date Selection -->
+<div class="card">
+    <div class="date-picker-section">
+        <div class="date-input-group">
+            <h4 style="margin: 0 0 10px 0; color: #666; font-size: 14px;">Select Date</h4>
+            <form method="GET" style="display: flex; gap: 10px;">
+                <input type="date" name="date" class="form-control"
+                       value="{{ selected_date.strftime('%Y-%m-%d') if selected_date else '' }}"
+                       onchange="this.form.submit()">
+            </form>
+        </div>
+
+        <div class="quick-dates">
+            <h4>Dates with Scheduled Games</h4>
+            <div class="date-chips">
+                {% for gd in game_dates %}
+                <a href="?date={{ gd.game_date }}"
+                   class="date-chip {{ 'selected' if selected_date and selected_date.strftime('%Y-%m-%d') == gd.game_date|string else '' }}">
+                    {{ gd.game_date.strftime('%a %m/%d') if gd.game_date is not string else gd.game_date }}
+                    <span class="count">{{ gd.game_count }}</span>
+                </a>
+                {% else %}
+                <span class="text-muted">No scheduled games found</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if selected_date %}
+<!-- Affected Games -->
+<div class="affected-games">
+    <h2 style="margin-bottom: 15px;">
+        Games on {{ selected_date.strftime('%A, %B %d, %Y') }}
+        <span class="text-muted" style="font-size: 16px; font-weight: normal;">({{ affected_games|length }} games)</span>
+    </h2>
+
+    {% if affected_games %}
+    <!-- Bulk Actions -->
+    <div class="bulk-actions">
+        <strong>Bulk Actions:</strong>
+        <form method="POST" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="postpone_all">
+            <input type="hidden" name="rainout_date" value="{{ selected_date.strftime('%Y-%m-%d') }}">
+            <button type="submit" class="btn btn-secondary"
+                    onclick="return confirm('Postpone all {{ affected_games|length }} games?')">
+                Postpone All Games
+            </button>
+        </form>
+        <span class="text-muted">This marks all games as "postponed" without rescheduling.</span>
+    </div>
+
+    <div class="card" style="padding: 0;">
+        {% for game in affected_games %}
+        <div class="game-row" id="game-{{ game.ID }}">
+            <div class="game-info">
+                <div style="margin-bottom: 5px;">
+                    <strong>{{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}</strong>
+                    at {{ game.location or 'TBD' }}
+                    <span class="status-badge status-{{ game.status }}">{{ game.status }}</span>
+                </div>
+                <div>
+                    <strong>{{ game.league }}</strong>:
+                    {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                    vs
+                    {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                </div>
+            </div>
+            <div class="game-actions">
+                <!-- Quick reschedule to practice date -->
+                <form method="POST" class="reschedule-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="swap_with_practice">
+                    <input type="hidden" name="game_id" value="{{ game.ID }}">
+                    <select name="practice_date" class="form-control" style="width: auto; font-size: 13px;">
+                        <option value="">Move to practice date...</option>
+                        {% for pd in practice_dates %}
+                        <option value="{{ pd.strftime('%Y-%m-%d') }}">{{ pd.strftime('%a %m/%d') }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-outline">Move</button>
+                </form>
+
+                <!-- Custom reschedule -->
+                <form method="POST" class="reschedule-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="reschedule_game">
+                    <input type="hidden" name="game_id" value="{{ game.ID }}">
+                    <input type="date" name="new_date" class="form-control" style="width: auto; font-size: 13px;">
+                    <input type="time" name="new_time" class="form-control" style="width: auto; font-size: 13px;"
+                           value="{{ game.game_date.strftime('%H:%M') if game.game_date else '17:30' }}">
+                    <button type="submit" class="btn btn-sm btn-primary">Reschedule</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card empty-state">
+        <p>No games scheduled for this date.</p>
+        <p class="text-muted">Practices are not shown here - only games with two teams.</p>
+    </div>
+    {% endif %}
+</div>
+{% else %}
+<!-- No date selected -->
+<div class="card empty-state" style="margin-top: 30px;">
+    <h3>Select a Date</h3>
+    <p class="text-muted">Choose a date above to see games that need to be rescheduled due to rain.</p>
+</div>
+{% endif %}
+
+<!-- Practice Dates Reference -->
+{% if practice_dates %}
+<div class="card" style="margin-top: 30px;">
+    <h3 style="margin-top: 0;">Available Practice Dates</h3>
+    <p class="text-muted">These dates are configured as practice days and may have availability for makeup games.</p>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        {% for pd in practice_dates %}
+        <span class="practice-date-btn">{{ pd.strftime('%a %b %d') }}</span>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

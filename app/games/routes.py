@@ -1,6 +1,6 @@
 """Game management routes"""
 
-from datetime import datetime
+from datetime import datetime, timedelta, date
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from app.models.game import Game
@@ -298,4 +298,244 @@ def external_teams():
         organizations=organizations,
         current_year=current_season.year if current_season else 2026,
         current_is_spring=current_season.is_spring if current_season else 0
+    )
+
+
+@games_bp.route('/<int:year>/<int:is_spring>/calendar')
+@login_required
+def calendar(year, is_spring):
+    """Calendar view of games for a season"""
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    # Get week parameter (ISO week number) or default to current/opening week
+    week_param = request.args.get('week')
+
+    # Get league filter
+    league = request.args.get('league')
+
+    # Determine the date range for this season
+    from app.models.league_season import LeagueSeason
+    configs = LeagueSeason.get_by_season(year, is_spring)
+
+    # Find earliest opening day across all leagues
+    opening_dates = [c.opening_day_date for c in configs if c.opening_day_date]
+    if opening_dates:
+        season_start = min(opening_dates)
+    else:
+        # Default to a reasonable start date
+        season_start = date(year, 3 if is_spring else 9, 1)
+
+    # Calculate current week
+    today = date.today()
+    if week_param:
+        # Parse week parameter (format: YYYY-WW)
+        try:
+            week_year, week_num = week_param.split('-')
+            # Get Monday of that week
+            week_start = datetime.strptime(f'{week_year}-W{week_num}-1', '%G-W%V-%u').date()
+        except (ValueError, AttributeError):
+            week_start = today - timedelta(days=today.weekday())
+    else:
+        # Default to current week if in season, otherwise opening week
+        if season_start <= today:
+            week_start = today - timedelta(days=today.weekday())
+        else:
+            week_start = season_start - timedelta(days=season_start.weekday())
+
+    week_end = week_start + timedelta(days=6)
+
+    # Build week days with games
+    week_days = []
+    for i in range(7):
+        day_date = week_start + timedelta(days=i)
+
+        # Get games for this day
+        query = Game.query.filter(
+            Game.active == 1,
+            Game.year == year,
+            Game.is_spring == is_spring,
+            db.func.date(Game.game_date) == day_date
+        )
+        if league:
+            query = query.filter(Game.league == league)
+
+        day_games = query.order_by(Game.game_date, Game.location).all()
+
+        week_days.append({
+            'date': day_date,
+            'is_today': day_date == today,
+            'games': day_games
+        })
+
+    # Calculate prev/next week
+    prev_week = (week_start - timedelta(days=7)).strftime('%G-%V')
+    next_week = (week_start + timedelta(days=7)).strftime('%G-%V')
+
+    # Get leagues for filter
+    leagues = db.session.query(Game.league).filter(
+        Game.year == year,
+        Game.is_spring == is_spring,
+        Game.league.isnot(None)
+    ).distinct().all()
+    leagues = [l[0] for l in leagues if l[0]]
+
+    # Get teams and fields for edit modal
+    teams = TeamSeason.query.filter_by(
+        year=year,
+        is_spring=is_spring,
+        active=1
+    ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+
+    fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
+
+    return render_template(
+        'games/calendar.html',
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name,
+        week_start=week_start,
+        week_end=week_end,
+        week_days=week_days,
+        prev_week=prev_week,
+        next_week=next_week,
+        leagues=leagues,
+        teams=teams,
+        fields=fields,
+        current_league=league
+    )
+
+
+@games_bp.route('/<int:year>/<int:is_spring>/rainout', methods=['GET', 'POST'])
+@login_required
+def rainout(year, is_spring):
+    """Handle rainouts - bulk postpone/reschedule games"""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to manage rainouts.', 'error')
+        return redirect(url_for('games.index', year=year, is_spring=is_spring))
+
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+
+        if action == 'postpone_all':
+            rainout_date_str = request.form.get('rainout_date')
+            if rainout_date_str:
+                rainout_date = datetime.strptime(rainout_date_str, '%Y-%m-%d').date()
+
+                # Get all games on this date
+                games = Game.query.filter(
+                    Game.active == 1,
+                    Game.year == year,
+                    Game.is_spring == is_spring,
+                    db.func.date(Game.game_date) == rainout_date,
+                    Game.away_ID.isnot(None)  # Only actual games, not practices
+                ).all()
+
+                count = 0
+                for game in games:
+                    game.status = 'postponed'
+                    count += 1
+
+                db.session.commit()
+                logger.info(f'Postponed {count} games for rainout on {rainout_date}')
+                flash(f'Postponed {count} games for {rainout_date.strftime("%B %d, %Y")}', 'success')
+
+        elif action == 'reschedule_game':
+            game_id = int(request.form.get('game_id'))
+            new_date_str = request.form.get('new_date')
+            new_time_str = request.form.get('new_time')
+
+            game = Game.query.get(game_id)
+            if game and new_date_str:
+                if new_time_str:
+                    game.game_date = datetime.strptime(f'{new_date_str} {new_time_str}', '%Y-%m-%d %H:%M')
+                else:
+                    # Keep original time
+                    original_time = game.game_date.time() if game.game_date else datetime.strptime('17:30', '%H:%M').time()
+                    new_date = datetime.strptime(new_date_str, '%Y-%m-%d').date()
+                    game.game_date = datetime.combine(new_date, original_time)
+
+                game.status = 'scheduled'
+                db.session.commit()
+                logger.info(f'Rescheduled game {game_id} to {game.game_date}')
+                flash(f'Rescheduled game to {game.game_date.strftime("%B %d at %I:%M %p")}', 'success')
+
+        elif action == 'swap_with_practice':
+            game_id = int(request.form.get('game_id'))
+            practice_date_str = request.form.get('practice_date')
+
+            game = Game.query.get(game_id)
+            if game and practice_date_str:
+                practice_date = datetime.strptime(practice_date_str, '%Y-%m-%d').date()
+                original_time = game.game_date.time() if game.game_date else datetime.strptime('17:30', '%H:%M').time()
+                game.game_date = datetime.combine(practice_date, original_time)
+                game.status = 'scheduled'
+                db.session.commit()
+                logger.info(f'Swapped game {game_id} to practice date {practice_date}')
+                flash(f'Moved game to {practice_date.strftime("%B %d")}', 'success')
+
+        return redirect(url_for('games.rainout', year=year, is_spring=is_spring))
+
+    # GET - show rainout wizard
+    selected_date_str = request.args.get('date')
+    selected_date = None
+    affected_games = []
+
+    if selected_date_str:
+        try:
+            selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
+            affected_games = Game.query.filter(
+                Game.active == 1,
+                Game.year == year,
+                Game.is_spring == is_spring,
+                db.func.date(Game.game_date) == selected_date,
+                Game.away_ID.isnot(None)  # Only actual games
+            ).order_by(Game.game_date).all()
+        except ValueError:
+            pass
+
+    # Get dates that have games (for quick selection)
+    game_dates = db.session.query(
+        db.func.date(Game.game_date).label('game_date'),
+        db.func.count(Game.ID).label('game_count')
+    ).filter(
+        Game.active == 1,
+        Game.year == year,
+        Game.is_spring == is_spring,
+        Game.away_ID.isnot(None),
+        Game.status == 'scheduled'
+    ).group_by(
+        db.func.date(Game.game_date)
+    ).order_by(
+        db.func.date(Game.game_date)
+    ).all()
+
+    # Get practice dates (potential reschedule targets)
+    from app.models.league_season import LeagueSeason
+    configs = LeagueSeason.get_by_season(year, is_spring)
+    practice_dates = []
+
+    for config in configs:
+        if config.practice_days and config.opening_day_date:
+            # Get practice days for next 4 weeks from opening day
+            current = config.opening_day_date
+            end_date = current + timedelta(weeks=12)
+            while current <= end_date:
+                if current.weekday() in config.practice_days:
+                    if current not in practice_dates:
+                        practice_dates.append(current)
+                current += timedelta(days=1)
+
+    practice_dates.sort()
+
+    return render_template(
+        'games/rainout.html',
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name,
+        selected_date=selected_date,
+        affected_games=affected_games,
+        game_dates=game_dates,
+        practice_dates=practice_dates[:20]  # Limit to next 20 practice dates
     )

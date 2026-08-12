@@ -121,6 +121,12 @@
                     <a href="{{ url_for('games.manage', year=current_season_year, is_spring=current_season_is_spring) }}">
                         <strong>Manage Games</strong>
                     </a>
+                    <a href="{{ url_for('games.calendar', year=current_season_year, is_spring=current_season_is_spring) }}">
+                        Calendar View
+                    </a>
+                    <a href="{{ url_for('games.rainout', year=current_season_year, is_spring=current_season_is_spring) }}">
+                        Handle Rainout
+                    </a>
                     {% endif %}
                     {% if current_user.can_edit_schedule() and current_season_year %}
                     <div class="dropdown-divider"></div>

@@ -1,0 +1,391 @@
+{% extends "base.html" %}
+
+{% block title %}Schedule Calendar - {{ season_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .calendar-nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding: 15px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .calendar-nav .week-label {
+        font-size: 18px;
+        font-weight: bold;
+    }
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 10px;
+        margin-bottom: 30px;
+    }
+    .calendar-day {
+        background: white;
+        border-radius: 8px;
+        min-height: 200px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    .calendar-day.today {
+        box-shadow: 0 0 0 2px rgb(34, 139, 34);
+    }
+    .day-header {
+        padding: 10px;
+        font-weight: bold;
+        text-align: center;
+        background: #f5f5f5;
+        border-bottom: 1px solid #eee;
+    }
+    .calendar-day.today .day-header {
+        background: rgb(34, 139, 34);
+        color: white;
+    }
+    .day-content {
+        padding: 8px;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .game-card {
+        padding: 8px;
+        margin-bottom: 6px;
+        border-radius: 6px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .game-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+    .game-card.regular {
+        background: #e8f5e9;
+        border-left: 3px solid #2e7d32;
+    }
+    .game-card.playoff {
+        background: #fff3e0;
+        border-left: 3px solid #e65100;
+    }
+    .game-card.practice {
+        background: #f3e5f5;
+        border-left: 3px solid #7b1fa2;
+    }
+    .game-card.scrimmage {
+        background: #e3f2fd;
+        border-left: 3px solid #1565c0;
+    }
+    .game-card.postponed {
+        opacity: 0.6;
+        text-decoration: line-through;
+    }
+    .game-card.cancelled {
+        opacity: 0.4;
+        text-decoration: line-through;
+    }
+    .game-time {
+        font-weight: bold;
+        color: #333;
+    }
+    .game-location {
+        color: #666;
+        font-size: 11px;
+    }
+    .game-teams {
+        margin-top: 4px;
+    }
+    .no-games {
+        color: #999;
+        font-size: 11px;
+        text-align: center;
+        padding: 20px 10px;
+    }
+    .filter-bar {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    /* Edit modal - reuse from manage.html */
+    .edit-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 2000;
+        align-items: center;
+        justify-content: center;
+    }
+    .edit-modal .card {
+        max-width: 550px;
+        width: 90%;
+        margin: auto;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+    }
+    .form-group {
+        margin-bottom: 15px;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+    }
+    .btn-row {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+    }
+    .status-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 4px;
+    }
+    .status-dot.scheduled { background: #2196f3; }
+    .status-dot.completed { background: #4caf50; }
+    .status-dot.postponed { background: #ff9800; }
+    .status-dot.cancelled { background: #f44336; }
+
+    @media (max-width: 900px) {
+        .calendar-grid {
+            grid-template-columns: 1fr;
+        }
+        .calendar-day {
+            min-height: auto;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>
+        <span class="badge badge-{{ 'spring' if is_spring else 'fall' }}">{{ season_name }}</span>
+        Calendar
+    </h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('games.rainout', year=year, is_spring=is_spring) }}" class="btn btn-secondary">Handle Rainout</a>
+        <a href="{{ url_for('games.manage', year=year, is_spring=is_spring) }}" class="btn btn-outline">List View</a>
+    </div>
+</div>
+
+<!-- Filter -->
+<div class="filter-bar">
+    <label>League:
+        <select onchange="applyFilter('league', this.value)" class="form-control">
+            <option value="">All Leagues</option>
+            {% for l in leagues %}
+            <option value="{{ l }}" {{ 'selected' if current_league == l else '' }}>{{ l }}</option>
+            {% endfor %}
+        </select>
+    </label>
+</div>
+
+<!-- Week Navigation -->
+<div class="calendar-nav">
+    <a href="?week={{ prev_week }}{% if current_league %}&league={{ current_league }}{% endif %}" class="btn btn-outline">&larr; Previous Week</a>
+    <span class="week-label">{{ week_start.strftime('%B %d') }} - {{ week_end.strftime('%B %d, %Y') }}</span>
+    <a href="?week={{ next_week }}{% if current_league %}&league={{ current_league }}{% endif %}" class="btn btn-outline">Next Week &rarr;</a>
+</div>
+
+<!-- Calendar Grid -->
+<div class="calendar-grid">
+    {% for day in week_days %}
+    <div class="calendar-day {{ 'today' if day.is_today else '' }}">
+        <div class="day-header">
+            {{ day.date.strftime('%a') }}<br>
+            {{ day.date.strftime('%m/%d') }}
+        </div>
+        <div class="day-content">
+            {% for game in day.games %}
+            <div class="game-card {{ game.game_type }} {{ 'scrimmage' if game.is_scrimmage else '' }} {{ game.status }}"
+                 onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.location or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage }}, '{{ game.league }}')">
+                <div class="game-time">
+                    <span class="status-dot {{ game.status }}"></span>
+                    {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
+                </div>
+                <div class="game-location">{{ game.location or 'TBD' }}</div>
+                <div class="game-teams">
+                    <strong>{{ game.league }}</strong><br>
+                    {% if game.home_team %}{{ game.home_team.computed_display_name }}{% else %}TBD{% endif %}
+                    {% if game.away_team %}
+                    <br>vs {{ game.away_team.computed_display_name }}
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="no-games">No games</div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Legend -->
+<div class="card" style="padding: 15px;">
+    <strong>Legend:</strong>
+    <span style="margin-left: 15px;"><span class="status-dot scheduled"></span> Scheduled</span>
+    <span style="margin-left: 15px;"><span class="status-dot completed"></span> Completed</span>
+    <span style="margin-left: 15px;"><span class="status-dot postponed"></span> Postponed</span>
+    <span style="margin-left: 15px;"><span class="status-dot cancelled"></span> Cancelled</span>
+    <span style="margin-left: 30px; padding: 2px 8px; background: #e8f5e9; border-radius: 4px;">Game</span>
+    <span style="margin-left: 10px; padding: 2px 8px; background: #f3e5f5; border-radius: 4px;">Practice</span>
+    <span style="margin-left: 10px; padding: 2px 8px; background: #e3f2fd; border-radius: 4px;">Scrimmage</span>
+    <span style="margin-left: 10px; padding: 2px 8px; background: #fff3e0; border-radius: 4px;">Playoff</span>
+</div>
+
+<!-- Edit Modal (same as manage.html) -->
+<div id="edit-modal" class="edit-modal">
+    <div class="card">
+        <h3 style="margin-bottom: 20px;">Edit Game</h3>
+        <form method="POST" action="{{ url_for('games.manage', year=year, is_spring=is_spring) }}" id="edit-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="update_game">
+            <input type="hidden" name="game_id" id="edit-game-id">
+
+            <div class="form-group">
+                <label>Type</label>
+                <select name="game_type" id="edit-game-type" class="form-control" onchange="toggleAwayTeam()">
+                    <option value="regular">Regular Game</option>
+                    <option value="playoff">Playoff Game</option>
+                    <option value="practice">Practice</option>
+                </select>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" name="game_date" id="edit-game-date" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Time</label>
+                    <input type="time" name="game_time" id="edit-game-time" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Field</label>
+                <select name="location" id="edit-game-location" class="form-control">
+                    <option value="">-- Select Field --</option>
+                    {% for field in fields %}
+                    <option value="{{ field.location_title }}">{{ field.location_title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Home Team</label>
+                <select name="home_id" id="edit-home-team" class="form-control">
+                    <option value="">-- Select --</option>
+                    {% for team in teams %}
+                    <option value="{{ team.team_ID }}">
+                        {{ team.computed_display_name }}{% if team.is_external %} ({{ team.organization.short_name }}){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group" id="away-team-group">
+                <label>Away Team</label>
+                <select name="away_id" id="edit-away-team" class="form-control">
+                    <option value="">-- None (Practice) --</option>
+                    {% for team in teams %}
+                    <option value="{{ team.team_ID }}">
+                        {{ team.computed_display_name }}{% if team.is_external %} ({{ team.organization.short_name }}){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status" id="edit-status" class="form-control">
+                        <option value="scheduled">Scheduled</option>
+                        <option value="completed">Completed</option>
+                        <option value="postponed">Postponed</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" name="is_scrimmage" id="edit-is-scrimmage">
+                        <span>Scrimmage</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="btn-row">
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+                <button type="button" class="btn btn-outline" onclick="closeEditModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function applyFilter(name, value) {
+    const url = new URL(window.location);
+    if (value) {
+        url.searchParams.set(name, value);
+    } else {
+        url.searchParams.delete(name);
+    }
+    window.location = url;
+}
+
+function openEditModal(gameId, gameDate, gameTime, location, homeId, awayId, status, gameType, isScrimmage, league) {
+    document.getElementById('edit-game-id').value = gameId;
+    document.getElementById('edit-game-date').value = gameDate;
+    document.getElementById('edit-game-time').value = gameTime;
+    document.getElementById('edit-game-location').value = location;
+    document.getElementById('edit-home-team').value = homeId || '';
+    document.getElementById('edit-away-team').value = awayId || '';
+    document.getElementById('edit-status').value = status;
+    document.getElementById('edit-game-type').value = gameType;
+    document.getElementById('edit-is-scrimmage').checked = isScrimmage == 1;
+
+    toggleAwayTeam();
+    document.getElementById('edit-modal').style.display = 'flex';
+}
+
+function closeEditModal() {
+    document.getElementById('edit-modal').style.display = 'none';
+}
+
+function toggleAwayTeam() {
+    var gameType = document.getElementById('edit-game-type').value;
+    var awayGroup = document.getElementById('away-team-group');
+    if (gameType === 'practice') {
+        awayGroup.style.display = 'none';
+        document.getElementById('edit-away-team').value = '';
+    } else {
+        awayGroup.style.display = 'block';
+    }
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeEditModal();
+});
+
+document.getElementById('edit-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditModal();
+});
+</script>
+{% endblock %}
