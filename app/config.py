@@ -48,6 +48,9 @@ class DevelopmentConfig(Config):
     """Development configuration"""
     DEBUG = True
 
+    # Server-side session file directory
+    SESSION_FILE_DIR = os.path.join(project_root, 'flask_session')
+
     # MySQL connection - local development
     MYSQL_HOST = os.environ.get('MYSQL_HOST', 'localhost')
     MYSQL_USER = os.environ.get('MYSQL_USER', 'root')

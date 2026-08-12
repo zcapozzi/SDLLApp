@@ -220,14 +220,31 @@ def generate(year, is_spring):
         generator = ScheduleGenerator(year, is_spring)
         result = generator.generate(start_fresh=start_fresh)
 
+        # Check if generation produced anything
+        summary = result['summary']
+        if summary['total_games'] == 0 and summary['total_practices'] == 0 and summary['total_scrimmages'] == 0:
+            # Show warnings about why nothing was generated
+            if result['warnings']:
+                for warning in result['warnings']:
+                    flash(warning['message'], 'warning')
+            else:
+                flash('No games, practices, or scrimmages were generated. Check prerequisites.', 'warning')
+            return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
         # Store in session for review
         proposed_key = f'proposed_schedule_{year}_{is_spring}'
         session[proposed_key] = result
 
+        # Verify session storage worked (Flask cookies have ~4KB limit)
+        session.modified = True
+        if proposed_key not in session or session.get(proposed_key) is None:
+            flash('Schedule generated but too large to store in session. Try generating fewer leagues at once.', 'error')
+            logger.info(f'Session storage failed for {season_name} - result too large')
+            return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
         logger.info(f'Generated schedule for {season_name}: {result["summary"]}')
 
         # Show summary
-        summary = result['summary']
         if result['warnings']:
             for warning in result['warnings']:
                 flash(warning['message'], 'warning')

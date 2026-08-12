@@ -6,7 +6,7 @@ import json
 import traceback
 from flask import Flask, jsonify, request
 
-from .extensions import db, login_manager, limiter, csrf
+from .extensions import db, login_manager, limiter, csrf, sess
 from .config import config
 
 
@@ -32,6 +32,7 @@ def create_app(config_name=None):
     login_manager.init_app(app)
     limiter.init_app(app)
     csrf.init_app(app)
+    sess.init_app(app)  # Server-side sessions for larger data (like schedule proposals)
 
     # Load logging config
     app.logging_config = load_logging_config(app)
