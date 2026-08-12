@@ -145,7 +145,7 @@
         <ul class="prereq-list">
             <li>
                 <span class="prereq-status {{ 'prereq-ok' if prereqs.has_teams else 'prereq-missing' }}">
-                    {{ '&#10003;' if prereqs.has_teams else '!' }}
+                    {{ '&#10003;'|safe if prereqs.has_teams else '!' }}
                 </span>
                 Teams ({{ prereqs.team_count or 0 }} teams; {{ prereqs.games_per_team }} reg. season games per team; {{ prereqs.playoff_format }})
                 {% if not prereqs.has_teams %}
@@ -154,7 +154,7 @@
             </li>
             <li>
                 <span class="prereq-status {{ 'prereq-ok' if prereqs.has_slots else 'prereq-missing' }}">
-                    {{ '&#10003;' if prereqs.has_slots else '!' }}
+                    {{ '&#10003;'|safe if prereqs.has_slots else '!' }}
                 </span>
                 Field Slots ({{ prereqs.slot_count or 0 }} slots)
                 {% if not prereqs.has_slots %}
@@ -163,7 +163,7 @@
             </li>
             <li>
                 <span class="prereq-status {{ 'prereq-ok' if prereqs.has_dates else 'prereq-missing' }}">
-                    {{ '&#10003;' if prereqs.has_dates else '!' }}
+                    {{ '&#10003;'|safe if prereqs.has_dates else '!' }}
                 </span>
                 Key Dates
                 {% if prereqs.has_dates %}
@@ -177,7 +177,7 @@
             </li>
             <li>
                 <span class="prereq-status {{ 'prereq-ok' if prereqs.has_days else 'prereq-missing' }}">
-                    {{ '&#10003;' if prereqs.has_days else '!' }}
+                    {{ '&#10003;'|safe if prereqs.has_days else '!' }}
                 </span>
                 Practice/Game Days
                 {% if prereqs.has_days %}
@@ -191,7 +191,7 @@
             </li>
             <li>
                 <span class="prereq-status {{ 'prereq-ok' if prereqs.has_game_slots else 'prereq-missing' }}">
-                    {{ '&#10003;' if prereqs.has_game_slots else '!' }}
+                    {{ '&#10003;'|safe if prereqs.has_game_slots else '!' }}
                 </span>
                 Game Slots
                 {% if prereqs.has_game_slots %}
