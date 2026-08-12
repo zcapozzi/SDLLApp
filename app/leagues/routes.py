@@ -140,3 +140,33 @@ def field_rules():
         leagues=leagues,
         fields=fields
     )
+
+
+@leagues_bp.route('/field-rules/save-all', methods=['POST'])
+@login_required
+def field_rules_save_all():
+    """Save field rules for all leagues at once"""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to manage league field rules.', 'error')
+        return redirect(url_for('leagues.index'))
+
+    leagues = League.get_all_active()
+    updated_count = 0
+
+    for league in leagues:
+        # Get selected field IDs from form using league-specific field names
+        game_fields = request.form.getlist(f'game_fields_{league.ID}')
+        practice_fields = request.form.getlist(f'practice_fields_{league.ID}')
+        preferred_fields = request.form.getlist(f'preferred_fields_{league.ID}')
+
+        # Convert to integers and store
+        league.allowed_game_field_ids = [int(f) for f in game_fields] if game_fields else []
+        league.allowed_practice_field_ids = [int(f) for f in practice_fields] if practice_fields else []
+        league.preferred_field_ids = [int(f) for f in preferred_fields] if preferred_fields else []
+        updated_count += 1
+
+    db.session.commit()
+    logger.info(f'Updated field rules for {updated_count} leagues')
+    flash(f'Updated field rules for all {updated_count} leagues', 'success')
+
+    return redirect(url_for('leagues.field_rules'))

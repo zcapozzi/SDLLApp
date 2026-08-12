@@ -188,12 +188,20 @@
     </div>
 </div>
 
-<div class="card" style="margin-bottom: 20px;">
+<div class="card" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
     <p class="text-muted" style="margin: 0;">
         Configure where each league can play <strong>games</strong> and <strong>practices</strong>.
         Leave sections empty to allow any field. These rules are used by the schedule generator.
     </p>
+    <button type="button" class="btn btn-primary" onclick="saveAllRules()" style="white-space: nowrap; margin-left: 20px;">
+        Save All Leagues
+    </button>
 </div>
+
+<!-- Hidden form for Save All -->
+<form method="POST" action="{{ url_for('leagues.field_rules_save_all') }}" id="save-all-form" style="display: none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
 
 {% for league in leagues %}
 <div class="league-card" id="league-{{ league.ID }}">
@@ -212,6 +220,7 @@
                 {% if field %}
                 <label class="field-checkbox {{ 'selected' if field.ID in league.allowed_game_field_ids else '' }}">
                     <input type="checkbox" name="game_fields" value="{{ field.ID }}"
+                           data-league-id="{{ league.ID }}"
                            {{ 'checked' if field.ID in league.allowed_game_field_ids else '' }}
                            onchange="this.parentElement.classList.toggle('selected', this.checked)">
                     {{ field.location_title }}
@@ -230,6 +239,7 @@
                 {% if field %}
                 <label class="field-checkbox {{ 'selected' if field.ID in league.allowed_practice_field_ids else '' }}">
                     <input type="checkbox" name="practice_fields" value="{{ field.ID }}"
+                           data-league-id="{{ league.ID }}"
                            {{ 'checked' if field.ID in league.allowed_practice_field_ids else '' }}
                            onchange="this.parentElement.classList.toggle('selected', this.checked)">
                     {{ field.location_title }}
@@ -317,6 +327,46 @@
 
 <script>
 let draggedElement = null;
+
+function saveAllRules() {
+    const form = document.getElementById('save-all-form');
+
+    // Clear any existing dynamic inputs (except csrf token)
+    const existingInputs = form.querySelectorAll('input:not([name="csrf_token"])');
+    existingInputs.forEach(input => input.remove());
+
+    // Collect all checked game fields
+    document.querySelectorAll('input[name="game_fields"]:checked').forEach(checkbox => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'game_fields_' + checkbox.dataset.leagueId;
+        input.value = checkbox.value;
+        form.appendChild(input);
+    });
+
+    // Collect all checked practice fields
+    document.querySelectorAll('input[name="practice_fields"]:checked').forEach(checkbox => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'practice_fields_' + checkbox.dataset.leagueId;
+        input.value = checkbox.value;
+        form.appendChild(input);
+    });
+
+    // Collect all preferred fields (from hidden inputs in each league's form)
+    document.querySelectorAll('[id^="pref-inputs-"]').forEach(container => {
+        const leagueId = container.id.replace('pref-inputs-', '');
+        container.querySelectorAll('input[name="preferred_fields"]').forEach(input => {
+            const newInput = document.createElement('input');
+            newInput.type = 'hidden';
+            newInput.name = 'preferred_fields_' + leagueId;
+            newInput.value = input.value;
+            form.appendChild(newInput);
+        });
+    });
+
+    form.submit();
+}
 
 function handleDragStart(e) {
     draggedElement = e.target;
