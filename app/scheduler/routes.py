@@ -35,6 +35,15 @@ def index(year, is_spring):
     # Get league configurations
     league_configs = LeagueSeason.get_by_season(year, is_spring)
 
+    # Build league display name mapping
+    league_display_names = {}
+    for config in league_configs:
+        league_obj = League.get_by_name(config.league)
+        if league_obj:
+            league_display_names[config.league] = league_obj.get_seasonal_name(is_spring)
+        else:
+            league_display_names[config.league] = config.league
+
     # Check if season schedule is locked
     is_locked = LeagueSeason.is_season_locked(year, is_spring)
 
@@ -60,6 +69,10 @@ def index(year, is_spring):
         ).count()
         prereqs['has_teams'] = teams >= 2
         prereqs['team_count'] = teams
+
+        # Add league settings info for display
+        prereqs['games_per_team'] = config.regular_season_games or 10
+        prereqs['playoff_format'] = config.playoff_format_display
 
         # Check field slots
         slots = FieldSlot.query.filter_by(
@@ -115,7 +128,8 @@ def index(year, is_spring):
         league_configs=league_configs,
         prerequisites=prerequisites,
         has_proposal=has_proposal,
-        is_locked=is_locked
+        is_locked=is_locked,
+        league_display_names=league_display_names
     )
 
 
@@ -134,6 +148,11 @@ def create_slots(year, is_spring):
         flash('No league specified.', 'error')
         return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
 
+    # Helper for scroll-back anchor
+    def redirect_with_anchor():
+        anchor = f'league-{league.replace(" ", "-")}'
+        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring) + f'#{anchor}')
+
     # Check if schedule is locked
     config = LeagueSeason.query.filter_by(
         year=year, is_spring=is_spring, league=league, active=1
@@ -141,7 +160,7 @@ def create_slots(year, is_spring):
 
     if config and config.schedule_locked:
         flash(f'{league} schedule is locked. Unlock it first to make changes.', 'error')
-        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+        return redirect_with_anchor()
 
     # Get number of teams
     teams = TeamSeason.query.filter_by(
@@ -150,7 +169,7 @@ def create_slots(year, is_spring):
 
     if len(teams) < 2:
         flash(f'{league}: Need at least 2 teams to create game slots.', 'error')
-        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+        return redirect_with_anchor()
 
     # Calculate number of games needed
     games_per_team = config.regular_season_games if config else 10
@@ -163,7 +182,7 @@ def create_slots(year, is_spring):
 
     if existing > 0:
         flash(f'{league}: {existing} game slots already exist. Delete them first or use "Start Fresh".', 'warning')
-        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+        return redirect_with_anchor()
 
     try:
         new_games = Game.generate_game_slots(year, is_spring, league, num_games, game_type='regular')
@@ -173,7 +192,7 @@ def create_slots(year, is_spring):
         logger.info(f'Failed to create game slots: {str(e)}')
         flash(f'Error creating game slots: {str(e)}', 'error')
 
-    return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+    return redirect_with_anchor()
 
 
 @scheduler_bp.route('/<int:year>/<int:is_spring>/generate', methods=['POST'])

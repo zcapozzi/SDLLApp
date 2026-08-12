@@ -127,9 +127,10 @@
     {% for config in league_configs %}
     {% set prereqs = prerequisites.get(config.league, {}) %}
     {% set phase = 'locked' if prereqs.locked else ('draft' if prereqs.has_game_slots else 'setup') %}
+    {% set display_name = league_display_names.get(config.league, config.league) %}
     <div class="league-card {{ 'locked' if prereqs.locked else ('ready' if prereqs.ready else 'not-ready') }}" id="league-{{ config.league | replace(' ', '-') }}">
         <h4 style="margin-top: 0; margin-bottom: 10px;">
-            {{ config.league }}
+            {{ display_name }}
             {% if prereqs.locked %}
                 <span class="phase-indicator phase-locked">Phase 3: Locked</span>
             {% elif prereqs.has_game_slots and prereqs.filled_slot_count > 0 %}
@@ -146,7 +147,7 @@
                 <span class="prereq-status {{ 'prereq-ok' if prereqs.has_teams else 'prereq-missing' }}">
                     {{ '&#10003;' if prereqs.has_teams else '!' }}
                 </span>
-                Teams ({{ prereqs.team_count or 0 }} teams)
+                Teams ({{ prereqs.team_count or 0 }} teams; {{ prereqs.games_per_team }} reg. season games per team; {{ prereqs.playoff_format }})
                 {% if not prereqs.has_teams %}
                 <div class="prereq-detail">Need at least 2 teams. <a href="{{ url_for('seasons.manage_teams', year=year, is_spring=is_spring) }}">Add teams</a></div>
                 {% endif %}
