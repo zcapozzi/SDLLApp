@@ -249,7 +249,7 @@ shuffle(matchups)  # Avoid predictable patterns
 | Code | Rule | Description |
 |------|------|-------------|
 | `a2` | Home/away vs opponent | Alternate home/away when teams play multiple times |
-| `b2` | Early/late balance | Balance games before/after 6 PM (diff > 2 flagged) |
+| `b2` | Early/late balance | Balance games 4-6 PM vs 6 PM+ (games before 4 PM excluded, diff > 2 flagged) |
 | `c2` | Practice field balance | Distribute practice locations evenly |
 | `c3` | Solo practice balance | Equal solo practice opportunities per team |
 

@@ -112,19 +112,20 @@ Soft rules represent preferences for schedule quality. Violating these is accept
 
 ### Rule b2: Early/Late Time Balance
 
-**Description:** Each team should have a balanced distribution of early games (before 6:00 PM) and late games (6:00 PM or later).
+**Description:** Each team should have a balanced distribution of early games (4:00 PM to before 6:00 PM) and late games (6:00 PM or later). Games before 4:00 PM do not count toward this balance.
 
 **Why it matters:** Late games can be harder for younger players; fairness requires sharing the burden.
 
 **Threshold:** Difference of more than 2 is flagged.
 
 **Validation logic:**
-- Count early games (start time < 18:00) per team
-- Count late games (start time >= 18:00) per team
+- Skip games starting before 4:00 PM (16:00)
+- Count early games (4:00 PM <= start time < 6:00 PM) per team
+- Count late games (start time >= 6:00 PM) per team
 - Flag if `|early - late|` > 2
 
 **Example violation:**
-- Team A has 8 early games and 2 late games (difference = 6)
+- Team A has 8 early games (4-6pm) and 2 late games (6pm+) (difference = 6)
 
 ---
 
@@ -263,7 +264,7 @@ First Practice Date < Opening Day Date < Regular Season End Date < Season End Da
 | `gap` | Same team gap | HARD | No back-to-back vs same opponent |
 | `slot` | Field double-booked | HARD | No two games at same time on same field |
 | `a2` | Home/away vs opponent | SOFT | Alternate home/away when playing same team |
-| `b2` | Early/late time balance | SOFT | Balance game start times per team |
+| `b2` | Early/late time balance | SOFT | Balance 4-6 PM vs 6 PM+ games (before 4 PM excluded) |
 | `c2` | Practice field balance | SOFT | Distribute practice locations evenly |
 | `c3` | Solo practice balance | SOFT | Equal solo practice opportunities per team |
 

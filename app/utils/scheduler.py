@@ -162,7 +162,7 @@ class ScheduleValidator:
         # Rule a2: No team is home twice against same opponent
         self._check_home_away_vs_opponent(league, actual_games, teams)
 
-        # Rule b2: Balance 5:30 vs 7:30 per team
+        # Rule b2: Balance early (4-6pm) vs late (6pm+) games per team
         self._check_time_balance(league, actual_games, teams)
 
         # Rule c2: Balance practice fields
@@ -300,8 +300,14 @@ class ScheduleValidator:
                     ))
 
     def _check_time_balance(self, league, games, teams):
-        """Rule b2: Balance 5:30 vs 7:30 start times per team."""
-        early_counts = defaultdict(int)  # Before 6:00 PM
+        """Rule b2: Balance early vs late start times per team.
+
+        Only games starting at 4pm or later count toward this balance:
+        - Early: 4:00 PM to before 6:00 PM
+        - Late: 6:00 PM or later
+        - Games before 4pm: not counted
+        """
+        early_counts = defaultdict(int)  # 4:00 PM to before 6:00 PM
         late_counts = defaultdict(int)   # 6:00 PM or later
 
         for g in games:
@@ -309,15 +315,19 @@ class ScheduleValidator:
             if start_time is None:
                 continue
 
+            # Only count games starting at 4pm or later
+            if start_time < 16:
+                continue
+
             home = self._get_home_team(g)
             away = self._get_away_team(g)
 
-            if start_time < 18:  # Before 6 PM
+            if start_time < 18:  # 4pm to before 6pm = early
                 if home:
                     early_counts[home] += 1
                 if away:
                     early_counts[away] += 1
-            else:
+            else:  # 6pm or later = late
                 if home:
                     late_counts[home] += 1
                 if away:
