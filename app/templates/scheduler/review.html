@@ -556,21 +556,20 @@
                class="{{ 'active' if view_mode == 'list' else '' }}">List</a>
         </div>
 
-        <form method="GET" style="display: flex; gap: 10px; align-items: center;">
-            <input type="hidden" name="view" value="{{ view_mode }}">
-            <select name="league" onchange="this.form.submit()">
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <select id="league-filter" onchange="applyFilters()">
                 <option value="">All Leagues</option>
                 {% for league in leagues %}
-                <option value="{{ league }}" {{ 'selected' if filter_league == league else '' }}>{{ league }}</option>
+                <option value="{{ league }}">{{ league }}</option>
                 {% endfor %}
             </select>
-            <select name="type" onchange="this.form.submit()">
+            <select id="type-filter" onchange="applyFilters()">
                 <option value="">All Types</option>
-                <option value="games" {{ 'selected' if filter_type == 'games' else '' }}>Games Only</option>
-                <option value="practices" {{ 'selected' if filter_type == 'practices' else '' }}>Practices Only</option>
-                <option value="scrimmages" {{ 'selected' if filter_type == 'scrimmages' else '' }}>Scrimmages Only</option>
+                <option value="regular">Games Only</option>
+                <option value="practice">Practices Only</option>
+                <option value="scrimmage">Scrimmages Only</option>
             </select>
-        </form>
+        </div>
 
         <!-- Team Filter -->
         <div class="team-filter-container">
@@ -605,7 +604,9 @@
              data-home-id="{{ game.home_team_id }}"
              data-away-id="{{ game.away_team_id }}"
              data-home-name="{{ game.home_team_name|lower if game.home_team_name else '' }}"
-             data-away-name="{{ game.away_team_name|lower if game.away_team_name else '' }}">
+             data-away-name="{{ game.away_team_name|lower if game.away_team_name else '' }}"
+             data-league="{{ game.league }}"
+             data-type="{{ game.game_type }}">
             <span class="game-type-badge {{ game.game_type }}">{{ game.game_type }}</span>
             <span class="game-time">
                 {% if game.game_date %}
@@ -649,7 +650,9 @@
             <tr data-home-id="{{ game.home_team_id }}"
                 data-away-id="{{ game.away_team_id }}"
                 data-home-name="{{ game.home_team_name|lower if game.home_team_name else '' }}"
-                data-away-name="{{ game.away_team_name|lower if game.away_team_name else '' }}">
+                data-away-name="{{ game.away_team_name|lower if game.away_team_name else '' }}"
+                data-league="{{ game.league }}"
+                data-type="{{ game.game_type }}">
                 <td>{{ game.game_date[:10] if game.game_date else 'TBD' }}</td>
                 <td>{{ game.game_date[11:16] if game.game_date else '' }}</td>
                 <td><span class="game-type-badge {{ game.game_type }}">{{ game.game_type }}</span></td>
@@ -929,10 +932,91 @@ document.getElementById('team-modal').addEventListener('click', function(e) {
     }
 });
 
-// Team filter functionality
+// Combined filter functionality
 var allTeams = [];
 var activeTeamFilter = null;
 var selectedSuggestionIndex = -1;
+var activeLeagueFilter = '';
+var activeTypeFilter = '';
+
+function applyFilters() {
+    activeLeagueFilter = document.getElementById('league-filter').value;
+    activeTypeFilter = document.getElementById('type-filter').value;
+
+    applyAllFilters();
+}
+
+function applyAllFilters() {
+    var visibleCount = 0;
+    var rows = document.querySelectorAll('[data-home-id]');
+
+    rows.forEach(function(row) {
+        var show = true;
+
+        // Team filter
+        if (activeTeamFilter) {
+            var homeId = row.dataset.homeId;
+            var awayId = row.dataset.awayId;
+            if (homeId !== activeTeamFilter.id && awayId !== activeTeamFilter.id) {
+                show = false;
+            }
+        }
+
+        // League filter
+        if (show && activeLeagueFilter) {
+            if (row.dataset.league !== activeLeagueFilter) {
+                show = false;
+            }
+        }
+
+        // Type filter
+        if (show && activeTypeFilter) {
+            if (row.dataset.type !== activeTypeFilter) {
+                show = false;
+            }
+        }
+
+        if (show) {
+            row.classList.remove('filtered-out');
+            visibleCount++;
+        } else {
+            row.classList.add('filtered-out');
+        }
+    });
+
+    // Hide empty date sections (calendar view)
+    var dateHeaders = document.querySelectorAll('.date-header[data-date]');
+    dateHeaders.forEach(function(header) {
+        var dateStr = header.dataset.date;
+        var gamesSection = document.querySelector('.date-games[data-date="' + dateStr + '"]');
+        if (gamesSection) {
+            var visibleGames = gamesSection.querySelectorAll('.game-row:not(.filtered-out)');
+            if (visibleGames.length === 0) {
+                header.classList.add('filtered-out');
+                gamesSection.classList.add('filtered-out');
+            } else {
+                header.classList.remove('filtered-out');
+                gamesSection.classList.remove('filtered-out');
+            }
+        }
+    });
+
+    // Update count
+    document.getElementById('items-count').textContent = 'Showing ' + visibleCount + ' items';
+
+    // Update team filter info
+    var filterInfo = document.getElementById('team-filter-info');
+    var filterName = document.getElementById('team-filter-name');
+    var filterCount = document.getElementById('team-filter-count');
+
+    if (activeTeamFilter) {
+        filterInfo.style.display = 'flex';
+        filterName.textContent = activeTeamFilter.name.charAt(0).toUpperCase() + activeTeamFilter.name.slice(1);
+        filterCount.textContent = '(' + visibleCount + ' games/practices)';
+    } else {
+        filterInfo.style.display = 'none';
+    }
+}
 
 // Build team list from game data
 function buildTeamList() {
@@ -997,50 +1081,7 @@ function selectTeamSuggestion(teamId, teamName) {
 
 function applyTeamFilter(teamId, teamName) {
     activeTeamFilter = { id: teamId, name: teamName };
-
-    var visibleCount = 0;
-    var rows = document.querySelectorAll('[data-home-id]');
-
-    rows.forEach(function(row) {
-        var homeId = row.dataset.homeId;
-        var awayId = row.dataset.awayId;
-
-        if (homeId === teamId || awayId === teamId) {
-            row.classList.remove('filtered-out');
-            visibleCount++;
-        } else {
-            row.classList.add('filtered-out');
-        }
-    });
-
-    // Hide empty date sections (calendar view)
-    var dateHeaders = document.querySelectorAll('.date-header[data-date]');
-    dateHeaders.forEach(function(header) {
-        var dateStr = header.dataset.date;
-        var gamesSection = document.querySelector('.date-games[data-date="' + dateStr + '"]');
-        if (gamesSection) {
-            var visibleGames = gamesSection.querySelectorAll('.game-row:not(.filtered-out)');
-            if (visibleGames.length === 0) {
-                header.classList.add('filtered-out');
-                gamesSection.classList.add('filtered-out');
-            } else {
-                header.classList.remove('filtered-out');
-                gamesSection.classList.remove('filtered-out');
-            }
-        }
-    });
-
-    // Show filter info
-    var filterInfo = document.getElementById('team-filter-info');
-    var filterName = document.getElementById('team-filter-name');
-    var filterCount = document.getElementById('team-filter-count');
-
-    filterInfo.style.display = 'flex';
-    filterName.textContent = teamName.charAt(0).toUpperCase() + teamName.slice(1);
-    filterCount.textContent = '(' + visibleCount + ' games/practices)';
-
-    // Update count
-    document.getElementById('items-count').textContent = 'Showing ' + visibleCount + ' items';
+    applyAllFilters();
 }
 
 function clearTeamFilter() {
@@ -1049,18 +1090,10 @@ function clearTeamFilter() {
     var input = document.getElementById('team-filter-input');
     input.value = '';
     document.getElementById('team-filter-clear').style.display = 'none';
-    document.getElementById('team-filter-info').style.display = 'none';
     document.getElementById('team-suggestions').classList.remove('visible');
 
-    // Show all rows
-    var rows = document.querySelectorAll('.filtered-out');
-    rows.forEach(function(row) {
-        row.classList.remove('filtered-out');
-    });
-
-    // Restore original count
-    var totalRows = document.querySelectorAll('[data-home-id]').length;
-    document.getElementById('items-count').textContent = 'Showing ' + totalRows + ' items';
+    // Reapply remaining filters (league/type)
+    applyAllFilters();
 }
 
 // Event listeners for team filter
