@@ -42,6 +42,9 @@
         border-left-color: rgb(255, 140, 0);
         background: rgba(255, 140, 0, 0.05);
     }
+    .violation-card.hidden {
+        display: none;
+    }
     .violation-code {
         font-weight: 700;
         font-size: 13px;
@@ -49,6 +52,69 @@
     .violation-name {
         font-size: 12px;
         color: #666;
+    }
+
+    /* Violation Navigator */
+    .violation-nav {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+    .violation-nav-card {
+        padding: 12px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        min-width: 100px;
+        text-align: center;
+        transition: all 0.2s;
+        border: 2px solid transparent;
+    }
+    .violation-nav-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .violation-nav-card.active {
+        border-color: #333;
+    }
+    .violation-nav-card.hard {
+        background: rgba(220, 53, 69, 0.1);
+    }
+    .violation-nav-card.soft {
+        background: rgba(255, 140, 0, 0.1);
+    }
+    .violation-nav-card .count {
+        font-size: 24px;
+        font-weight: 700;
+    }
+    .violation-nav-card.hard .count {
+        color: #dc3545;
+    }
+    .violation-nav-card.soft .count {
+        color: rgb(255, 140, 0);
+    }
+    .violation-nav-card .code {
+        font-size: 12px;
+        font-weight: 600;
+        color: #666;
+        text-transform: uppercase;
+    }
+    .violation-nav-card .name {
+        font-size: 11px;
+        color: #888;
+        margin-top: 2px;
+    }
+    .violation-filter-info {
+        padding: 10px 15px;
+        background: #f0f0f0;
+        border-radius: 4px;
+        margin-bottom: 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .violation-filter-info.hidden {
+        display: none;
     }
 
     .warning-card {
@@ -237,13 +303,46 @@
 {% if violations %}
 <div class="card">
     <h3 style="margin-top: 0;">Rule Violations</h3>
-    {% for v in violations %}
-    <div class="violation-card {{ 'soft' if v.severity == 'soft' else '' }}">
-        <span class="violation-code">[{{ v.rule_code }}]</span>
-        <span class="violation-name">{{ v.rule_name }}</span>
-        <div style="margin-top: 5px;">{{ v.message }}</div>
+
+    <!-- Violation Navigator - Summary by Rule Type -->
+    <div class="violation-nav">
+        <div class="violation-nav-card active" onclick="filterViolations('all')" data-filter="all">
+            <div class="count">{{ violations|length }}</div>
+            <div class="code">All</div>
+            <div class="name">violations</div>
+        </div>
+        {% set violation_groups = {} %}
+        {% for v in violations %}
+            {% if v.rule_code not in violation_groups %}
+                {% set _ = violation_groups.update({v.rule_code: {'name': v.rule_name, 'severity': v.severity, 'count': 0}}) %}
+            {% endif %}
+            {% set _ = violation_groups[v.rule_code].update({'count': violation_groups[v.rule_code].count + 1}) %}
+        {% endfor %}
+        {% for code, info in violation_groups.items() | sort %}
+        <div class="violation-nav-card {{ info.severity }}" onclick="filterViolations('{{ code }}')" data-filter="{{ code }}">
+            <div class="count">{{ info.count }}</div>
+            <div class="code">{{ code }}</div>
+            <div class="name">{{ info.name }}</div>
+        </div>
+        {% endfor %}
     </div>
-    {% endfor %}
+
+    <!-- Filter Info Bar -->
+    <div class="violation-filter-info hidden" id="violation-filter-info">
+        <span>Showing <strong id="filter-rule-name">all</strong> violations (<span id="filter-count">0</span> of {{ violations|length }})</span>
+        <button class="btn btn-outline btn-sm" onclick="filterViolations('all')">Show All</button>
+    </div>
+
+    <!-- Violation Cards -->
+    <div id="violations-list">
+        {% for v in violations %}
+        <div class="violation-card {{ 'soft' if v.severity == 'soft' else '' }}" data-rule="{{ v.rule_code }}">
+            <span class="violation-code">[{{ v.rule_code }}]</span>
+            <span class="violation-name">{{ v.rule_name }}</span>
+            <div style="margin-top: 5px;">{{ v.message }}</div>
+        </div>
+        {% endfor %}
+    </div>
 </div>
 {% endif %}
 
@@ -460,5 +559,46 @@ document.querySelectorAll('form').forEach(function(form) {
         }
     });
 });
+
+// Violation filtering
+function filterViolations(ruleCode) {
+    var cards = document.querySelectorAll('.violation-card');
+    var navCards = document.querySelectorAll('.violation-nav-card');
+    var filterInfo = document.getElementById('violation-filter-info');
+    var filterRuleName = document.getElementById('filter-rule-name');
+    var filterCount = document.getElementById('filter-count');
+    var visibleCount = 0;
+
+    // Update nav card active state
+    navCards.forEach(function(navCard) {
+        if (navCard.dataset.filter === ruleCode) {
+            navCard.classList.add('active');
+        } else {
+            navCard.classList.remove('active');
+        }
+    });
+
+    // Filter violation cards
+    cards.forEach(function(card) {
+        if (ruleCode === 'all' || card.dataset.rule === ruleCode) {
+            card.classList.remove('hidden');
+            visibleCount++;
+        } else {
+            card.classList.add('hidden');
+        }
+    });
+
+    // Update filter info bar
+    if (ruleCode === 'all') {
+        filterInfo.classList.add('hidden');
+    } else {
+        filterInfo.classList.remove('hidden');
+        // Find the rule name from the active nav card
+        var activeNav = document.querySelector('.violation-nav-card[data-filter="' + ruleCode + '"]');
+        var ruleName = activeNav ? activeNav.querySelector('.name').textContent : ruleCode;
+        filterRuleName.textContent = ruleCode.toUpperCase() + ' - ' + ruleName;
+        filterCount.textContent = visibleCount;
+    }
+}
 </script>
 {% endblock %}
