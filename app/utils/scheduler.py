@@ -1152,10 +1152,10 @@ class ScheduleGenerator:
         """
         result = {}
 
-        # Get preferred field IDs for this league
+        # Get preferred field IDs for this league (as list of integers)
         preferred_ids = []
-        if league and hasattr(league, 'preferred_fields') and league.preferred_fields:
-            preferred_ids = league.preferred_fields
+        if league and hasattr(league, 'preferred_field_ids'):
+            preferred_ids = league.preferred_field_ids or []
 
         def slot_preference_key(slot):
             """Sort key: preferred fields first (in order), then others."""
