@@ -421,25 +421,63 @@ def properties():
     ownership_filter = request.args.get('ownership', 'sdll')  # 'sdll', 'away', 'all'
 
     if request.method == 'POST':
-        field_id = int(request.form.get('field_id'))
-        usage_type = request.form.get('usage_type')
-        practice_capacity = request.form.get('practice_capacity', type=int) or 1
+        action = request.form.get('action')
 
-        # Handle late capacity: empty string = None (same), otherwise use the int value (including 0)
-        late_capacity_str = request.form.get('practice_capacity_late', '')
-        practice_capacity_late = int(late_capacity_str) if late_capacity_str != '' else None
+        if action == 'bulk_update':
+            # Bulk update all fields
+            # Get all fields that might have been edited
+            all_fields = Field.query.filter_by(active=1).all()
+            updated_count = 0
 
-        field = Field.query.get(field_id)
-        if field:
-            field.usage_type = usage_type
-            field.practice_capacity = practice_capacity
-            # Store None if "Same" selected, otherwise store the value (including 0 for "No Practices")
-            field.practice_capacity_late = practice_capacity_late
+            for field in all_fields:
+                field_id = field.ID
+                usage_type = request.form.get(f'field_{field_id}_usage_type')
+                practice_capacity_str = request.form.get(f'field_{field_id}_practice_capacity')
+                late_capacity_str = request.form.get(f'field_{field_id}_practice_capacity_late', '')
+
+                # Skip if this field wasn't in the form
+                if usage_type is None:
+                    continue
+
+                practice_capacity = int(practice_capacity_str) if practice_capacity_str else 1
+                practice_capacity_late = int(late_capacity_str) if late_capacity_str != '' else None
+
+                # Update if changed
+                if (field.usage_type != usage_type or
+                    field.practice_capacity != practice_capacity or
+                    field.practice_capacity_late != practice_capacity_late):
+                    field.usage_type = usage_type
+                    field.practice_capacity = practice_capacity
+                    field.practice_capacity_late = practice_capacity_late
+                    updated_count += 1
+
             db.session.commit()
-            logger.info(f'Updated properties for {field.location_title}: {field.usage_type_display}')
-            flash(f'Updated properties for {field.location_title}', 'success')
+            logger.info(f'Bulk updated {updated_count} field properties')
+            flash(f'Saved properties for {updated_count} field(s)', 'success')
 
-        return redirect(url_for('fields.properties', ownership=ownership_filter) + f'#field-{field_id}')
+            return redirect(url_for('fields.properties', ownership=ownership_filter))
+
+        else:
+            # Legacy single-field update (keep for backwards compatibility)
+            field_id = int(request.form.get('field_id'))
+            usage_type = request.form.get('usage_type')
+            practice_capacity = request.form.get('practice_capacity', type=int) or 1
+
+            # Handle late capacity: empty string = None (same), otherwise use the int value (including 0)
+            late_capacity_str = request.form.get('practice_capacity_late', '')
+            practice_capacity_late = int(late_capacity_str) if late_capacity_str != '' else None
+
+            field = Field.query.get(field_id)
+            if field:
+                field.usage_type = usage_type
+                field.practice_capacity = practice_capacity
+                # Store None if "Same" selected, otherwise store the value (including 0 for "No Practices")
+                field.practice_capacity_late = practice_capacity_late
+                db.session.commit()
+                logger.info(f'Updated properties for {field.location_title}: {field.usage_type_display}')
+                flash(f'Updated properties for {field.location_title}', 'success')
+
+            return redirect(url_for('fields.properties', ownership=ownership_filter) + f'#field-{field_id}')
 
     # GET - filter fields by ownership
     query = Field.query.filter_by(active=1)

@@ -134,6 +134,7 @@ def manage(year, is_spring):
                     game.game_type = request.form.get('game_type', 'regular')
                     game.status = request.form.get('status', 'scheduled')
                     game.is_scrimmage = 1 if request.form.get('is_scrimmage') else 0
+                    game.no_time_limit = 1 if request.form.get('no_time_limit') else 0
 
                     # If converting to practice, clear away team
                     if game.game_type == 'practice':
@@ -401,7 +402,104 @@ def calendar(year, is_spring):
         leagues=leagues,
         teams=teams,
         fields=fields,
-        current_league=league
+        current_league=league,
+        today=today
+    )
+
+
+@games_bp.route('/<int:year>/<int:is_spring>/day/<target_date>')
+@login_required
+def day_view(year, is_spring, target_date):
+    """Single day view with field columns and time slot rows.
+
+    Shows all games/practices for a specific date in a grid format:
+    - Columns: Fields
+    - Rows: Time slots (5:30, 6:00, 6:30, 7:00, 7:30, 8:00)
+    - Cells: Games/practices at that field/time
+    """
+    from datetime import datetime as dt
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    # Parse the target date
+    try:
+        view_date = dt.strptime(target_date, '%Y-%m-%d').date()
+    except ValueError:
+        flash('Invalid date format', 'error')
+        return redirect(url_for('games.calendar', year=year, is_spring=is_spring))
+
+    # Get games for this day
+    games = Game.query.filter(
+        Game.active == 1,
+        Game.year == year,
+        Game.is_spring == is_spring,
+        db.func.date(Game.game_date) == view_date
+    ).order_by(Game.game_date, Game.location).all()
+
+    # Get all fields that have games on this day
+    fields_with_games = set()
+    for game in games:
+        if game.location:
+            fields_with_games.add(game.location)
+
+    # Get all fields for display (prioritize those with games)
+    all_fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
+
+    # Filter to fields used on this day, or all fields if none
+    if fields_with_games:
+        display_fields = [f for f in all_fields if f.location_title in fields_with_games]
+    else:
+        display_fields = all_fields[:8]  # Limit to 8 fields to fit on screen
+
+    # Define time slots (30-minute intervals from 5:00 PM to 9:00 PM)
+    time_slots = []
+    for hour in [17, 18, 19, 20]:  # 5 PM, 6 PM, 7 PM, 8 PM
+        for minute in [0, 30]:
+            time_slots.append(f'{hour:02d}:{minute:02d}')
+
+    # Build grid: time_slot -> field -> list of games
+    grid = {}
+    for slot in time_slots:
+        grid[slot] = {}
+        for field in display_fields:
+            grid[slot][field.location_title] = []
+
+    # Place games in grid
+    for game in games:
+        if game.game_date and game.location:
+            time_key = game.game_date.strftime('%H:%M')
+            # Round to nearest 30-minute slot
+            hour = game.game_date.hour
+            minute = 0 if game.game_date.minute < 30 else 30
+            time_key = f'{hour:02d}:{minute:02d}'
+
+            if time_key in grid and game.location in grid[time_key]:
+                grid[time_key][game.location].append(game)
+
+    # Calculate prev/next day links
+    prev_date = view_date - timedelta(days=1)
+    next_date = view_date + timedelta(days=1)
+
+    # Get teams for edit modal
+    teams = TeamSeason.query.filter_by(
+        year=year,
+        is_spring=is_spring,
+        active=1
+    ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+
+    return render_template(
+        'games/day_view.html',
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name,
+        view_date=view_date,
+        prev_date=prev_date.strftime('%Y-%m-%d'),
+        next_date=next_date.strftime('%Y-%m-%d'),
+        games=games,
+        display_fields=display_fields,
+        all_fields=all_fields,
+        time_slots=time_slots,
+        grid=grid,
+        teams=teams
     )
 
 
@@ -445,6 +543,7 @@ def rainout(year, is_spring):
             game_id = int(request.form.get('game_id'))
             new_date_str = request.form.get('new_date')
             new_time_str = request.form.get('new_time')
+            new_field = request.form.get('new_field')
 
             game = Game.query.get(game_id)
             if game and new_date_str:
@@ -456,9 +555,13 @@ def rainout(year, is_spring):
                     new_date = datetime.strptime(new_date_str, '%Y-%m-%d').date()
                     game.game_date = datetime.combine(new_date, original_time)
 
+                # Update field if specified
+                if new_field:
+                    game.location = new_field
+
                 game.status = 'scheduled'
                 db.session.commit()
-                logger.info(f'Rescheduled game {game_id} to {game.game_date}')
+                logger.info(f'Rescheduled game {game_id} to {game.game_date} at {game.location}')
                 flash(f'Rescheduled game to {game.game_date.strftime("%B %d at %I:%M %p")}', 'success')
 
         elif action == 'swap_with_practice':
@@ -474,6 +577,37 @@ def rainout(year, is_spring):
                 db.session.commit()
                 logger.info(f'Swapped game {game_id} to practice date {practice_date}')
                 flash(f'Moved game to {practice_date.strftime("%B %d")}', 'success')
+
+        elif action == 'bulk_reschedule':
+            # Bulk reschedule selected games
+            game_ids = request.form.getlist('game_ids')
+            new_date_str = request.form.get('bulk_new_date')
+            new_time_str = request.form.get('bulk_new_time')
+            new_field = request.form.get('bulk_new_field')
+
+            if game_ids and new_date_str:
+                count = 0
+                for game_id in game_ids:
+                    game = Game.query.get(int(game_id))
+                    if game:
+                        # Update date/time
+                        if new_time_str:
+                            game.game_date = datetime.strptime(f'{new_date_str} {new_time_str}', '%Y-%m-%d %H:%M')
+                        else:
+                            original_time = game.game_date.time() if game.game_date else datetime.strptime('17:30', '%H:%M').time()
+                            new_date = datetime.strptime(new_date_str, '%Y-%m-%d').date()
+                            game.game_date = datetime.combine(new_date, original_time)
+
+                        # Update field if specified
+                        if new_field:
+                            game.location = new_field
+
+                        game.status = 'scheduled'
+                        count += 1
+
+                db.session.commit()
+                logger.info(f'Bulk rescheduled {count} games to {new_date_str}')
+                flash(f'Rescheduled {count} games to {new_date_str}', 'success')
 
         return redirect(url_for('games.rainout', year=year, is_spring=is_spring))
 
@@ -529,6 +663,9 @@ def rainout(year, is_spring):
 
     practice_dates.sort()
 
+    # Get fields for reschedule dropdown
+    fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
+
     return render_template(
         'games/rainout.html',
         year=year,
@@ -537,5 +674,6 @@ def rainout(year, is_spring):
         selected_date=selected_date,
         affected_games=affected_games,
         game_dates=game_dates,
-        practice_dates=practice_dates[:20]  # Limit to next 20 practice dates
+        practice_dates=practice_dates[:20],  # Limit to next 20 practice dates
+        fields=fields
     )

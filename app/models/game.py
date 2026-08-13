@@ -24,6 +24,7 @@ class Game(db.Model):
     is_spring = db.Column(db.SmallInteger)  # 0=Fall, 1=Spring
     game_type = db.Column(db.String(20), default='regular')  # regular, playoff, practice
     is_scrimmage = db.Column(db.SmallInteger, default=0)
+    no_time_limit = db.Column(db.SmallInteger, default=0)  # 1 = 3-hour game (no time limit)
     umpire_override = db.Column(db.String(20))
 
     def __repr__(self):
@@ -33,6 +34,50 @@ class Game(db.Model):
     def season_name(self):
         """Return human-readable season name"""
         return 'Spring' if self.is_spring else 'Fall'
+
+    @property
+    def duration_minutes(self):
+        """Return game duration in minutes based on type and flags.
+
+        - Regular games: 120 minutes (2 hours)
+        - No-time-limit games: 180 minutes (3 hours)
+        - Practices: 90 minutes
+        """
+        if self.game_type == 'practice' or (self.away_ID is None and self.home_ID is not None):
+            return 90
+        if self.no_time_limit:
+            return 180
+        return 120
+
+    @property
+    def display_type(self):
+        """Return the game type for display/CSS purposes.
+
+        This handles cases where:
+        - game_type is 'practice' -> 'practice'
+        - game_type is 'regular' but away_ID is None -> 'practice'
+        - is_scrimmage is True -> 'scrimmage'
+        - game_type is 'playoff' -> 'playoff'
+        - Otherwise -> 'regular'
+        """
+        # Explicit practice type
+        if self.game_type == 'practice':
+            return 'practice'
+
+        # Scrimmage flag overrides
+        if self.is_scrimmage:
+            return 'scrimmage'
+
+        # If no away team, it's effectively a practice
+        if self.away_ID is None and self.home_ID is not None:
+            return 'practice'
+
+        # Playoff games
+        if self.game_type == 'playoff':
+            return 'playoff'
+
+        # Default to regular
+        return 'regular'
 
     @property
     def is_upcoming(self):

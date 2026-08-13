@@ -154,6 +154,47 @@
         font-size: 12px;
         min-width: 80px;
     }
+
+    /* Loading overlay */
+    .loading-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.9);
+        z-index: 9999;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+    }
+    .loading-overlay.visible {
+        display: flex;
+    }
+    .loading-spinner {
+        width: 50px;
+        height: 50px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid rgb(34, 139, 34);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    .loading-message {
+        font-size: 18px;
+        color: #333;
+        text-align: center;
+    }
+    .loading-submessage {
+        font-size: 14px;
+        color: #666;
+        margin-top: 10px;
+    }
 </style>
 {% endblock %}
 
@@ -387,4 +428,37 @@
         </div>
     </div>
 </div>
+
+<!-- Loading Overlay -->
+<div id="loading-overlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-message" id="loading-message">Saving schedule...</div>
+    <div class="loading-submessage">This may take a minute. Please don't close this page.</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Show loading overlay for long-running operations
+function showLoading(message) {
+    document.getElementById('loading-message').textContent = message;
+    document.getElementById('loading-overlay').classList.add('visible');
+}
+
+// Intercept form submissions that trigger long operations
+document.querySelectorAll('form').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+        var action = form.getAttribute('action') || '';
+        var submitBtn = form.querySelector('button[type="submit"]');
+        var btnText = submitBtn ? submitBtn.textContent.trim() : '';
+
+        // Only show loading for save/generate operations
+        if (action.includes('/save') || btnText.includes('Save')) {
+            showLoading('Saving schedule...');
+        } else if (action.includes('/generate') || btnText.includes('Regenerate') || btnText.includes('Start Fresh')) {
+            showLoading('Generating schedule...');
+        }
+    });
+});
+</script>
 {% endblock %}

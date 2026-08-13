@@ -176,6 +176,9 @@
                         {% if game.is_scrimmage %}Scrimmage{% else %}{{ game.game_type|title }}{% endif %}
                     </span>
                     <span class="status-badge status-{{ game.status }}">{{ game.status }}</span>
+                    {% if game.no_time_limit %}
+                    <span style="background: #7b1fa2; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 5px;">NO LIMIT</span>
+                    {% endif %}
                     <strong style="margin-left: 10px;">{{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}</strong>
                     <span class="text-muted">at {{ game.location or 'TBD' }}</span>
                 </div>
@@ -197,7 +200,7 @@
             </div>
             <div>
                 <button type="button" class="btn btn-outline btn-sm"
-                        onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.location or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage }}, '{{ game.league }}')">
+                        onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.location or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage }}, {{ game.no_time_limit or 0 }}, '{{ game.league }}')">
                     Edit
                 </button>
             </div>
@@ -287,10 +290,13 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>&nbsp;</label>
                     <label class="checkbox-label">
                         <input type="checkbox" name="is_scrimmage" id="edit-is-scrimmage">
                         <span>Scrimmage (no umpire)</span>
+                    </label>
+                    <label class="checkbox-label" style="margin-top: 8px;">
+                        <input type="checkbox" name="no_time_limit" id="edit-no-time-limit">
+                        <span>No Time Limit (3 hrs)</span>
                     </label>
                 </div>
             </div>
@@ -323,7 +329,7 @@ function applyFilter(name, value) {
     window.location = url;
 }
 
-function openEditModal(gameId, gameDate, gameTime, location, homeId, awayId, status, gameType, isScrimmage, league) {
+function openEditModal(gameId, gameDate, gameTime, location, homeId, awayId, status, gameType, isScrimmage, noTimeLimit, league) {
     document.getElementById('edit-game-id').value = gameId;
     document.getElementById('delete-game-id').value = gameId;
     document.getElementById('edit-game-date').value = gameDate;
@@ -334,6 +340,7 @@ function openEditModal(gameId, gameDate, gameTime, location, homeId, awayId, sta
     document.getElementById('edit-status').value = status;
     document.getElementById('edit-game-type').value = gameType;
     document.getElementById('edit-is-scrimmage').checked = isScrimmage == 1;
+    document.getElementById('edit-no-time-limit').checked = noTimeLimit == 1;
 
     toggleAwayTeam();
     document.getElementById('edit-modal').style.display = 'flex';

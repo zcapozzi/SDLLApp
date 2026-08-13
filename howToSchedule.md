@@ -142,6 +142,21 @@ Soft rules represent preferences for schedule quality. Violating these is accept
 
 ---
 
+### Rule c3: Solo Practice Balance
+
+**Description:** Each team should have an equal number of practices where they're the only team at the field.
+
+**Why it matters:** Solo practices allow for more focused coaching and use of the entire field. Teams should share this benefit equally.
+
+**Threshold:** Difference of more than 1 solo practice between teams is flagged.
+
+**Validation logic:**
+- Count solo practices (no other teams at field/time) per team
+- Compare across all teams in the league
+- Flag if `max(solo_count) - min(solo_count)` > 1
+
+---
+
 ## Field Restrictions
 
 Leagues can have field restrictions that must be respected:
@@ -161,6 +176,14 @@ Leagues can have field restrictions that must be respected:
 - Ordered list of field IDs in preference order
 - Generator should try to use preferred fields first when multiple options exist
 
+### Non-Preferred Fields Priority
+- If a field is in `allowed_game_fields` or `allowed_practice_fields` but NOT in `preferred_fields`, it has lowest priority
+- These fields are used only when preferred fields are at capacity
+- Order of preference:
+  1. Fields in `preferred_fields` (in order listed)
+  2. Fields in allowed list but not in preferred (lowest priority)
+  3. Fields not in allowed list are never used
+
 ### Field Capacities
 - Fields have `practice_capacity_early` and `practice_capacity_late` settings
 - Multiple teams can share a practice slot up to the capacity limit
@@ -169,6 +192,17 @@ Leagues can have field restrictions that must be respected:
 ---
 
 ## Time Restrictions
+
+### Field Allocations versus Practice & Game Slots
+- A field allocation can support multiple games or practices; you can't have two games at 5:30 on the same field, but if the allocation is from 5:30 to 9:30, then you can have two games scheduled on that day, one at 5:30pm and one at 7:30pm
+- All regular season games should be scheduled for 2 hours and all practices should be scheduled for 90 minutes
+
+### No Time Limit Games
+- Games can be flagged with `no_time_limit = 1` in the database
+- No-time-limit games are allocated 3 hours instead of 2 hours
+- This flag is displayed to umpires so they know the game format
+- Typically used for: championship games, playoff finals, tiebreakers
+- Set via the game edit modal (checkbox: "No Time Limit (3 hrs)")
 
 ### League Time Restrictions
 - Configured via `League.earliest_start_time` and `League.latest_start_time`
@@ -227,9 +261,11 @@ First Practice Date < Opening Day Date < Regular Season End Date < Season End Da
 | `a1` | Play everyone / Matchup balance | HARD | All pairs play, max diff of 1 |
 | `b1` | Home/away balance | HARD | Per team, home/away diff <= 1 |
 | `gap` | Same team gap | HARD | No back-to-back vs same opponent |
+| `slot` | Field double-booked | HARD | No two games at same time on same field |
 | `a2` | Home/away vs opponent | SOFT | Alternate home/away when playing same team |
 | `b2` | Early/late time balance | SOFT | Balance game start times per team |
 | `c2` | Practice field balance | SOFT | Distribute practice locations evenly |
+| `c3` | Solo practice balance | SOFT | Equal solo practice opportunities per team |
 
 ---
 

@@ -69,6 +69,12 @@
     .game-row:hover {
         background: #fafafa;
     }
+    .game-row.selected {
+        background: #e8f5e9;
+    }
+    .game-checkbox {
+        margin-right: 15px;
+    }
     .game-info {
         flex: 1;
     }
@@ -76,11 +82,13 @@
         display: flex;
         gap: 10px;
         align-items: center;
+        flex-wrap: wrap;
     }
     .reschedule-form {
         display: flex;
         gap: 8px;
         align-items: center;
+        flex-wrap: wrap;
     }
     .practice-date-select {
         display: flex;
@@ -100,6 +108,23 @@
         background: #e1bee7;
     }
     .bulk-actions {
+        display: none;
+        gap: 15px;
+        padding: 15px;
+        background: #e3f2fd;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .bulk-actions.visible {
+        display: flex;
+    }
+    .bulk-actions .selection-count {
+        font-weight: 600;
+        color: #1565c0;
+    }
+    .postpone-all-bar {
         display: flex;
         gap: 15px;
         padding: 15px;
@@ -139,7 +164,7 @@
 <div class="card" style="margin-bottom: 20px;">
     <p class="text-muted" style="margin: 0;">
         Select a date that was rained out to see affected games and reschedule them.
-        You can postpone all games at once or reschedule individual games to practice dates.
+        You can postpone all games at once, select individual games for bulk rescheduling, or reschedule games one by one.
     </p>
 </div>
 
@@ -181,24 +206,45 @@
     </h2>
 
     {% if affected_games %}
-    <!-- Bulk Actions -->
-    <div class="bulk-actions">
-        <strong>Bulk Actions:</strong>
+    <!-- Postpone All -->
+    <div class="postpone-all-bar">
+        <strong>Quick Action:</strong>
         <form method="POST" style="display: inline;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="postpone_all">
             <input type="hidden" name="rainout_date" value="{{ selected_date.strftime('%Y-%m-%d') }}">
             <button type="submit" class="btn btn-secondary"
-                    onclick="return confirm('Postpone all {{ affected_games|length }} games?')">
+                    onclick="return confirm('Postpone all {{ affected_games|length }} games?');">
                 Postpone All Games
             </button>
         </form>
         <span class="text-muted">This marks all games as "postponed" without rescheduling.</span>
     </div>
 
+    <!-- Bulk Reschedule (shown when games selected) -->
+    <div class="bulk-actions" id="bulk-actions">
+        <span class="selection-count"><span id="selection-count">0</span> games selected</span>
+        <form method="POST" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="bulk_reschedule">
+            <div id="bulk-game-ids"></div>
+            <input type="date" name="bulk_new_date" class="form-control" style="width: auto;" required>
+            <input type="time" name="bulk_new_time" class="form-control" style="width: auto;" placeholder="Keep time">
+            <select name="bulk_new_field" class="form-control" style="width: auto;">
+                <option value="">Keep field</option>
+                {% for field in fields %}
+                <option value="{{ field.location_title }}">{{ field.location_title }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">Reschedule Selected</button>
+        </form>
+        <button type="button" class="btn btn-outline btn-sm" onclick="clearSelection()">Clear Selection</button>
+    </div>
+
     <div class="card" style="padding: 0;">
         {% for game in affected_games %}
-        <div class="game-row" id="game-{{ game.ID }}">
+        <div class="game-row" id="game-{{ game.ID }}" data-game-id="{{ game.ID }}">
+            <input type="checkbox" class="game-checkbox" onchange="updateSelection()" value="{{ game.ID }}">
             <div class="game-info">
                 <div style="margin-bottom: 5px;">
                     <strong>{{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}</strong>
@@ -227,7 +273,7 @@
                     <button type="submit" class="btn btn-sm btn-outline">Move</button>
                 </form>
 
-                <!-- Custom reschedule -->
+                <!-- Custom reschedule with field -->
                 <form method="POST" class="reschedule-form">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" value="reschedule_game">
@@ -235,6 +281,14 @@
                     <input type="date" name="new_date" class="form-control" style="width: auto; font-size: 13px;">
                     <input type="time" name="new_time" class="form-control" style="width: auto; font-size: 13px;"
                            value="{{ game.game_date.strftime('%H:%M') if game.game_date else '17:30' }}">
+                    <select name="new_field" class="form-control" style="width: auto; font-size: 13px;">
+                        <option value="">Keep field</option>
+                        {% for field in fields %}
+                        <option value="{{ field.location_title }}" {{ 'selected' if game.location == field.location_title else '' }}>
+                            {{ field.location_title }}
+                        </option>
+                        {% endfor %}
+                    </select>
                     <button type="submit" class="btn btn-sm btn-primary">Reschedule</button>
                 </form>
             </div>
@@ -269,4 +323,66 @@
 </div>
 {% endif %}
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var selectedGames = new Set();
+
+function updateSelection() {
+    selectedGames.clear();
+    document.querySelectorAll('.game-checkbox:checked').forEach(function(cb) {
+        selectedGames.add(cb.value);
+    });
+
+    var bulkActions = document.getElementById('bulk-actions');
+    var countSpan = document.getElementById('selection-count');
+    var idsContainer = document.getElementById('bulk-game-ids');
+
+    if (selectedGames.size > 0) {
+        bulkActions.classList.add('visible');
+        countSpan.textContent = selectedGames.size;
+
+        // Update hidden inputs for bulk form
+        idsContainer.innerHTML = '';
+        selectedGames.forEach(function(id) {
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'game_ids';
+            input.value = id;
+            idsContainer.appendChild(input);
+        });
+
+        // Highlight selected rows
+        document.querySelectorAll('.game-row').forEach(function(row) {
+            var gameId = row.dataset.gameId;
+            if (selectedGames.has(gameId)) {
+                row.classList.add('selected');
+            } else {
+                row.classList.remove('selected');
+            }
+        });
+    } else {
+        bulkActions.classList.remove('visible');
+        document.querySelectorAll('.game-row').forEach(function(row) {
+            row.classList.remove('selected');
+        });
+    }
+}
+
+function clearSelection() {
+    document.querySelectorAll('.game-checkbox').forEach(function(cb) {
+        cb.checked = false;
+    });
+    updateSelection();
+}
+
+// Select all / none
+function toggleAll(selectAll) {
+    document.querySelectorAll('.game-checkbox').forEach(function(cb) {
+        cb.checked = selectAll;
+    });
+    updateSelection();
+}
+</script>
 {% endblock %}

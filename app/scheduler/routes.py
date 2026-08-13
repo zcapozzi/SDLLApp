@@ -195,6 +195,96 @@ def create_slots(year, is_spring):
     return redirect_with_anchor()
 
 
+@scheduler_bp.route('/<int:year>/<int:is_spring>/create-all-slots', methods=['POST'])
+@login_required
+def create_all_slots(year, is_spring):
+    """Phase 1: Create empty game slots for all ready leagues at once."""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to create game slots.', 'error')
+        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    # Check if schedule is locked
+    if LeagueSeason.is_season_locked(year, is_spring):
+        flash('Schedule is locked. Unlock it first to create game slots.', 'error')
+        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+    # Get all league configurations
+    league_configs = LeagueSeason.get_by_season(year, is_spring)
+
+    created_leagues = []
+    skipped_leagues = []
+
+    for config in league_configs:
+        league = config.league
+
+        # Skip locked leagues
+        if config.schedule_locked:
+            skipped_leagues.append((league, 'locked'))
+            continue
+
+        # Check if slots already exist
+        existing = Game.query.filter_by(
+            year=year, is_spring=is_spring, league=league, active=1, game_type='regular'
+        ).count()
+        if existing > 0:
+            skipped_leagues.append((league, f'{existing} slots exist'))
+            continue
+
+        # Get number of teams
+        teams = TeamSeason.query.filter_by(
+            year=year, is_spring=is_spring, league=league, active=1, is_placeholder=0
+        ).all()
+        if len(teams) < 2:
+            skipped_leagues.append((league, 'needs 2+ teams'))
+            continue
+
+        # Check field slots
+        slots = FieldSlot.query.filter_by(
+            year=year, is_spring=is_spring, active=1
+        ).count()
+        if slots == 0:
+            skipped_leagues.append((league, 'no field slots'))
+            continue
+
+        # Check dates configured
+        if not config.first_practice_date or not config.opening_day_date:
+            skipped_leagues.append((league, 'dates not set'))
+            continue
+
+        # Check days configured
+        if not config.practice_days and not config.game_days:
+            skipped_leagues.append((league, 'days not configured'))
+            continue
+
+        # All prerequisites met - create slots
+        games_per_team = config.regular_season_games or 10
+        num_games = (len(teams) * games_per_team) // 2
+
+        try:
+            new_games = Game.generate_game_slots(year, is_spring, league, num_games, game_type='regular')
+            created_leagues.append((league, len(new_games)))
+            logger.info(f'Created {len(new_games)} empty game slots for {league} in {season_name}')
+        except Exception as e:
+            skipped_leagues.append((league, f'error: {str(e)}'))
+            logger.info(f'Failed to create game slots for {league}: {str(e)}')
+
+    # Build feedback message
+    if created_leagues:
+        details = ', '.join([f'{league} ({count})' for league, count in created_leagues])
+        flash(f'Created game slots for {len(created_leagues)} league(s): {details}. Now generate to fill them.', 'success')
+
+    if skipped_leagues:
+        details = ', '.join([f'{league} ({reason})' for league, reason in skipped_leagues])
+        flash(f'Skipped {len(skipped_leagues)} league(s): {details}', 'warning')
+
+    if not created_leagues and not skipped_leagues:
+        flash('No leagues found to create slots for.', 'info')
+
+    return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+
 @scheduler_bp.route('/<int:year>/<int:is_spring>/generate', methods=['POST'])
 @login_required
 def generate(year, is_spring):

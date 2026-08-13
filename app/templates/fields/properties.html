@@ -27,6 +27,38 @@
         background: rgb(34, 139, 34);
         color: white;
     }
+    .dirty-indicator {
+        display: none;
+        width: 8px;
+        height: 8px;
+        background: #e67e22;
+        border-radius: 50%;
+        margin-left: 5px;
+    }
+    tr.dirty .dirty-indicator {
+        display: inline-block;
+    }
+    tr.dirty {
+        background: #fffbf0;
+    }
+    .save-bar {
+        position: sticky;
+        bottom: 0;
+        background: white;
+        padding: 15px 20px;
+        border-top: 2px solid rgb(34, 139, 34);
+        display: none;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        margin-top: 20px;
+    }
+    .save-bar.visible {
+        display: flex;
+    }
+    .save-bar .changes-count {
+        color: #666;
+    }
 </style>
 {% endblock %}
 
@@ -43,6 +75,7 @@
 <div class="card" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
     <p class="text-muted" style="margin: 0;">
         Configure field usage type and practice capacity for the schedule generator.
+        Changes are saved when you click <strong>Save All Changes</strong>.
     </p>
     <div class="filter-toggle">
         <a href="{{ url_for('fields.properties', ownership='sdll') }}" class="{{ 'active' if ownership_filter == 'sdll' else '' }}">SDLL</a>
@@ -51,27 +84,32 @@
     </div>
 </div>
 
-<div class="card">
-    <table>
-        <thead>
-            <tr>
-                <th>Field</th>
-                <th style="width: 180px;">Usage Type</th>
-                <th style="width: 140px;">Practice Capacity</th>
-                <th style="width: 140px;">Late Slot Capacity</th>
-                <th style="width: 100px;"></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for field in fields %}
-            {% if field %}
-            <tr id="field-{{ field.ID }}">
-                <form method="POST">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="field_id" value="{{ field.ID }}">
-                    <td><strong>{{ field.location_title }}</strong></td>
+<form method="POST" id="properties-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="bulk_update">
+
+    <div class="card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Field</th>
+                    <th style="width: 180px;">Usage Type</th>
+                    <th style="width: 140px;">Practice Capacity</th>
+                    <th style="width: 140px;">Late Slot Capacity</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for field in fields %}
+                {% if field %}
+                <tr id="field-{{ field.ID }}" data-field-id="{{ field.ID }}">
                     <td>
-                        <select name="usage_type" class="form-control" style="width: 100%;">
+                        <strong>{{ field.location_title }}</strong>
+                        <span class="dirty-indicator" title="Unsaved changes"></span>
+                    </td>
+                    <td>
+                        <select name="field_{{ field.ID }}_usage_type" class="form-control" style="width: 100%;"
+                                data-original="{{ field.usage_type or 'both' }}"
+                                onchange="markDirty({{ field.ID }})">
                             {% for value, label in usage_types %}
                             <option value="{{ value }}" {{ 'selected' if field.usage_type == value else '' }}>
                                 {{ label }}
@@ -80,7 +118,9 @@
                         </select>
                     </td>
                     <td>
-                        <select name="practice_capacity" class="form-control" style="width: 100%;">
+                        <select name="field_{{ field.ID }}_practice_capacity" class="form-control" style="width: 100%;"
+                                data-original="{{ field.practice_capacity or 1 }}"
+                                onchange="markDirty({{ field.ID }})">
                             {% for i in range(1, 5) %}
                             <option value="{{ i }}" {{ 'selected' if field.practice_capacity == i else '' }}>
                                 {{ i }} team{{ 's' if i > 1 else '' }}
@@ -89,7 +129,9 @@
                         </select>
                     </td>
                     <td>
-                        <select name="practice_capacity_late" class="form-control" style="width: 100%;">
+                        <select name="field_{{ field.ID }}_practice_capacity_late" class="form-control" style="width: 100%;"
+                                data-original="{{ field.practice_capacity_late if field.practice_capacity_late is not none else '' }}"
+                                onchange="markDirty({{ field.ID }})">
                             <option value="" {{ 'selected' if field.practice_capacity_late is none else '' }}>Same</option>
                             <option value="0" {{ 'selected' if field.practice_capacity_late == 0 else '' }}>No Practices</option>
                             {% for i in range(1, 5) %}
@@ -99,20 +141,25 @@
                             {% endfor %}
                         </select>
                     </td>
-                    <td>
-                        <button type="submit" class="btn btn-primary btn-sm">Save</button>
-                    </td>
-                </form>
-            </tr>
-            {% endif %}
-            {% else %}
-            <tr>
-                <td colspan="5" style="text-align: center; color: #666;">No fields found.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
+                </tr>
+                {% endif %}
+                {% else %}
+                <tr>
+                    <td colspan="4" style="text-align: center; color: #666;">No fields found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="save-bar" id="save-bar">
+        <span class="changes-count"><span id="changes-count">0</span> field(s) with unsaved changes</span>
+        <div style="display: flex; gap: 10px;">
+            <button type="button" class="btn btn-outline" onclick="resetChanges()">Reset</button>
+            <button type="submit" class="btn btn-primary">Save All Changes</button>
+        </div>
+    </div>
+</form>
 
 <div class="card" style="margin-top: 20px;">
     <h3 style="margin-top: 0;">Usage Types</h3>
@@ -139,4 +186,57 @@
         Example: Parkwood can hold 2 teams at 5:30 PM but only 1 team at 7:30 PM. Southern Boundaries 2 has no lights, so set Late Slot to "No Practices".
     </p>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var dirtyFields = new Set();
+
+function markDirty(fieldId) {
+    var row = document.getElementById('field-' + fieldId);
+    row.classList.add('dirty');
+    dirtyFields.add(fieldId);
+    updateSaveBar();
+}
+
+function updateSaveBar() {
+    var saveBar = document.getElementById('save-bar');
+    var countSpan = document.getElementById('changes-count');
+
+    if (dirtyFields.size > 0) {
+        saveBar.classList.add('visible');
+        countSpan.textContent = dirtyFields.size;
+    } else {
+        saveBar.classList.remove('visible');
+    }
+}
+
+function resetChanges() {
+    // Reset all selects to original values
+    document.querySelectorAll('select[data-original]').forEach(function(select) {
+        select.value = select.dataset.original;
+    });
+
+    // Clear dirty state
+    document.querySelectorAll('tr.dirty').forEach(function(row) {
+        row.classList.remove('dirty');
+    });
+
+    dirtyFields.clear();
+    updateSaveBar();
+}
+
+// Clear dirty state on successful submit
+document.getElementById('properties-form').addEventListener('submit', function(e) {
+    dirtyFields.clear();
+});
+
+// Warn before leaving with unsaved changes
+window.addEventListener('beforeunload', function(e) {
+    if (dirtyFields.size > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
+</script>
 {% endblock %}

@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}Schedule Calendar - {{ season_name }}{% endblock %}
+{% block title %}Day View - {{ view_date.strftime('%B %d, %Y') }} - {{ season_name }}{% endblock %}
 
 {% block extra_css %}
 <style>
-    .calendar-nav {
+    .day-nav {
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -14,43 +14,52 @@
         border-radius: 8px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
-    .calendar-nav .week-label {
-        font-size: 18px;
+    .day-nav .date-label {
+        font-size: 20px;
         font-weight: bold;
     }
-    .calendar-grid {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: 10px;
+    .day-grid {
+        overflow-x: auto;
         margin-bottom: 30px;
     }
-    .calendar-day {
-        background: white;
-        border-radius: 8px;
-        min-height: 200px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        overflow: hidden;
+    .day-grid table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 800px;
     }
-    .calendar-day.today {
-        box-shadow: 0 0 0 2px rgb(34, 139, 34);
-    }
-    .day-header {
-        padding: 10px;
-        font-weight: bold;
-        text-align: center;
-        background: #f5f5f5;
-        border-bottom: 1px solid #eee;
-    }
-    .calendar-day.today .day-header {
-        background: rgb(34, 139, 34);
-        color: white;
-    }
-    .day-content {
+    .day-grid th, .day-grid td {
+        border: 1px solid #e0e0e0;
         padding: 8px;
-        max-height: 300px;
-        overflow-y: auto;
+        text-align: left;
+        vertical-align: top;
+        min-width: 120px;
     }
-    .game-card {
+    .day-grid th {
+        background: #f5f5f5;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    .day-grid th.time-header {
+        width: 80px;
+        min-width: 80px;
+        text-align: center;
+    }
+    .day-grid td.time-cell {
+        background: #fafafa;
+        font-weight: 500;
+        text-align: center;
+        white-space: nowrap;
+    }
+    .day-grid td.field-cell {
+        background: white;
+        min-height: 60px;
+    }
+    .day-grid td.field-cell:hover {
+        background: #f8f8f8;
+    }
+    .game-slot {
         padding: 8px;
         margin-bottom: 6px;
         border-radius: 6px;
@@ -58,58 +67,69 @@
         cursor: pointer;
         transition: transform 0.1s, box-shadow 0.1s;
     }
-    .game-card:hover {
+    .game-slot:last-child {
+        margin-bottom: 0;
+    }
+    .game-slot:hover {
         transform: translateY(-1px);
         box-shadow: 0 2px 6px rgba(0,0,0,0.15);
     }
-    .game-card.regular {
+    .game-slot.regular {
         background: #e8f5e9;
         border-left: 3px solid #2e7d32;
     }
-    .game-card.playoff {
+    .game-slot.playoff {
         background: #fff3e0;
         border-left: 3px solid #e65100;
     }
-    .game-card.practice {
+    .game-slot.practice {
         background: #f3e5f5;
         border-left: 3px solid #7b1fa2;
     }
-    .game-card.scrimmage {
+    .game-slot.scrimmage {
         background: #e3f2fd;
         border-left: 3px solid #1565c0;
     }
-    .game-card.postponed {
+    .game-slot.postponed {
         opacity: 0.6;
         text-decoration: line-through;
     }
-    .game-card.cancelled {
+    .game-slot.cancelled {
         opacity: 0.4;
         text-decoration: line-through;
     }
     .game-time {
         font-weight: bold;
         color: #333;
+        font-size: 11px;
     }
-    .game-location {
-        color: #666;
+    .game-league {
+        font-weight: 600;
+        color: #1976d2;
         font-size: 11px;
     }
     .game-teams {
         margin-top: 4px;
+        font-size: 11px;
     }
-    .no-games {
-        color: #999;
+    .status-dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        margin-right: 4px;
+    }
+    .status-dot.scheduled { background: #2196f3; }
+    .status-dot.completed { background: #4caf50; }
+    .status-dot.postponed { background: #ff9800; }
+    .status-dot.cancelled { background: #f44336; }
+    .empty-cell {
+        color: #ccc;
         font-size: 11px;
         text-align: center;
-        padding: 20px 10px;
+        padding: 15px 0;
     }
-    .filter-bar {
-        display: flex;
-        gap: 15px;
-        align-items: center;
-        margin-bottom: 15px;
-    }
-    /* Edit modal - reuse from manage.html */
+    /* Edit modal */
     .edit-modal {
         display: none;
         position: fixed;
@@ -149,31 +169,6 @@
         padding-top: 15px;
         border-top: 1px solid #eee;
     }
-    .status-dot {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        margin-right: 4px;
-    }
-    .status-dot.scheduled { background: #2196f3; }
-    .status-dot.completed { background: #4caf50; }
-    .status-dot.postponed { background: #ff9800; }
-    .status-dot.cancelled { background: #f44336; }
-
-    /* Hidden by filter */
-    .game-card.filtered-out {
-        display: none;
-    }
-
-    @media (max-width: 900px) {
-        .calendar-grid {
-            grid-template-columns: 1fr;
-        }
-        .calendar-day {
-            min-height: auto;
-        }
-    }
 </style>
 {% endblock %}
 
@@ -181,77 +176,87 @@
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
     <h1>
         <span class="badge badge-{{ 'spring' if is_spring else 'fall' }}">{{ season_name }}</span>
-        Calendar
+        Day View
     </h1>
     <div style="display: flex; gap: 10px;">
-        <a href="{{ url_for('games.day_view', year=year, is_spring=is_spring, target_date=today.strftime('%Y-%m-%d') if today else week_start.strftime('%Y-%m-%d')) }}" class="btn btn-outline">Day View</a>
-        <a href="{{ url_for('games.rainout', year=year, is_spring=is_spring) }}" class="btn btn-secondary">Handle Rainout</a>
+        <a href="{{ url_for('games.calendar', year=year, is_spring=is_spring) }}" class="btn btn-outline">Week View</a>
         <a href="{{ url_for('games.manage', year=year, is_spring=is_spring) }}" class="btn btn-outline">List View</a>
     </div>
 </div>
 
-<!-- Filter (CSS-based, no page reload) -->
-<div class="filter-bar">
-    <label>League:
-        <select id="filter-league" onchange="applyFilters()" class="form-control">
-            <option value="">All Leagues</option>
-            {% for l in leagues %}
-            <option value="{{ l }}" {{ 'selected' if current_league == l else '' }}>{{ l }}</option>
-            {% endfor %}
-        </select>
-    </label>
-    <label>Type:
-        <select id="filter-type" onchange="applyFilters()" class="form-control">
-            <option value="">All Types</option>
-            <option value="regular">Games</option>
-            <option value="practice">Practices</option>
-            <option value="scrimmage">Scrimmages</option>
-            <option value="playoff">Playoffs</option>
-        </select>
-    </label>
-</div>
-
-<!-- Week Navigation -->
-<div class="calendar-nav">
-    <a href="?week={{ prev_week }}{% if current_league %}&league={{ current_league }}{% endif %}" class="btn btn-outline">&larr; Previous Week</a>
-    <span class="week-label">{{ week_start.strftime('%B %d') }} - {{ week_end.strftime('%B %d, %Y') }}</span>
-    <a href="?week={{ next_week }}{% if current_league %}&league={{ current_league }}{% endif %}" class="btn btn-outline">Next Week &rarr;</a>
-</div>
-
-<!-- Calendar Grid -->
-<div class="calendar-grid">
-    {% for day in week_days %}
-    <div class="calendar-day {{ 'today' if day.is_today else '' }}">
-        <a href="{{ url_for('games.day_view', year=year, is_spring=is_spring, target_date=day.date.strftime('%Y-%m-%d')) }}" class="day-header" style="text-decoration: none; color: inherit; display: block;">
-            {{ day.date.strftime('%a') }}<br>
-            {{ day.date.strftime('%m/%d') }}
-        </a>
-        <div class="day-content">
-            {% for game in day.games %}
-            <div class="game-card {{ game.display_type }} {{ game.status }}"
-                 data-league="{{ game.league }}"
-                 data-type="{{ game.display_type }}"
-                 onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.location or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage }}, {{ game.no_time_limit or 0 }}, '{{ game.league }}')">
-                <div class="game-time">
-                    <span class="status-dot {{ game.status }}"></span>
-                    {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
-                </div>
-                <div class="game-location">{{ game.location or 'TBD' }}</div>
-                <div class="game-teams">
-                    <strong>{{ game.league }}</strong><br>
-                    {% if game.home_team %}{{ game.home_team.computed_display_name }}{% else %}TBD{% endif %}
-                    {% if game.away_team %}
-                    <br>vs {{ game.away_team.computed_display_name }}
-                    {% endif %}
-                </div>
-            </div>
-            {% else %}
-            <div class="no-games">No games</div>
-            {% endfor %}
-        </div>
+<!-- Day Navigation -->
+<div class="day-nav">
+    <a href="{{ url_for('games.day_view', year=year, is_spring=is_spring, target_date=prev_date) }}" class="btn btn-outline">&larr; Previous Day</a>
+    <div>
+        <span class="date-label">{{ view_date.strftime('%A, %B %d, %Y') }}</span>
+        <span class="text-muted" style="margin-left: 10px;">({{ games|length }} activities)</span>
     </div>
-    {% endfor %}
+    <a href="{{ url_for('games.day_view', year=year, is_spring=is_spring, target_date=next_date) }}" class="btn btn-outline">Next Day &rarr;</a>
 </div>
+
+<!-- Jump to Date -->
+<div class="card" style="margin-bottom: 20px; padding: 15px;">
+    <form method="GET" action="{{ url_for('games.day_view', year=year, is_spring=is_spring, target_date='__DATE__') }}" id="jump-form" style="display: flex; gap: 15px; align-items: center;">
+        <label>Jump to date:</label>
+        <input type="date" id="jump-date" class="form-control" style="width: auto;" value="{{ view_date.strftime('%Y-%m-%d') }}">
+        <button type="button" class="btn btn-outline" onclick="jumpToDate()">Go</button>
+    </form>
+</div>
+
+{% if display_fields %}
+<!-- Day Grid -->
+<div class="card day-grid">
+    <table>
+        <thead>
+            <tr>
+                <th class="time-header">Time</th>
+                {% for field in display_fields %}
+                <th>{{ field.location_title }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for time_slot in time_slots %}
+            <tr>
+                <td class="time-cell">
+                    {{ time_slot[:2]|int }}:{{ time_slot[3:] }} {% if time_slot[:2]|int >= 12 %}PM{% else %}AM{% endif %}
+                </td>
+                {% for field in display_fields %}
+                <td class="field-cell">
+                    {% set cell_games = grid.get(time_slot, {}).get(field.location_title, []) %}
+                    {% if cell_games %}
+                        {% for game in cell_games %}
+                        <div class="game-slot {{ game.display_type }} {{ game.status }}"
+                             onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.location or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage }}, {{ game.no_time_limit or 0 }}, '{{ game.league }}')">
+                            <div class="game-time">
+                                <span class="status-dot {{ game.status }}"></span>
+                                {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
+                            </div>
+                            <div class="game-league">{{ game.league }}</div>
+                            <div class="game-teams">
+                                {% if game.home_team %}{{ game.home_team.computed_display_name }}{% else %}TBD{% endif %}
+                                {% if game.away_team %}
+                                <br>vs {{ game.away_team.computed_display_name }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-cell">-</div>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card" style="text-align: center; padding: 40px;">
+    <h3 style="color: #666;">No Games Scheduled</h3>
+    <p class="text-muted">There are no games or practices scheduled for this date.</p>
+</div>
+{% endif %}
 
 <!-- Legend -->
 <div class="card" style="padding: 15px;">
@@ -266,7 +271,7 @@
     <span style="margin-left: 10px; padding: 2px 8px; background: #fff3e0; border-radius: 4px;">Playoff</span>
 </div>
 
-<!-- Edit Modal (same as manage.html) -->
+<!-- Edit Modal -->
 <div id="edit-modal" class="edit-modal">
     <div class="card">
         <h3 style="margin-bottom: 20px;">Edit Game</h3>
@@ -299,7 +304,7 @@
                 <label>Field</label>
                 <select name="location" id="edit-game-location" class="form-control">
                     <option value="">-- Select Field --</option>
-                    {% for field in fields %}
+                    {% for field in all_fields %}
                     <option value="{{ field.location_title }}">{{ field.location_title }}</option>
                     {% endfor %}
                 </select>
@@ -363,82 +368,12 @@
 </div>
 
 <script>
-// CSS-based filtering (no page reload)
-function applyFilters() {
-    var leagueFilter = document.getElementById('filter-league').value;
-    var typeFilter = document.getElementById('filter-type').value;
-
-    var cards = document.querySelectorAll('.game-card');
-    var visibleCount = 0;
-
-    cards.forEach(function(card) {
-        var cardLeague = card.dataset.league;
-        var cardType = card.dataset.type;
-
-        var showLeague = !leagueFilter || cardLeague === leagueFilter;
-        var showType = !typeFilter || cardType === typeFilter;
-
-        if (showLeague && showType) {
-            card.classList.remove('filtered-out');
-            visibleCount++;
-        } else {
-            card.classList.add('filtered-out');
-        }
-    });
-
-    // Update "No games" message visibility in each day
-    document.querySelectorAll('.day-content').forEach(function(dayContent) {
-        var visibleCards = dayContent.querySelectorAll('.game-card:not(.filtered-out)');
-        var noGamesMsg = dayContent.querySelector('.no-games');
-
-        if (visibleCards.length === 0) {
-            // Show "No games" only if there are no visible cards
-            if (!noGamesMsg) {
-                noGamesMsg = document.createElement('div');
-                noGamesMsg.className = 'no-games filter-empty-msg';
-                noGamesMsg.textContent = 'No matches';
-                dayContent.appendChild(noGamesMsg);
-            }
-            noGamesMsg.style.display = 'block';
-        } else if (noGamesMsg && noGamesMsg.classList.contains('filter-empty-msg')) {
-            // Hide filter-added "No games" message
-            noGamesMsg.style.display = 'none';
-        }
-    });
-
-    // Update URL for bookmarking/sharing (without page reload)
-    var url = new URL(window.location);
-    if (leagueFilter) {
-        url.searchParams.set('league', leagueFilter);
-    } else {
-        url.searchParams.delete('league');
+function jumpToDate() {
+    var dateInput = document.getElementById('jump-date').value;
+    if (dateInput) {
+        window.location.href = '{{ url_for("games.day_view", year=year, is_spring=is_spring, target_date="__DATE__") }}'.replace('__DATE__', dateInput);
     }
-    if (typeFilter) {
-        url.searchParams.set('type', typeFilter);
-    } else {
-        url.searchParams.delete('type');
-    }
-    history.replaceState(null, '', url);
 }
-
-// Restore filters from URL on page load
-document.addEventListener('DOMContentLoaded', function() {
-    var url = new URL(window.location);
-    var league = url.searchParams.get('league');
-    var type = url.searchParams.get('type');
-
-    if (league) {
-        document.getElementById('filter-league').value = league;
-    }
-    if (type) {
-        document.getElementById('filter-type').value = type;
-    }
-
-    // Apply filters if any are set
-    if (league || type) {
-        applyFilters();
-    }
-});
 
 function openEditModal(gameId, gameDate, gameTime, location, homeId, awayId, status, gameType, isScrimmage, noTimeLimit, league) {
     document.getElementById('edit-game-id').value = gameId;

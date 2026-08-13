@@ -121,8 +121,22 @@
 
 <!-- Prerequisites by League -->
 <div class="card">
-    <h3 style="margin-top: 0;">Leagues</h3>
-    <p class="text-muted text-small">Configure each league before generating the schedule.</p>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <div>
+            <h3 style="margin-top: 0; margin-bottom: 5px;">Leagues</h3>
+            <p class="text-muted text-small" style="margin: 0;">Configure each league before generating the schedule.</p>
+        </div>
+        {% set ready_without_slots = prerequisites.values() | selectattr('ready') | rejectattr('has_game_slots') | list %}
+        {% if ready_without_slots | length > 0 and not is_locked %}
+        <form method="POST" action="{{ url_for('scheduler.create_all_slots', year=year, is_spring=is_spring) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-primary"
+                    onclick="return confirm('Create game slots for {{ ready_without_slots | length }} league(s)?');">
+                Create All Game Slots
+            </button>
+        </form>
+        {% endif %}
+    </div>
 
     {% for config in league_configs %}
     {% set prereqs = prerequisites.get(config.league, {}) %}
