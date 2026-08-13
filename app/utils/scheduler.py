@@ -507,6 +507,7 @@ class ScheduleGenerator:
         self.warnings = []
         self._next_id = 1
         self._slot_assignments = {}  # Maps game_id to proposed assignment
+        self._global_field_time_usage = set()  # Tracks (field_id, datetime) across all leagues
 
     def generate(self, start_fresh=False):
         """Generate a complete proposed schedule.
@@ -524,6 +525,9 @@ class ScheduleGenerator:
         self.violations = []
         self.warnings = []
         self._slot_assignments = {}
+        # Global tracker for field/time usage across all leagues
+        # Key: (field_id, datetime_isoformat) - prevents double-booking
+        self._global_field_time_usage = set()
 
         # Validate prerequisites
         if not self._validate_prerequisites():
@@ -816,22 +820,42 @@ class ScheduleGenerator:
             home = shuffled[i]
             away = shuffled[i + 1]
 
-            # Find a slot with capacity
+            # Find a slot with capacity that isn't already used globally
             assigned_slot = None
             time_offset = 0
             for slot in available_slots:
                 capacity = self._get_time_based_game_capacity(slot)
-                if slot_usage[slot.slot_ID] < capacity:
+                field_id = slot.field.ID if slot and slot.field else None
+
+                # Try each time offset in this slot
+                for time_slot_idx in range(slot_usage[slot.slot_ID], capacity):
+                    test_offset = time_slot_idx * GAME_DURATION_MINUTES
+                    test_datetime = self._slot_to_datetime(slot, scrimmage_date)
+                    if test_datetime and test_offset > 0:
+                        test_datetime = test_datetime + timedelta(minutes=test_offset)
+
+                    # Check global usage
+                    if field_id and test_datetime:
+                        usage_key = (field_id, test_datetime.isoformat())
+                        if usage_key in self._global_field_time_usage:
+                            continue  # Already used by another league
+
+                    # Found an available slot/time
                     assigned_slot = slot
-                    time_offset = slot_usage[slot.slot_ID] * GAME_DURATION_MINUTES
-                    slot_usage[slot.slot_ID] += 1
+                    time_offset = test_offset
+                    slot_usage[slot.slot_ID] = time_slot_idx + 1
+                    break
+
+                if assigned_slot:
                     break
 
             if not assigned_slot:
-                # All slots at capacity, use first slot anyway (will overbook)
-                assigned_slot = available_slots[0]
-                time_offset = slot_usage[assigned_slot.slot_ID] * GAME_DURATION_MINUTES
-                slot_usage[assigned_slot.slot_ID] += 1
+                # All slots at capacity - skip this scrimmage
+                self.warnings.append({
+                    'type': 'no_capacity',
+                    'message': f'{config.league}: No available slot for scrimmage {home.display_name} vs {away.display_name}'
+                })
+                continue
 
             game_datetime = self._slot_to_datetime(assigned_slot, scrimmage_date)
             if game_datetime and time_offset > 0:
@@ -852,6 +876,11 @@ class ScheduleGenerator:
             game.id = self._next_id
             self._next_id += 1
             self.proposed_games.append(game)
+
+            # Mark as used globally
+            field_id = assigned_slot.field.ID if assigned_slot and assigned_slot.field else None
+            if field_id and game_datetime:
+                self._global_field_time_usage.add((field_id, game_datetime.isoformat()))
 
         # Handle odd team out (no scrimmage partner)
         if len(shuffled) % 2 == 1:
@@ -963,21 +992,32 @@ class ScheduleGenerator:
             for slot in slots:
                 # Calculate capacity for this slot based on duration
                 slot_capacity = self._get_time_based_game_capacity(slot)
+                field_id = slot.field.ID if slot and slot.field else None
 
-                # Assign games until slot is full or no more matchups
-                while slot_usage[slot.slot_ID] < slot_capacity and matchup_idx < len(matchups):
+                # Try each time offset within the slot
+                for time_slot_idx in range(slot_capacity):
+                    if matchup_idx >= len(matchups):
+                        break
+
+                    # Calculate actual game time for this time slot
+                    time_offset_minutes = time_slot_idx * GAME_DURATION_MINUTES
+                    game_datetime = self._slot_to_datetime(slot, game_date)
+                    if game_datetime and time_offset_minutes > 0:
+                        game_datetime = game_datetime + timedelta(minutes=time_offset_minutes)
+
+                    # Check if this field/time is already used (cross-league check)
+                    if field_id and game_datetime:
+                        usage_key = (field_id, game_datetime.isoformat())
+                        if usage_key in self._global_field_time_usage:
+                            # This slot is already taken by another league
+                            continue
+
                     home, away = matchups[matchup_idx]
 
                     # Try to balance home/away
                     if home_counts[home.team_ID] > away_counts[home.team_ID] + 1:
                         # Swap home/away
                         home, away = away, home
-
-                    # Calculate actual game time based on which sequential slot this is
-                    time_offset_minutes = slot_usage[slot.slot_ID] * GAME_DURATION_MINUTES
-                    game_datetime = self._slot_to_datetime(slot, game_date)
-                    if game_datetime and time_offset_minutes > 0:
-                        game_datetime = game_datetime + timedelta(minutes=time_offset_minutes)
 
                     is_early = game_datetime.hour < 18 if game_datetime else True
 
@@ -1003,7 +1043,7 @@ class ScheduleGenerator:
                             'home_id': home.team_ID,
                             'away_id': away.team_ID,
                             'game_date': game_datetime.isoformat() if game_datetime else None,
-                            'field_id': slot.field.ID if slot and slot.field else None
+                            'field_id': field_id
                         }
                         existing_idx += 1
                     else:
@@ -1021,6 +1061,10 @@ class ScheduleGenerator:
                     else:
                         late_counts[home.team_ID] += 1
                         late_counts[away.team_ID] += 1
+
+                    # Mark this field/time as used globally
+                    if field_id and game_datetime:
+                        self._global_field_time_usage.add((field_id, game_datetime.isoformat()))
 
                     slot_usage[slot.slot_ID] += 1
                     matchup_idx += 1
