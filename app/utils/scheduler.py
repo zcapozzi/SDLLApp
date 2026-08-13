@@ -212,6 +212,9 @@ class ScheduleValidator:
         # Check no back-to-back against same team
         self._check_same_team_gap(league, actual_games, teams)
 
+        # Rule d1: One game/practice per team per day
+        self._check_one_activity_per_day(league, games, teams)
+
     def _is_actual_game(self, game):
         """Check if this is an actual game (not practice)."""
         if hasattr(game, 'game_type'):
@@ -538,6 +541,47 @@ class ScheduleValidator:
                     games=games_at_slot
                 ))
 
+    def _check_one_activity_per_day(self, league, games, teams):
+        """Rule d1: Each team can have at most one game or practice per day."""
+        # Group activities by (team, date)
+        team_day_activities = defaultdict(list)
+
+        for g in games:
+            game_date = self._get_game_date(g)
+            if not game_date:
+                continue
+
+            date_str = game_date.date().isoformat() if hasattr(game_date, 'date') else str(game_date)[:10]
+
+            home = self._get_home_team(g)
+            away = self._get_away_team(g)
+
+            if home:
+                team_day_activities[(home, date_str)].append(g)
+            if away:
+                team_day_activities[(away, date_str)].append(g)
+
+        # Check for violations
+        for (team_id, date_str), activities in team_day_activities.items():
+            if len(activities) > 1:
+                team_name = self._get_team_name(team_id)
+                activity_types = []
+                for a in activities:
+                    if self._is_practice(a):
+                        activity_types.append('practice')
+                    elif hasattr(a, 'is_scrimmage') and a.is_scrimmage:
+                        activity_types.append('scrimmage')
+                    else:
+                        activity_types.append('game')
+
+                self.violations.append(ScheduleViolation(
+                    'd1', 'One activity per day',
+                    ScheduleViolation.HARD,
+                    f'{league}: Team {team_name} has {len(activities)} activities on {date_str} ({", ".join(activity_types)})',
+                    games=activities,
+                    teams=[self._build_team_info(team_id)]
+                ))
+
 
 class ScheduleGenerator:
     """Generates proposed schedules for a season.
@@ -557,6 +601,7 @@ class ScheduleGenerator:
         self._next_id = 1
         self._slot_assignments = {}  # Maps game_id to proposed assignment
         self._global_field_time_usage = set()  # Tracks (field_id, datetime) across all leagues
+        self._team_day_usage = set()  # Tracks (team_id, date_str) - one activity per team per day
 
     def generate(self, start_fresh=False):
         """Generate a complete proposed schedule.
@@ -577,6 +622,9 @@ class ScheduleGenerator:
         # Global tracker for field/time usage across all leagues
         # Key: (field_id, datetime_isoformat) - prevents double-booking
         self._global_field_time_usage = set()
+        # Global tracker for team-day usage (one game/practice per team per day)
+        # Key: (team_id, date_str) - prevents multiple activities on same day
+        self._team_day_usage = set()
 
         # Validate prerequisites
         if not self._validate_prerequisites():
@@ -865,9 +913,23 @@ class ScheduleGenerator:
         # Track slot usage for time-based capacity
         slot_usage = defaultdict(int)
 
+        # Get date string for team-day tracking
+        date_str = scrimmage_date.isoformat() if hasattr(scrimmage_date, 'isoformat') else str(scrimmage_date)
+
         for i in range(0, len(shuffled) - 1, 2):
             home = shuffled[i]
             away = shuffled[i + 1]
+
+            # Check if either team already has activity on this day
+            home_day_key = (home.team_ID, date_str)
+            away_day_key = (away.team_ID, date_str)
+            if home_day_key in self._team_day_usage or away_day_key in self._team_day_usage:
+                # One of the teams already has activity today, skip this scrimmage
+                self.warnings.append({
+                    'type': 'team_busy',
+                    'message': f'{config.league}: Cannot schedule scrimmage {home.display_name} vs {away.display_name} - team already has activity today'
+                })
+                continue
 
             # Find a slot with capacity that isn't already used globally
             assigned_slot = None
@@ -931,6 +993,10 @@ class ScheduleGenerator:
             if field_id and game_datetime:
                 self._global_field_time_usage.add((field_id, game_datetime.isoformat()))
 
+            # Mark both teams as having activity on this day
+            self._team_day_usage.add((home.team_ID, date_str))
+            self._team_day_usage.add((away.team_ID, date_str))
+
         # Handle odd team out (no scrimmage partner)
         if len(shuffled) % 2 == 1:
             self.warnings.append({
@@ -958,7 +1024,16 @@ class ScheduleGenerator:
         # Track slot usage (for capacity)
         slot_usage = defaultdict(int)
 
+        # Get date string for team-day tracking
+        date_str = practice_date.isoformat() if hasattr(practice_date, 'isoformat') else str(practice_date)
+
         for team in teams:
+            # Check if team already has activity on this day
+            team_day_key = (team.team_ID, date_str)
+            if team_day_key in self._team_day_usage:
+                # Team already has a game or practice today, skip
+                continue
+
             # Find best slot (considering capacity and balance)
             assigned_slot = None
             assigned_time_offset = 0  # Track which time slot within the field slot
@@ -970,9 +1045,8 @@ class ScheduleGenerator:
                     break
 
             if not assigned_slot:
-                # All slots at capacity, use first one anyway
-                assigned_slot = available_slots[0]
-                assigned_time_offset = slot_usage[assigned_slot.slot_ID]
+                # All slots at capacity, skip this team's practice for today
+                continue
 
             slot_usage[assigned_slot.slot_ID] += 1
 
@@ -1005,6 +1079,9 @@ class ScheduleGenerator:
             practice.id = self._next_id
             self._next_id += 1
             self.proposed_games.append(practice)
+
+            # Mark team as having activity on this day
+            self._team_day_usage.add(team_day_key)
 
     def _assign_games_to_slots(self, config, matchups, slots_by_date, league, existing_game_records=None, start_fresh=False):
         """Assign game matchups to available slots.
@@ -1063,6 +1140,14 @@ class ScheduleGenerator:
 
                     home, away = matchups[matchup_idx]
 
+                    # Check if either team already has activity on this day
+                    date_str = game_date.isoformat() if hasattr(game_date, 'isoformat') else str(game_date)
+                    home_day_key = (home.team_ID, date_str)
+                    away_day_key = (away.team_ID, date_str)
+                    if home_day_key in self._team_day_usage or away_day_key in self._team_day_usage:
+                        # One of the teams already has activity today, skip to next slot
+                        continue
+
                     # Try to balance home/away
                     if home_counts[home.team_ID] > away_counts[home.team_ID] + 1:
                         # Swap home/away
@@ -1114,6 +1199,11 @@ class ScheduleGenerator:
                     # Mark this field/time as used globally
                     if field_id and game_datetime:
                         self._global_field_time_usage.add((field_id, game_datetime.isoformat()))
+
+                    # Mark both teams as having activity on this day
+                    date_str = game_date.isoformat() if hasattr(game_date, 'isoformat') else str(game_date)
+                    self._team_day_usage.add((home.team_ID, date_str))
+                    self._team_day_usage.add((away.team_ID, date_str))
 
                     slot_usage[slot.slot_ID] += 1
                     matchup_idx += 1

@@ -91,6 +91,21 @@ These rules represent fundamental fairness requirements. A schedule that violate
 
 ---
 
+### Rule d1: One Activity Per Day
+
+**Description:** Each team can have at most one game or practice per day. A team cannot have both a game and a practice on the same day, nor two games on the same day.
+
+**Why it matters:** Prevents over-scheduling teams and ensures players have adequate rest between activities.
+
+**Validation logic:**
+- Group all activities (games, practices, scrimmages) by (team, date)
+- Flag any team with more than one activity on the same day
+
+**Example violation:**
+- Team A has a game at 5:30 PM and a practice at 7:30 PM on the same day
+
+---
+
 ## Soft Rules (SHOULD avoid)
 
 Soft rules represent preferences for schedule quality. Violating these is acceptable when necessary to satisfy hard rules, but the generator should minimize violations.
@@ -261,6 +276,7 @@ First Practice Date < Opening Day Date < Regular Season End Date < Season End Da
 |------|------|----------|-------------|
 | `a1` | Play everyone / Matchup balance | HARD | All pairs play, max diff of 1 |
 | `b1` | Home/away balance | HARD | Per team, home/away diff <= 1 |
+| `d1` | One activity per day | HARD | Max one game or practice per team per day |
 | `gap` | Same team gap | HARD | No back-to-back vs same opponent |
 | `slot` | Field double-booked | HARD | No two games at same time on same field |
 | `a2` | Home/away vs opponent | SOFT | Alternate home/away when playing same team |

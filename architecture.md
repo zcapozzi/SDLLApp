@@ -241,6 +241,7 @@ shuffle(matchups)  # Avoid predictable patterns
 |------|------|-------------|
 | `a1` | Play everyone | All team pairs must play; max difference of 1 game between pairs |
 | `b1` | Home/away balance | Each team's home/away games differ by at most 1 |
+| `d1` | One activity per day | Each team can have at most one game or practice per day |
 | `gap` | Same team gap | Teams can't play back-to-back against same opponent |
 | `slot` | Field double-booked | No two games at same time on same field |
 
