@@ -608,6 +608,74 @@ def api_proposal(year, is_spring):
     return jsonify(proposal)
 
 
+@scheduler_bp.route('/api/<int:year>/<int:is_spring>/team-schedule/<team_name>')
+@login_required
+def api_team_schedule(year, is_spring, team_name):
+    """API endpoint to get all games/practices for a team.
+
+    Used by the violations navigator to show team schedules.
+    First checks the current proposal, then falls back to saved games.
+    """
+    games_list = []
+
+    # Check if there's a current proposal
+    proposed_key = f'proposed_schedule_{year}_{is_spring}'
+    proposal = session.get(proposed_key)
+
+    if proposal and 'games' in proposal:
+        # Get games from proposal
+        for game in proposal['games']:
+            home_name = game.get('home_team_name', '')
+            away_name = game.get('away_team_name', '')
+
+            if team_name in (home_name, away_name):
+                games_list.append({
+                    'id': game.get('id'),
+                    'date': game.get('game_date', '')[:10] if game.get('game_date') else 'TBD',
+                    'time': game.get('game_date', '')[11:16] if game.get('game_date') and len(game.get('game_date', '')) > 11 else 'TBD',
+                    'type': game.get('game_type', 'regular'),
+                    'home': home_name,
+                    'away': away_name,
+                    'field': game.get('field_name', 'TBD'),
+                    'league': game.get('league', ''),
+                    'is_home': team_name == home_name
+                })
+    else:
+        # Fall back to saved games
+        games = Game.query.filter_by(
+            year=year,
+            is_spring=is_spring,
+            active=1
+        ).all()
+
+        for game in games:
+            home_name = game.home_team.computed_display_name if game.home_team else None
+            away_name = game.away_team.computed_display_name if game.away_team else None
+
+            if team_name in (home_name, away_name):
+                games_list.append({
+                    'id': game.ID,
+                    'date': game.game_date.strftime('%Y-%m-%d') if game.game_date else 'TBD',
+                    'time': game.game_date.strftime('%H:%M') if game.game_date else 'TBD',
+                    'type': game.game_type,
+                    'home': home_name or 'TBD',
+                    'away': away_name or '-',
+                    'field': game.location or 'TBD',
+                    'league': game.league,
+                    'is_home': team_name == home_name
+                })
+
+    # Sort by date/time
+    games_list.sort(key=lambda g: (g['date'], g['time']))
+
+    return jsonify({
+        'team': team_name,
+        'season': f'{"Spring" if is_spring else "Fall"} {year}',
+        'games': games_list,
+        'total': len(games_list)
+    })
+
+
 @scheduler_bp.route('/<int:year>/<int:is_spring>/unlock', methods=['POST'])
 @login_required
 def unlock(year, is_spring):

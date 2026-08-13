@@ -117,6 +117,101 @@
         display: none;
     }
 
+    /* Team lookup icon */
+    .team-lookup {
+        cursor: pointer;
+        color: #666;
+        margin-left: 4px;
+        font-size: 12px;
+        opacity: 0.7;
+        transition: opacity 0.2s;
+    }
+    .team-lookup:hover {
+        opacity: 1;
+        color: rgb(34, 139, 34);
+    }
+
+    /* Team schedule modal */
+    .team-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 3000;
+        justify-content: center;
+        align-items: center;
+    }
+    .team-modal.visible {
+        display: flex;
+    }
+    .team-modal-content {
+        background: white;
+        border-radius: 8px;
+        max-width: 700px;
+        width: 90%;
+        max-height: 80vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    .team-modal-header {
+        padding: 15px 20px;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .team-modal-header h3 {
+        margin: 0;
+    }
+    .team-modal-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: #666;
+    }
+    .team-modal-body {
+        padding: 20px;
+        overflow-y: auto;
+        flex: 1;
+    }
+    .team-schedule-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .team-schedule-table th,
+    .team-schedule-table td {
+        padding: 8px 12px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+    }
+    .team-schedule-table th {
+        background: #f8f8f8;
+        font-weight: 600;
+    }
+    .team-schedule-table tr:hover {
+        background: #f5f5f5;
+    }
+    .team-schedule-table .home-game {
+        font-weight: 500;
+    }
+    .team-schedule-table .type-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 10px;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+    .team-schedule-table .type-regular { background: #e8f5e9; color: #2e7d32; }
+    .team-schedule-table .type-practice { background: #f3e5f5; color: #7b1fa2; }
+    .team-schedule-table .type-scrimmage { background: #e3f2fd; color: #1565c0; }
+    .team-schedule-table .type-playoff { background: #fff3e0; color: #e65100; }
+
     .warning-card {
         border-left: 4px solid rgb(255, 140, 0);
         padding: 10px 15px;
@@ -528,6 +623,40 @@
     </div>
 </div>
 
+<!-- Team Schedule Modal -->
+<div id="team-modal" class="team-modal">
+    <div class="team-modal-content">
+        <div class="team-modal-header">
+            <h3 id="team-modal-title">Team Schedule</h3>
+            <button class="team-modal-close" onclick="closeTeamModal()">&times;</button>
+        </div>
+        <div class="team-modal-body">
+            <div id="team-modal-loading" style="text-align: center; padding: 40px;">
+                <div class="loading-spinner" style="margin: 0 auto 20px;"></div>
+                <p>Loading schedule...</p>
+            </div>
+            <div id="team-modal-content" style="display: none;">
+                <table class="team-schedule-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Time</th>
+                            <th>Type</th>
+                            <th>Matchup</th>
+                            <th>Field</th>
+                        </tr>
+                    </thead>
+                    <tbody id="team-schedule-body">
+                    </tbody>
+                </table>
+            </div>
+            <div id="team-modal-empty" style="display: none; text-align: center; padding: 40px; color: #666;">
+                No games or practices found for this team.
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Loading Overlay -->
 <div id="loading-overlay" class="loading-overlay">
     <div class="loading-spinner"></div>
@@ -600,5 +729,138 @@ function filterViolations(ruleCode) {
         filterCount.textContent = visibleCount;
     }
 }
+
+// Team schedule lookup
+var currentYear = {{ year }};
+var currentIsSpring = {{ is_spring }};
+
+function openTeamModal(teamName) {
+    var modal = document.getElementById('team-modal');
+    var loading = document.getElementById('team-modal-loading');
+    var content = document.getElementById('team-modal-content');
+    var empty = document.getElementById('team-modal-empty');
+    var title = document.getElementById('team-modal-title');
+
+    // Show modal with loading state
+    modal.classList.add('visible');
+    loading.style.display = 'block';
+    content.style.display = 'none';
+    empty.style.display = 'none';
+    title.textContent = teamName + ' - Schedule';
+
+    // Fetch team schedule
+    var url = '/scheduler/api/' + currentYear + '/' + currentIsSpring + '/team-schedule/' + encodeURIComponent(teamName);
+    fetch(url)
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            loading.style.display = 'none';
+
+            if (data.games && data.games.length > 0) {
+                content.style.display = 'block';
+                var tbody = document.getElementById('team-schedule-body');
+                tbody.innerHTML = '';
+
+                data.games.forEach(function(game) {
+                    var row = document.createElement('tr');
+                    if (game.is_home) row.classList.add('home-game');
+
+                    var matchup = '';
+                    if (game.type === 'practice') {
+                        matchup = game.home + ' (Practice)';
+                    } else {
+                        matchup = game.home + ' vs ' + (game.away || 'TBD');
+                        if (game.is_home) {
+                            matchup = '<strong>' + game.home + '</strong> vs ' + (game.away || 'TBD');
+                        } else {
+                            matchup = game.home + ' vs <strong>' + (game.away || 'TBD') + '</strong>';
+                        }
+                    }
+
+                    row.innerHTML = '<td>' + game.date + '</td>' +
+                        '<td>' + game.time + '</td>' +
+                        '<td><span class="type-badge type-' + game.type + '">' + game.type + '</span></td>' +
+                        '<td>' + matchup + '</td>' +
+                        '<td>' + game.field + '</td>';
+
+                    tbody.appendChild(row);
+                });
+
+                title.textContent = teamName + ' - ' + data.total + ' Games/Practices';
+            } else {
+                empty.style.display = 'block';
+            }
+        })
+        .catch(function(err) {
+            loading.style.display = 'none';
+            empty.style.display = 'block';
+            empty.textContent = 'Error loading schedule: ' + err.message;
+        });
+}
+
+function closeTeamModal() {
+    document.getElementById('team-modal').classList.remove('visible');
+}
+
+// Close modal on escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeTeamModal();
+    }
+});
+
+// Close modal on background click
+document.getElementById('team-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeTeamModal();
+    }
+});
+
+// Add team lookup icons to violation messages
+function addTeamLookupIcons() {
+    var violationCards = document.querySelectorAll('.violation-card');
+
+    violationCards.forEach(function(card) {
+        var messageDiv = card.querySelector('div[style*="margin-top"]');
+        if (!messageDiv) return;
+
+        var text = messageDiv.textContent;
+
+        // Pattern: "Team X" where X is the team name (captures word characters and spaces until common endings)
+        // Common patterns in violation messages:
+        // - "Team [Name] has X early games"
+        // - "Team [Name] is home X times"
+        // - "[League]: Team [Name] has..."
+
+        var teamPattern = /Team\s+([A-Za-z0-9\s\-\']+?)(?:\s+(?:has|is|plays|vs|and)\s)/gi;
+        var html = messageDiv.innerHTML;
+        var match;
+        var replacements = [];
+
+        while ((match = teamPattern.exec(text)) !== null) {
+            var teamName = match[1].trim();
+            if (teamName && teamName.length > 0) {
+                replacements.push({
+                    original: 'Team ' + teamName,
+                    teamName: teamName
+                });
+            }
+        }
+
+        // Apply replacements (deduplicate)
+        var seen = {};
+        replacements.forEach(function(r) {
+            if (seen[r.teamName]) return;
+            seen[r.teamName] = true;
+
+            var icon = '<span class="team-lookup" onclick="openTeamModal(\'' + r.teamName.replace(/'/g, "\\'") + '\')" title="View ' + r.teamName + ' schedule">&#128269;</span>';
+            html = html.split(r.original).join(r.original + icon);
+        });
+
+        messageDiv.innerHTML = html;
+    });
+}
+
+// Run on page load
+document.addEventListener('DOMContentLoaded', addTeamLookupIcons);
 </script>
 {% endblock %}
