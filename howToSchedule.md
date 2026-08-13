@@ -106,6 +106,22 @@ These rules represent fundamental fairness requirements. A schedule that violate
 
 ---
 
+### Rule e1: Minimum Games
+
+**Description:** Each team must play at least the configured number of regular season games (default: 10 games per team).
+
+**Why it matters:** Ensures all teams get their fair share of playing time. A team shouldn't be short-changed due to scheduling constraints.
+
+**Validation logic:**
+- Get the minimum games requirement from the league configuration
+- Count games per team
+- Flag any team with fewer games than the minimum
+
+**Example violation:**
+- Team A has only 8 games when the league requires 10 games per team
+
+---
+
 ## Soft Rules (SHOULD avoid)
 
 Soft rules represent preferences for schedule quality. Violating these is acceptable when necessary to satisfy hard rules, but the generator should minimize violations.
@@ -170,6 +186,27 @@ Soft rules represent preferences for schedule quality. Violating these is accept
 - Count solo practices (no other teams at field/time) per team
 - Compare across all teams in the league
 - Flag if `max(solo_count) - min(solo_count)` > 1
+
+---
+
+### Rule e2: Game Day Balance
+
+**Description:** All teams in a league should play on the same game days. When games are scheduled on a particular date, all teams should be playing - no team should sit out while others play.
+
+**Why it matters:** Ensures fairness and competitive balance. If some teams get extra rest days while others play, it creates an uneven playing field. It also makes scheduling easier for families when they know game days are consistent.
+
+**Validation logic:**
+- Group games by date
+- For each game date, identify which teams are playing
+- Flag any date where some teams play and others don't
+
+**Example violation:**
+- On April 15th, 4 of 6 teams in the Minors league play (2 games), but Cardinals and Blue Jays have no game that day
+
+**Generator behavior:**
+- The scheduler tries to schedule full rounds (all teams playing) on each game day
+- Only uses a date if there's enough field capacity for n/2 games (where n = team count)
+- Falls back to partial scheduling only when necessary to meet minimum games requirement
 
 ---
 
@@ -277,12 +314,14 @@ First Practice Date < Opening Day Date < Regular Season End Date < Season End Da
 | `a1` | Play everyone / Matchup balance | HARD | All pairs play, max diff of 1 |
 | `b1` | Home/away balance | HARD | Per team, home/away diff <= 1 |
 | `d1` | One activity per day | HARD | Max one game or practice per team per day |
+| `e1` | Minimum games | HARD | Each team must play at least the configured number of regular season games |
 | `gap` | Same team gap | HARD | No back-to-back vs same opponent |
 | `slot` | Field double-booked | HARD | No two games at same time on same field |
 | `a2` | Home/away vs opponent | SOFT | Alternate home/away when playing same team |
 | `b2` | Early/late time balance | SOFT | Balance 4-6 PM vs 6 PM+ games (before 4 PM excluded) |
 | `c2` | Practice field balance | SOFT | Distribute practice locations evenly |
 | `c3` | Solo practice balance | SOFT | Equal solo practice opportunities per team |
+| `e2` | Game day balance | SOFT | All teams should play on the same game days (no team sits out) |
 
 ---
 

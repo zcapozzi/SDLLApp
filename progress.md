@@ -1,7 +1,7 @@
 # SDLL Web Application - Progress Report
 
-**Last Updated:** July 8, 2026
-**Status:** Phase 2 Complete - Season Setup, Teams, Field Allocations, League Settings, Playoff Placeholders, Game Generation & Field Restrictions
+**Last Updated:** August 13, 2026
+**Status:** Phase 3 In Progress - Schedule Generator with Validation Rules, CSS Filters, Day of Week Display
 
 ---
 
@@ -658,6 +658,39 @@ This section captures key design decisions made during development.
 | Field slots separate from games | Yes | Slots = available windows; Games = actual scheduled events |
 | League settings per season | Yes (sdll_league_seasons table) | Playoff format may vary by season |
 | No foreign key on field_slots | Application-level integrity | sdll_fields.ID lacked primary key index |
+
+---
+
+## Session Log (August 13, 2026)
+
+### Schedule Generator Improvements
+
+1. **New Validation Rules**
+   - `e1` (HARD): Minimum games - Each team must play at least the configured number of regular season games
+   - `e2` (SOFT): Game day balance - All teams should play on the same game days (no team sits out)
+
+2. **Schedule-by-Date Algorithm**
+   - Generator now schedules full rounds per date (all teams play on each game day)
+   - Only uses a date if there's enough field capacity for n/2 games (where n = team count)
+   - Falls back to partial scheduling only when necessary to meet minimum games requirement
+   - Prioritizes matchups involving teams with fewer scheduled games
+
+3. **UI Improvements**
+   - League and type filters now use CSS-based filtering (no page reload)
+   - All filters (team, league, type) work together seamlessly
+   - Day of week now displayed with all dates throughout the application
+   - Added Jinja filters: `format_date_with_day` and `format_datetime_with_day`
+
+4. **Previous Session Updates**
+   - Fixed cross-league field double-booking bug
+   - Added team schedule lookup in violations using team IDs
+   - Added team filter with autocomplete for schedule review
+   - Added rule d1: Teams can have at most one game or practice per day
+   - Updated b2 rule to only count games starting at 4pm or later
+
+### Documentation Updated
+- `howToSchedule.md` - Added rules e1 and e2 with full descriptions
+- `architecture.md` - Updated validation rules table
 
 ---
 
