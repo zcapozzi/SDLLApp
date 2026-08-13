@@ -1093,15 +1093,23 @@ class ScheduleGenerator:
         - Each game is 2 hours (120 minutes)
         - A 4-hour slot (e.g., 5:30-9:30) can hold 2 sequential games
         - First game at slot start time, second game 2 hours later
+
+        Minimum games enforcement:
+        - Tracks games per team as we assign
+        - Prioritizes matchups involving teams with fewer scheduled games
+        - Makes multiple passes to ensure all teams hit their minimum
         """
-        matchup_idx = 0
         existing_idx = 0
+        games_per_team = config.regular_season_games or 10
 
         # Track home/away counts for balancing
         home_counts = defaultdict(int)
         away_counts = defaultdict(int)
         early_counts = defaultdict(int)
         late_counts = defaultdict(int)
+
+        # Track total games per team
+        team_game_counts = defaultdict(int)
 
         # Track slot usage - how many games assigned to each slot
         slot_usage = defaultdict(int)
@@ -1114,44 +1122,91 @@ class ScheduleGenerator:
                 if start_fresh or g.home_ID is None:
                     records_to_fill.append(g)
 
+        # Build list of available slot/time combinations
+        available_slots = []
         for game_date, slots in sorted(slots_by_date.items()):
             for slot in slots:
-                # Calculate capacity for this slot based on duration
                 slot_capacity = self._get_time_based_game_capacity(slot)
                 field_id = slot.field.ID if slot and slot.field else None
-
-                # Try each time offset within the slot
                 for time_slot_idx in range(slot_capacity):
-                    if matchup_idx >= len(matchups):
-                        break
-
-                    # Calculate actual game time for this time slot
                     time_offset_minutes = time_slot_idx * GAME_DURATION_MINUTES
                     game_datetime = self._slot_to_datetime(slot, game_date)
                     if game_datetime and time_offset_minutes > 0:
                         game_datetime = game_datetime + timedelta(minutes=time_offset_minutes)
+                    available_slots.append({
+                        'date': game_date,
+                        'slot': slot,
+                        'datetime': game_datetime,
+                        'field_id': field_id,
+                        'time_slot_idx': time_slot_idx
+                    })
 
-                    # Check if this field/time is already used (cross-league check)
+        # Track which matchups have been scheduled
+        scheduled_matchups = set()
+        unscheduled_matchups = list(range(len(matchups)))
+
+        # Get all team IDs for minimum tracking
+        all_team_ids = set()
+        for home, away in matchups:
+            all_team_ids.add(home.team_ID)
+            all_team_ids.add(away.team_ID)
+
+        # Multiple passes to ensure minimum games
+        max_passes = 3
+        for pass_num in range(max_passes):
+            if not unscheduled_matchups:
+                break
+
+            # Sort unscheduled matchups by priority: teams with fewer games first
+            def matchup_priority(idx):
+                home, away = matchups[idx]
+                # Prioritize matchups where BOTH teams need more games
+                home_needs = games_per_team - team_game_counts[home.team_ID]
+                away_needs = games_per_team - team_game_counts[away.team_ID]
+                # Higher priority (lower number) for teams that need more games
+                return -(home_needs + away_needs)
+
+            unscheduled_matchups.sort(key=matchup_priority)
+
+            still_unscheduled = []
+
+            for matchup_idx in unscheduled_matchups:
+                if matchup_idx in scheduled_matchups:
+                    continue
+
+                home, away = matchups[matchup_idx]
+
+                # Check if both teams already have enough games
+                if team_game_counts[home.team_ID] >= games_per_team and team_game_counts[away.team_ID] >= games_per_team:
+                    scheduled_matchups.add(matchup_idx)  # Mark as "done" even though not scheduled
+                    continue
+
+                # Find a slot for this matchup
+                assigned = False
+                for slot_info in available_slots:
+                    game_date = slot_info['date']
+                    slot = slot_info['slot']
+                    game_datetime = slot_info['datetime']
+                    field_id = slot_info['field_id']
+
+                    # Check if this field/time is already used
                     if field_id and game_datetime:
                         usage_key = (field_id, game_datetime.isoformat())
                         if usage_key in self._global_field_time_usage:
-                            # This slot is already taken by another league
                             continue
-
-                    home, away = matchups[matchup_idx]
 
                     # Check if either team already has activity on this day
                     date_str = game_date.isoformat() if hasattr(game_date, 'isoformat') else str(game_date)
                     home_day_key = (home.team_ID, date_str)
                     away_day_key = (away.team_ID, date_str)
                     if home_day_key in self._team_day_usage or away_day_key in self._team_day_usage:
-                        # One of the teams already has activity today, skip to next slot
                         continue
 
+                    # Found a valid slot - assign the game
+                    actual_home, actual_away = home, away
                     # Try to balance home/away
                     if home_counts[home.team_ID] > away_counts[home.team_ID] + 1:
-                        # Swap home/away
-                        home, away = away, home
+                        actual_home, actual_away = away, home
 
                     is_early = game_datetime.hour < 18 if game_datetime else True
 
@@ -1160,8 +1215,8 @@ class ScheduleGenerator:
                         league=config.league,
                         year=self.year,
                         is_spring=self.is_spring,
-                        home_team=home,
-                        away_team=away,
+                        home_team=actual_home,
+                        away_team=actual_away,
                         field=slot.field if slot else None,
                         game_date=game_datetime
                     )
@@ -1170,12 +1225,12 @@ class ScheduleGenerator:
                     # Link to existing game record if available
                     if existing_idx < len(records_to_fill):
                         existing_game = records_to_fill[existing_idx]
-                        game.id = existing_game.ID  # Use existing game ID
+                        game.id = existing_game.ID
                         game.existing_record = existing_game
                         self._slot_assignments[existing_game.ID] = {
                             'game_id': existing_game.ID,
-                            'home_id': home.team_ID,
-                            'away_id': away.team_ID,
+                            'home_id': actual_home.team_ID,
+                            'away_id': actual_away.team_ID,
                             'game_date': game_datetime.isoformat() if game_datetime else None,
                             'field_id': field_id
                         }
@@ -1187,35 +1242,62 @@ class ScheduleGenerator:
                     self.proposed_games.append(game)
 
                     # Update tracking
-                    home_counts[home.team_ID] += 1
-                    away_counts[away.team_ID] += 1
+                    home_counts[actual_home.team_ID] += 1
+                    away_counts[actual_away.team_ID] += 1
+                    team_game_counts[home.team_ID] += 1
+                    team_game_counts[away.team_ID] += 1
                     if is_early:
-                        early_counts[home.team_ID] += 1
-                        early_counts[away.team_ID] += 1
+                        early_counts[actual_home.team_ID] += 1
+                        early_counts[actual_away.team_ID] += 1
                     else:
-                        late_counts[home.team_ID] += 1
-                        late_counts[away.team_ID] += 1
+                        late_counts[actual_home.team_ID] += 1
+                        late_counts[actual_away.team_ID] += 1
 
                     # Mark this field/time as used globally
                     if field_id and game_datetime:
                         self._global_field_time_usage.add((field_id, game_datetime.isoformat()))
 
                     # Mark both teams as having activity on this day
-                    date_str = game_date.isoformat() if hasattr(game_date, 'isoformat') else str(game_date)
                     self._team_day_usage.add((home.team_ID, date_str))
                     self._team_day_usage.add((away.team_ID, date_str))
 
-                    slot_usage[slot.slot_ID] += 1
-                    matchup_idx += 1
+                    scheduled_matchups.add(matchup_idx)
+                    assigned = True
+                    break
 
-            if matchup_idx >= len(matchups):
-                break
+                if not assigned:
+                    still_unscheduled.append(matchup_idx)
 
-        # Warn if not all matchups assigned
-        if matchup_idx < len(matchups):
+            unscheduled_matchups = still_unscheduled
+
+        # Check for teams below minimum and report
+        teams_below_min = []
+        for team_id in all_team_ids:
+            count = team_game_counts[team_id]
+            if count < games_per_team:
+                # Get team name
+                team = None
+                for home, away in matchups:
+                    if home.team_ID == team_id:
+                        team = home
+                        break
+                    if away.team_ID == team_id:
+                        team = away
+                        break
+                team_name = team.display_name if team else str(team_id)
+                teams_below_min.append(f'{team_name} ({count}/{games_per_team})')
+
+        if teams_below_min:
+            self.warnings.append({
+                'type': 'insufficient_games',
+                'message': f'{config.league}: Teams below minimum games: {", ".join(teams_below_min)}. Need more field slots or fewer constraints.'
+            })
+
+        # Warn about unscheduled matchups
+        if unscheduled_matchups:
             self.warnings.append({
                 'type': 'insufficient_slots',
-                'message': f'{config.league}: Only {matchup_idx} of {len(matchups)} games could be scheduled. Need more field slots.'
+                'message': f'{config.league}: {len(unscheduled_matchups)} matchups could not be scheduled. Need more field slots.'
             })
 
     def _can_use_slot(self, slot, league, usage_type):

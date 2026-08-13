@@ -21,7 +21,7 @@
                 <tbody>
                     {% for game in upcoming_games[:5] %}
                     <tr>
-                        <td>{{ game.game_date.strftime('%b %d, %H:%M') if game.game_date else 'TBD' }}</td>
+                        <td>{{ game.game_date.strftime('%a, %b %d, %I:%M %p').replace(' 0', ' ') if game.game_date else 'TBD' }}</td>
                         <td>{{ game.league }}</td>
                         <td>{{ game.location }}</td>
                     </tr>

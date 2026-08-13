@@ -182,8 +182,8 @@
                 Key Dates
                 {% if prereqs.has_dates %}
                 <div class="prereq-detail">
-                    First Practice: {{ prereqs.first_practice.strftime('%b %d, %Y') if prereqs.first_practice else 'Not set' }} |
-                    Opening Day: {{ prereqs.opening_day.strftime('%b %d, %Y') if prereqs.opening_day else 'Not set' }}
+                    First Practice: {{ prereqs.first_practice.strftime('%a, %b %d') if prereqs.first_practice else 'Not set' }} |
+                    Opening Day: {{ prereqs.opening_day.strftime('%a, %b %d') if prereqs.opening_day else 'Not set' }}
                 </div>
                 {% else %}
                 <div class="prereq-detail">Set first practice and opening day. <a href="{{ url_for('seasons.schedule_settings', year=year, is_spring=is_spring) }}">Schedule Settings</a></div>

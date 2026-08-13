@@ -89,6 +89,44 @@ def create_app(config_name=None):
             'current_season_name': None
         }
 
+    # Custom Jinja filters for date formatting
+    @app.template_filter('format_date_with_day')
+    def format_date_with_day(date_str):
+        """Format a date string (YYYY-MM-DD or ISO datetime) with day of week.
+
+        Examples:
+            '2026-04-15' -> 'Wed, Apr 15, 2026'
+            '2026-04-15T17:30:00' -> 'Wed, Apr 15, 2026'
+        """
+        from datetime import datetime
+        if not date_str:
+            return ''
+        try:
+            # Handle both date-only and datetime strings
+            if 'T' in date_str:
+                date_obj = datetime.fromisoformat(date_str[:10])
+            else:
+                date_obj = datetime.strptime(date_str[:10], '%Y-%m-%d')
+            return date_obj.strftime('%a, %b %d, %Y')
+        except (ValueError, TypeError):
+            return date_str
+
+    @app.template_filter('format_datetime_with_day')
+    def format_datetime_with_day(dt_str):
+        """Format a datetime string with day of week and time.
+
+        Examples:
+            '2026-04-15T17:30:00' -> 'Wed, Apr 15 at 5:30 PM'
+        """
+        from datetime import datetime
+        if not dt_str:
+            return ''
+        try:
+            dt_obj = datetime.fromisoformat(dt_str)
+            return dt_obj.strftime('%a, %b %d at %I:%M %p').replace(' 0', ' ')
+        except (ValueError, TypeError):
+            return dt_str
+
     # Global error handler - logs full traceback to stdout for Railway
     @app.errorhandler(Exception)
     def handle_exception(e):

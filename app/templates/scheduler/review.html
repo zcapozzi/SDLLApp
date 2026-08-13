@@ -596,7 +596,7 @@
     {% for date_str, day_games in games_by_date | dictsort %}
     {% set date_obj = day_games[0].game_date[:10] %}
     <div class="date-header" data-date="{{ date_str }}">
-        {{ date_str }}
+        {{ date_str | format_date_with_day }}
     </div>
     <div class="date-games" data-date="{{ date_str }}">
         {% for game in day_games | sort(attribute='game_date') %}
@@ -653,7 +653,7 @@
                 data-away-name="{{ game.away_team_name|lower if game.away_team_name else '' }}"
                 data-league="{{ game.league }}"
                 data-type="{{ game.game_type }}">
-                <td>{{ game.game_date[:10] if game.game_date else 'TBD' }}</td>
+                <td>{{ game.game_date | format_date_with_day if game.game_date else 'TBD' }}</td>
                 <td>{{ game.game_date[11:16] if game.game_date else '' }}</td>
                 <td><span class="game-type-badge {{ game.game_type }}">{{ game.game_type }}</span></td>
                 <td>{{ game.league }}</td>
