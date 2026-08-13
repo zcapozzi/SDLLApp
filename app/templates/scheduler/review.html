@@ -212,6 +212,90 @@
     .team-schedule-table .type-scrimmage { background: #e3f2fd; color: #1565c0; }
     .team-schedule-table .type-playoff { background: #fff3e0; color: #e65100; }
 
+    /* Team filter autocomplete */
+    .team-filter-container {
+        position: relative;
+    }
+    .team-filter-input {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        width: 200px;
+    }
+    .team-filter-input:focus {
+        outline: none;
+        border-color: rgb(34, 139, 34);
+    }
+    .team-suggestions {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #ddd;
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 100;
+        display: none;
+    }
+    .team-suggestions.visible {
+        display: block;
+    }
+    .team-suggestion {
+        padding: 8px 12px;
+        cursor: pointer;
+    }
+    .team-suggestion:hover {
+        background: #f5f5f5;
+    }
+    .team-suggestion.selected {
+        background: rgb(34, 139, 34);
+        color: white;
+    }
+    .team-filter-clear {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #999;
+        font-size: 16px;
+        padding: 0 4px;
+    }
+    .team-filter-clear:hover {
+        color: #333;
+    }
+    .team-filter-info {
+        background: rgb(34, 139, 34);
+        color: white;
+        padding: 8px 15px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .team-filter-info button {
+        background: rgba(255,255,255,0.2);
+        border: none;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 3px;
+        cursor: pointer;
+    }
+    .team-filter-info button:hover {
+        background: rgba(255,255,255,0.3);
+    }
+    .game-row.filtered-out,
+    .date-header.filtered-out,
+    .date-games.filtered-out,
+    tr.filtered-out {
+        display: none !important;
+    }
+
     .warning-card {
         border-left: 4px solid rgb(255, 140, 0);
         padding: 10px 15px;
@@ -488,22 +572,40 @@
             </select>
         </form>
 
-        <span class="text-muted text-small">Showing {{ games | length }} items</span>
+        <!-- Team Filter -->
+        <div class="team-filter-container">
+            <input type="text" id="team-filter-input" class="team-filter-input" placeholder="Filter by team..." autocomplete="off">
+            <button type="button" class="team-filter-clear" id="team-filter-clear" style="display: none;" onclick="clearTeamFilter()">&times;</button>
+            <div id="team-suggestions" class="team-suggestions"></div>
+        </div>
+
+        <span class="text-muted text-small" id="items-count">Showing {{ games | length }} items</span>
+    </div>
+
+    <!-- Team filter active indicator -->
+    <div id="team-filter-info" class="team-filter-info" style="display: none; margin-top: 10px;">
+        <span>Filtered to: <strong id="team-filter-name"></strong></span>
+        <span id="team-filter-count"></span>
+        <button onclick="clearTeamFilter()">Clear Filter</button>
     </div>
 </div>
 
 <!-- Schedule Display -->
 {% if view_mode == 'calendar' %}
 <!-- Calendar View (grouped by date) -->
-<div class="card">
+<div class="card" id="schedule-display">
     {% for date_str, day_games in games_by_date | dictsort %}
     {% set date_obj = day_games[0].game_date[:10] %}
-    <div class="date-header">
+    <div class="date-header" data-date="{{ date_str }}">
         {{ date_str }}
     </div>
-    <div class="date-games">
+    <div class="date-games" data-date="{{ date_str }}">
         {% for game in day_games | sort(attribute='game_date') %}
-        <div class="game-row">
+        <div class="game-row"
+             data-home-id="{{ game.home_team_id }}"
+             data-away-id="{{ game.away_team_id }}"
+             data-home-name="{{ game.home_team_name|lower if game.home_team_name else '' }}"
+             data-away-name="{{ game.away_team_name|lower if game.away_team_name else '' }}">
             <span class="game-type-badge {{ game.game_type }}">{{ game.game_type }}</span>
             <span class="game-time">
                 {% if game.game_date %}
@@ -529,7 +631,7 @@
 
 {% else %}
 <!-- List View -->
-<div class="card">
+<div class="card" id="schedule-display">
     <table>
         <thead>
             <tr>
@@ -544,7 +646,10 @@
         </thead>
         <tbody>
             {% for game in games | sort(attribute='game_date') %}
-            <tr>
+            <tr data-home-id="{{ game.home_team_id }}"
+                data-away-id="{{ game.away_team_id }}"
+                data-home-name="{{ game.home_team_name|lower if game.home_team_name else '' }}"
+                data-away-name="{{ game.away_team_name|lower if game.away_team_name else '' }}">
                 <td>{{ game.game_date[:10] if game.game_date else 'TBD' }}</td>
                 <td>{{ game.game_date[11:16] if game.game_date else '' }}</td>
                 <td><span class="game-type-badge {{ game.game_type }}">{{ game.game_type }}</span></td>
@@ -823,5 +928,202 @@ document.getElementById('team-modal').addEventListener('click', function(e) {
         closeTeamModal();
     }
 });
+
+// Team filter functionality
+var allTeams = [];
+var activeTeamFilter = null;
+var selectedSuggestionIndex = -1;
+
+// Build team list from game data
+function buildTeamList() {
+    var teamMap = {};
+    var rows = document.querySelectorAll('[data-home-id], [data-away-id]');
+
+    rows.forEach(function(row) {
+        var homeId = row.dataset.homeId;
+        var homeName = row.dataset.homeName;
+        var awayId = row.dataset.awayId;
+        var awayName = row.dataset.awayName;
+
+        if (homeId && homeName) {
+            teamMap[homeId] = homeName;
+        }
+        if (awayId && awayName) {
+            teamMap[awayId] = awayName;
+        }
+    });
+
+    allTeams = Object.keys(teamMap).map(function(id) {
+        return { id: id, name: teamMap[id] };
+    }).sort(function(a, b) {
+        return a.name.localeCompare(b.name);
+    });
+}
+
+function showTeamSuggestions(query) {
+    var suggestions = document.getElementById('team-suggestions');
+    var queryLower = query.toLowerCase().trim();
+
+    if (!queryLower) {
+        suggestions.classList.remove('visible');
+        return;
+    }
+
+    var matches = allTeams.filter(function(team) {
+        return team.name.includes(queryLower);
+    });
+
+    if (matches.length === 0) {
+        suggestions.classList.remove('visible');
+        return;
+    }
+
+    suggestions.innerHTML = matches.slice(0, 10).map(function(team, idx) {
+        return '<div class="team-suggestion" data-team-id="' + team.id + '" data-team-name="' + team.name + '">' +
+            team.name.charAt(0).toUpperCase() + team.name.slice(1) + '</div>';
+    }).join('');
+
+    suggestions.classList.add('visible');
+    selectedSuggestionIndex = -1;
+}
+
+function selectTeamSuggestion(teamId, teamName) {
+    var input = document.getElementById('team-filter-input');
+    input.value = teamName.charAt(0).toUpperCase() + teamName.slice(1);
+    document.getElementById('team-suggestions').classList.remove('visible');
+    document.getElementById('team-filter-clear').style.display = 'block';
+    applyTeamFilter(teamId, teamName);
+}
+
+function applyTeamFilter(teamId, teamName) {
+    activeTeamFilter = { id: teamId, name: teamName };
+
+    var visibleCount = 0;
+    var rows = document.querySelectorAll('[data-home-id]');
+
+    rows.forEach(function(row) {
+        var homeId = row.dataset.homeId;
+        var awayId = row.dataset.awayId;
+
+        if (homeId === teamId || awayId === teamId) {
+            row.classList.remove('filtered-out');
+            visibleCount++;
+        } else {
+            row.classList.add('filtered-out');
+        }
+    });
+
+    // Hide empty date sections (calendar view)
+    var dateHeaders = document.querySelectorAll('.date-header[data-date]');
+    dateHeaders.forEach(function(header) {
+        var dateStr = header.dataset.date;
+        var gamesSection = document.querySelector('.date-games[data-date="' + dateStr + '"]');
+        if (gamesSection) {
+            var visibleGames = gamesSection.querySelectorAll('.game-row:not(.filtered-out)');
+            if (visibleGames.length === 0) {
+                header.classList.add('filtered-out');
+                gamesSection.classList.add('filtered-out');
+            } else {
+                header.classList.remove('filtered-out');
+                gamesSection.classList.remove('filtered-out');
+            }
+        }
+    });
+
+    // Show filter info
+    var filterInfo = document.getElementById('team-filter-info');
+    var filterName = document.getElementById('team-filter-name');
+    var filterCount = document.getElementById('team-filter-count');
+
+    filterInfo.style.display = 'flex';
+    filterName.textContent = teamName.charAt(0).toUpperCase() + teamName.slice(1);
+    filterCount.textContent = '(' + visibleCount + ' games/practices)';
+
+    // Update count
+    document.getElementById('items-count').textContent = 'Showing ' + visibleCount + ' items';
+}
+
+function clearTeamFilter() {
+    activeTeamFilter = null;
+
+    var input = document.getElementById('team-filter-input');
+    input.value = '';
+    document.getElementById('team-filter-clear').style.display = 'none';
+    document.getElementById('team-filter-info').style.display = 'none';
+    document.getElementById('team-suggestions').classList.remove('visible');
+
+    // Show all rows
+    var rows = document.querySelectorAll('.filtered-out');
+    rows.forEach(function(row) {
+        row.classList.remove('filtered-out');
+    });
+
+    // Restore original count
+    var totalRows = document.querySelectorAll('[data-home-id]').length;
+    document.getElementById('items-count').textContent = 'Showing ' + totalRows + ' items';
+}
+
+// Event listeners for team filter
+document.getElementById('team-filter-input').addEventListener('input', function(e) {
+    showTeamSuggestions(e.target.value);
+    if (e.target.value) {
+        document.getElementById('team-filter-clear').style.display = 'block';
+    } else {
+        document.getElementById('team-filter-clear').style.display = 'none';
+        if (activeTeamFilter) {
+            clearTeamFilter();
+        }
+    }
+});
+
+document.getElementById('team-filter-input').addEventListener('keydown', function(e) {
+    var suggestions = document.getElementById('team-suggestions');
+    var items = suggestions.querySelectorAll('.team-suggestion');
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, items.length - 1);
+        updateSelectedSuggestion(items);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedSuggestionIndex = Math.max(selectedSuggestionIndex - 1, 0);
+        updateSelectedSuggestion(items);
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (selectedSuggestionIndex >= 0 && items[selectedSuggestionIndex]) {
+            var item = items[selectedSuggestionIndex];
+            selectTeamSuggestion(item.dataset.teamId, item.dataset.teamName);
+        }
+    } else if (e.key === 'Escape') {
+        suggestions.classList.remove('visible');
+    }
+});
+
+function updateSelectedSuggestion(items) {
+    items.forEach(function(item, idx) {
+        if (idx === selectedSuggestionIndex) {
+            item.classList.add('selected');
+        } else {
+            item.classList.remove('selected');
+        }
+    });
+}
+
+document.getElementById('team-suggestions').addEventListener('click', function(e) {
+    var item = e.target.closest('.team-suggestion');
+    if (item) {
+        selectTeamSuggestion(item.dataset.teamId, item.dataset.teamName);
+    }
+});
+
+// Close suggestions when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.team-filter-container')) {
+        document.getElementById('team-suggestions').classList.remove('visible');
+    }
+});
+
+// Build team list on page load
+document.addEventListener('DOMContentLoaded', buildTeamList);
 </script>
 {% endblock %}
