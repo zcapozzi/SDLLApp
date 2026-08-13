@@ -608,15 +608,19 @@ def api_proposal(year, is_spring):
     return jsonify(proposal)
 
 
-@scheduler_bp.route('/api/<int:year>/<int:is_spring>/team-schedule/<team_name>')
+@scheduler_bp.route('/api/<int:year>/<int:is_spring>/team-schedule/<int:team_id>')
 @login_required
-def api_team_schedule(year, is_spring, team_name):
-    """API endpoint to get all games/practices for a team.
+def api_team_schedule(year, is_spring, team_id):
+    """API endpoint to get all games/practices for a team by ID.
 
     Used by the violations navigator to show team schedules.
     First checks the current proposal, then falls back to saved games.
     """
     games_list = []
+
+    # Get team name for display
+    team = TeamSeason.query.filter_by(team_ID=team_id).first()
+    team_name = team.computed_display_name if team else f'Team {team_id}'
 
     # Check if there's a current proposal
     proposed_key = f'proposed_schedule_{year}_{is_spring}'
@@ -625,23 +629,24 @@ def api_team_schedule(year, is_spring, team_name):
     if proposal and 'games' in proposal:
         # Get games from proposal
         for game in proposal['games']:
-            home_name = game.get('home_team_name', '')
-            away_name = game.get('away_team_name', '')
+            home_id = game.get('home_team_id')
+            away_id = game.get('away_team_id')
 
-            if team_name in (home_name, away_name):
+            if team_id in (home_id, away_id):
                 games_list.append({
                     'id': game.get('id'),
                     'date': game.get('game_date', '')[:10] if game.get('game_date') else 'TBD',
                     'time': game.get('game_date', '')[11:16] if game.get('game_date') and len(game.get('game_date', '')) > 11 else 'TBD',
                     'type': game.get('game_type', 'regular'),
-                    'home': home_name,
-                    'away': away_name,
+                    'home': game.get('home_team_name') or 'TBD',
+                    'away': game.get('away_team_name') or '-',
                     'field': game.get('field_name', 'TBD'),
                     'league': game.get('league', ''),
-                    'is_home': team_name == home_name
+                    'is_home': team_id == home_id
                 })
-    else:
-        # Fall back to saved games
+
+    # Always check database for saved games too (in case proposal is incomplete)
+    if not games_list:
         games = Game.query.filter_by(
             year=year,
             is_spring=is_spring,
@@ -649,20 +654,23 @@ def api_team_schedule(year, is_spring, team_name):
         ).all()
 
         for game in games:
-            home_name = game.home_team.computed_display_name if game.home_team else None
-            away_name = game.away_team.computed_display_name if game.away_team else None
+            home_id = game.home_ID
+            away_id = game.away_ID
 
-            if team_name in (home_name, away_name):
+            if team_id in (home_id, away_id):
+                home_name = game.home_team.computed_display_name if game.home_team else 'TBD'
+                away_name = game.away_team.computed_display_name if game.away_team else '-'
+
                 games_list.append({
                     'id': game.ID,
                     'date': game.game_date.strftime('%Y-%m-%d') if game.game_date else 'TBD',
                     'time': game.game_date.strftime('%H:%M') if game.game_date else 'TBD',
                     'type': game.game_type,
-                    'home': home_name or 'TBD',
-                    'away': away_name or '-',
+                    'home': home_name,
+                    'away': away_name,
                     'field': game.location or 'TBD',
                     'league': game.league,
-                    'is_home': team_name == home_name
+                    'is_home': team_id == home_id
                 })
 
     # Sort by date/time
@@ -670,6 +678,7 @@ def api_team_schedule(year, is_spring, team_name):
 
     return jsonify({
         'team': team_name,
+        'team_id': team_id,
         'season': f'{"Spring" if is_spring else "Fall"} {year}',
         'games': games_list,
         'total': len(games_list)

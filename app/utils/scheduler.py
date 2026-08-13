@@ -33,12 +33,13 @@ class ScheduleViolation:
     HARD = 'hard'  # Cannot be violated
     SOFT = 'soft'  # Preferably not violated
 
-    def __init__(self, rule_code, rule_name, severity, message, games=None):
+    def __init__(self, rule_code, rule_name, severity, message, games=None, teams=None):
         self.rule_code = rule_code
         self.rule_name = rule_name
         self.severity = severity
         self.message = message
         self.games = games or []
+        self.teams = teams or []  # List of {'id': team_id, 'name': team_name}
 
     def to_dict(self):
         def get_game_id(g):
@@ -58,7 +59,8 @@ class ScheduleViolation:
             'rule_name': self.rule_name,
             'severity': self.severity,
             'message': self.message,
-            'game_ids': [get_game_id(g) for g in self.games]
+            'game_ids': [get_game_id(g) for g in self.games],
+            'teams': self.teams  # List of {'id': team_id, 'name': team_name}
         }
 
 
@@ -107,6 +109,25 @@ class ScheduleValidator:
         self.year = year
         self.is_spring = is_spring
         self.violations = []
+        self._team_names = {}  # Cache: team_id -> team_name
+
+    def _get_team_name(self, team_id):
+        """Get team name from ID (with caching)."""
+        if team_id is None:
+            return None
+        if team_id not in self._team_names:
+            # Try to look up from database
+            from app.models.team import TeamSeason
+            team = TeamSeason.query.filter_by(team_ID=team_id).first()
+            if team:
+                self._team_names[team_id] = team.computed_display_name or team.display_name or str(team_id)
+            else:
+                self._team_names[team_id] = str(team_id)
+        return self._team_names[team_id]
+
+    def _build_team_info(self, team_id):
+        """Build team info dict for violation."""
+        return {'id': team_id, 'name': self._get_team_name(team_id)}
 
     def validate(self, games):
         """Validate a list of games/proposed games.
@@ -118,6 +139,22 @@ class ScheduleValidator:
             List of ScheduleViolation objects
         """
         self.violations = []
+        self._team_names = {}  # Reset cache
+
+        # Pre-cache team names from game objects
+        for g in games:
+            if hasattr(g, 'home_team') and g.home_team:
+                team = g.home_team
+                team_id = team.team_ID if hasattr(team, 'team_ID') else None
+                if team_id:
+                    name = getattr(team, 'computed_display_name', None) or getattr(team, 'display_name', None) or str(team_id)
+                    self._team_names[team_id] = name
+            if hasattr(g, 'away_team') and g.away_team:
+                team = g.away_team
+                team_id = team.team_ID if hasattr(team, 'team_ID') else None
+                if team_id:
+                    name = getattr(team, 'computed_display_name', None) or getattr(team, 'display_name', None) or str(team_id)
+                    self._team_names[team_id] = name
 
         # Group games by league
         games_by_league = defaultdict(list)
@@ -268,15 +305,17 @@ class ScheduleValidator:
             if away:
                 away_counts[away] += 1
 
-        for team in teams:
-            home = home_counts.get(team, 0)
-            away = away_counts.get(team, 0)
+        for team_id in teams:
+            home = home_counts.get(team_id, 0)
+            away = away_counts.get(team_id, 0)
             diff = abs(home - away)
             if diff > 1:
+                team_name = self._get_team_name(team_id)
                 self.violations.append(ScheduleViolation(
                     'b1', 'Home/away balance',
                     ScheduleViolation.HARD,
-                    f'{league}: Team {team} has {home} home games and {away} away games (diff: {diff})'
+                    f'{league}: Team {team_name} has {home} home games and {away} away games (diff: {diff})',
+                    teams=[self._build_team_info(team_id)]
                 ))
 
     def _check_home_away_vs_opponent(self, league, games, teams):
@@ -289,14 +328,17 @@ class ScheduleValidator:
             if home and away:
                 home_vs_opponent[home][away] += 1
 
-        for team, opponents in home_vs_opponent.items():
-            for opponent, home_count in opponents.items():
-                away_count = home_vs_opponent.get(opponent, {}).get(team, 0)
+        for team_id, opponents in home_vs_opponent.items():
+            for opponent_id, home_count in opponents.items():
+                away_count = home_vs_opponent.get(opponent_id, {}).get(team_id, 0)
                 if home_count >= 2 and away_count == 0:
+                    team_name = self._get_team_name(team_id)
+                    opponent_name = self._get_team_name(opponent_id)
                     self.violations.append(ScheduleViolation(
                         'a2', 'Home/away vs opponent',
                         ScheduleViolation.SOFT,
-                        f'{league}: Team {team} is home {home_count}x vs {opponent} but never away'
+                        f'{league}: Team {team_name} is home {home_count}x vs {opponent_name} but never away',
+                        teams=[self._build_team_info(team_id), self._build_team_info(opponent_id)]
                     ))
 
     def _check_time_balance(self, league, games, teams):
@@ -333,18 +375,20 @@ class ScheduleValidator:
                 if away:
                     late_counts[away] += 1
 
-        for team in teams:
-            early = early_counts.get(team, 0)
-            late = late_counts.get(team, 0)
+        for team_id in teams:
+            early = early_counts.get(team_id, 0)
+            late = late_counts.get(team_id, 0)
             total = early + late
             if total > 0:
                 diff = abs(early - late)
                 # Allow some imbalance, but flag if more than 2 difference
                 if diff > 2:
+                    team_name = self._get_team_name(team_id)
                     self.violations.append(ScheduleViolation(
                         'b2', 'Early/late time balance',
                         ScheduleViolation.SOFT,
-                        f'{league}: Team {team} has {early} early games and {late} late games'
+                        f'{league}: Team {team_name} has {early} early games and {late} late games',
+                        teams=[self._build_team_info(team_id)]
                     ))
 
     def _check_practice_field_balance(self, league, practices, teams):
@@ -363,15 +407,17 @@ class ScheduleValidator:
                 field_counts[team][field] += 1
 
         # Check each team's field distribution
-        for team in teams:
-            counts = field_counts.get(team, {})
+        for team_id in teams:
+            counts = field_counts.get(team_id, {})
             if len(counts) > 1:
                 values = list(counts.values())
                 if max(values) - min(values) > 2:
+                    team_name = self._get_team_name(team_id)
                     self.violations.append(ScheduleViolation(
                         'c2', 'Practice field balance',
                         ScheduleViolation.SOFT,
-                        f'{league}: Team {team} has uneven practice field distribution'
+                        f'{league}: Team {team_name} has uneven practice field distribution',
+                        teams=[self._build_team_info(team_id)]
                     ))
 
     def _check_solo_practice_balance(self, league, practices, teams):
@@ -438,10 +484,13 @@ class ScheduleValidator:
                     # Check if this is the very next game for either team
                     # This is a simplified check - ideally we'd check game-by-game per team
                     if i - last_idx == 1:
+                        home_name = self._get_team_name(home)
+                        away_name = self._get_team_name(away)
                         self.violations.append(ScheduleViolation(
                             'gap', 'Same team gap',
                             ScheduleViolation.HARD,
-                            f'{league}: Teams play back-to-back without a game gap'
+                            f'{league}: {home_name} vs {away_name} play back-to-back without a game gap',
+                            teams=[self._build_team_info(home), self._build_team_info(away)]
                         ))
                 last_matchup[key] = i
 

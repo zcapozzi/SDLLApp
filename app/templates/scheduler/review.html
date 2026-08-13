@@ -434,7 +434,16 @@
         <div class="violation-card {{ 'soft' if v.severity == 'soft' else '' }}" data-rule="{{ v.rule_code }}">
             <span class="violation-code">[{{ v.rule_code }}]</span>
             <span class="violation-name">{{ v.rule_name }}</span>
-            <div style="margin-top: 5px;">{{ v.message }}</div>
+            <div style="margin-top: 5px;">
+                {{ v.message }}
+                {% if v.teams %}
+                <span style="margin-left: 10px;">
+                    {% for team in v.teams %}
+                    <span class="team-lookup" onclick="openTeamModal({{ team.id }}, '{{ team.name|e }}')" title="View {{ team.name }} schedule">&#128269;</span>
+                    {% endfor %}
+                </span>
+                {% endif %}
+            </div>
         </div>
         {% endfor %}
     </div>
@@ -734,7 +743,7 @@ function filterViolations(ruleCode) {
 var currentYear = {{ year }};
 var currentIsSpring = {{ is_spring }};
 
-function openTeamModal(teamName) {
+function openTeamModal(teamId, teamName) {
     var modal = document.getElementById('team-modal');
     var loading = document.getElementById('team-modal-loading');
     var content = document.getElementById('team-modal-content');
@@ -746,10 +755,10 @@ function openTeamModal(teamName) {
     loading.style.display = 'block';
     content.style.display = 'none';
     empty.style.display = 'none';
-    title.textContent = teamName + ' - Schedule';
+    title.textContent = (teamName || 'Team ' + teamId) + ' - Schedule';
 
-    // Fetch team schedule
-    var url = '/scheduler/api/' + currentYear + '/' + currentIsSpring + '/team-schedule/' + encodeURIComponent(teamName);
+    // Fetch team schedule using team ID
+    var url = '/scheduler/api/' + currentYear + '/' + currentIsSpring + '/team-schedule/' + teamId;
     fetch(url)
         .then(function(response) { return response.json(); })
         .then(function(data) {
@@ -814,53 +823,5 @@ document.getElementById('team-modal').addEventListener('click', function(e) {
         closeTeamModal();
     }
 });
-
-// Add team lookup icons to violation messages
-function addTeamLookupIcons() {
-    var violationCards = document.querySelectorAll('.violation-card');
-
-    violationCards.forEach(function(card) {
-        var messageDiv = card.querySelector('div[style*="margin-top"]');
-        if (!messageDiv) return;
-
-        var text = messageDiv.textContent;
-
-        // Pattern: "Team X" where X is the team name (captures word characters and spaces until common endings)
-        // Common patterns in violation messages:
-        // - "Team [Name] has X early games"
-        // - "Team [Name] is home X times"
-        // - "[League]: Team [Name] has..."
-
-        var teamPattern = /Team\s+([A-Za-z0-9\s\-\']+?)(?:\s+(?:has|is|plays|vs|and)\s)/gi;
-        var html = messageDiv.innerHTML;
-        var match;
-        var replacements = [];
-
-        while ((match = teamPattern.exec(text)) !== null) {
-            var teamName = match[1].trim();
-            if (teamName && teamName.length > 0) {
-                replacements.push({
-                    original: 'Team ' + teamName,
-                    teamName: teamName
-                });
-            }
-        }
-
-        // Apply replacements (deduplicate)
-        var seen = {};
-        replacements.forEach(function(r) {
-            if (seen[r.teamName]) return;
-            seen[r.teamName] = true;
-
-            var icon = '<span class="team-lookup" onclick="openTeamModal(\'' + r.teamName.replace(/'/g, "\\'") + '\')" title="View ' + r.teamName + ' schedule">&#128269;</span>';
-            html = html.split(r.original).join(r.original + icon);
-        });
-
-        messageDiv.innerHTML = html;
-    });
-}
-
-// Run on page load
-document.addEventListener('DOMContentLoaded', addTeamLookupIcons);
 </script>
 {% endblock %}
