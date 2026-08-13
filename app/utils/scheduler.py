@@ -41,12 +41,24 @@ class ScheduleViolation:
         self.games = games or []
 
     def to_dict(self):
+        def get_game_id(g):
+            # Handle database Game objects (uppercase ID)
+            if hasattr(g, 'ID'):
+                return g.ID
+            # Handle ProposedGame objects (lowercase id)
+            if hasattr(g, 'id'):
+                return g.id
+            # Handle dict (from serialized data)
+            if isinstance(g, dict):
+                return g.get('id')
+            return None
+
         return {
             'rule_code': self.rule_code,
             'rule_name': self.rule_name,
             'severity': self.severity,
             'message': self.message,
-            'game_ids': [g.ID if hasattr(g, 'ID') else g.get('id') for g in self.games]
+            'game_ids': [get_game_id(g) for g in self.games]
         }
 
 
