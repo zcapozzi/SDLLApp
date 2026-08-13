@@ -440,15 +440,116 @@
         color: #666;
         margin-top: 10px;
     }
+
+    /* Field x League Matrix */
+    .field-league-matrix {
+        overflow-x: auto;
+        margin-top: 15px;
+    }
+    .field-league-matrix table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+    }
+    .field-league-matrix th,
+    .field-league-matrix td {
+        border: 1px solid #ddd;
+        padding: 8px 10px;
+        text-align: center;
+    }
+    .field-league-matrix th {
+        background: #f8f8f8;
+        font-weight: 600;
+    }
+    .field-league-matrix th.field-name {
+        text-align: left;
+        min-width: 150px;
+    }
+    .field-league-matrix td.field-name {
+        text-align: left;
+        font-weight: 500;
+        background: #fafafa;
+    }
+    .field-league-matrix td.count {
+        font-weight: 600;
+    }
+    .field-league-matrix td.count.has-games {
+        background: rgba(34, 139, 34, 0.1);
+        color: rgb(34, 139, 34);
+    }
+    .field-league-matrix td.count.zero {
+        color: #ccc;
+    }
+    .field-league-matrix tr.total-row td {
+        background: #f0f0f0;
+        font-weight: 700;
+    }
+
+    /* See More link for violations */
+    .see-more-link {
+        display: inline-block;
+        margin-top: 10px;
+        padding: 8px 16px;
+        background: #f0f0f0;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        color: #666;
+    }
+    .see-more-link:hover {
+        background: #e0e0e0;
+    }
+
+    /* Action buttons bar at top */
+    .top-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 6px;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
     <h1>Review Proposed Schedule</h1>
-    <div style="display: flex; gap: 10px;">
-        <a href="{{ url_for('scheduler.index', year=year, is_spring=is_spring) }}" class="btn btn-outline">Back</a>
-    </div>
+    <a href="{{ url_for('scheduler.index', year=year, is_spring=is_spring) }}" class="btn btn-outline">Back</a>
+</div>
+
+<!-- Top Action Buttons -->
+<div class="top-actions">
+    <form method="POST" action="{{ url_for('scheduler.generate', year=year, is_spring=is_spring) }}" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline" onclick="return confirm('Regenerate? This will try different arrangements.');">
+            Regenerate Schedule
+        </button>
+    </form>
+    <form method="POST" action="{{ url_for('scheduler.start_fresh', year=year, is_spring=is_spring) }}" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline" onclick="return confirm('Start Fresh? This will clear all assignments and regenerate from scratch.');">
+            Start Fresh
+        </button>
+    </form>
+    {% if summary.hard_violations == 0 %}
+    <form method="POST" action="{{ url_for('scheduler.save', year=year, is_spring=is_spring) }}" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="lock_schedule" value="1">
+        <button type="submit" class="btn btn-primary" onclick="return confirm('Save and lock this schedule?');">
+            Save &amp; Lock Schedule
+        </button>
+    </form>
+    {% else %}
+    <form method="POST" action="{{ url_for('scheduler.save', year=year, is_spring=is_spring) }}" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="force_save" value="1">
+        <button type="submit" class="btn btn-secondary" onclick="return confirm('WARNING: There are {{ summary.hard_violations }} hard rule violations. Save anyway?');">
+            Force Save ({{ summary.hard_violations }} violations)
+        </button>
+    </form>
+    {% endif %}
 </div>
 
 <!-- Summary -->
@@ -476,6 +577,84 @@
             <div class="label">Soft Violations</div>
         </div>
     </div>
+</div>
+
+<!-- Field x League Matrix -->
+<div class="card">
+    <h3 style="margin-top: 0;">Field Usage by League</h3>
+    {% set field_league_counts = {} %}
+    {% set all_fields = [] %}
+    {% set all_leagues_list = [] %}
+    {% set field_totals = {} %}
+    {% set league_totals = {} %}
+
+    {# Build the counts matrix - respects current type filter #}
+    {% for game in games %}
+        {% set field = game.field_name or game.location or 'Unassigned' %}
+        {% set league = game.league or 'Unknown' %}
+
+        {# Track unique fields and leagues #}
+        {% if field not in all_fields %}
+            {% set _ = all_fields.append(field) %}
+        {% endif %}
+        {% if league not in all_leagues_list %}
+            {% set _ = all_leagues_list.append(league) %}
+        {% endif %}
+
+        {# Initialize nested dict if needed #}
+        {% if field not in field_league_counts %}
+            {% set _ = field_league_counts.update({field: {}}) %}
+            {% set _ = field_totals.update({field: 0}) %}
+        {% endif %}
+        {% if league not in field_league_counts[field] %}
+            {% set _ = field_league_counts[field].update({league: 0}) %}
+        {% endif %}
+        {% if league not in league_totals %}
+            {% set _ = league_totals.update({league: 0}) %}
+        {% endif %}
+
+        {# Increment counts #}
+        {% set _ = field_league_counts[field].update({league: field_league_counts[field][league] + 1}) %}
+        {% set _ = field_totals.update({field: field_totals[field] + 1}) %}
+        {% set _ = league_totals.update({league: league_totals[league] + 1}) %}
+    {% endfor %}
+
+    {% if all_fields %}
+    <div class="field-league-matrix">
+        <table>
+            <thead>
+                <tr>
+                    <th class="field-name">Field</th>
+                    {% for league in all_leagues_list | sort %}
+                    <th>{{ league }}</th>
+                    {% endfor %}
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for field in all_fields | sort %}
+                <tr>
+                    <td class="field-name">{{ field }}</td>
+                    {% for league in all_leagues_list | sort %}
+                        {% set count = field_league_counts[field].get(league, 0) %}
+                        <td class="count {{ 'has-games' if count > 0 else 'zero' }}">{{ count if count > 0 else '-' }}</td>
+                    {% endfor %}
+                    <td class="count has-games">{{ field_totals[field] }}</td>
+                </tr>
+                {% endfor %}
+                <tr class="total-row">
+                    <td class="field-name">Total</td>
+                    {% for league in all_leagues_list | sort %}
+                    <td class="count">{{ league_totals[league] }}</td>
+                    {% endfor %}
+                    <td class="count">{{ games | length }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted">No games/practices to display.</p>
+    {% endif %}
 </div>
 
 <!-- Violations -->
@@ -512,22 +691,40 @@
         <button class="btn btn-outline btn-sm" onclick="filterViolations('all')">Show All</button>
     </div>
 
-    <!-- Violation Cards -->
+    <!-- Violation Cards - Grouped by rule type with limit -->
     <div id="violations-list">
+        {% set violations_by_rule = {} %}
         {% for v in violations %}
-        <div class="violation-card {{ 'soft' if v.severity == 'soft' else '' }}" data-rule="{{ v.rule_code }}">
-            <span class="violation-code">[{{ v.rule_code }}]</span>
-            <span class="violation-name">{{ v.rule_name }}</span>
-            <div style="margin-top: 5px;">
-                {{ v.message }}
-                {% if v.teams %}
-                <span style="margin-left: 10px;">
-                    {% for team in v.teams %}
-                    <span class="team-lookup" onclick="openTeamModal({{ team.id }}, '{{ team.name|e }}')" title="View {{ team.name }} schedule">&#128269;</span>
-                    {% endfor %}
-                </span>
-                {% endif %}
+            {% if v.rule_code not in violations_by_rule %}
+                {% set _ = violations_by_rule.update({v.rule_code: []}) %}
+            {% endif %}
+            {% set _ = violations_by_rule[v.rule_code].append(v) %}
+        {% endfor %}
+
+        {% for rule_code, rule_violations in violations_by_rule.items() | sort %}
+        <div class="violation-group" data-rule="{{ rule_code }}">
+            {% for v in rule_violations %}
+            <div class="violation-card {{ 'soft' if v.severity == 'soft' else '' }} {{ 'hidden' if loop.index > 10 else '' }}"
+                 data-rule="{{ v.rule_code }}" data-index="{{ loop.index }}">
+                <span class="violation-code">[{{ v.rule_code }}]</span>
+                <span class="violation-name">{{ v.rule_name }}</span>
+                <div style="margin-top: 5px;">
+                    {{ v.message }}
+                    {% if v.teams %}
+                    <span style="margin-left: 10px;">
+                        {% for team in v.teams %}
+                        <span class="team-lookup" onclick="openTeamModal({{ team.id }}, '{{ team.name|e }}')" title="View {{ team.name }} schedule">&#128269;</span>
+                        {% endfor %}
+                    </span>
+                    {% endif %}
+                </div>
             </div>
+            {% endfor %}
+            {% if rule_violations | length > 10 %}
+            <div class="see-more-link" data-rule="{{ rule_code }}" onclick="toggleViolationExpand('{{ rule_code }}')">
+                Show {{ rule_violations | length - 10 }} more {{ rule_code }} violations...
+            </div>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
@@ -713,30 +910,12 @@
         </form>
         {% endif %}
 
-        <div style="display: flex; flex-direction: column; gap: 10px;">
-            <form method="POST" action="{{ url_for('scheduler.generate', year=year, is_spring=is_spring) }}" style="display: inline;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-outline"
-                        onclick="return confirm('Regenerate? This will try different arrangements.');">
-                    Regenerate
-                </button>
-            </form>
-
-            <form method="POST" action="{{ url_for('scheduler.start_fresh', year=year, is_spring=is_spring) }}" style="display: inline;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-outline"
-                        onclick="return confirm('Start Fresh? This will clear all assignments and regenerate from scratch.');">
-                    Start Fresh
-                </button>
-            </form>
-
-            <form method="POST" action="{{ url_for('scheduler.clear', year=year, is_spring=is_spring) }}" style="display: inline;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-outline" onclick="return confirm('Discard this proposal?');">
-                    Discard
-                </button>
-            </form>
-        </div>
+        <form method="POST" action="{{ url_for('scheduler.clear', year=year, is_spring=is_spring) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline" onclick="return confirm('Discard this proposal?');">
+                Discard Proposal
+            </button>
+        </form>
     </div>
 </div>
 
@@ -806,9 +985,12 @@ document.querySelectorAll('form').forEach(function(form) {
     });
 });
 
+// Track expanded violation groups
+var expandedGroups = {};
+
 // Violation filtering
 function filterViolations(ruleCode) {
-    var cards = document.querySelectorAll('.violation-card');
+    var groups = document.querySelectorAll('.violation-group');
     var navCards = document.querySelectorAll('.violation-nav-card');
     var filterInfo = document.getElementById('violation-filter-info');
     var filterRuleName = document.getElementById('filter-rule-name');
@@ -824,13 +1006,29 @@ function filterViolations(ruleCode) {
         }
     });
 
-    // Filter violation cards
-    cards.forEach(function(card) {
-        if (ruleCode === 'all' || card.dataset.rule === ruleCode) {
-            card.classList.remove('hidden');
-            visibleCount++;
+    // Filter violation groups and count visible cards
+    groups.forEach(function(group) {
+        var groupRule = group.dataset.rule;
+        var cards = group.querySelectorAll('.violation-card');
+        var seeMore = group.querySelector('.see-more-link');
+
+        if (ruleCode === 'all' || groupRule === ruleCode) {
+            group.style.display = 'block';
+            // Apply expand/collapse state
+            var isExpanded = expandedGroups[groupRule];
+            cards.forEach(function(card, idx) {
+                if (isExpanded || idx < 10) {
+                    card.classList.remove('hidden');
+                    visibleCount++;
+                } else {
+                    card.classList.add('hidden');
+                }
+            });
+            if (seeMore) {
+                seeMore.style.display = isExpanded ? 'none' : 'inline-block';
+            }
         } else {
-            card.classList.add('hidden');
+            group.style.display = 'none';
         }
     });
 
@@ -839,11 +1037,27 @@ function filterViolations(ruleCode) {
         filterInfo.classList.add('hidden');
     } else {
         filterInfo.classList.remove('hidden');
-        // Find the rule name from the active nav card
         var activeNav = document.querySelector('.violation-nav-card[data-filter="' + ruleCode + '"]');
         var ruleName = activeNav ? activeNav.querySelector('.name').textContent : ruleCode;
+        var totalForRule = activeNav ? activeNav.querySelector('.count').textContent : visibleCount;
         filterRuleName.textContent = ruleCode.toUpperCase() + ' - ' + ruleName;
-        filterCount.textContent = visibleCount;
+        filterCount.textContent = totalForRule;
+    }
+}
+
+// Toggle showing all violations for a rule type
+function toggleViolationExpand(ruleCode) {
+    expandedGroups[ruleCode] = true;
+    var group = document.querySelector('.violation-group[data-rule="' + ruleCode + '"]');
+    if (group) {
+        var cards = group.querySelectorAll('.violation-card');
+        var seeMore = group.querySelector('.see-more-link');
+        cards.forEach(function(card) {
+            card.classList.remove('hidden');
+        });
+        if (seeMore) {
+            seeMore.style.display = 'none';
+        }
     }
 }
 
