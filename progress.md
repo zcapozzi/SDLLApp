@@ -696,7 +696,18 @@ This section captures key design decisions made during development.
    - Slots with specific league = only that league can use
    - Previously, slot league restrictions were not being checked at all
 
-7. **Previous Session Updates**
+6. **Games-First Scheduling Priority**
+   - Fixed issue where BB A stopped scheduling games on Oct 3 despite season running until Oct 23
+   - Root cause: Leagues were processed sequentially (games + practices), so later leagues
+     couldn't access field slots claimed by earlier leagues' practices
+   - Solution: Two-phase scheduling - ALL games for ALL leagues first, THEN all practices
+   - This ensures games (mandatory) always get priority over practices (flexible)
+
+7. **Games Only Filter Fix**
+   - "Games Only" filter now includes scrimmages and playoffs (matches matrix behavior)
+   - Added separate "Regular Season Only" filter for exact match
+
+8. **Previous Session Updates**
    - Fixed cross-league field double-booking bug
    - Added team schedule lookup in violations using team IDs
    - Added team filter with autocomplete for schedule review

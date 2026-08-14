@@ -54,10 +54,14 @@ Empty slots + Field allocations + Teams → ScheduleGenerator.generate() → Pro
 ```
 
 **What happens:**
+- **Games First**: Schedule all games for ALL leagues before any practices
+  - This ensures games (mandatory) get priority over practices (flexible)
+  - Prevents later leagues from losing field slots to earlier leagues' practices
 - Generate round-robin matchups ensuring balance
 - Assign dates within the configured season window
 - Assign fields based on preference and availability
 - Calculate time offsets for multiple games per slot
+- **Practices Second**: Schedule practices for all leagues after games
 - Validate against hard and soft rules
 - Store proposal in session for review
 
