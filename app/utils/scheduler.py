@@ -725,8 +725,16 @@ class ScheduleGenerator:
             # Filter out locked leagues
             league_configs = [c for c in league_configs if not c.schedule_locked]
 
+        # Two-phase scheduling: games first (priority), then practices
+        # This ensures games get first dibs on all field slots across all leagues
+
+        # Phase 1: Schedule all games for all leagues
         for config in league_configs:
-            self._generate_for_league(config, start_fresh)
+            self._generate_games_only(config, start_fresh)
+
+        # Phase 2: Schedule all practices for all leagues
+        for config in league_configs:
+            self._generate_practices_only(config, start_fresh)
 
         # Validate the generated schedule
         validator = ScheduleValidator(self.year, self.is_spring)
@@ -777,6 +785,135 @@ class ScheduleGenerator:
                 })
 
         return len(self.warnings) == 0
+
+    def _generate_games_only(self, config, start_fresh=False):
+        """Generate games and scrimmages for a single league.
+
+        This is called first for all leagues to ensure games get priority
+        over practices when claiming field slots.
+        """
+        league_name = config.league
+
+        # Get teams for this league
+        teams = TeamSeason.query.filter_by(
+            year=self.year,
+            is_spring=self.is_spring,
+            league=league_name,
+            active=1,
+            is_placeholder=0
+        ).all()
+
+        if len(teams) < 2:
+            self.warnings.append({
+                'type': 'insufficient_teams',
+                'message': f'{league_name}: Need at least 2 teams to schedule.'
+            })
+            return
+
+        # Get league object for field rules
+        league = League.get_by_name(league_name)
+
+        # Get available field slots
+        all_slots = FieldSlot.get_by_season(self.year, self.is_spring)
+
+        # Get existing game slots for this league
+        existing_games = Game.query.filter_by(
+            year=self.year,
+            is_spring=self.is_spring,
+            league=league_name,
+            active=1
+        ).all()
+
+        # Separate by type
+        regular_slots = [g for g in existing_games if g.game_type == 'regular']
+
+        # If start_fresh, treat all as unassigned
+        if start_fresh:
+            for game in existing_games:
+                game._temp_clear = True
+
+        # Generate scrimmages (last day before opening)
+        if config.first_practice_date and config.opening_day_date:
+            scrimmage_date = config.opening_day_date - timedelta(days=1)
+            # Find last activity day before opening
+            practice_days = config.practice_days or []
+            game_days = config.game_days or []
+            all_activity_days = set(practice_days + game_days)
+            current = scrimmage_date
+            while current >= config.first_practice_date:
+                if current.weekday() in all_activity_days:
+                    self._generate_scrimmages(config, teams, league, all_slots, current)
+                    break
+                current -= timedelta(days=1)
+
+        # Generate regular season games
+        self._generate_games(config, teams, league, all_slots, regular_slots, start_fresh)
+
+    def _generate_practices_only(self, config, start_fresh=False):
+        """Generate practices for a single league.
+
+        This is called after all games are scheduled to ensure practices
+        work around the game schedule.
+        """
+        league_name = config.league
+
+        # Get teams for this league
+        teams = TeamSeason.query.filter_by(
+            year=self.year,
+            is_spring=self.is_spring,
+            league=league_name,
+            active=1,
+            is_placeholder=0
+        ).all()
+
+        if len(teams) < 2:
+            return  # Warning already issued in games phase
+
+        # Get league object for field rules
+        league = League.get_by_name(league_name)
+
+        # Get available field slots
+        all_slots = FieldSlot.get_by_season(self.year, self.is_spring)
+
+        # Get existing practice slots for this league
+        existing_games = Game.query.filter_by(
+            year=self.year,
+            is_spring=self.is_spring,
+            league=league_name,
+            active=1
+        ).all()
+        practice_slots = [g for g in existing_games if g.game_type == 'practice']
+
+        # If start_fresh, treat all as unassigned
+        if start_fresh:
+            for game in existing_games:
+                game._temp_clear = True
+
+        # Pre-opening practices (before opening day, excluding scrimmage day)
+        if config.first_practice_date and config.opening_day_date:
+            practice_days = config.practice_days or []
+            game_days = config.game_days or []
+            all_activity_days = set(practice_days + game_days)
+
+            current_date = config.first_practice_date
+            end_date = config.opening_day_date - timedelta(days=1)
+
+            # Find scrimmage date (last activity day before opening) to skip it
+            scrimmage_date = None
+            check_date = end_date
+            while check_date >= config.first_practice_date:
+                if check_date.weekday() in all_activity_days:
+                    scrimmage_date = check_date
+                    break
+                check_date -= timedelta(days=1)
+
+            while current_date <= end_date:
+                if current_date.weekday() in all_activity_days and current_date != scrimmage_date:
+                    self._assign_practices_for_date(config, teams, league, all_slots, current_date, practice_slots, start_fresh)
+                current_date += timedelta(days=1)
+
+        # Post-opening practices
+        self._generate_post_opening_practices(config, teams, league, all_slots, practice_slots, start_fresh)
 
     def _generate_for_league(self, config, start_fresh=False):
         """Generate schedule for a single league.
