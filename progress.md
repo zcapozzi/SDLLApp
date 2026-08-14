@@ -689,7 +689,7 @@ Added new HARD rule to enforce practice field capacity from database:
 - Total practices reduced (teams that couldn't be assigned get warnings)
 - Respects each field's actual capacity setting
 
-**Violation Summary (after fix)**:
+**Violation Summary (after f1 fix, before a1 fix)**:
 | Rule | Type | Count | Description |
 |------|------|-------|-------------|
 | a1 | HARD | 6 | Play everyone at least once |
@@ -702,6 +702,8 @@ Added new HARD rule to enforce practice field capacity from database:
 | c2 | SOFT | 32 | Practice field balance |
 | c3 | SOFT | 9 | Solo practice balance |
 | e2 | SOFT | 51 | Game day balance |
+
+**Note:** a1 violations later fixed (see "Bug Fix: Rule a1 - Pair-Balanced Matchup Scheduling" section below).
 
 ---
 
@@ -814,6 +816,50 @@ Added support for league-specific game and practice durations:
    - **Status: Configuration change needed by admin**
 
 **Conclusion:** The scheduler code is working correctly. BB AA will resolve on regeneration. BB Tee Ball requires a configuration change to the league's allowed game fields.
+
+### Bug Fix: Rule a1 - Pair-Balanced Matchup Scheduling
+
+**Problem**: Teams were playing some opponents 3 times while never playing others. Rule a1 requires every pair to play, and the gap between most-played and least-played opponents should be ≤ 1.
+
+**Root Cause**: The round-robin generator didn't track pair counts, only team counts. During catch-up scheduling, the algorithm would prioritize teams needing games without considering whether those matchups created pair imbalances.
+
+**Solution:**
+
+1. **Rewrote `_generate_round_robin()`** to ensure pair balance:
+   - Calculate target games per pair: `floor(games_per_team / (n-1))` + distribute extras
+   - Select matchups prioritizing pairs with fewest games
+   - Balance home/away assignments during selection
+
+2. **Added `pair_game_counts` tracking** in `_assign_games_to_slots()`:
+   - Dictionary mapping `(min_team_id, max_team_id)` → count
+   - Updated when games are scheduled in both full-round and catch-up passes
+
+3. **Modified catch-up pass** to prioritize unplayed pairs:
+   - Sort unscheduled matchups by `(pair_count, -team_need)`
+   - Pairs with 0 games get highest priority
+   - Only skip matchups if BOTH teams have enough games AND pair has already played
+
+**Results (11 of 12 leagues pass a1):**
+| League | Status | Pairs | Gap |
+|--------|--------|-------|-----|
+| BB A | ✅ OK | 6/6 | 1 |
+| BB AA | ✅ OK | 28/28 | 1 |
+| BB AAA | ✅ OK | 15/15 | 1 |
+| BB Intermediate | ✅ OK | 3/3 | 0 |
+| BB Juniors | ✅ OK | 3/3 | 0 |
+| BB Rookie | ✅ OK | 6/6 | 0 |
+| BB Tee Ball | ❌ FAIL | 21/28 | - |
+| SB Majors | ✅ OK | 3/3 | 0 |
+| SB Minors | ✅ OK | 6/6 | 1 |
+| SB Rookie | ✅ OK | 3/3 | 0 |
+| SB Seniors | ✅ OK | 6/6 | 1 |
+| SB Tee Ball | ✅ OK | 6/6 | 0 |
+
+**BB Tee Ball Still Fails**: This is a mathematical impossibility, not a code bug:
+- 8 teams × 6 games = 24 total games possible
+- 28 unique pairs exist (8 choose 2)
+- You cannot have all 28 pairs play with only 24 games
+- **Fix**: Either increase games_per_team to 7+ or reduce team count
 
 ---
 
