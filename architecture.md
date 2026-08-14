@@ -247,6 +247,7 @@ shuffle(matchups)  # Avoid predictable patterns
 | `b1` | Home/away balance | Each team's home/away games differ by at most 1 |
 | `d1` | One activity per day | Each team can have at most one game or practice per day |
 | `e1` | Minimum games | Each team must play at least the configured number of regular season games |
+| `f1` | Practice field capacity | Enforces field's `practice_capacity` setting from DB (default: 1) |
 | `gap` | Same team gap | Teams can't play back-to-back against same opponent |
 | `slot` | Field double-booked | No two games at same time on same field |
 

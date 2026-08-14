@@ -128,6 +128,27 @@ These rules represent fundamental fairness requirements. A schedule that violate
 
 ---
 
+### Rule f1: Practice Field Capacity
+
+**Description:** Each field has a `practice_capacity` setting in the database that defines how many teams can practice simultaneously. The scheduler enforces this limit. If not set, defaults to 1.
+
+**Why it matters:** Fields have varying sizes and configurations. Some can accommodate multiple teams practicing at once (e.g., Cresset=2, Pearsontown=3), while others can only support one team at a time.
+
+**Database fields:**
+- `practice_capacity`: Teams that can practice simultaneously (default: 1)
+- `practice_capacity_late`: Capacity for late slots like 7:30 PM (NULL = same as regular capacity)
+
+**Validation logic:**
+- Group all practices by (field, date, start_time)
+- Look up field's `practice_capacity` from database
+- For late slots (7 PM+), use `practice_capacity_late` if set
+- Flag any slot where teams exceed the field's capacity
+
+**Example violation:**
+- Alston Ridge has 3 teams practicing at 5:30 PM (field capacity: 1)
+
+---
+
 ## Soft Rules (SHOULD avoid)
 
 Soft rules represent preferences for schedule quality. Violating these is acceptable when necessary to satisfy hard rules, but the generator should minimize violations.
@@ -321,6 +342,7 @@ First Practice Date < Opening Day Date < Regular Season End Date < Season End Da
 | `b1` | Home/away balance | HARD | Per team, home/away diff <= 1 |
 | `d1` | One activity per day | HARD | Max one game or practice per team per day |
 | `e1` | Minimum games | HARD | Each team must play at least the configured number of regular season games (scrimmages don't count) |
+| `f1` | Practice field capacity | HARD | Enforces field's `practice_capacity` setting from DB (default: 1) |
 | `gap` | Same team gap | HARD | No back-to-back vs same opponent |
 | `slot` | Field double-booked | HARD | No two games at same time on same field |
 | `a2` | Home/away vs opponent | SOFT | Alternate home/away when playing same team |

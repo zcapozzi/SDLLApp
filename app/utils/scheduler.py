@@ -175,6 +175,9 @@ class ScheduleValidator:
         # Cross-league validation: Check for field double-booking
         self._check_field_conflicts(games)
 
+        # Cross-league validation: Check practice field capacity
+        self._check_practice_field_capacity(games)
+
         return self.violations
 
     def _validate_league(self, league, games):
@@ -573,6 +576,71 @@ class ScheduleValidator:
                     games=games_at_slot
                 ))
 
+    def _check_practice_field_capacity(self, games):
+        """Check practice field capacity limits.
+
+        Rule f1: Practice field capacity - enforces each field's practice_capacity
+        setting from the database. If not set, defaults to 1.
+        """
+        # Group practices by (field_object, date, hour, minute)
+        practices_by_slot = defaultdict(list)
+
+        for game in games:
+            # Only check practices
+            if not self._is_practice(game):
+                continue
+
+            game_date = self._get_game_date(game)
+            if not game_date:
+                continue
+
+            # Get field object (need full object for capacity check)
+            field_obj = None
+            field_id = None
+            field_name = None
+            if hasattr(game, 'field') and game.field:
+                field_obj = game.field
+                field_id = game.field.ID if hasattr(game.field, 'ID') else game.field
+                field_name = game.field.location_title if hasattr(game.field, 'location_title') else str(field_id)
+            elif hasattr(game, 'location'):
+                field_id = game.location
+                field_name = str(field_id)
+
+            if not field_id:
+                continue
+
+            # Key includes field object for capacity lookup
+            key = (field_id, field_name, field_obj, game_date.date(), game_date.hour, game_date.minute)
+            practices_by_slot[key].append(game)
+
+        # Check for capacity violations
+        for key, practices_at_slot in practices_by_slot.items():
+            field_id, field_name, field_obj, date, hour, minute = key
+
+            # Get field's practice_capacity from DB (defaults to 1 if not set)
+            if field_obj and hasattr(field_obj, 'get_practice_capacity'):
+                is_late = hour >= 19
+                field_capacity = field_obj.get_practice_capacity(is_late_slot=is_late)
+            else:
+                field_capacity = 1  # Default if no field object
+
+            if len(practices_at_slot) > field_capacity:
+                time_str = f'{hour:02d}:{minute:02d}'
+
+                # Get team names for the violation message
+                team_names = []
+                for p in practices_at_slot:
+                    home = self._get_home_team(p)
+                    if home:
+                        team_names.append(self._get_team_name(home))
+
+                self.violations.append(ScheduleViolation(
+                    'f1', 'Practice field capacity',
+                    ScheduleViolation.HARD,
+                    f'{field_name} has {len(practices_at_slot)} teams practicing at {date} {time_str} (field capacity: {field_capacity}). Teams: {", ".join(team_names[:5])}{"..." if len(team_names) > 5 else ""}',
+                    games=practices_at_slot
+                ))
+
     def _check_one_activity_per_day(self, league, games, teams):
         """Rule d1: Each team can have at most one game or practice per day."""
         # Group activities by (team, date)
@@ -730,6 +798,7 @@ class ScheduleGenerator:
         self._global_field_time_usage = set()  # Tracks (field_id, datetime) across all leagues
         self._team_day_usage = set()  # Tracks (team_id, date_str) - one activity per team per day
         self._slot_decisions = []  # Detailed decision log for tracing
+        self._practice_slot_counts = defaultdict(int)  # Tracks practice count per (field_id, datetime) - f1 rule
 
     def generate(self, start_fresh=False):
         """Generate a complete proposed schedule.
@@ -1486,11 +1555,36 @@ class ScheduleGenerator:
             })
             return
 
-        # Track slot usage (for capacity)
-        slot_usage = defaultdict(int)
-
         # Get date string for team-day tracking
         date_str = practice_date.isoformat() if hasattr(practice_date, 'isoformat') else str(practice_date)
+
+        # Build all possible practice time slots with their global capacity status
+        # Each slot can have multiple time blocks (e.g., 5:30 and 7:00 for a 3-hour slot)
+        practice_options = []
+        for slot in available_slots:
+            if not slot.field:
+                continue
+            field_id = slot.field.ID
+            time_capacity = self._get_time_based_practice_capacity(slot)
+
+            for time_block in range(time_capacity):
+                time_offset_minutes = time_block * PRACTICE_DURATION_MINUTES
+                game_datetime = self._slot_to_datetime(slot, practice_date)
+                if game_datetime and time_offset_minutes > 0:
+                    game_datetime = game_datetime + timedelta(minutes=time_offset_minutes)
+
+                if game_datetime:
+                    # Get field's practice capacity from DB, considering late slots
+                    is_late = game_datetime.hour >= 19
+                    field_capacity = slot.field.get_practice_capacity(is_late_slot=is_late)
+
+                    practice_options.append({
+                        'slot': slot,
+                        'field_id': field_id,
+                        'datetime': game_datetime,
+                        'datetime_key': (field_id, game_datetime.isoformat()),
+                        'field_capacity': field_capacity
+                    })
 
         for team in teams:
             # Check if team already has activity on this day
@@ -1499,36 +1593,26 @@ class ScheduleGenerator:
                 # Team already has a game or practice today, skip
                 continue
 
-            # Find best slot (considering capacity and balance)
-            assigned_slot = None
-            assigned_time_offset = 0  # Track which time slot within the field slot
-            for slot in available_slots:
-                capacity = self._get_slot_capacity(slot, practice_date, usage_type='practice')
-                if slot_usage[slot.slot_ID] < capacity:
-                    assigned_slot = slot
-                    assigned_time_offset = slot_usage[slot.slot_ID]
+            # Find best slot with available capacity (respects field's practice_capacity from DB)
+            assigned_option = None
+            for option in practice_options:
+                datetime_key = option['datetime_key']
+                current_count = self._practice_slot_counts[datetime_key]
+                field_capacity = option['field_capacity']
+                if current_count < field_capacity:
+                    assigned_option = option
                     break
 
-            if not assigned_slot:
-                # All slots at capacity, skip this team's practice for today
+            if not assigned_option:
+                # All practice slots at capacity, skip this team's practice
+                self.warnings.append({
+                    'type': 'practice_capacity',
+                    'message': f'{config.league}: No practice slot available for {team.display_name} on {practice_date} (all slots at capacity)'
+                })
                 continue
 
-            slot_usage[assigned_slot.slot_ID] += 1
-
-            # Calculate the actual start time based on sequential practice slots
-            # Each practice is 90 minutes; if this is the 2nd practice in a time slot,
-            # the start time is 90 minutes later
-            sharing_capacity = assigned_slot.field.get_practice_capacity(
-                is_late_slot=assigned_slot.start_time and assigned_slot.start_time.hour >= 19
-            ) if assigned_slot.field else 1
-
-            # Which time block is this practice in?
-            time_block = assigned_time_offset // sharing_capacity
-            time_offset_minutes = time_block * PRACTICE_DURATION_MINUTES
-
-            game_datetime = self._slot_to_datetime(assigned_slot, practice_date)
-            if game_datetime and time_offset_minutes > 0:
-                game_datetime = game_datetime + timedelta(minutes=time_offset_minutes)
+            # Increment the global practice count for this field/time
+            self._practice_slot_counts[assigned_option['datetime_key']] += 1
 
             practice = ProposedGame(
                 game_type='practice',
@@ -1537,10 +1621,10 @@ class ScheduleGenerator:
                 is_spring=self.is_spring,
                 home_team=team,
                 away_team=None,
-                field=assigned_slot.field if assigned_slot else None,
-                game_date=game_datetime
+                field=assigned_option['slot'].field,
+                game_date=assigned_option['datetime']
             )
-            practice.slot = assigned_slot
+            practice.slot = assigned_option['slot']
             practice.id = self._next_id
             self._next_id += 1
             self.proposed_games.append(practice)
