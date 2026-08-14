@@ -1070,16 +1070,33 @@ class ScheduleGenerator:
 
                     if not league_accessible and game_capable:
                         # There are game-capable slots but this league can't use them
+                        # Diagnose why
                         slot_leagues = set()
+                        inaccessible_fields = set()
+                        time_restricted = 0
                         for s in game_capable:
                             if s.league:
                                 slot_leagues.add(s.league)
+                            if league and s.field:
+                                if not league.can_play_at_field(s.field.ID, is_practice=False):
+                                    inaccessible_fields.add(s.field.location_title)
+                            if league and s.start_time:
+                                if not league.can_play_at_time(s.start_time):
+                                    time_restricted += 1
+
+                        reasons = []
                         if slot_leagues:
+                            reasons.append(f'slots assigned to: {", ".join(sorted(slot_leagues))}')
+                        if inaccessible_fields:
+                            reasons.append(f'fields not in allowed list: {", ".join(sorted(inaccessible_fields))}')
+                        if time_restricted:
+                            reasons.append(f'{time_restricted} slots outside time restrictions')
+
+                        if reasons:
                             self.warnings.append({
                                 'type': 'slot_access',
                                 'message': f'{config.league}: No accessible {day_name} game slots. '
-                                           f'{len(game_capable)} slots exist but are assigned to: {", ".join(sorted(slot_leagues))}. '
-                                           f'Set slot league to "Any" or add {config.league} allocations.'
+                                           f'{len(game_capable)} game-capable slots exist but: {"; ".join(reasons)}.'
                             })
 
             if config.regular_season_end_date and last_date_with_slots:
