@@ -729,12 +729,47 @@ class ScheduleGenerator:
         # This ensures games get first dibs on all field slots across all leagues
 
         # Phase 1: Schedule all games for all leagues
+        phase1_game_count = 0
         for config in league_configs:
+            before = len(self.proposed_games)
             self._generate_games_only(config, start_fresh)
+            after = len(self.proposed_games)
+            games_added = after - before
+            phase1_game_count += games_added
 
         # Phase 2: Schedule all practices for all leagues
+        phase2_practice_count = 0
         for config in league_configs:
+            before = len(self.proposed_games)
             self._generate_practices_only(config, start_fresh)
+            after = len(self.proposed_games)
+            practices_added = after - before
+            phase2_practice_count += practices_added
+
+        # Debug: Report phase results
+        self.warnings.append({
+            'type': 'debug_phases',
+            'message': f'Phase 1 (games/scrimmages): {phase1_game_count} scheduled. Phase 2 (practices): {phase2_practice_count} scheduled. Field slots used after Phase 1: {len(self._global_field_time_usage)}.'
+        })
+
+        # Debug: Show what's scheduled on a Thursday in October (for debugging BB A issue)
+        from datetime import date
+        debug_date = date(self.year, 10, 15)  # Oct 15th
+        if debug_date.weekday() == 3:  # Thursday
+            oct15_activities = []
+            for g in self.proposed_games:
+                if g.game_date:
+                    g_date = g.game_date.date() if hasattr(g.game_date, 'date') else g.game_date
+                    if g_date == debug_date:
+                        oct15_activities.append(f'{g.league}:{g.game_type}')
+            if oct15_activities:
+                from collections import Counter
+                counts = Counter(oct15_activities)
+                summary = ', '.join(f'{k}({v})' for k, v in sorted(counts.items()))
+                self.warnings.append({
+                    'type': 'debug_oct15',
+                    'message': f'Oct 15 activities: {summary}'
+                })
 
         # Validate the generated schedule
         validator = ScheduleValidator(self.year, self.is_spring)
@@ -1046,6 +1081,23 @@ class ScheduleGenerator:
 
         # Get available slots for each date
         slots_by_date = self._group_slots_by_date(all_slots, game_dates, league, 'game')
+
+        # Debug: Check specifically for Oct 15th for BB A
+        from datetime import date as date_class
+        oct15 = date_class(self.year, 10, 15)
+        if config.league == 'BB A' and oct15 in game_dates:
+            if oct15 in slots_by_date:
+                slot_count = len(slots_by_date[oct15])
+                slot_fields = [s.field.location_title for s in slots_by_date[oct15] if s.field]
+                self.warnings.append({
+                    'type': 'debug_bba_oct15',
+                    'message': f'BB A Oct 15: {slot_count} slots available at start of Phase 1. Fields: {", ".join(slot_fields)}'
+                })
+            else:
+                self.warnings.append({
+                    'type': 'debug_bba_oct15',
+                    'message': f'BB A Oct 15: NO slots in slots_by_date (date not found)'
+                })
 
         # Debug: Report date coverage and diagnose missing dates
         if game_dates:
@@ -1575,6 +1627,15 @@ class ScheduleGenerator:
 
         # Second pass: Fill remaining games (catch-up for teams below minimum)
         # This may result in some e2 violations but ensures e1 (minimum games) is met
+
+        # Debug: For BB A, show catch-up status
+        if config.league == 'BB A':
+            remaining = len([m for m in unscheduled_matchups if m not in scheduled_matchups])
+            self.warnings.append({
+                'type': 'debug_bba_catchup',
+                'message': f'BB A catch-up starting: {remaining} matchups remaining, {len(slots_info_by_date)} dates with slots'
+            })
+
         still_unscheduled = []
         for idx in unscheduled_matchups:
             if idx in scheduled_matchups:
@@ -1672,6 +1733,24 @@ class ScheduleGenerator:
 
             if not assigned:
                 still_unscheduled.append(idx)
+                # Debug: Why couldn't we assign this matchup?
+                if config.league == 'BB A' and len(still_unscheduled) <= 3:
+                    reasons = []
+                    for game_date in sorted(slots_info_by_date.keys()):
+                        date_str = game_date.isoformat()
+                        home_busy = (home.team_ID, date_str) in self._team_day_usage
+                        away_busy = (away.team_ID, date_str) in self._team_day_usage
+                        slots_available = sum(1 for s in slots_info_by_date[game_date]
+                                              if (s['field_id'], s['datetime'].isoformat()) not in self._global_field_time_usage
+                                              if s['field_id'] and s['datetime'])
+                        if home_busy or away_busy or slots_available == 0:
+                            if game_date.month == 10 and game_date.day >= 10:
+                                reasons.append(f'{game_date.strftime("%b%d")}:{"H" if home_busy else ""}{"A" if away_busy else ""}{"S0" if slots_available==0 else ""}')
+                    if reasons:
+                        self.warnings.append({
+                            'type': 'debug_bba_unassigned',
+                            'message': f'BB A matchup {home.display_name} vs {away.display_name} unassigned. Oct dates: {", ".join(reasons[:5])}'
+                        })
 
         unscheduled_matchups = still_unscheduled
 
