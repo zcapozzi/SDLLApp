@@ -1507,7 +1507,15 @@ class ScheduleGenerator:
             })
 
     def _can_use_slot(self, slot, league, usage_type):
-        """Check if a league can use a slot."""
+        """Check if a league can use a slot.
+
+        Checks:
+        1. Slot has a valid field
+        2. Field allows the usage type (game vs practice)
+        3. Slot league restriction (NULL = any league, otherwise must match)
+        4. League's allowed fields list
+        5. League's time restrictions
+        """
         if not slot.field:
             return False
 
@@ -1518,6 +1526,14 @@ class ScheduleGenerator:
             return False
         if usage_type == 'practice' and not field.allows_practices:
             return False
+
+        # Check slot league restriction
+        # If slot.league is set, only that league can use it
+        # If slot.league is NULL/empty, any league can use it
+        if slot.league and league:
+            if slot.league != league.display_name and slot.league != league.ID:
+                # Slot is restricted to a different league
+                return False
 
         # Check league field rules
         if league:
