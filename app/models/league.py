@@ -24,6 +24,10 @@ class League(db.Model):
     preferred_fields = db.Column(db.Text)         # Comma-separated field IDs in preference order
     required_days = db.Column(db.String(50))      # Comma-separated day numbers (0=Mon, 6=Sun)
 
+    # Duration settings - NULL means use defaults (120 min for games, 90 min for practices)
+    game_duration_minutes = db.Column(db.Integer)     # NULL = 120 (or 180 for no-time-limit)
+    practice_duration_minutes = db.Column(db.Integer) # NULL = 90
+
     # Pitch type constants
     PITCH_TEE_BALL = 'tee_ball'
     PITCH_MACHINE = 'machine_pitch'
@@ -246,3 +250,42 @@ class League(db.Model):
         from app.models.field import Field
         fields = Field.query.filter(Field.ID.in_(ids)).all()
         return ', '.join(f.location_title for f in fields) if fields else "Any field"
+
+    # Duration defaults
+    DEFAULT_GAME_DURATION = 120  # 2 hours
+    DEFAULT_NO_LIMIT_GAME_DURATION = 180  # 3 hours
+    DEFAULT_PRACTICE_DURATION = 90  # 90 minutes
+
+    def get_game_duration(self, is_no_time_limit=False):
+        """Get game duration in minutes for this league.
+
+        Args:
+            is_no_time_limit: True for no-time-limit games (playoffs, etc.)
+
+        Returns:
+            int: Duration in minutes
+        """
+        if self.game_duration_minutes:
+            return self.game_duration_minutes
+        if is_no_time_limit:
+            return self.DEFAULT_NO_LIMIT_GAME_DURATION
+        return self.DEFAULT_GAME_DURATION
+
+    def get_practice_duration(self):
+        """Get practice duration in minutes for this league.
+
+        Returns:
+            int: Duration in minutes
+        """
+        if self.practice_duration_minutes:
+            return self.practice_duration_minutes
+        return self.DEFAULT_PRACTICE_DURATION
+
+    @property
+    def duration_display(self):
+        """Human-readable duration settings"""
+        game = self.game_duration_minutes or self.DEFAULT_GAME_DURATION
+        practice = self.practice_duration_minutes or self.DEFAULT_PRACTICE_DURATION
+        if game == self.DEFAULT_GAME_DURATION and practice == self.DEFAULT_PRACTICE_DURATION:
+            return "Standard (2hr games, 90min practices)"
+        return f"{game} min games, {practice} min practices"

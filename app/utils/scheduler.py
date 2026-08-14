@@ -1,23 +1,24 @@
 """Schedule generator and validator for SDLL games, practices, and scrimmages.
 
-Time-based scheduling:
-- Regular games: 2 hours (120 minutes)
+Time-based scheduling (defaults, can be overridden per league):
+- Regular games: 2 hours (120 minutes) - Tee Ball: 75 minutes
 - No-time-limit games: 3 hours (180 minutes)
-- Practices: 90 minutes
+- Practices: 90 minutes - Tee Ball: 75 minutes
 
 A field slot's capacity is determined by both:
 1. The slot duration (end_time - start_time)
 2. The field's practice_capacity setting (for shared practices)
+3. The league's game/practice duration settings
 """
 
 from datetime import date, datetime, timedelta
 from collections import defaultdict
 import random
 
-# Activity durations in minutes
-GAME_DURATION_MINUTES = 120  # 2 hours for regular games
+# Default activity durations in minutes (leagues can override via game_duration_minutes/practice_duration_minutes)
+GAME_DURATION_MINUTES = 120  # 2 hours for regular games (default)
 GAME_NO_LIMIT_DURATION_MINUTES = 180  # 3 hours for no-time-limit games
-PRACTICE_DURATION_MINUTES = 90  # 90 minutes for practices
+PRACTICE_DURATION_MINUTES = 90  # 90 minutes for practices (default)
 from app.models.game import Game
 from app.models.team import TeamSeason
 from app.models.field import Field
@@ -1473,13 +1474,14 @@ class ScheduleGenerator:
             # Find a slot with capacity that isn't already used globally
             assigned_slot = None
             time_offset = 0
+            game_duration = league.get_game_duration() if league else GAME_DURATION_MINUTES
             for slot in available_slots:
-                capacity = self._get_time_based_game_capacity(slot)
+                capacity = self._get_time_based_game_capacity(slot, league)
                 field_id = slot.field.ID if slot and slot.field else None
 
                 # Try each time offset in this slot
                 for time_slot_idx in range(slot_usage[slot.slot_ID], capacity):
-                    test_offset = time_slot_idx * GAME_DURATION_MINUTES
+                    test_offset = time_slot_idx * game_duration
                     test_datetime = self._slot_to_datetime(slot, scrimmage_date)
                     if test_datetime and test_offset > 0:
                         test_datetime = test_datetime + timedelta(minutes=test_offset)
@@ -1678,14 +1680,16 @@ class ScheduleGenerator:
         games_per_date = num_teams // 2  # All teams play = n/2 games
 
         # Build slot info grouped by date
+        # Get league-specific game duration
+        game_duration = league.get_game_duration() if league else GAME_DURATION_MINUTES
         slots_info_by_date = {}
         for game_date, slots in sorted(slots_by_date.items()):
             date_slots = []
             for slot in slots:
-                slot_capacity = self._get_time_based_game_capacity(slot)
+                slot_capacity = self._get_time_based_game_capacity(slot, league)
                 field_id = slot.field.ID if slot and slot.field else None
                 for time_slot_idx in range(slot_capacity):
-                    time_offset_minutes = time_slot_idx * GAME_DURATION_MINUTES
+                    time_offset_minutes = time_slot_idx * game_duration
                     game_datetime = self._slot_to_datetime(slot, game_date)
                     if game_datetime and time_offset_minutes > 0:
                         game_datetime = game_datetime + timedelta(minutes=time_offset_minutes)
@@ -2127,32 +2131,50 @@ class ScheduleGenerator:
 
         return end_minutes - start_minutes
 
-    def _get_time_based_game_capacity(self, slot):
+    def _get_time_based_game_capacity(self, slot, league=None):
         """Calculate how many games can fit in a slot based on duration.
 
-        Each regular game requires 2 hours (120 minutes).
+        Uses league-specific game duration if set, otherwise defaults to 120 minutes.
+
+        Args:
+            slot: FieldSlot object
+            league: Optional League object for league-specific duration
         """
         duration = self._get_slot_duration_minutes(slot)
         if duration <= 0:
             return 1  # Default to 1 if we can't calculate
 
-        return duration // GAME_DURATION_MINUTES
+        # Get league-specific duration or default
+        game_duration = GAME_DURATION_MINUTES
+        if league:
+            game_duration = league.get_game_duration(is_no_time_limit=False)
 
-    def _get_time_based_practice_capacity(self, slot):
+        return duration // game_duration
+
+    def _get_time_based_practice_capacity(self, slot, league=None):
         """Calculate how many sequential practices can fit in a slot based on duration.
 
-        Each practice requires 90 minutes.
+        Uses league-specific practice duration if set, otherwise defaults to 90 minutes.
+
+        Args:
+            slot: FieldSlot object
+            league: Optional League object for league-specific duration
         """
         duration = self._get_slot_duration_minutes(slot)
         if duration <= 0:
             return 1  # Default to 1 if we can't calculate
 
-        return duration // PRACTICE_DURATION_MINUTES
+        # Get league-specific duration or default
+        practice_duration = PRACTICE_DURATION_MINUTES
+        if league:
+            practice_duration = league.get_practice_duration()
 
-    def _get_slot_capacity(self, slot, game_date, usage_type='practice'):
+        return duration // practice_duration
+
+    def _get_slot_capacity(self, slot, game_date, usage_type='practice', league=None):
         """Get capacity for a slot based on time and field settings.
 
-        For games: Returns how many games can fit (based on 2-hour duration)
+        For games: Returns how many games can fit (based on league's game duration)
         For practices: Returns how many teams can practice simultaneously,
                        limited by both time and field's practice_capacity setting
 
@@ -2160,17 +2182,18 @@ class ScheduleGenerator:
             slot: FieldSlot object
             game_date: The date for the activity
             usage_type: 'game' or 'practice'
+            league: Optional League object for league-specific durations
         """
         if not slot or not slot.field:
             return 1
 
         if usage_type == 'game':
             # Games run sequentially - capacity based on time only
-            return self._get_time_based_game_capacity(slot)
+            return self._get_time_based_game_capacity(slot, league)
 
         # For practices, consider both time-based capacity and field sharing capacity
         # Time-based: how many sequential time slots fit
-        time_capacity = self._get_time_based_practice_capacity(slot)
+        time_capacity = self._get_time_based_practice_capacity(slot, league)
 
         # Field sharing: how many teams can practice at the same time
         is_late = slot.start_time and slot.start_time.hour >= 19

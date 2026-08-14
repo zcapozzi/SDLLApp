@@ -332,6 +332,25 @@ First Practice Date < Opening Day Date < Regular Season End Date < Season End Da
 - Practices scheduled on practice days only
 - Scrimmages can be scheduled as needed
 
+### Game & Practice Durations
+
+Each league can have custom game and practice durations stored in `sdll_leagues`:
+
+| Setting | Column | Default | Description |
+|---------|--------|---------|-------------|
+| Game Duration | `game_duration_minutes` | 120 (2 hrs) | Time allocated per game |
+| Practice Duration | `practice_duration_minutes` | 90 | Time allocated per practice |
+
+**Special Cases:**
+- **No-time-limit games** (playoffs): 180 minutes (3 hours) - not configurable per league
+- **Tee Ball leagues**: 75 minutes for both games and practices
+
+**How it affects scheduling:**
+- Field slot capacity is calculated using the league's duration
+- Example: A 7-hour Saturday slot (420 min) at Pearsontown
+  - Standard league (120 min games): 3 games capacity
+  - Tee Ball (75 min games): 5 games capacity
+
 ---
 
 ## Rule Codes Reference

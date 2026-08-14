@@ -774,6 +774,24 @@ Fixed BB A scheduling to guarantee all teams get their required games:
 
 **Testing**: Ran 20 random seeds - all pass with 0 BB A e1 violations.
 
+### League-Specific Game/Practice Durations
+
+Added support for league-specific game and practice durations:
+
+**Database Changes:**
+- Added `game_duration_minutes` column to `sdll_leagues` (NULL = 120 default, 180 for no-time-limit)
+- Added `practice_duration_minutes` column to `sdll_leagues` (NULL = 90 default)
+- Set BB Tee Ball and SB Tee Ball to 75 minutes for both games and practices
+
+**Code Changes:**
+- `League.get_game_duration(is_no_time_limit=False)` - returns league-specific or default duration
+- `League.get_practice_duration()` - returns league-specific or default duration
+- Updated `ScheduleGenerator` to use league-specific durations when calculating slot capacity
+
+**Impact:**
+- Pearsontown Saturday capacity for Tee Ball: 3 games → 5 games (420 min / 75 min)
+- BB Tee Ball games scheduled: 18 → 22 (4 teams now at 6 games target)
+
 ### e1 Violations Analysis - Configuration Issues Identified
 
 **Investigation of 10 teams below minimum games in DB proposal:**
