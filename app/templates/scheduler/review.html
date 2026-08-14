@@ -458,8 +458,30 @@
         text-align: center;
     }
     .field-league-matrix th {
-        background: #f8f8f8;
+        background: #e8e8e8;
         font-weight: 600;
+        color: #333;
+    }
+    .matrix-filter {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+    }
+    .matrix-filter-btn {
+        padding: 6px 12px;
+        border: 1px solid #ddd;
+        background: white;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+    }
+    .matrix-filter-btn.active {
+        background: rgb(34, 139, 34);
+        color: white;
+        border-color: rgb(34, 139, 34);
+    }
+    .matrix-filter-btn:hover:not(.active) {
+        background: #f0f0f0;
     }
     .field-league-matrix th.field-name {
         text-align: left;
@@ -582,14 +604,26 @@
 <!-- Field x League Matrix -->
 <div class="card">
     <h3 style="margin-top: 0;">Field Usage by League</h3>
+
+    <!-- Matrix Type Filter -->
+    <div class="matrix-filter">
+        <button class="matrix-filter-btn active" onclick="filterMatrix('all')" data-matrix-filter="all">All Activities</button>
+        <button class="matrix-filter-btn" onclick="filterMatrix('games')" data-matrix-filter="games">Games Only</button>
+        <button class="matrix-filter-btn" onclick="filterMatrix('practices')" data-matrix-filter="practices">Practices Only</button>
+    </div>
+
     {% set field_league_counts = {} %}
     {% set all_fields = [] %}
     {% set all_leagues_list = [] %}
     {% set field_totals = {} %}
     {% set league_totals = {} %}
 
-    {# Build the counts matrix - respects current type filter #}
-    {% for game in games %}
+    {# Also build separate counts for games vs practices #}
+    {% set game_counts = {} %}
+    {% set practice_counts = {} %}
+
+    {# Build the counts matrix from ALL proposal games (not filtered) #}
+    {% for game in proposal.games %}
         {% set field = game.field_name or game.location or 'Unassigned' %}
         {% set league = game.league or 'Unknown' %}
 
@@ -617,6 +651,20 @@
         {% set _ = field_league_counts[field].update({league: field_league_counts[field][league] + 1}) %}
         {% set _ = field_totals.update({field: field_totals[field] + 1}) %}
         {% set _ = league_totals.update({league: league_totals[league] + 1}) %}
+
+        {# Track games vs practices separately #}
+        {% set key = field + '|' + league %}
+        {% if game.game_type == 'practice' %}
+            {% if key not in practice_counts %}
+                {% set _ = practice_counts.update({key: 0}) %}
+            {% endif %}
+            {% set _ = practice_counts.update({key: practice_counts[key] + 1}) %}
+        {% else %}
+            {% if key not in game_counts %}
+                {% set _ = game_counts.update({key: 0}) %}
+            {% endif %}
+            {% set _ = game_counts.update({key: game_counts[key] + 1}) %}
+        {% endif %}
     {% endfor %}
 
     {% if all_fields %}
@@ -636,8 +684,14 @@
                 <tr>
                     <td class="field-name">{{ field }}</td>
                     {% for league in all_leagues_list | sort %}
-                        {% set count = field_league_counts[field].get(league, 0) %}
-                        <td class="count {{ 'has-games' if count > 0 else 'zero' }}">{{ count if count > 0 else '-' }}</td>
+                        {% set key = field + '|' + league %}
+                        {% set total_count = field_league_counts[field].get(league, 0) %}
+                        {% set g_count = game_counts.get(key, 0) %}
+                        {% set p_count = practice_counts.get(key, 0) %}
+                        <td class="count {{ 'has-games' if total_count > 0 else 'zero' }}"
+                            data-all="{{ total_count }}"
+                            data-games="{{ g_count }}"
+                            data-practices="{{ p_count }}">{{ total_count if total_count > 0 else '-' }}</td>
                     {% endfor %}
                     <td class="count has-games">{{ field_totals[field] }}</td>
                 </tr>
@@ -691,8 +745,13 @@
         <button class="btn btn-outline btn-sm" onclick="filterViolations('all')">Show All</button>
     </div>
 
+    <!-- Instructions when no filter selected -->
+    <div id="violations-instructions" style="padding: 20px; text-align: center; color: #666; background: #f8f8f8; border-radius: 4px;">
+        <p style="margin: 0;">Click a violation type above to see details.</p>
+    </div>
+
     <!-- Violation Cards - Grouped by rule type with limit -->
-    <div id="violations-list">
+    <div id="violations-list" style="display: none;">
         {% set violations_by_rule = {} %}
         {% for v in violations %}
             {% if v.rule_code not in violations_by_rule %}
@@ -702,7 +761,7 @@
         {% endfor %}
 
         {% for rule_code, rule_violations in violations_by_rule.items() | sort %}
-        <div class="violation-group" data-rule="{{ rule_code }}">
+        <div class="violation-group" data-rule="{{ rule_code }}" style="display: none;">
             {% for v in rule_violations %}
             <div class="violation-card {{ 'soft' if v.severity == 'soft' else '' }} {{ 'hidden' if loop.index > 10 else '' }}"
                  data-rule="{{ v.rule_code }}" data-index="{{ loop.index }}">
@@ -807,7 +866,7 @@
             <span class="game-type-badge {{ game.game_type }}">{{ game.game_type }}</span>
             <span class="game-time">
                 {% if game.game_date %}
-                {{ game.game_date[11:16] }}
+                {{ game.game_date | format_time }}
                 {% endif %}
             </span>
             <span class="game-teams">
@@ -851,7 +910,7 @@
                 data-league="{{ game.league }}"
                 data-type="{{ game.game_type }}">
                 <td>{{ game.game_date | format_date_with_day if game.game_date else 'TBD' }}</td>
-                <td>{{ game.game_date[11:16] if game.game_date else '' }}</td>
+                <td>{{ game.game_date | format_time if game.game_date else '' }}</td>
                 <td><span class="game-type-badge {{ game.game_type }}">{{ game.game_type }}</span></td>
                 <td>{{ game.league }}</td>
                 <td>{{ game.home_team_name or 'TBD' }}</td>
@@ -995,6 +1054,8 @@ function filterViolations(ruleCode) {
     var filterInfo = document.getElementById('violation-filter-info');
     var filterRuleName = document.getElementById('filter-rule-name');
     var filterCount = document.getElementById('filter-count');
+    var violationsList = document.getElementById('violations-list');
+    var instructions = document.getElementById('violations-instructions');
     var visibleCount = 0;
 
     // Update nav card active state
@@ -1006,13 +1067,26 @@ function filterViolations(ruleCode) {
         }
     });
 
+    // Show/hide violations list vs instructions
+    if (ruleCode === 'all') {
+        // Hide detail list, show instructions
+        violationsList.style.display = 'none';
+        instructions.style.display = 'block';
+        filterInfo.classList.add('hidden');
+        return;
+    } else {
+        // Show detail list, hide instructions
+        violationsList.style.display = 'block';
+        instructions.style.display = 'none';
+    }
+
     // Filter violation groups and count visible cards
     groups.forEach(function(group) {
         var groupRule = group.dataset.rule;
         var cards = group.querySelectorAll('.violation-card');
         var seeMore = group.querySelector('.see-more-link');
 
-        if (ruleCode === 'all' || groupRule === ruleCode) {
+        if (groupRule === ruleCode) {
             group.style.display = 'block';
             // Apply expand/collapse state
             var isExpanded = expandedGroups[groupRule];
@@ -1033,15 +1107,81 @@ function filterViolations(ruleCode) {
     });
 
     // Update filter info bar
-    if (ruleCode === 'all') {
-        filterInfo.classList.add('hidden');
-    } else {
-        filterInfo.classList.remove('hidden');
-        var activeNav = document.querySelector('.violation-nav-card[data-filter="' + ruleCode + '"]');
-        var ruleName = activeNav ? activeNav.querySelector('.name').textContent : ruleCode;
-        var totalForRule = activeNav ? activeNav.querySelector('.count').textContent : visibleCount;
-        filterRuleName.textContent = ruleCode.toUpperCase() + ' - ' + ruleName;
-        filterCount.textContent = totalForRule;
+    filterInfo.classList.remove('hidden');
+    var activeNav = document.querySelector('.violation-nav-card[data-filter="' + ruleCode + '"]');
+    var ruleName = activeNav ? activeNav.querySelector('.name').textContent : ruleCode;
+    var totalForRule = activeNav ? activeNav.querySelector('.count').textContent : visibleCount;
+    filterRuleName.textContent = ruleCode.toUpperCase() + ' - ' + ruleName;
+    filterCount.textContent = totalForRule;
+}
+
+// Matrix filter functionality
+function filterMatrix(filterType) {
+    // Update button states
+    document.querySelectorAll('.matrix-filter-btn').forEach(function(btn) {
+        if (btn.dataset.matrixFilter === filterType) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // Update cell values based on filter
+    var cells = document.querySelectorAll('.field-league-matrix td.count:not(.field-name)');
+    cells.forEach(function(cell) {
+        var value = parseInt(cell.dataset[filterType] || cell.dataset.all || 0);
+        cell.textContent = value > 0 ? value : '-';
+        if (value > 0) {
+            cell.classList.add('has-games');
+            cell.classList.remove('zero');
+        } else {
+            cell.classList.remove('has-games');
+            cell.classList.add('zero');
+        }
+    });
+
+    // Recalculate row totals
+    var rows = document.querySelectorAll('.field-league-matrix tbody tr:not(.total-row)');
+    rows.forEach(function(row) {
+        var rowTotal = 0;
+        var dataCells = row.querySelectorAll('td.count:not(:last-child)');
+        dataCells.forEach(function(cell) {
+            var val = parseInt(cell.dataset[filterType] || cell.dataset.all || 0);
+            rowTotal += val;
+        });
+        var totalCell = row.querySelector('td.count:last-child');
+        if (totalCell) {
+            totalCell.textContent = rowTotal;
+        }
+    });
+
+    // Recalculate column totals
+    var totalRow = document.querySelector('.field-league-matrix .total-row');
+    if (totalRow) {
+        var headerCells = document.querySelectorAll('.field-league-matrix thead th');
+        var colCount = headerCells.length - 2; // Exclude Field and Total columns
+        var grandTotal = 0;
+
+        for (var i = 0; i < colCount; i++) {
+            var colTotal = 0;
+            rows.forEach(function(row) {
+                var cells = row.querySelectorAll('td.count:not(:last-child)');
+                if (cells[i]) {
+                    colTotal += parseInt(cells[i].dataset[filterType] || cells[i].dataset.all || 0);
+                }
+            });
+            var totalCells = totalRow.querySelectorAll('td.count');
+            if (totalCells[i]) {
+                totalCells[i].textContent = colTotal;
+            }
+            grandTotal += colTotal;
+        }
+
+        // Update grand total
+        var lastTotalCell = totalRow.querySelector('td.count:last-child');
+        if (lastTotalCell) {
+            lastTotalCell.textContent = grandTotal;
+        }
     }
 }
 

@@ -127,6 +127,36 @@ def create_app(config_name=None):
         except (ValueError, TypeError):
             return dt_str
 
+    @app.template_filter('format_time')
+    def format_time(dt_str):
+        """Format a datetime string to 12-hour time only.
+
+        Examples:
+            '2026-04-15T17:30:00' -> '5:30 PM'
+            '2026-04-15T09:00:00' -> '9:00 AM'
+        """
+        from datetime import datetime
+        if not dt_str:
+            return ''
+        try:
+            dt_obj = datetime.fromisoformat(dt_str)
+            return dt_obj.strftime('%I:%M %p').lstrip('0')
+        except (ValueError, TypeError):
+            # Try parsing just time portion
+            try:
+                if 'T' in dt_str and len(dt_str) >= 16:
+                    time_part = dt_str[11:16]  # HH:MM
+                    hour, minute = int(time_part[:2]), int(time_part[3:5])
+                    period = 'AM' if hour < 12 else 'PM'
+                    if hour == 0:
+                        hour = 12
+                    elif hour > 12:
+                        hour -= 12
+                    return f'{hour}:{minute:02d} {period}'
+            except:
+                pass
+            return dt_str
+
     # Global error handler - logs full traceback to stdout for Railway
     @app.errorhandler(Exception)
     def handle_exception(e):
