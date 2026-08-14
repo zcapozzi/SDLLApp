@@ -1040,12 +1040,26 @@ class ScheduleGenerator:
         game_dates = self._get_dates_for_days(
             config.opening_day_date,
             game_days,
-            len(matchups),  # Estimate needed dates
+            len(matchups) * 2,  # Get more dates than needed to ensure coverage
             end_date=config.regular_season_end_date  # Don't schedule past this date
         )
 
         # Get available slots for each date
         slots_by_date = self._group_slots_by_date(all_slots, game_dates, league, 'game')
+
+        # Debug: Report date coverage
+        if game_dates:
+            dates_with_slots = [d for d in game_dates if d in slots_by_date]
+            last_date_with_slots = max(dates_with_slots) if dates_with_slots else None
+            if config.regular_season_end_date and last_date_with_slots:
+                days_unused = (config.regular_season_end_date - last_date_with_slots).days
+                if days_unused > 7:
+                    self.warnings.append({
+                        'type': 'date_coverage',
+                        'message': f'{config.league}: Last available slot date is {last_date_with_slots.strftime("%b %d")}, '
+                                   f'but season ends {config.regular_season_end_date.strftime("%b %d")} '
+                                   f'({days_unused} days unused). Check field allocations for {", ".join(["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][d] for d in game_days)}.'
+                    })
 
         # Assign games to slots, using existing game records if available
         self._assign_games_to_slots(config, matchups, slots_by_date, league, existing_slots, start_fresh)
@@ -1631,9 +1645,25 @@ class ScheduleGenerator:
                 teams_below_min.append(f'{team_name} ({count}/{games_per_team})')
 
         if teams_below_min:
+            # Find the last date that was actually used for this league
+            scheduled_dates = set()
+            for g in self.proposed_games:
+                if g.league == config.league and g.game_type == 'regular' and g.game_date:
+                    scheduled_dates.add(g.game_date.date() if hasattr(g.game_date, 'date') else g.game_date)
+
+            last_scheduled = max(scheduled_dates) if scheduled_dates else None
+            last_available = max(slots_info_by_date.keys()) if slots_info_by_date else None
+
+            detail = f'{config.league}: Teams below minimum games: {", ".join(teams_below_min)}.'
+            if last_scheduled and last_available and last_scheduled < last_available:
+                detail += f' Last game scheduled: {last_scheduled.strftime("%b %d")}. Slots available through: {last_available.strftime("%b %d")}.'
+                detail += f' Check if field slots have correct league assignments.'
+            else:
+                detail += ' Need more field slots or fewer constraints.'
+
             self.warnings.append({
                 'type': 'insufficient_games',
-                'message': f'{config.league}: Teams below minimum games: {", ".join(teams_below_min)}. Need more field slots or fewer constraints.'
+                'message': detail
             })
 
         # Warn about unscheduled matchups
