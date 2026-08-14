@@ -830,6 +830,11 @@ class ScheduleGenerator:
         # Get league configurations
         league_configs = LeagueSeason.get_by_season(self.year, self.is_spring)
 
+        # Sort leagues to prioritize those with FEWER game day options
+        # This ensures Saturday-only leagues (like Tee Ball) get first dibs on Saturday slots
+        # before leagues with multiple game days take them
+        league_configs = sorted(league_configs, key=lambda c: (len(c.game_days), c.league))
+
         # Check for locked schedules
         locked_leagues = [c.league for c in league_configs if c.schedule_locked]
         if locked_leagues:

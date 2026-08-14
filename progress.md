@@ -774,10 +774,28 @@ Fixed BB A scheduling to guarantee all teams get their required games:
 
 **Testing**: Ran 20 random seeds - all pass with 0 BB A e1 violations.
 
-**Remaining e1 Violations (Configuration Issues, Not Code Bugs):**
-- BB Rookie/Tee Ball, SB Tee Ball: Only play on Saturday, but ~6 Saturdays not enough for 8-10 games
-- BB AA: Needs more Tue/Sat field slots
-- Some leagues: "Slots available but check league assignments" - field slot league restrictions need adjustment
+### e1 Violations Analysis - Configuration Issues Identified
+
+**Investigation of 10 teams below minimum games in DB proposal:**
+
+1. **BB AA (2 teams at 7/8 games):**
+   - Fresh schedule generation now produces 8 games for all 8 teams
+   - Issue in DB was from older code
+   - **Status: RESOLVED** - regenerating schedule fixes this
+
+2. **BB Tee Ball (8 teams at 4-5/6 games):**
+   - **ROOT CAUSE: Configuration Issue**
+   - League's `allowed_game_fields = 29` (Pearsontown only)
+   - Pearsontown Saturday capacity: 3 games (7 hours / 2 hours per game)
+   - Available: 6 Saturdays × 3 games = 18 games max
+   - Required: 8 teams × 6 games / 2 = 24 games
+   - **Shortfall: 6 games - mathematically impossible with current config**
+   - **FIX OPTIONS:**
+     1. Expand `allowed_game_fields` to include more Saturday fields (e.g., SB Tee Ball has 10+ fields)
+     2. Reduce `regular_season_games` from 6 to 4
+   - **Status: Configuration change needed by admin**
+
+**Conclusion:** The scheduler code is working correctly. BB AA will resolve on regeneration. BB Tee Ball requires a configuration change to the league's allowed game fields.
 
 ---
 
