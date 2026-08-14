@@ -1236,36 +1236,121 @@ class ScheduleGenerator:
             current_date += timedelta(days=1)
 
     def _generate_round_robin(self, teams, games_per_team):
-        """Generate round-robin matchups ensuring balance.
+        """Generate round-robin matchups ensuring BALANCED team appearances.
+
+        Each team should have exactly games_per_team appearances in the matchups.
 
         Returns list of (home_team, away_team) tuples.
         """
         n = len(teams)
-        matchups = []
-
-        # Calculate how many times each pair should play
-        # For games_per_team games, we need games_per_team / (n-1) matchups per pair
-        # Use ceiling division to ensure we generate ENOUGH matchups
         total_games_needed = (games_per_team * n) // 2
+
+        # Calculate how many times each pair should play (use ceiling to generate enough)
         games_per_pair = max(1, -(-games_per_team // (n - 1)))  # Ceiling division
 
-        # Generate base round-robin
+        # Generate base round-robin matchups
+        all_matchups = []
         for round_num in range(games_per_pair):
             for i in range(n):
                 for j in range(i + 1, n):
                     # Alternate home/away each round
                     if (round_num + i + j) % 2 == 0:
-                        matchups.append((teams[i], teams[j]))
+                        all_matchups.append((teams[i], teams[j]))
                     else:
-                        matchups.append((teams[j], teams[i]))
+                        all_matchups.append((teams[j], teams[i]))
 
         # Shuffle to avoid predictable patterns
-        random.shuffle(matchups)
+        random.shuffle(all_matchups)
 
-        # Trim to exact number needed
-        matchups = matchups[:total_games_needed]
+        # Select matchups while maintaining balance
+        # Use priority-based selection: prioritize matchups involving teams that need more games
+        team_counts = {t.team_ID: 0 for t in teams}
+        selected = []
+        available = list(all_matchups)  # Copy so we can remove as we select
 
-        return matchups
+        while len(selected) < total_games_needed and available:
+            # Find the matchup that most helps teams below their target
+            best_matchup = None
+            best_priority = -1
+            best_idx = -1
+
+            for idx, (home, away) in enumerate(available):
+                # Skip if either team already has enough games
+                if team_counts[home.team_ID] >= games_per_team or team_counts[away.team_ID] >= games_per_team:
+                    continue
+
+                # Priority = how many games both teams still need (higher = more needed)
+                home_needs = games_per_team - team_counts[home.team_ID]
+                away_needs = games_per_team - team_counts[away.team_ID]
+                priority = home_needs + away_needs
+
+                if priority > best_priority:
+                    best_priority = priority
+                    best_matchup = (home, away)
+                    best_idx = idx
+
+            if best_matchup is None:
+                # No valid matchups left (all remaining matchups have at least one team with enough games)
+                break
+
+            # Select this matchup
+            home, away = best_matchup
+            selected.append(best_matchup)
+            team_counts[home.team_ID] += 1
+            team_counts[away.team_ID] += 1
+            available.pop(best_idx)
+
+        return selected
+
+    def _find_complete_round(self, eligible_matchups, available_slots, games_needed, all_team_ids):
+        """Find a combination of matchups that covers all teams.
+
+        Uses backtracking to find games_needed matchups where all teams play exactly once.
+
+        Args:
+            eligible_matchups: List of (idx, priority, home, away) tuples
+            available_slots: List of slot_info dicts
+            games_needed: Number of games to schedule (n_teams / 2)
+            all_team_ids: Set of all team IDs that must be covered
+
+        Returns:
+            List of (idx, home, away, slot_info) tuples, or None if no valid combination
+        """
+        if len(available_slots) < games_needed:
+            return None
+
+        # Try to find a combination using backtracking
+        def backtrack(selected, teams_used, slot_idx):
+            if len(selected) == games_needed:
+                # Found a valid combination
+                return selected.copy()
+
+            for idx, priority, home, away in eligible_matchups:
+                # Skip if either team already used
+                if home.team_ID in teams_used or away.team_ID in teams_used:
+                    continue
+
+                # Skip if this matchup was already selected
+                if any(s[0] == idx for s in selected):
+                    continue
+
+                # Try adding this matchup
+                selected.append((idx, home, away, available_slots[slot_idx]))
+                teams_used.add(home.team_ID)
+                teams_used.add(away.team_ID)
+
+                result = backtrack(selected, teams_used, slot_idx + 1)
+                if result is not None:
+                    return result
+
+                # Backtrack
+                selected.pop()
+                teams_used.remove(home.team_ID)
+                teams_used.remove(away.team_ID)
+
+            return None
+
+        return backtrack([], set(), 0)
 
     def _generate_scrimmages(self, config, teams, league, all_slots, scrimmage_date):
         """Generate scrimmages - one per team, random pairing.
@@ -1601,37 +1686,32 @@ class ScheduleGenerator:
                     # Prioritize by how many games teams still need
                     home_needs = games_per_team - team_game_counts[home.team_ID]
                     away_needs = games_per_team - team_game_counts[away.team_ID]
-                    eligible_matchups.append((idx, home_needs + away_needs))
+                    eligible_matchups.append((idx, home_needs + away_needs, home, away))
 
             # Sort by priority (most needed first)
             eligible_matchups.sort(key=lambda x: -x[1])
 
-            # Try to schedule a full round - select matchups that cover all teams
+            # Try to find a COMPLETE round (all teams play)
+            # Use backtracking to find a valid combination of matchups
+            matchups_for_today = self._find_complete_round(
+                eligible_matchups, available_date_slots, games_per_date, all_team_ids
+            )
+
+            # Only proceed if we found a complete round
+            if matchups_for_today is None:
+                # Can't schedule a complete round - skip this date
+                for slot_info in available_date_slots[:games_per_date]:
+                    self._record_decision(
+                        date_str, config.league, slot_info['slot'],
+                        'skipped', f'Could not form complete round (need {games_per_date} non-overlapping matchups)',
+                        game_info=None
+                    )
+                continue
+
             teams_scheduled_today = set()
-            matchups_for_today = []
-            slot_idx = 0
-
-            for idx, _ in eligible_matchups:
-                if len(matchups_for_today) >= games_per_date:
-                    break
-                if slot_idx >= len(available_date_slots):
-                    break
-
-                home, away = matchups[idx]
-
-                # Skip if either team already scheduled today
-                if home.team_ID in teams_scheduled_today or away.team_ID in teams_scheduled_today:
-                    continue
-
-                matchups_for_today.append((idx, home, away, available_date_slots[slot_idx]))
+            for _, home, away, _ in matchups_for_today:
                 teams_scheduled_today.add(home.team_ID)
                 teams_scheduled_today.add(away.team_ID)
-                slot_idx += 1
-
-            # Only proceed if we scheduled games for all teams
-            if len(teams_scheduled_today) < num_teams:
-                # Can't schedule a complete round - skip this date
-                continue
 
             # Commit the games for this date
             for idx, home, away, slot_info in matchups_for_today:
