@@ -663,40 +663,44 @@ This section captures key design decisions made during development.
 
 ## Session Log (August 14, 2026)
 
-### New Rule f1: Practice Field Capacity (max 2 teams)
+### New Rule f1: Practice Field Capacity
 
-Added new HARD rule to enforce practice field capacity limit:
+Added new HARD rule to enforce practice field capacity from database:
 
 **Problem**: The previous schedule proposal had up to 14 teams sharing a single practice field at the same time (e.g., Cresset Christian Academy at 5:30 PM). The scheduler didn't track practice slots globally across leagues, allowing unlimited stacking.
 
 **Solution**:
-1. Added constant `MAX_TEAMS_PER_PRACTICE_SLOT = 2` in `app/utils/scheduler.py`
-2. Added `_practice_slot_counts` tracker in `ScheduleGenerator.__init__()` to track practice count per (field_id, datetime) globally across all leagues
-3. Rewrote `_assign_practices_for_date()` to:
-   - Build all possible practice time slots first
+1. Added `_practice_slot_counts` tracker in `ScheduleGenerator.__init__()` to track practice count per (field_id, datetime) globally across all leagues
+2. Rewrote `_assign_practices_for_date()` to:
+   - Build all possible practice time slots with field capacity info
    - Check global `_practice_slot_counts` before assigning
-   - Enforce max 2 teams per field/time slot
+   - Enforce field's `practice_capacity` from DB (default: 1)
    - Issue warnings when teams can't be assigned due to capacity
-4. Added validation rule `_check_practice_field_capacity()` to detect violations
-5. Updated documentation in `howToSchedule.md` and `architecture.md`
+3. Added validation rule `_check_practice_field_capacity()` to detect violations
+4. Updated documentation in `howToSchedule.md` and `architecture.md`
+
+**Field capacities from DB**:
+- Most fields: `practice_capacity=1`
+- Cresset, Githens SB, Parkwood: `practice_capacity=2`
+- Pearsontown: `practice_capacity=3`
 
 **Results after fix**:
 - f1 violations: 132 → 0
-- Total practices reduced from 722 to 680 (teams that couldn't be assigned get warnings)
-- 197 `practice_capacity` warnings for teams that couldn't get practice slots due to f1 limit
+- Total practices reduced (teams that couldn't be assigned get warnings)
+- Respects each field's actual capacity setting
 
 **Violation Summary (after fix)**:
 | Rule | Type | Count | Description |
 |------|------|-------|-------------|
-| a1 | HARD | 5 | Play everyone at least once |
-| b1 | HARD | 6 | Home/away balance |
+| a1 | HARD | 6 | Play everyone at least once |
+| b1 | HARD | 10 | Home/away balance |
 | e1 | HARD | 8 | Minimum games |
-| gap | HARD | 4 | Same team gap |
+| gap | HARD | 5 | Same team gap |
 | **f1** | **HARD** | **0** | **Practice field capacity (fixed!)** |
-| a2 | SOFT | 2 | Home/away vs opponent |
-| b2 | SOFT | 24 | Early/late time balance |
-| c2 | SOFT | 31 | Practice field balance |
-| c3 | SOFT | 5 | Solo practice balance |
+| a2 | SOFT | 8 | Home/away vs opponent |
+| b2 | SOFT | 20 | Early/late time balance |
+| c2 | SOFT | 32 | Practice field balance |
+| c3 | SOFT | 9 | Solo practice balance |
 | e2 | SOFT | 51 | Game day balance |
 
 ---
