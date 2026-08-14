@@ -14,6 +14,7 @@ from app.models.game import Game
 from app.models.league import League
 from app.models.league_season import LeagueSeason
 from app.models.field_slot import FieldSlot
+from app.models.schedule_proposal import ScheduleProposal
 from app.extensions import db
 from app.utils.scheduler import ScheduleGenerator, ScheduleValidator
 from app.utils.logging import SDLLLogger
@@ -116,9 +117,9 @@ def index(year, is_spring):
 
         prerequisites[config.league] = prereqs
 
-    # Check if there's already a proposed schedule in session
-    proposed_key = f'proposed_schedule_{year}_{is_spring}'
-    has_proposal = proposed_key in session
+    # Check if there's already a proposed schedule in database
+    proposal = ScheduleProposal.get_for_season(year, is_spring)
+    has_proposal = proposal is not None
 
     return render_template(
         'scheduler/index.html',
@@ -321,16 +322,9 @@ def generate(year, is_spring):
                 flash('No games, practices, or scrimmages were generated. Check prerequisites.', 'warning')
             return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
 
-        # Store in session for review
-        proposed_key = f'proposed_schedule_{year}_{is_spring}'
-        session[proposed_key] = result
-
-        # Verify session storage worked (Flask cookies have ~4KB limit)
-        session.modified = True
-        if proposed_key not in session or session.get(proposed_key) is None:
-            flash('Schedule generated but too large to store in session. Try generating fewer leagues at once.', 'error')
-            logger.info(f'Session storage failed for {season_name} - result too large')
-            return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+        # Store in database for persistence and sharing
+        user_id = current_user.ID if current_user.is_authenticated else None
+        ScheduleProposal.create_or_update(year, is_spring, result, user_id)
 
         logger.info(f'Generated schedule for {season_name}: {result["summary"]}')
 
@@ -365,20 +359,22 @@ def review(year, is_spring):
 
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
 
-    # Get proposed schedule from session
-    proposed_key = f'proposed_schedule_{year}_{is_spring}'
-    proposal = session.get(proposed_key)
+    # Get proposed schedule from database
+    proposal_record = ScheduleProposal.get_for_season(year, is_spring)
 
-    if not proposal:
+    if not proposal_record:
         flash('No proposed schedule found. Generate one first.', 'warning')
         return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+    # Extract data from proposal record
+    proposal = proposal_record.data
 
     # Get filter options
     view_mode = request.args.get('view', 'calendar')  # 'calendar' or 'list'
     filter_league = request.args.get('league', '')
     filter_type = request.args.get('type', '')  # 'games', 'practices', 'scrimmages', ''
 
-    games = proposal['games']
+    games = proposal.get('games', [])
 
     # Apply filters
     if filter_league:
@@ -431,16 +427,17 @@ def save(year, is_spring):
 
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
 
-    # Get proposed schedule from session
-    proposed_key = f'proposed_schedule_{year}_{is_spring}'
-    proposal = session.get(proposed_key)
+    # Get proposed schedule from database
+    proposal_record = ScheduleProposal.get_for_season(year, is_spring)
 
-    if not proposal:
+    if not proposal_record:
         flash('No proposed schedule found.', 'error')
         return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
 
+    proposal = proposal_record.data
+
     # Check for hard violations
-    hard_violations = [v for v in proposal['violations'] if v['severity'] == 'hard']
+    hard_violations = [v for v in proposal.get('violations', []) if v['severity'] == 'hard']
     if hard_violations and not request.form.get('force_save'):
         flash(f'Cannot save: {len(hard_violations)} hard rule violations. Fix them or check "Force save" to proceed.', 'error')
         return redirect(url_for('scheduler.review', year=year, is_spring=is_spring))
@@ -505,8 +502,9 @@ def save(year, is_spring):
             LeagueSeason.lock_all_for_season(year, is_spring, current_user.ID)
             logger.info(f'Locked schedule for {season_name}')
 
-        # Clear the proposal from session
-        del session[proposed_key]
+        # Mark proposal as accepted and clear it
+        ScheduleProposal.mark_accepted(year, is_spring)
+        ScheduleProposal.delete_for_season(year, is_spring)
 
         logger.info(f'Saved {saved_count} new games, updated {updated_count} existing games for {season_name}')
 
@@ -527,13 +525,13 @@ def save(year, is_spring):
 @scheduler_bp.route('/<int:year>/<int:is_spring>/clear', methods=['POST'])
 @login_required
 def clear(year, is_spring):
-    """Clear the proposed schedule from session."""
+    """Clear the proposed schedule from database."""
     if not current_user.can_edit_schedule():
         return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
 
-    proposed_key = f'proposed_schedule_{year}_{is_spring}'
-    if proposed_key in session:
-        del session[proposed_key]
+    proposal = ScheduleProposal.get_for_season(year, is_spring)
+    if proposal:
+        ScheduleProposal.delete_for_season(year, is_spring)
         flash('Proposed schedule cleared.', 'success')
 
     return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
@@ -599,13 +597,12 @@ def validation_results(year, is_spring):
 @login_required
 def api_proposal(year, is_spring):
     """API endpoint to get the current proposal."""
-    proposed_key = f'proposed_schedule_{year}_{is_spring}'
-    proposal = session.get(proposed_key)
+    proposal_record = ScheduleProposal.get_for_season(year, is_spring)
 
-    if not proposal:
+    if not proposal_record:
         return jsonify({'error': 'No proposal found'}), 404
 
-    return jsonify(proposal)
+    return jsonify(proposal_record.data)
 
 
 @scheduler_bp.route('/api/<int:year>/<int:is_spring>/team-schedule/<int:team_id>')
@@ -622,9 +619,9 @@ def api_team_schedule(year, is_spring, team_id):
     team = TeamSeason.query.filter_by(team_ID=team_id).first()
     team_name = team.computed_display_name if team else f'Team {team_id}'
 
-    # Check if there's a current proposal
-    proposed_key = f'proposed_schedule_{year}_{is_spring}'
-    proposal = session.get(proposed_key)
+    # Check if there's a current proposal in database
+    proposal_record = ScheduleProposal.get_for_season(year, is_spring)
+    proposal = proposal_record.data if proposal_record else None
 
     if proposal and 'games' in proposal:
         # Get games from proposal
@@ -736,9 +733,9 @@ def start_fresh(year, is_spring):
         generator = ScheduleGenerator(year, is_spring)
         result = generator.generate(start_fresh=True)
 
-        # Store in session for review
-        proposed_key = f'proposed_schedule_{year}_{is_spring}'
-        session[proposed_key] = result
+        # Store in database for persistence
+        user_id = current_user.ID if current_user.is_authenticated else None
+        ScheduleProposal.create_or_update(year, is_spring, result, user_id)
 
         summary = result['summary']
         flash(
