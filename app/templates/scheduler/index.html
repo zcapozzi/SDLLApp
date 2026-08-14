@@ -119,6 +119,52 @@
 </div>
 {% endif %}
 
+<!-- Generate Button (at top for quick access) -->
+{% set any_ready = prerequisites.values() | selectattr('ready') | list | length > 0 %}
+{% set any_has_slots = prerequisites.values() | selectattr('has_game_slots') | list | length > 0 %}
+<div class="card" style="background: #f8f9fa;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+        <div>
+            <h3 style="margin: 0 0 5px 0;">Generate Schedule</h3>
+            {% if has_proposal %}
+            <span style="color: rgb(255, 140, 0);">
+                You have an unsaved proposal. <a href="{{ url_for('scheduler.review', year=year, is_spring=is_spring) }}">Review it</a>
+            </span>
+            {% elif is_locked %}
+            <span class="text-muted">Schedule is locked.</span>
+            {% elif any_ready %}
+            <span class="text-muted">Ready to generate.</span>
+            {% else %}
+            <span class="text-muted">Complete prerequisites below first.</span>
+            {% endif %}
+        </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            {% if not is_locked and any_ready %}
+            <form method="POST" action="{{ url_for('scheduler.generate', year=year, is_spring=is_spring) }}" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary">Generate Schedule</button>
+            </form>
+            {% if any_has_slots %}
+            <form method="POST" action="{{ url_for('scheduler.start_fresh', year=year, is_spring=is_spring) }}" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-secondary"
+                        onclick="return confirm('Clear all assignments and regenerate?');">
+                    Start Fresh
+                </button>
+            </form>
+            {% endif %}
+            {% endif %}
+            {% if has_proposal %}
+            <a href="{{ url_for('scheduler.review', year=year, is_spring=is_spring) }}" class="btn btn-primary">Review Proposal</a>
+            <form method="POST" action="{{ url_for('scheduler.clear', year=year, is_spring=is_spring) }}" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline" onclick="return confirm('Clear proposal?');">Clear</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
 <!-- Prerequisites by League -->
 <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
@@ -233,62 +279,6 @@
     {% else %}
     <p class="text-muted">No leagues configured for this season.</p>
     {% endfor %}
-</div>
-
-<!-- Generate Button -->
-<div class="card">
-    <h3 style="margin-top: 0;">Generate Schedule</h3>
-
-    {% set any_ready = prerequisites.values() | selectattr('ready') | list | length > 0 %}
-    {% set any_has_slots = prerequisites.values() | selectattr('has_game_slots') | list | length > 0 %}
-
-    {% if has_proposal %}
-    <div style="background: rgba(255, 140, 0, 0.1); padding: 15px; border-radius: 4px; margin-bottom: 15px;">
-        <strong>You have an unsaved proposed schedule.</strong>
-        <a href="{{ url_for('scheduler.review', year=year, is_spring=is_spring) }}">Review it</a> or generate a new one.
-    </div>
-    {% endif %}
-
-    {% if is_locked %}
-    <p class="text-muted">
-        Schedule is locked. Unlock it to enable generation controls.
-    </p>
-    {% elif any_ready %}
-    <p class="text-muted text-small">
-        Click below to generate a proposed schedule. You'll be able to review and edit it before saving.
-    </p>
-
-    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-        <form method="POST" action="{{ url_for('scheduler.generate', year=year, is_spring=is_spring) }}" style="display: inline;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-primary">Generate Proposed Schedule</button>
-        </form>
-
-        {% if any_has_slots %}
-        <form method="POST" action="{{ url_for('scheduler.start_fresh', year=year, is_spring=is_spring) }}" style="display: inline;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-secondary"
-                    onclick="return confirm('This will clear all existing game assignments and regenerate from scratch. Continue?');">
-                Start Fresh
-            </button>
-        </form>
-        {% endif %}
-
-        {% if has_proposal %}
-        <form method="POST" action="{{ url_for('scheduler.clear', year=year, is_spring=is_spring) }}" style="display: inline;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-outline"
-                    onclick="return confirm('Clear the current proposal?');">
-                Clear Proposal
-            </button>
-        </form>
-        {% endif %}
-    </div>
-    {% else %}
-    <p class="text-muted">
-        No leagues are ready for schedule generation. Please complete the prerequisites above.
-    </p>
-    {% endif %}
 </div>
 
 <!-- Validate Existing Schedule -->
