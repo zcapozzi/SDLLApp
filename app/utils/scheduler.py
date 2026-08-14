@@ -1311,69 +1311,100 @@ class ScheduleGenerator:
             current_date += timedelta(days=1)
 
     def _generate_round_robin(self, teams, games_per_team):
-        """Generate round-robin matchups ensuring BALANCED team appearances.
+        """Generate round-robin matchups ensuring PAIR BALANCE (rule a1).
 
-        Each team should have exactly games_per_team appearances in the matchups.
+        Constraints:
+        - Each team plays exactly games_per_team games
+        - All pairs must play each other (no missing matchups)
+        - The gap between most-played and least-played pair is at most 1
 
         Returns list of (home_team, away_team) tuples.
         """
         n = len(teams)
+        if n < 2:
+            return []
+
         total_games_needed = (games_per_team * n) // 2
 
-        # Calculate how many times each pair should play (use ceiling to generate enough)
-        games_per_pair = max(1, -(-games_per_team // (n - 1)))  # Ceiling division
+        # Calculate pair frequency requirements
+        # With n teams, each team plays n-1 opponents over games_per_team games
+        # Average games per pair = games_per_team / (n-1)
+        min_games_per_pair = games_per_team // (n - 1)  # Floor - every pair plays at least this many
 
-        # Generate base round-robin matchups
-        all_matchups = []
-        for round_num in range(games_per_pair):
-            for i in range(n):
-                for j in range(i + 1, n):
-                    # Alternate home/away each round
-                    if (round_num + i + j) % 2 == 0:
-                        all_matchups.append((teams[i], teams[j]))
-                    else:
-                        all_matchups.append((teams[j], teams[i]))
+        # Number of pairs that need to play one extra game
+        num_pairs = n * (n - 1) // 2
+        base_total = num_pairs * min_games_per_pair
+        extra_games_needed = total_games_needed - base_total
 
-        # Shuffle to avoid predictable patterns
-        random.shuffle(all_matchups)
+        # Create all pairs with their target counts
+        all_pairs = []
+        pair_targets = {}
+        for i in range(n):
+            for j in range(i + 1, n):
+                pair_key = (teams[i].team_ID, teams[j].team_ID)
+                all_pairs.append((teams[i], teams[j]))
+                pair_targets[pair_key] = min_games_per_pair
 
-        # Select matchups while maintaining balance
-        # Use priority-based selection: prioritize matchups involving teams that need more games
+        # Distribute extra games across pairs
+        # Shuffle pairs to randomize which ones get extra games
+        shuffled_pairs = list(all_pairs)
+        random.shuffle(shuffled_pairs)
+        for i in range(min(extra_games_needed, len(shuffled_pairs))):
+            t1, t2 = shuffled_pairs[i]
+            pair_key = (t1.team_ID, t2.team_ID) if t1.team_ID < t2.team_ID else (t2.team_ID, t1.team_ID)
+            pair_targets[pair_key] += 1
+
+        # Now select matchups to meet pair targets while balancing team counts
+        pair_counts = defaultdict(int)
         team_counts = {t.team_ID: 0 for t in teams}
+        home_counts = {t.team_ID: 0 for t in teams}
         selected = []
-        available = list(all_matchups)  # Copy so we can remove as we select
 
-        while len(selected) < total_games_needed and available:
-            # Find the matchup that most helps teams below their target
-            best_matchup = None
-            best_priority = -1
-            best_idx = -1
+        # Process in rounds - each round tries to cover as many pairs as possible
+        while len(selected) < total_games_needed:
+            # Find pairs that still need games
+            pairs_needing_games = []
+            for t1, t2 in all_pairs:
+                pair_key = (t1.team_ID, t2.team_ID) if t1.team_ID < t2.team_ID else (t2.team_ID, t1.team_ID)
+                target = pair_targets[pair_key]
+                current = pair_counts[pair_key]
 
-            for idx, (home, away) in enumerate(available):
-                # Skip if either team already has enough games
-                if team_counts[home.team_ID] >= games_per_team or team_counts[away.team_ID] >= games_per_team:
-                    continue
+                if current < target:
+                    # Check if both teams can still play
+                    if team_counts[t1.team_ID] < games_per_team and team_counts[t2.team_ID] < games_per_team:
+                        # Priority: pairs with fewer games get higher priority
+                        # Secondary: teams that need more games
+                        team_need = (games_per_team - team_counts[t1.team_ID]) + (games_per_team - team_counts[t2.team_ID])
+                        # Use team IDs as tiebreaker to make sorting deterministic
+                        pairs_needing_games.append((current, -team_need, t1.team_ID, t2.team_ID, t1, t2))
 
-                # Priority = how many games both teams still need (higher = more needed)
-                home_needs = games_per_team - team_counts[home.team_ID]
-                away_needs = games_per_team - team_counts[away.team_ID]
-                priority = home_needs + away_needs
-
-                if priority > best_priority:
-                    best_priority = priority
-                    best_matchup = (home, away)
-                    best_idx = idx
-
-            if best_matchup is None:
-                # No valid matchups left (all remaining matchups have at least one team with enough games)
+            if not pairs_needing_games:
                 break
 
-            # Select this matchup
-            home, away = best_matchup
-            selected.append(best_matchup)
-            team_counts[home.team_ID] += 1
-            team_counts[away.team_ID] += 1
-            available.pop(best_idx)
+            # Sort by pair count (ascending), then by team need (descending via negative)
+            pairs_needing_games.sort()
+
+            # Select a matchup - prefer pairs with lowest count
+            min_count = pairs_needing_games[0][0]
+            top_candidates = [p for p in pairs_needing_games if p[0] == min_count]
+
+            # Among top candidates, pick randomly for variety
+            chosen = random.choice(top_candidates)
+            t1, t2 = chosen[4], chosen[5]  # Extract team objects from tuple
+
+            # Determine home/away based on balance
+            if home_counts[t1.team_ID] <= home_counts[t2.team_ID]:
+                selected.append((t1, t2))
+                home_counts[t1.team_ID] += 1
+            else:
+                selected.append((t2, t1))
+                home_counts[t2.team_ID] += 1
+
+            # Update counts
+            pair_key = (t1.team_ID, t2.team_ID) if t1.team_ID < t2.team_ID else (t2.team_ID, t1.team_ID)
+            pair_counts[pair_key] += 1
+            team_counts[t1.team_ID] += 1
+            team_counts[t2.team_ID] += 1
 
         return selected
 
@@ -1664,6 +1695,9 @@ class ScheduleGenerator:
         # Track total games per team
         team_game_counts = defaultdict(int)
 
+        # Track games per pair for a1 compliance (pair balance)
+        pair_game_counts = defaultdict(int)  # (team_id1, team_id2) -> count, where id1 < id2
+
         # Filter existing records to those needing assignment
         records_to_fill = []
         if existing_game_records:
@@ -1882,19 +1916,28 @@ class ScheduleGenerator:
                 self._team_day_usage.add((home.team_ID, date_str))
                 self._team_day_usage.add((away.team_ID, date_str))
 
+                # Track pair game count for a1 compliance
+                pair_key = (min(home.team_ID, away.team_ID), max(home.team_ID, away.team_ID))
+                pair_game_counts[pair_key] += 1
+
                 scheduled_matchups.add(idx)
                 unscheduled_matchups = [m for m in unscheduled_matchups if m != idx]
 
-        # Second pass: Fill remaining games (catch-up for teams below minimum)
-        # This may result in some e2 violations but ensures e1 (minimum games) is met
+        # Second pass: Fill remaining games (catch-up)
+        # IMPORTANT: Prioritize pairs that have never played (a1 rule compliance)
+        # This may result in some e2 violations but ensures a1 (all pairs play) is met
 
-        # Debug: For BB A, show catch-up status
-        if config.league == 'BB A':
-            remaining = len([m for m in unscheduled_matchups if m not in scheduled_matchups])
-            self.warnings.append({
-                'type': 'debug_bba_catchup',
-                'message': f'BB A catch-up starting: {remaining} matchups remaining, {len(slots_info_by_date)} dates with slots'
-            })
+        # Sort unscheduled matchups by pair game count (0 games first = highest priority)
+        def matchup_priority(idx):
+            home, away = matchups[idx]
+            pair_key = (min(home.team_ID, away.team_ID), max(home.team_ID, away.team_ID))
+            pair_count = pair_game_counts[pair_key]
+            # Secondary: teams that need more games
+            team_need = (games_per_team - team_game_counts[home.team_ID]) + (games_per_team - team_game_counts[away.team_ID])
+            return (pair_count, -team_need)  # Lower pair count = higher priority
+
+        # Sort unscheduled matchups by priority (pairs with 0 games first)
+        unscheduled_matchups.sort(key=matchup_priority)
 
         still_unscheduled = []
         for idx in unscheduled_matchups:
@@ -1902,9 +1945,12 @@ class ScheduleGenerator:
                 continue
 
             home, away = matchups[idx]
+            pair_key = (min(home.team_ID, away.team_ID), max(home.team_ID, away.team_ID))
 
-            # Check if both teams already have enough games
-            if team_game_counts[home.team_ID] >= games_per_team and team_game_counts[away.team_ID] >= games_per_team:
+            # Only skip if BOTH: teams have enough games AND pair has already played
+            if (team_game_counts[home.team_ID] >= games_per_team and
+                team_game_counts[away.team_ID] >= games_per_team and
+                pair_game_counts[pair_key] > 0):
                 scheduled_matchups.add(idx)
                 continue
 
@@ -1998,6 +2044,10 @@ class ScheduleGenerator:
 
                     self._team_day_usage.add((home.team_ID, date_str))
                     self._team_day_usage.add((away.team_ID, date_str))
+
+                    # Track pair game count for a1 compliance
+                    pair_key = (min(home.team_ID, away.team_ID), max(home.team_ID, away.team_ID))
+                    pair_game_counts[pair_key] += 1
 
                     scheduled_matchups.add(idx)
                     assigned = True
