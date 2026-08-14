@@ -1047,10 +1047,41 @@ class ScheduleGenerator:
         # Get available slots for each date
         slots_by_date = self._group_slots_by_date(all_slots, game_dates, league, 'game')
 
-        # Debug: Report date coverage
+        # Debug: Report date coverage and diagnose missing dates
         if game_dates:
             dates_with_slots = [d for d in game_dates if d in slots_by_date]
+            dates_without_slots = [d for d in game_dates if d not in slots_by_date]
             last_date_with_slots = max(dates_with_slots) if dates_with_slots else None
+
+            # Check for dates that SHOULD have slots but don't
+            if dates_without_slots and config.regular_season_end_date:
+                # Find dates within the season that are missing slots
+                missing_in_season = [d for d in dates_without_slots if d <= config.regular_season_end_date]
+                if missing_in_season:
+                    # Diagnose WHY slots are missing for a sample date
+                    sample_date = missing_in_season[0]
+                    sample_day = sample_date.weekday()
+                    day_name = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][sample_day]
+
+                    # Count slots for this day of week
+                    all_day_slots = [s for s in all_slots if s.day_of_week == sample_day]
+                    game_capable = [s for s in all_day_slots if s.field and s.field.allows_games]
+                    league_accessible = [s for s in game_capable if self._can_use_slot(s, league, 'game')]
+
+                    if not league_accessible and game_capable:
+                        # There are game-capable slots but this league can't use them
+                        slot_leagues = set()
+                        for s in game_capable:
+                            if s.league:
+                                slot_leagues.add(s.league)
+                        if slot_leagues:
+                            self.warnings.append({
+                                'type': 'slot_access',
+                                'message': f'{config.league}: No accessible {day_name} game slots. '
+                                           f'{len(game_capable)} slots exist but are assigned to: {", ".join(sorted(slot_leagues))}. '
+                                           f'Set slot league to "Any" or add {config.league} allocations.'
+                            })
+
             if config.regular_season_end_date and last_date_with_slots:
                 days_unused = (config.regular_season_end_date - last_date_with_slots).days
                 if days_unused > 7:
