@@ -4,7 +4,8 @@ import os
 import sys
 import json
 import traceback
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, redirect, url_for, flash
+from flask_wtf.csrf import CSRFError
 
 from .extensions import db, login_manager, limiter, csrf, sess
 from .config import config
@@ -156,6 +157,35 @@ def create_app(config_name=None):
             except:
                 pass
             return dt_str
+
+    # CSRF error handler - session expired or token missing
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(e):
+        """Handle CSRF token errors gracefully.
+
+        This typically happens when:
+        - The user's session expired
+        - The user opened a form in multiple tabs
+        - The page was cached with a stale token
+        """
+        # Log it but don't treat as critical error
+        print(f"CSRF Error at {request.method} {request.path}: {e.description}", file=sys.stderr, flush=True)
+
+        # For API requests, return JSON
+        if request.path.startswith('/api/') or request.is_json:
+            return jsonify({
+                'error': 'Session expired',
+                'message': 'Your session has expired. Please refresh the page and try again.'
+            }), 400
+
+        # For regular requests, flash a message and redirect
+        flash('Your session expired. Please try your action again.', 'warning')
+
+        # Try to redirect back to where they were, or home
+        referrer = request.referrer
+        if referrer and referrer.startswith(request.host_url):
+            return redirect(referrer)
+        return redirect(url_for('main.dashboard'))
 
     # Global error handler - logs full traceback to stdout for Railway
     @app.errorhandler(Exception)
