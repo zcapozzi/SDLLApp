@@ -821,9 +821,10 @@
             </select>
             <select id="type-filter" onchange="applyFilters()">
                 <option value="">All Types</option>
-                <option value="regular">Games Only</option>
+                <option value="games">Games Only</option>
                 <option value="practice">Practices Only</option>
                 <option value="scrimmage">Scrimmages Only</option>
+                <option value="regular">Regular Season Only</option>
             </select>
         </div>
 
@@ -1325,7 +1326,12 @@ function applyAllFilters() {
 
         // Type filter
         if (show && activeTypeFilter) {
-            if (row.dataset.type !== activeTypeFilter) {
+            if (activeTypeFilter === 'games') {
+                // "Games Only" = anything that's not a practice
+                if (row.dataset.type === 'practice') {
+                    show = false;
+                }
+            } else if (row.dataset.type !== activeTypeFilter) {
                 show = false;
             }
         }
