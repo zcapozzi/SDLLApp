@@ -1245,8 +1245,9 @@ class ScheduleGenerator:
 
         # Calculate how many times each pair should play
         # For games_per_team games, we need games_per_team / (n-1) matchups per pair
+        # Use ceiling division to ensure we generate ENOUGH matchups
         total_games_needed = (games_per_team * n) // 2
-        games_per_pair = max(1, games_per_team // (n - 1))
+        games_per_pair = max(1, -(-games_per_team // (n - 1)))  # Ceiling division
 
         # Generate base round-robin
         for round_num in range(games_per_pair):

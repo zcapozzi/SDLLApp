@@ -699,6 +699,24 @@ Fixed rule e1 (minimum games) to exclude scrimmages from the count:
 - Scrimmages are pre-season practice games and should not count toward the minimum games requirement
 - Rule e2 (game day balance) also now only checks counting games
 
+### Bug Fix: Matchup Generation Using Ceiling Division
+
+Fixed `_generate_round_robin()` to generate enough matchups for all required games:
+- **Problem**: Integer division `games_per_team // (n - 1)` was rounding DOWN
+- For BB A (4 teams, 8 games): `8 // 3 = 2` rounds = 12 matchups, but needed 16
+- **Fix**: Use ceiling division `-(-games_per_team // (n - 1))`
+- Now: `ceil(8 / 3) = 3` rounds = 18 matchups, trimmed to 16
+
+**Local Debugging Setup:**
+- Created `railway_replica` database from railway_backup.sql
+- Used local Flask app on port 8084 for testing
+- Verified BB A now schedules 16 games on 8 dates with all teams at 8 games
+
+**Remaining e1 Violations (Configuration Issues, Not Code Bugs):**
+- BB Rookie/Tee Ball, SB Tee Ball: Only play on Saturday, but ~6 Saturdays not enough for 8-10 games
+- BB AA: Needs more Tue/Sat field slots
+- Some leagues: "Slots available but check league assignments" - field slot league restrictions need adjustment
+
 ---
 
 ## Session Log (August 13, 2026)
