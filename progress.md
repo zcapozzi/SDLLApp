@@ -712,6 +712,26 @@ Fixed `_generate_round_robin()` to generate enough matchups for all required gam
 - Used local Flask app on port 8084 for testing
 - Verified BB A now schedules 16 games on 8 dates with all teams at 8 games
 
+### Bug Fix: Priority-Based Matchup Selection
+
+Fixed BB A scheduling to guarantee all teams get their required games:
+
+- **Problem**: Greedy matchup selection would fill up 3 teams to 8 games before the 4th team got enough
+- Example: With seed 2, Team 3 only got 15 matchups generated (6 appearances instead of 8)
+- The shuffle order determined which team got short-changed
+
+- **Fix #1**: `_generate_round_robin()` now uses priority-based selection
+  - Instead of iterating through shuffled matchups and taking valid ones
+  - Repeatedly selects the matchup that most helps teams below their target
+  - Ensures all teams get balanced coverage
+
+- **Fix #2**: Added `_find_complete_round()` with backtracking algorithm
+  - Finds valid combinations of matchups where all teams play on each game date
+  - Tries all possibilities instead of greedy first-fit
+  - Returns None if no valid combination exists (triggers catch-up scheduling)
+
+**Testing**: Ran 20 random seeds - all pass with 0 BB A e1 violations.
+
 **Remaining e1 Violations (Configuration Issues, Not Code Bugs):**
 - BB Rookie/Tee Ball, SB Tee Ball: Only play on Saturday, but ~6 Saturdays not enough for 8-10 games
 - BB AA: Needs more Tue/Sat field slots
