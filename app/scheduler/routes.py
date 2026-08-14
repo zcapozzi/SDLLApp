@@ -605,6 +605,66 @@ def api_proposal(year, is_spring):
     return jsonify(proposal_record.data)
 
 
+@scheduler_bp.route('/api/<int:year>/<int:is_spring>/trace/<date_str>')
+@login_required
+def api_trace_date(year, is_spring, date_str):
+    """API endpoint to get slot assignment decisions for a specific date.
+
+    Returns detailed trace of why each slot was assigned, skipped, or rejected.
+    """
+    # Get proposed schedule from database
+    proposal_record = ScheduleProposal.get_for_season(year, is_spring)
+
+    if not proposal_record:
+        return jsonify({'error': 'No proposal found. Generate a schedule first.'}), 404
+
+    proposal = proposal_record.data
+    slot_decisions = proposal.get('slot_decisions', {})
+
+    # Get decisions for this date
+    decisions = slot_decisions.get(date_str, [])
+
+    # Also gather what games were scheduled on this date for context
+    games_on_date = []
+    for game in proposal.get('games', []):
+        if game.get('game_date', '')[:10] == date_str:
+            games_on_date.append({
+                'type': game.get('game_type'),
+                'league': game.get('league'),
+                'home': game.get('home_team_name'),
+                'away': game.get('away_team_name'),
+                'field': game.get('field_name'),
+                'time': game.get('game_date', '')[11:16] if game.get('game_date') and len(game.get('game_date', '')) > 11 else 'TBD'
+            })
+
+    # Group decisions by league for easier reading
+    decisions_by_league = {}
+    for d in decisions:
+        league = d.get('league', 'Unknown')
+        if league not in decisions_by_league:
+            decisions_by_league[league] = []
+        decisions_by_league[league].append(d)
+
+    # Summary stats
+    summary = {
+        'total_decisions': len(decisions),
+        'assigned': len([d for d in decisions if d.get('decision') == 'assigned']),
+        'skipped': len([d for d in decisions if d.get('decision') == 'skipped']),
+        'rejected': len([d for d in decisions if d.get('decision') == 'rejected']),
+        'games_scheduled': len(games_on_date),
+        'leagues': list(decisions_by_league.keys())
+    }
+
+    return jsonify({
+        'date': date_str,
+        'season': f'{"Spring" if is_spring else "Fall"} {year}',
+        'decisions': decisions,
+        'decisions_by_league': decisions_by_league,
+        'games_on_date': games_on_date,
+        'summary': summary
+    })
+
+
 @scheduler_bp.route('/api/<int:year>/<int:is_spring>/team-schedule/<int:team_id>')
 @login_required
 def api_team_schedule(year, is_spring, team_id):

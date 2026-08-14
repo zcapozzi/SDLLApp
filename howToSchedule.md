@@ -112,13 +112,19 @@ These rules represent fundamental fairness requirements. A schedule that violate
 
 **Why it matters:** Ensures all teams get their fair share of playing time. A team shouldn't be short-changed due to scheduling constraints.
 
+**What counts:**
+- Regular season games: YES
+- Playoff games: YES
+- Scrimmages: NO (pre-season practice games don't count toward minimum)
+- Practices: NO
+
 **Validation logic:**
 - Get the minimum games requirement from the league configuration
-- Count games per team
-- Flag any team with fewer games than the minimum
+- Count regular and playoff games per team (scrimmages excluded)
+- Flag any team with fewer counting games than the minimum
 
 **Example violation:**
-- Team A has only 8 games when the league requires 10 games per team
+- Team A has only 8 regular/playoff games when the league requires 10 games per team
 
 ---
 
@@ -314,7 +320,7 @@ First Practice Date < Opening Day Date < Regular Season End Date < Season End Da
 | `a1` | Play everyone / Matchup balance | HARD | All pairs play, max diff of 1 |
 | `b1` | Home/away balance | HARD | Per team, home/away diff <= 1 |
 | `d1` | One activity per day | HARD | Max one game or practice per team per day |
-| `e1` | Minimum games | HARD | Each team must play at least the configured number of regular season games |
+| `e1` | Minimum games | HARD | Each team must play at least the configured number of regular season games (scrimmages don't count) |
 | `gap` | Same team gap | HARD | No back-to-back vs same opponent |
 | `slot` | Field double-booked | HARD | No two games at same time on same field |
 | `a2` | Home/away vs opponent | SOFT | Alternate home/away when playing same team |

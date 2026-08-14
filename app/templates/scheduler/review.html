@@ -532,6 +532,160 @@
         background: #f8f9fa;
         border-radius: 6px;
     }
+
+    /* Trace button and modal */
+    .trace-btn {
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white;
+        padding: 2px 8px;
+        border-radius: 3px;
+        font-size: 11px;
+        cursor: pointer;
+        margin-left: 10px;
+    }
+    .trace-btn:hover {
+        background: rgba(255,255,255,0.3);
+    }
+    .trace-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 3000;
+        justify-content: center;
+        align-items: center;
+    }
+    .trace-modal.visible {
+        display: flex;
+    }
+    .trace-modal-content {
+        background: white;
+        border-radius: 8px;
+        max-width: 900px;
+        width: 95%;
+        max-height: 85vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    .trace-modal-header {
+        padding: 15px 20px;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgb(34, 139, 34);
+        color: white;
+    }
+    .trace-modal-header h3 {
+        margin: 0;
+    }
+    .trace-modal-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: white;
+    }
+    .trace-modal-body {
+        padding: 20px;
+        overflow-y: auto;
+        flex: 1;
+    }
+    .trace-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    .trace-summary-item {
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+        text-align: center;
+    }
+    .trace-summary-item .number {
+        font-size: 24px;
+        font-weight: 700;
+    }
+    .trace-summary-item.assigned .number { color: rgb(34, 139, 34); }
+    .trace-summary-item.skipped .number { color: rgb(255, 140, 0); }
+    .trace-summary-item.rejected .number { color: #dc3545; }
+    .trace-league-section {
+        margin-bottom: 20px;
+    }
+    .trace-league-header {
+        background: #e8e8e8;
+        padding: 10px 15px;
+        font-weight: 600;
+        border-radius: 4px 4px 0 0;
+    }
+    .trace-decision {
+        padding: 10px 15px;
+        border: 1px solid #eee;
+        border-top: none;
+        display: flex;
+        gap: 15px;
+        align-items: flex-start;
+    }
+    .trace-decision:last-child {
+        border-radius: 0 0 4px 4px;
+    }
+    .trace-decision.assigned {
+        background: rgba(34, 139, 34, 0.05);
+        border-left: 3px solid rgb(34, 139, 34);
+    }
+    .trace-decision.skipped {
+        background: rgba(255, 140, 0, 0.05);
+        border-left: 3px solid rgb(255, 140, 0);
+    }
+    .trace-decision.rejected {
+        background: rgba(220, 53, 69, 0.05);
+        border-left: 3px solid #dc3545;
+    }
+    .trace-decision-badge {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        padding: 2px 6px;
+        border-radius: 3px;
+        min-width: 60px;
+        text-align: center;
+    }
+    .trace-decision-badge.assigned { background: rgb(34, 139, 34); color: white; }
+    .trace-decision-badge.skipped { background: rgb(255, 140, 0); color: white; }
+    .trace-decision-badge.rejected { background: #dc3545; color: white; }
+    .trace-slot-info {
+        min-width: 150px;
+    }
+    .trace-slot-field {
+        font-weight: 500;
+    }
+    .trace-slot-time {
+        font-size: 12px;
+        color: #666;
+    }
+    .trace-reason {
+        flex: 1;
+        font-size: 13px;
+    }
+    .trace-game-info {
+        font-size: 12px;
+        color: #666;
+        margin-top: 4px;
+    }
+    .trace-filter {
+        margin-bottom: 15px;
+    }
+    .trace-filter select {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
 </style>
 {% endblock %}
 
@@ -854,6 +1008,7 @@
     {% set date_obj = day_games[0].game_date[:10] %}
     <div class="date-header" data-date="{{ date_str }}">
         {{ date_str | format_date_with_day }}
+        <button class="trace-btn" onclick="openTraceModal('{{ date_str }}')" title="View slot assignment decisions">Trace</button>
     </div>
     <div class="date-games" data-date="{{ date_str }}">
         {% for game in day_games | sort(attribute='game_date') %}
@@ -1008,6 +1163,47 @@
             </div>
             <div id="team-modal-empty" style="display: none; text-align: center; padding: 40px; color: #666;">
                 No games or practices found for this team.
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Trace Modal -->
+<div id="trace-modal" class="trace-modal">
+    <div class="trace-modal-content">
+        <div class="trace-modal-header">
+            <h3 id="trace-modal-title">Slot Assignment Trace</h3>
+            <button class="trace-modal-close" onclick="closeTraceModal()">&times;</button>
+        </div>
+        <div class="trace-modal-body">
+            <div id="trace-modal-loading" style="text-align: center; padding: 40px;">
+                <div class="loading-spinner" style="margin: 0 auto 20px;"></div>
+                <p>Loading trace data...</p>
+            </div>
+            <div id="trace-modal-content" style="display: none;">
+                <!-- Summary -->
+                <div class="trace-summary" id="trace-summary"></div>
+
+                <!-- Filter -->
+                <div class="trace-filter">
+                    <label>Filter by league: </label>
+                    <select id="trace-league-filter" onchange="filterTraceByLeague()">
+                        <option value="">All Leagues</option>
+                    </select>
+                    <label style="margin-left: 15px;">Filter by decision: </label>
+                    <select id="trace-decision-filter" onchange="filterTraceByDecision()">
+                        <option value="">All Decisions</option>
+                        <option value="assigned">Assigned</option>
+                        <option value="skipped">Skipped</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                </div>
+
+                <!-- Decisions list -->
+                <div id="trace-decisions"></div>
+            </div>
+            <div id="trace-modal-empty" style="display: none; text-align: center; padding: 40px; color: #666;">
+                No trace data available for this date.
             </div>
         </div>
     </div>
@@ -1518,5 +1714,167 @@ document.addEventListener('click', function(e) {
 
 // Build team list on page load
 document.addEventListener('DOMContentLoaded', buildTeamList);
+
+// Trace Modal Functions
+var traceData = null;
+
+function openTraceModal(dateStr) {
+    var modal = document.getElementById('trace-modal');
+    var loading = document.getElementById('trace-modal-loading');
+    var content = document.getElementById('trace-modal-content');
+    var empty = document.getElementById('trace-modal-empty');
+    var title = document.getElementById('trace-modal-title');
+
+    // Show modal with loading state
+    modal.classList.add('visible');
+    loading.style.display = 'block';
+    content.style.display = 'none';
+    empty.style.display = 'none';
+    title.textContent = 'Slot Assignment Trace - ' + dateStr;
+
+    // Fetch trace data
+    var url = '/scheduler/api/' + currentYear + '/' + currentIsSpring + '/trace/' + dateStr;
+    fetch(url)
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            loading.style.display = 'none';
+            traceData = data;
+
+            if (data.error) {
+                empty.style.display = 'block';
+                empty.textContent = data.error;
+                return;
+            }
+
+            if (!data.decisions || data.decisions.length === 0) {
+                empty.style.display = 'block';
+                empty.textContent = 'No trace data available for this date. Regenerate the schedule to capture trace data.';
+                return;
+            }
+
+            content.style.display = 'block';
+            renderTraceSummary(data.summary);
+            populateTraceLeagueFilter(data.summary.leagues);
+            renderTraceDecisions(data.decisions);
+        })
+        .catch(function(err) {
+            loading.style.display = 'none';
+            empty.style.display = 'block';
+            empty.textContent = 'Error loading trace data: ' + err.message;
+        });
+}
+
+function closeTraceModal() {
+    document.getElementById('trace-modal').classList.remove('visible');
+    traceData = null;
+}
+
+function renderTraceSummary(summary) {
+    var html = '<div class="trace-summary-item">' +
+        '<div class="number">' + summary.total_decisions + '</div>' +
+        '<div class="label">Total Decisions</div></div>' +
+        '<div class="trace-summary-item assigned">' +
+        '<div class="number">' + summary.assigned + '</div>' +
+        '<div class="label">Assigned</div></div>' +
+        '<div class="trace-summary-item skipped">' +
+        '<div class="number">' + summary.skipped + '</div>' +
+        '<div class="label">Skipped</div></div>' +
+        '<div class="trace-summary-item">' +
+        '<div class="number">' + summary.games_scheduled + '</div>' +
+        '<div class="label">Games Scheduled</div></div>';
+
+    document.getElementById('trace-summary').innerHTML = html;
+}
+
+function populateTraceLeagueFilter(leagues) {
+    var select = document.getElementById('trace-league-filter');
+    select.innerHTML = '<option value="">All Leagues</option>';
+    leagues.forEach(function(league) {
+        select.innerHTML += '<option value="' + league + '">' + league + '</option>';
+    });
+}
+
+function renderTraceDecisions(decisions) {
+    var container = document.getElementById('trace-decisions');
+    var leagueFilter = document.getElementById('trace-league-filter').value;
+    var decisionFilter = document.getElementById('trace-decision-filter').value;
+
+    // Filter decisions
+    var filtered = decisions.filter(function(d) {
+        if (leagueFilter && d.league !== leagueFilter) return false;
+        if (decisionFilter && d.decision !== decisionFilter) return false;
+        return true;
+    });
+
+    // Group by league
+    var byLeague = {};
+    filtered.forEach(function(d) {
+        if (!byLeague[d.league]) byLeague[d.league] = [];
+        byLeague[d.league].push(d);
+    });
+
+    var html = '';
+    Object.keys(byLeague).sort().forEach(function(league) {
+        html += '<div class="trace-league-section">';
+        html += '<div class="trace-league-header">' + league + ' (' + byLeague[league].length + ' decisions)</div>';
+
+        byLeague[league].forEach(function(d) {
+            var gameInfo = '';
+            if (d.game_info) {
+                if (d.game_info.home && d.game_info.away) {
+                    gameInfo = '<div class="trace-game-info">' + d.game_info.home + ' vs ' + d.game_info.away + '</div>';
+                } else if (d.game_info.unavailable) {
+                    gameInfo = '<div class="trace-game-info">Unavailable: ' + d.game_info.unavailable.join(', ') + '</div>';
+                }
+            }
+
+            html += '<div class="trace-decision ' + d.decision + '">' +
+                '<span class="trace-decision-badge ' + d.decision + '">' + d.decision + '</span>' +
+                '<div class="trace-slot-info">' +
+                    '<div class="trace-slot-field">' + (d.field || 'Unknown Field') + '</div>' +
+                    '<div class="trace-slot-time">' + (d.time || 'Unknown Time') + '</div>' +
+                '</div>' +
+                '<div class="trace-reason">' +
+                    '<div>' + d.reason + '</div>' +
+                    gameInfo +
+                '</div>' +
+            '</div>';
+        });
+
+        html += '</div>';
+    });
+
+    if (html === '') {
+        html = '<p style="text-align: center; color: #666; padding: 20px;">No decisions match your filters.</p>';
+    }
+
+    container.innerHTML = html;
+}
+
+function filterTraceByLeague() {
+    if (traceData && traceData.decisions) {
+        renderTraceDecisions(traceData.decisions);
+    }
+}
+
+function filterTraceByDecision() {
+    if (traceData && traceData.decisions) {
+        renderTraceDecisions(traceData.decisions);
+    }
+}
+
+// Close trace modal on escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeTraceModal();
+    }
+});
+
+// Close trace modal on background click
+document.getElementById('trace-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeTraceModal();
+    }
+});
 </script>
 {% endblock %}

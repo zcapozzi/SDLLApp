@@ -223,15 +223,34 @@ class ScheduleValidator:
         self._check_one_activity_per_day(league, games, teams)
 
         # Rule e1: Minimum games per team (HARD)
-        self._check_minimum_games(league, actual_games, teams)
+        # Only count regular and playoff games - scrimmages don't count
+        counting_games = [g for g in games if self._is_counting_game(g)]
+        self._check_minimum_games(league, counting_games, teams)
 
         # Rule e2: All teams play on same game days (SOFT)
-        self._check_game_day_balance(league, actual_games, teams)
+        # Also only check counting games (regular + playoff)
+        self._check_game_day_balance(league, counting_games, teams)
 
     def _is_actual_game(self, game):
-        """Check if this is an actual game (not practice)."""
+        """Check if this is an actual game (not practice).
+
+        Includes regular, playoff, and scrimmage games.
+        """
         if hasattr(game, 'game_type'):
             return game.game_type in ('regular', 'playoff', 'scrimmage')
+        return game.away_ID is not None
+
+    def _is_counting_game(self, game):
+        """Check if this game counts toward minimum games requirement.
+
+        Only regular season and playoff games count.
+        Scrimmages do NOT count toward minimum games.
+        """
+        if hasattr(game, 'game_type'):
+            return game.game_type in ('regular', 'playoff')
+        # For database Game objects, check is_scrimmage flag
+        if hasattr(game, 'is_scrimmage') and game.is_scrimmage:
+            return False
         return game.away_ID is not None
 
     def _is_practice(self, game):
@@ -665,6 +684,32 @@ class ScheduleValidator:
                 ))
 
 
+class SlotDecision:
+    """Records a single slot assignment decision for tracing."""
+
+    def __init__(self, date_str, league, slot, decision, reason, game_info=None):
+        self.date_str = date_str  # YYYY-MM-DD
+        self.league = league
+        self.slot_id = slot.slot_ID if slot else None
+        self.field_name = slot.field.location_title if slot and slot.field else 'Unknown'
+        self.start_time = slot.start_time.strftime('%I:%M %p') if slot and slot.start_time else 'Unknown'
+        self.decision = decision  # 'assigned', 'skipped', 'rejected'
+        self.reason = reason  # Why this decision was made
+        self.game_info = game_info  # Details about what was assigned (if any)
+
+    def to_dict(self):
+        return {
+            'date': self.date_str,
+            'league': self.league,
+            'slot_id': self.slot_id,
+            'field': self.field_name,
+            'time': self.start_time,
+            'decision': self.decision,
+            'reason': self.reason,
+            'game_info': self.game_info
+        }
+
+
 class ScheduleGenerator:
     """Generates proposed schedules for a season.
 
@@ -684,6 +729,7 @@ class ScheduleGenerator:
         self._slot_assignments = {}  # Maps game_id to proposed assignment
         self._global_field_time_usage = set()  # Tracks (field_id, datetime) across all leagues
         self._team_day_usage = set()  # Tracks (team_id, date_str) - one activity per team per day
+        self._slot_decisions = []  # Detailed decision log for tracing
 
     def generate(self, start_fresh=False):
         """Generate a complete proposed schedule.
@@ -1488,6 +1534,7 @@ class ScheduleGenerator:
 
             # Filter out slots already used by other leagues
             available_date_slots = []
+            used_by_other_league = []
             for slot_info in date_slots:
                 field_id = slot_info['field_id']
                 game_datetime = slot_info['datetime']
@@ -1495,25 +1542,52 @@ class ScheduleGenerator:
                     usage_key = (field_id, game_datetime.isoformat())
                     if usage_key not in self._global_field_time_usage:
                         available_date_slots.append(slot_info)
+                    else:
+                        used_by_other_league.append(slot_info)
                 else:
                     available_date_slots.append(slot_info)
+
+            # Record skipped slots (used by other leagues)
+            for slot_info in used_by_other_league:
+                self._record_decision(
+                    date_str, config.league, slot_info['slot'],
+                    'skipped', 'Already used by another league',
+                    game_info={'time': slot_info['datetime'].strftime('%I:%M %p') if slot_info['datetime'] else 'N/A'}
+                )
 
             # Check if we have enough slots for a full round (all teams playing)
             if len(available_date_slots) < games_per_date:
                 # Not enough capacity - skip this date for full rounds
-                # But we might use it later for catch-up games
+                # Record why we skipped this date
+                for slot_info in available_date_slots:
+                    self._record_decision(
+                        date_str, config.league, slot_info['slot'],
+                        'skipped', f'Insufficient capacity for full round (need {games_per_date} slots, have {len(available_date_slots)}). Will retry in catch-up pass.',
+                        game_info=None
+                    )
                 continue
 
             # Find teams that need more games and don't have activity on this day
             available_teams = set()
+            unavailable_teams = []
             for team_id in all_team_ids:
                 team_day_key = (team_id, date_str)
                 if team_day_key not in self._team_day_usage:
                     if team_game_counts[team_id] < games_per_team:
                         available_teams.add(team_id)
+                    else:
+                        unavailable_teams.append(f'Team {team_id} has enough games')
+                else:
+                    unavailable_teams.append(f'Team {team_id} already has activity')
 
             # If not all teams are available, skip this date for a full round
             if len(available_teams) < num_teams:
+                for slot_info in available_date_slots:
+                    self._record_decision(
+                        date_str, config.league, slot_info['slot'],
+                        'skipped', f'Not all teams available ({len(available_teams)}/{num_teams}). Will retry in catch-up pass.',
+                        game_info={'unavailable': unavailable_teams[:3]}
+                    )
                 continue
 
             # Find matchups where both teams are available and need games
@@ -1601,6 +1675,18 @@ class ScheduleGenerator:
                     self._next_id += 1
 
                 self.proposed_games.append(game)
+
+                # Record the assignment decision
+                self._record_decision(
+                    date_str, config.league, slot,
+                    'assigned', 'Full round scheduling',
+                    game_info={
+                        'home': actual_home.display_name,
+                        'away': actual_away.display_name,
+                        'time': game_datetime.strftime('%I:%M %p') if game_datetime else 'N/A',
+                        'phase': 'full_round'
+                    }
+                )
 
                 # Update tracking
                 home_counts[actual_home.team_ID] += 1
@@ -1709,6 +1795,18 @@ class ScheduleGenerator:
                         self._next_id += 1
 
                     self.proposed_games.append(game)
+
+                    # Record the catch-up assignment
+                    self._record_decision(
+                        date_str, config.league, slot,
+                        'assigned', 'Catch-up scheduling (partial round)',
+                        game_info={
+                            'home': actual_home.display_name,
+                            'away': actual_away.display_name,
+                            'time': game_datetime.strftime('%I:%M %p') if game_datetime else 'N/A',
+                            'phase': 'catch_up'
+                        }
+                    )
 
                     home_counts[actual_home.team_ID] += 1
                     away_counts[actual_away.team_ID] += 1
@@ -1986,13 +2084,32 @@ class ScheduleGenerator:
 
         return result
 
+    def _record_decision(self, date_str, league, slot, decision, reason, game_info=None):
+        """Record a slot assignment decision for tracing."""
+        self._slot_decisions.append(SlotDecision(
+            date_str=date_str,
+            league=league,
+            slot=slot,
+            decision=decision,
+            reason=reason,
+            game_info=game_info
+        ))
+
     def _build_result(self):
         """Build the result dictionary."""
+        # Group slot decisions by date for easier lookup
+        decisions_by_date = {}
+        for d in self._slot_decisions:
+            if d.date_str not in decisions_by_date:
+                decisions_by_date[d.date_str] = []
+            decisions_by_date[d.date_str].append(d.to_dict())
+
         return {
             'games': [g.to_dict() for g in self.proposed_games],
             'violations': [v.to_dict() for v in self.violations],
             'warnings': self.warnings,
             'assignments': self._slot_assignments,  # Maps existing game IDs to proposed values
+            'slot_decisions': decisions_by_date,  # Detailed trace by date
             'summary': {
                 'total_games': len([g for g in self.proposed_games if g.game_type in ('regular', 'playoff')]),
                 'total_practices': len([g for g in self.proposed_games if g.game_type == 'practice']),

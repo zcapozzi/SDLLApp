@@ -1,7 +1,7 @@
 # SDLL Web Application - Progress Report
 
-**Last Updated:** August 13, 2026
-**Status:** Phase 3 In Progress - Schedule Generator with Validation Rules, CSS Filters, Day of Week Display
+**Last Updated:** August 14, 2026
+**Status:** Phase 3 In Progress - Schedule Generator with Slot Assignment Tracing
 
 ---
 
@@ -658,6 +658,46 @@ This section captures key design decisions made during development.
 | Field slots separate from games | Yes | Slots = available windows; Games = actual scheduled events |
 | League settings per season | Yes (sdll_league_seasons table) | Playoff format may vary by season |
 | No foreign key on field_slots | Application-level integrity | sdll_fields.ID lacked primary key index |
+
+---
+
+## Session Log (August 14, 2026)
+
+### Slot Assignment Tracing Feature
+
+Added detailed decision-by-decision tracing for slot assignments:
+
+1. **SlotDecision Class** (`app/utils/scheduler.py`)
+   - Records each slot assignment decision during schedule generation
+   - Captures: date, league, slot info, decision type, reason, and game info
+   - Decisions stored in proposal data under `slot_decisions` key
+
+2. **Trace API Endpoint** (`/scheduler/api/<year>/<is_spring>/trace/<date>`)
+   - Returns all slot decisions for a specific date
+   - Groups decisions by league
+   - Includes summary stats (assigned/skipped/rejected counts)
+   - Shows what games were scheduled on that date
+
+3. **Trace Modal on Review Page**
+   - "Trace" button next to each date header
+   - Modal displays slot-by-slot decision log
+   - Filter by league or decision type (assigned/skipped/rejected)
+   - Color-coded decisions: green (assigned), orange (skipped), red (rejected)
+   - Shows field name, time, and reason for each decision
+
+4. **Decision Types Recorded**
+   - `assigned` - Slot used for a game (full round or catch-up)
+   - `skipped` - Slot available but not used (with detailed reason)
+   - Reasons include: "Already used by another league", "Insufficient capacity for full round", "Not all teams available"
+
+**Usage**: After generating a schedule, click "Trace" next to any date to see exactly why each slot was or wasn't used for scheduling.
+
+### Bug Fix: Scrimmages Don't Count Toward Minimum Games
+
+Fixed rule e1 (minimum games) to exclude scrimmages from the count:
+- Added `_is_counting_game()` method that only includes regular and playoff games
+- Scrimmages are pre-season practice games and should not count toward the minimum games requirement
+- Rule e2 (game day balance) also now only checks counting games
 
 ---
 
