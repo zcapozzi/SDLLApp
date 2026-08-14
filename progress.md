@@ -679,9 +679,24 @@ This section captures key design decisions made during development.
    - League and type filters now use CSS-based filtering (no page reload)
    - All filters (team, league, type) work together seamlessly
    - Day of week now displayed with all dates throughout the application
-   - Added Jinja filters: `format_date_with_day` and `format_datetime_with_day`
+   - Added Jinja filters: `format_date_with_day`, `format_datetime_with_day`, and `format_time`
+   - All times now display in 12-hour format (5:30 PM instead of 17:30)
 
-4. **Previous Session Updates**
+4. **Schedule Review Page Enhancements**
+   - Added Field x League matrix showing game/practice counts per field per league
+   - Matrix includes filter for Games Only / Practices Only / All
+   - Moved Generate Schedule button to top of page
+   - Violations now grouped by type with summary cards
+   - Only first 10 violations shown per type (with "See More" button)
+   - Violation details hidden until a specific type is selected
+
+5. **Bug Fix: Slot League Restriction**
+   - Fixed `_can_use_slot()` to respect field slot league assignments
+   - Slots with NULL league = any league can use
+   - Slots with specific league = only that league can use
+   - Previously, slot league restrictions were not being checked at all
+
+7. **Previous Session Updates**
    - Fixed cross-league field double-booking bug
    - Added team schedule lookup in violations using team IDs
    - Added team filter with autocomplete for schedule review
