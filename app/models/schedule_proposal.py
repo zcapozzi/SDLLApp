@@ -35,15 +35,25 @@ class ScheduleProposal(db.Model):
         """Get the current proposal for a season.
 
         Returns the most recent draft/review proposal, or None if no active proposal.
+        Uses a two-step query to avoid sorting large JSON data in memory.
         """
-        return cls.query.filter_by(
-            year=year,
-            is_spring=is_spring
-        ).filter(
-            cls.status.in_([cls.STATUS_DRAFT, cls.STATUS_REVIEW])
-        ).order_by(
-            cls.updated_at.desc()
-        ).first()
+        # First get just the ID (small column, efficient sort)
+        result = db.session.execute(
+            db.text("""
+                SELECT ID FROM sdll_schedule_proposals
+                WHERE year = :year AND is_spring = :is_spring
+                AND status IN ('draft', 'review')
+                ORDER BY updated_at DESC
+                LIMIT 1
+            """),
+            {'year': year, 'is_spring': is_spring}
+        ).fetchone()
+
+        if not result:
+            return None
+
+        # Then load the full row by ID (no sorting needed)
+        return cls.query.get(result[0])
 
     @classmethod
     def create_or_update(cls, year, is_spring, data, user_id=None):
