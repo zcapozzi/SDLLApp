@@ -4,6 +4,11 @@
 
 {% block extra_css %}
 <style>
+    /* Hide flash messages on this page */
+    .flash-message {
+        display: none !important;
+    }
+
     .summary-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -692,68 +697,109 @@
 {% block content %}
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
     <h1>Review Proposed Schedule</h1>
-    <a href="{{ url_for('scheduler.index', year=year, is_spring=is_spring) }}" class="btn btn-outline">Back</a>
-</div>
-
-<!-- Top Action Buttons -->
-<div class="top-actions">
-    <form method="POST" action="{{ url_for('scheduler.generate', year=year, is_spring=is_spring) }}" style="display: inline;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-outline" onclick="return confirm('Regenerate? This will try different arrangements.');">
-            Regenerate Schedule
-        </button>
-    </form>
-    <form method="POST" action="{{ url_for('scheduler.start_fresh', year=year, is_spring=is_spring) }}" style="display: inline;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-outline" onclick="return confirm('Start Fresh? This will clear all assignments and regenerate from scratch.');">
-            Start Fresh
-        </button>
-    </form>
-    {% if summary.hard_violations == 0 %}
-    <form method="POST" action="{{ url_for('scheduler.save', year=year, is_spring=is_spring) }}" style="display: inline;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="lock_schedule" value="1">
-        <button type="submit" class="btn btn-primary" onclick="return confirm('Save and lock this schedule?');">
-            Save &amp; Lock Schedule
-        </button>
-    </form>
-    {% else %}
-    <form method="POST" action="{{ url_for('scheduler.save', year=year, is_spring=is_spring) }}" style="display: inline;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="force_save" value="1">
-        <button type="submit" class="btn btn-secondary" onclick="return confirm('WARNING: There are {{ summary.hard_violations }} hard rule violations. Save anyway?');">
-            Force Save ({{ summary.hard_violations }} violations)
-        </button>
-    </form>
-    {% endif %}
-</div>
-
-<!-- Summary -->
-<div class="card">
-    <h3 style="margin-top: 0;">{{ season_name }} - Summary</h3>
-    <div class="summary-grid">
-        <div class="summary-item">
-            <div class="number">{{ summary.total_games }}</div>
-            <div class="label">Games</div>
-        </div>
-        <div class="summary-item">
-            <div class="number">{{ summary.total_practices }}</div>
-            <div class="label">Practices</div>
-        </div>
-        <div class="summary-item">
-            <div class="number">{{ summary.total_scrimmages }}</div>
-            <div class="label">Scrimmages</div>
-        </div>
-        <div class="summary-item {{ 'error' if summary.hard_violations > 0 else '' }}">
-            <div class="number">{{ summary.hard_violations }}</div>
-            <div class="label">Hard Violations</div>
-        </div>
-        <div class="summary-item {{ 'warning' if summary.soft_violations > 0 else '' }}">
-            <div class="number">{{ summary.soft_violations }}</div>
-            <div class="label">Soft Violations</div>
-        </div>
+    <div style="display: flex; gap: 10px; align-items: center;">
+        <form method="POST" action="{{ url_for('scheduler.generate', year=year, is_spring=is_spring) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline btn-sm" onclick="return confirm('Regenerate? This will try different arrangements.');">
+                Regenerate
+            </button>
+        </form>
+        {% if summary.hard_violations == 0 %}
+        <form method="POST" action="{{ url_for('scheduler.save', year=year, is_spring=is_spring) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="lock_schedule" value="1">
+            <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Save and lock this schedule?');">
+                Save &amp; Lock
+            </button>
+        </form>
+        {% endif %}
+        <a href="{{ url_for('scheduler.index', year=year, is_spring=is_spring) }}" class="btn btn-outline btn-sm">Back</a>
     </div>
 </div>
+
+<!-- Violations (Error Summaries) - First Section -->
+{% if violations %}
+<div class="card">
+    <h3 style="margin-top: 0;">Rule Violations</h3>
+
+    <!-- Violation Navigator - Summary by Rule Type -->
+    <div class="violation-nav">
+        <div class="violation-nav-card active" onclick="filterViolations('all')" data-filter="all">
+            <div class="count">{{ violations|length }}</div>
+            <div class="code">All</div>
+            <div class="name">violations</div>
+        </div>
+        {% set violation_groups = {} %}
+        {% for v in violations %}
+            {% if v.rule_code not in violation_groups %}
+                {% set _ = violation_groups.update({v.rule_code: {'name': v.rule_name, 'severity': v.severity, 'count': 0}}) %}
+            {% endif %}
+            {% set _ = violation_groups[v.rule_code].update({'count': violation_groups[v.rule_code].count + 1}) %}
+        {% endfor %}
+        {% for code, info in violation_groups.items() | sort %}
+        <div class="violation-nav-card {{ info.severity }}" onclick="filterViolations('{{ code }}')" data-filter="{{ code }}">
+            <div class="count">{{ info.count }}</div>
+            <div class="code">{{ code }}</div>
+            <div class="name">{{ info.name }}</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Filter Info Bar -->
+    <div class="violation-filter-info hidden" id="violation-filter-info">
+        <span>Showing <strong id="filter-rule-name">all</strong> violations (<span id="filter-count">0</span> of {{ violations|length }})</span>
+        <button class="btn btn-outline btn-sm" onclick="filterViolations('all')">Show All</button>
+    </div>
+
+    <!-- Instructions when no filter selected -->
+    <div id="violations-instructions" style="padding: 20px; text-align: center; color: #666; background: #f8f8f8; border-radius: 4px;">
+        <p style="margin: 0;">Click a violation type above to see details.</p>
+    </div>
+
+    <!-- Violation Cards - Grouped by rule type with limit -->
+    <div id="violations-list" style="display: none;">
+        {% set violations_by_rule = {} %}
+        {% for v in violations %}
+            {% if v.rule_code not in violations_by_rule %}
+                {% set _ = violations_by_rule.update({v.rule_code: []}) %}
+            {% endif %}
+            {% set _ = violations_by_rule[v.rule_code].append(v) %}
+        {% endfor %}
+
+        {% for rule_code, rule_violations in violations_by_rule.items() | sort %}
+        <div class="violation-group" data-rule="{{ rule_code }}" style="display: none;">
+            {% for v in rule_violations %}
+            <div class="violation-card {{ 'soft' if v.severity == 'soft' else '' }} {{ 'hidden' if loop.index > 10 else '' }}"
+                 data-rule="{{ v.rule_code }}" data-index="{{ loop.index }}">
+                <span class="violation-code">[{{ v.rule_code }}]</span>
+                <span class="violation-name">{{ v.rule_name }}</span>
+                <div style="margin-top: 5px;">
+                    {{ v.message }}
+                    {% if v.teams %}
+                    <span style="margin-left: 10px;">
+                        {% for team in v.teams %}
+                        <span class="team-lookup" onclick="openTeamModal({{ team.id }}, '{{ team.name|e }}')" title="View {{ team.name }} schedule">&#128269;</span>
+                        {% endfor %}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+            {% if rule_violations | length > 10 %}
+            <div class="see-more-link" data-rule="{{ rule_code }}" onclick="toggleViolationExpand('{{ rule_code }}')">
+                Show {{ rule_violations | length - 10 }} more {{ rule_code }} violations...
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <h3 style="margin-top: 0;">Rule Violations</h3>
+    <p style="color: rgb(34, 139, 34); text-align: center; padding: 15px;">No violations found.</p>
+</div>
+{% endif %}
 
 <!-- Field x League Matrix -->
 <div class="card">
@@ -865,94 +911,20 @@
     {% endif %}
 </div>
 
-<!-- Violations -->
-{% if violations %}
-<div class="card">
-    <h3 style="margin-top: 0;">Rule Violations</h3>
-
-    <!-- Violation Navigator - Summary by Rule Type -->
-    <div class="violation-nav">
-        <div class="violation-nav-card active" onclick="filterViolations('all')" data-filter="all">
-            <div class="count">{{ violations|length }}</div>
-            <div class="code">All</div>
-            <div class="name">violations</div>
-        </div>
-        {% set violation_groups = {} %}
-        {% for v in violations %}
-            {% if v.rule_code not in violation_groups %}
-                {% set _ = violation_groups.update({v.rule_code: {'name': v.rule_name, 'severity': v.severity, 'count': 0}}) %}
-            {% endif %}
-            {% set _ = violation_groups[v.rule_code].update({'count': violation_groups[v.rule_code].count + 1}) %}
-        {% endfor %}
-        {% for code, info in violation_groups.items() | sort %}
-        <div class="violation-nav-card {{ info.severity }}" onclick="filterViolations('{{ code }}')" data-filter="{{ code }}">
-            <div class="count">{{ info.count }}</div>
-            <div class="code">{{ code }}</div>
-            <div class="name">{{ info.name }}</div>
-        </div>
-        {% endfor %}
-    </div>
-
-    <!-- Filter Info Bar -->
-    <div class="violation-filter-info hidden" id="violation-filter-info">
-        <span>Showing <strong id="filter-rule-name">all</strong> violations (<span id="filter-count">0</span> of {{ violations|length }})</span>
-        <button class="btn btn-outline btn-sm" onclick="filterViolations('all')">Show All</button>
-    </div>
-
-    <!-- Instructions when no filter selected -->
-    <div id="violations-instructions" style="padding: 20px; text-align: center; color: #666; background: #f8f8f8; border-radius: 4px;">
-        <p style="margin: 0;">Click a violation type above to see details.</p>
-    </div>
-
-    <!-- Violation Cards - Grouped by rule type with limit -->
-    <div id="violations-list" style="display: none;">
-        {% set violations_by_rule = {} %}
-        {% for v in violations %}
-            {% if v.rule_code not in violations_by_rule %}
-                {% set _ = violations_by_rule.update({v.rule_code: []}) %}
-            {% endif %}
-            {% set _ = violations_by_rule[v.rule_code].append(v) %}
-        {% endfor %}
-
-        {% for rule_code, rule_violations in violations_by_rule.items() | sort %}
-        <div class="violation-group" data-rule="{{ rule_code }}" style="display: none;">
-            {% for v in rule_violations %}
-            <div class="violation-card {{ 'soft' if v.severity == 'soft' else '' }} {{ 'hidden' if loop.index > 10 else '' }}"
-                 data-rule="{{ v.rule_code }}" data-index="{{ loop.index }}">
-                <span class="violation-code">[{{ v.rule_code }}]</span>
-                <span class="violation-name">{{ v.rule_name }}</span>
-                <div style="margin-top: 5px;">
-                    {{ v.message }}
-                    {% if v.teams %}
-                    <span style="margin-left: 10px;">
-                        {% for team in v.teams %}
-                        <span class="team-lookup" onclick="openTeamModal({{ team.id }}, '{{ team.name|e }}')" title="View {{ team.name }} schedule">&#128269;</span>
-                        {% endfor %}
-                    </span>
-                    {% endif %}
-                </div>
-            </div>
-            {% endfor %}
-            {% if rule_violations | length > 10 %}
-            <div class="see-more-link" data-rule="{{ rule_code }}" onclick="toggleViolationExpand('{{ rule_code }}')">
-                Show {{ rule_violations | length - 10 }} more {{ rule_code }} violations...
-            </div>
-            {% endif %}
-        </div>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
-
-<!-- Warnings -->
+<!-- Warnings (Hidden by Default) -->
 {% if warnings %}
 <div class="card">
-    <h3 style="margin-top: 0;">Warnings</h3>
-    {% for w in warnings %}
-    <div class="warning-card">
-        {{ w.message }}
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin-top: 0; margin-bottom: 0;">Warnings ({{ warnings|length }})</h3>
+        <button class="btn btn-outline btn-sm" id="toggle-warnings-btn" onclick="toggleWarnings()">Show Warnings</button>
     </div>
-    {% endfor %}
+    <div id="warnings-list" style="display: none; margin-top: 15px;">
+        {% for w in warnings %}
+        <div class="warning-card">
+            {{ w.message }}
+        </div>
+        {% endfor %}
+    </div>
 </div>
 {% endif %}
 
@@ -1223,6 +1195,19 @@
 function showLoading(message) {
     document.getElementById('loading-message').textContent = message;
     document.getElementById('loading-overlay').classList.add('visible');
+}
+
+// Toggle warnings visibility
+function toggleWarnings() {
+    var warningsList = document.getElementById('warnings-list');
+    var btn = document.getElementById('toggle-warnings-btn');
+    if (warningsList.style.display === 'none') {
+        warningsList.style.display = 'block';
+        btn.textContent = 'Hide Warnings';
+    } else {
+        warningsList.style.display = 'none';
+        btn.textContent = 'Show Warnings';
+    }
 }
 
 // Intercept form submissions that trigger long operations
