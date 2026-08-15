@@ -127,6 +127,9 @@
                     <a href="{{ url_for('games.rainout', year=current_season_year, is_spring=current_season_is_spring) }}">
                         Handle Rainout
                     </a>
+                    <a href="{{ url_for('games.league_practice', year=current_season_year, is_spring=current_season_is_spring) }}">
+                        Add Division-Practice
+                    </a>
                     {% endif %}
                     {% if current_user.can_edit_schedule() and current_season_year %}
                     <div class="dropdown-divider"></div>
