@@ -314,6 +314,11 @@ def calendar(year, is_spring):
     # Get league filter
     league = request.args.get('league')
 
+    # Check if there's a proposal for this season
+    from app.models.schedule_proposal import ScheduleProposal
+    proposal = ScheduleProposal.get_for_season(year, is_spring)
+    has_proposal = proposal is not None
+
     # Determine the date range for this season
     from app.models.league_season import LeagueSeason
     configs = LeagueSeason.get_by_season(year, is_spring)
@@ -347,20 +352,61 @@ def calendar(year, is_spring):
 
     # Build week days with games
     week_days = []
+
+    # If there's a proposal, create a lookup of proposed games by date
+    proposed_games_by_date = {}
+    if has_proposal:
+        for pg in proposal.games:
+            if pg.get('game_date'):
+                try:
+                    pg_date = datetime.fromisoformat(pg['game_date']).date()
+                    if pg_date not in proposed_games_by_date:
+                        proposed_games_by_date[pg_date] = []
+                    proposed_games_by_date[pg_date].append(pg)
+                except (ValueError, TypeError):
+                    pass
+
     for i in range(7):
         day_date = week_start + timedelta(days=i)
 
-        # Get games for this day
-        query = Game.query.filter(
-            Game.active == 1,
-            Game.year == year,
-            Game.is_spring == is_spring,
-            db.func.date(Game.game_date) == day_date
-        )
-        if league:
-            query = query.filter(Game.league == league)
+        if has_proposal:
+            # Use proposed games
+            day_games_raw = proposed_games_by_date.get(day_date, [])
+            if league:
+                day_games_raw = [g for g in day_games_raw if g.get('league') == league]
 
-        day_games = query.order_by(Game.game_date, Game.location).all()
+            # Convert to objects with needed properties for template
+            day_games = []
+            for g in sorted(day_games_raw, key=lambda x: x.get('game_date', '')):
+                game_obj = type('ProposedGame', (), {
+                    'ID': g.get('id'),
+                    'game_date': datetime.fromisoformat(g['game_date']) if g.get('game_date') else None,
+                    'location': g.get('location'),
+                    'league': g.get('league'),
+                    'status': 'scheduled',
+                    'game_type': g.get('game_type', 'regular'),
+                    'is_scrimmage': g.get('is_scrimmage', False),
+                    'display_type': g.get('game_type', 'regular') if not g.get('is_scrimmage') else 'scrimmage',
+                    'home_ID': g.get('home_team', {}).get('id') if g.get('home_team') else None,
+                    'away_ID': g.get('away_team', {}).get('id') if g.get('away_team') else None,
+                    'home_team': type('Team', (), {'computed_display_name': g.get('home_team', {}).get('name', 'TBD')})() if g.get('home_team') else None,
+                    'away_team': type('Team', (), {'computed_display_name': g.get('away_team', {}).get('name', 'TBD')})() if g.get('away_team') else None,
+                    'no_time_limit': g.get('no_time_limit', False),
+                    'is_proposed': True
+                })()
+                day_games.append(game_obj)
+        else:
+            # Get games from database
+            query = Game.query.filter(
+                Game.active == 1,
+                Game.year == year,
+                Game.is_spring == is_spring,
+                db.func.date(Game.game_date) == day_date
+            )
+            if league:
+                query = query.filter(Game.league == league)
+
+            day_games = query.order_by(Game.game_date, Game.location).all()
 
         week_days.append({
             'date': day_date,
@@ -373,12 +419,18 @@ def calendar(year, is_spring):
     next_week = (week_start + timedelta(days=7)).strftime('%G-%V')
 
     # Get leagues for filter
-    leagues = db.session.query(Game.league).filter(
-        Game.year == year,
-        Game.is_spring == is_spring,
-        Game.league.isnot(None)
-    ).distinct().all()
-    leagues = [l[0] for l in leagues if l[0]]
+    if has_proposal:
+        # Get leagues from proposal
+        leagues = list(set(g.get('league') for g in proposal.games if g.get('league')))
+    else:
+        # Get leagues from database
+        leagues = db.session.query(Game.league).filter(
+            Game.year == year,
+            Game.is_spring == is_spring,
+            Game.league.isnot(None)
+        ).distinct().all()
+        leagues = [l[0] for l in leagues if l[0]]
+    leagues.sort()
 
     # Get teams and fields for edit modal
     teams = TeamSeason.query.filter_by(
@@ -403,7 +455,8 @@ def calendar(year, is_spring):
         teams=teams,
         fields=fields,
         current_league=league,
-        today=today
+        today=today,
+        has_proposal=has_proposal
     )
 
 
@@ -427,13 +480,49 @@ def day_view(year, is_spring, target_date):
         flash('Invalid date format', 'error')
         return redirect(url_for('games.calendar', year=year, is_spring=is_spring))
 
-    # Get games for this day
-    games = Game.query.filter(
-        Game.active == 1,
-        Game.year == year,
-        Game.is_spring == is_spring,
-        db.func.date(Game.game_date) == view_date
-    ).order_by(Game.game_date, Game.location).all()
+    # Check if there's a proposal for this season
+    from app.models.schedule_proposal import ScheduleProposal
+    proposal = ScheduleProposal.get_for_season(year, is_spring)
+    has_proposal = proposal is not None
+
+    if has_proposal:
+        # Get games from proposal for this day
+        games = []
+        for g in proposal.games:
+            if g.get('game_date'):
+                try:
+                    pg_date = dt.fromisoformat(g['game_date']).date()
+                    if pg_date == view_date:
+                        # Convert to object with needed properties
+                        game_obj = type('ProposedGame', (), {
+                            'ID': g.get('id'),
+                            'game_date': dt.fromisoformat(g['game_date']) if g.get('game_date') else None,
+                            'location': g.get('location'),
+                            'league': g.get('league'),
+                            'status': 'scheduled',
+                            'game_type': g.get('game_type', 'regular'),
+                            'is_scrimmage': g.get('is_scrimmage', False),
+                            'display_type': g.get('game_type', 'regular') if not g.get('is_scrimmage') else 'scrimmage',
+                            'home_ID': g.get('home_team', {}).get('id') if g.get('home_team') else None,
+                            'away_ID': g.get('away_team', {}).get('id') if g.get('away_team') else None,
+                            'home_team': type('Team', (), {'computed_display_name': g.get('home_team', {}).get('name', 'TBD')})() if g.get('home_team') else None,
+                            'away_team': type('Team', (), {'computed_display_name': g.get('away_team', {}).get('name', 'TBD')})() if g.get('away_team') else None,
+                            'no_time_limit': g.get('no_time_limit', False),
+                            'is_proposed': True
+                        })()
+                        games.append(game_obj)
+                except (ValueError, TypeError):
+                    pass
+        # Sort by game_date
+        games.sort(key=lambda x: x.game_date if x.game_date else dt.min)
+    else:
+        # Get games from database for this day
+        games = Game.query.filter(
+            Game.active == 1,
+            Game.year == year,
+            Game.is_spring == is_spring,
+            db.func.date(Game.game_date) == view_date
+        ).order_by(Game.game_date, Game.location).all()
 
     # Get all fields that have games on this day
     fields_with_games = set()
