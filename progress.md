@@ -923,6 +923,60 @@ Reorganized the schedule review page layout per user request:
 - Added compact action buttons (Regenerate, Save) to header
 - Removed separate Summary card (counts visible in violation nav cards)
 
+### Scrimmage Control: has_scrimmages Field
+
+Some leagues don't have pre-season scrimmages (tee ball, rookie). Added control to disable scrimmages per league:
+
+**Database Changes:**
+- Added `has_scrimmages` column to `sdll_league_seasons` (default TRUE)
+- Set to FALSE for BB Tee Ball, SB Tee Ball, BB Rookie
+
+**Code Changes:**
+- LeagueSeason model now includes `has_scrimmages` property
+- Scheduler checks `has_scrimmages` before generating scrimmages:
+  - In `_generate_games_for_league()`: Skip scrimmage generation if false
+  - In `_generate_pre_opening()`: All pre-opening dates become practice dates if no scrimmages
+- UI checkbox on schedule settings page
+
+### Team-Specific Practice Days
+
+Teams can now have different practice days than their league default:
+
+**Database Changes:**
+- Added `practice_days` column to `sdll_team_seasons` (VARCHAR, nullable)
+- Format: comma-separated day numbers (e.g., "1,3" for Tue/Thu)
+- NULL means use league default
+
+**Code Changes:**
+- `TeamSeason.get_practice_days(league_season)` - Returns team's days or falls back to league
+- `TeamSeason.practice_days_display` - Human-readable format ("Tue, Thu")
+- Scheduler uses team-specific days when scheduling practices
+- `_generate_post_opening_practices()` collects all unique practice days across teams
+- `_assign_practices_for_date()` checks if date is a practice day for each team
+
+**UI Changes:**
+- Edit button on team management page now opens settings modal
+- Modal includes checkboxes for selecting practice days
+- Shows "League Default" if no team-specific days set
+
+### League-Based Group Practices
+
+Added manual feature for group practices where all teams practice together:
+
+**Database Changes:**
+- Added `is_league_practice` column to `sdll_games` (BOOLEAN, default FALSE)
+
+**New Route:**
+- `/games/<year>/<is_spring>/league-practice` - Create and view league practices
+
+**Features:**
+- Form to select league, date, time, and field
+- Creates a practice record for every team in the league
+- All practices marked with `is_league_practice=True`
+- Shows list of existing league practices
+
+**Migration Script:** `scripts/add_scrimmage_and_practice_fields.sql`
+
 ---
 
 ## Session Log (August 13, 2026)
