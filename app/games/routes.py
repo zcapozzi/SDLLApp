@@ -526,24 +526,45 @@ def day_view(year, is_spring, target_date):
 
     # Get all fields that have games on this day
     fields_with_games = set()
+    game_hours = set()
     for game in games:
         if game.location:
             fields_with_games.add(game.location)
+        if game.game_date:
+            game_hours.add(game.game_date.hour)
 
     # Get all fields for display (prioritize those with games)
     all_fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
+    field_lookup = {f.location_title: f for f in all_fields}
 
-    # Filter to fields used on this day, or all fields if none
+    # Build display_fields from fields used on this day
     if fields_with_games:
-        display_fields = [f for f in all_fields if f.location_title in fields_with_games]
+        display_fields = []
+        for field_name in sorted(fields_with_games):
+            if field_name:
+                # Try to find matching field in DB
+                if field_name in field_lookup:
+                    display_fields.append(field_lookup[field_name])
+                else:
+                    # Create a placeholder field object for fields not in DB
+                    placeholder = type('Field', (), {'ID': None, 'location_title': field_name})()
+                    display_fields.append(placeholder)
     else:
         display_fields = all_fields[:8]  # Limit to 8 fields to fit on screen
 
-    # Define time slots (30-minute intervals from 5:00 PM to 9:00 PM)
+    # Define time slots based on actual game times (dynamic range)
     time_slots = []
-    for hour in [17, 18, 19, 20]:  # 5 PM, 6 PM, 7 PM, 8 PM
-        for minute in [0, 30]:
-            time_slots.append(f'{hour:02d}:{minute:02d}')
+    if game_hours:
+        min_hour = min(game_hours)
+        max_hour = max(game_hours) + 1  # Include the last hour
+        for hour in range(min_hour, max_hour + 1):
+            for minute in [0, 30]:
+                time_slots.append(f'{hour:02d}:{minute:02d}')
+    else:
+        # Default to evening if no games
+        for hour in [17, 18, 19, 20]:
+            for minute in [0, 30]:
+                time_slots.append(f'{hour:02d}:{minute:02d}')
 
     # Build grid: time_slot -> field -> list of games
     grid = {}
