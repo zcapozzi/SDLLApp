@@ -1311,11 +1311,11 @@ class ScheduleGenerator:
             current_date += timedelta(days=1)
 
     def _generate_round_robin(self, teams, games_per_team):
-        """Generate round-robin matchups ensuring PAIR BALANCE (rule a1).
+        """Generate round-robin matchups ensuring PAIR BALANCE (rule a1) and TEAM BALANCE (rule e1).
 
         Constraints:
         - Each team plays exactly games_per_team games
-        - All pairs must play each other (no missing matchups)
+        - All pairs must play each other (if mathematically possible)
         - The gap between most-played and least-played pair is at most 1
 
         Returns list of (home_team, away_team) tuples.
@@ -1327,16 +1327,12 @@ class ScheduleGenerator:
         total_games_needed = (games_per_team * n) // 2
 
         # Calculate pair frequency requirements
-        # With n teams, each team plays n-1 opponents over games_per_team games
-        # Average games per pair = games_per_team / (n-1)
-        min_games_per_pair = games_per_team // (n - 1)  # Floor - every pair plays at least this many
-
-        # Number of pairs that need to play one extra game
+        min_games_per_pair = games_per_team // (n - 1)
         num_pairs = n * (n - 1) // 2
         base_total = num_pairs * min_games_per_pair
         extra_games_needed = total_games_needed - base_total
 
-        # Create all pairs with their target counts
+        # Create all pairs with their base targets
         all_pairs = []
         pair_targets = {}
         for i in range(n):
@@ -1345,52 +1341,157 @@ class ScheduleGenerator:
                 all_pairs.append((teams[i], teams[j]))
                 pair_targets[pair_key] = min_games_per_pair
 
-        # Distribute extra games across pairs
-        # Shuffle pairs to randomize which ones get extra games
-        shuffled_pairs = list(all_pairs)
-        random.shuffle(shuffled_pairs)
-        for i in range(min(extra_games_needed, len(shuffled_pairs))):
-            t1, t2 = shuffled_pairs[i]
-            pair_key = (t1.team_ID, t2.team_ID) if t1.team_ID < t2.team_ID else (t2.team_ID, t1.team_ID)
-            pair_targets[pair_key] += 1
+        # FIXED EXTRA DISTRIBUTION: Guarantee each team gets their fair share
+        # Each team needs: games_per_team total games
+        # Each team's games from base: min_games_per_pair * (n-1)
+        # Each team's extras needed: games_per_team - min_games_per_pair * (n-1)
+        team_extras_needed = {}
+        for t in teams:
+            base_games = min_games_per_pair * (n - 1)
+            team_extras_needed[t.team_ID] = games_per_team - base_games
 
-        # Now select matchups to meet pair targets while balancing team counts
+        # Distribute extras using a round-robin approach that guarantees balance
+        extras_given = {t.team_ID: 0 for t in teams}
+        pair_has_extra = set()  # Track which pairs already have an extra
+        candidate_pairs = list(all_pairs)
+        random.shuffle(candidate_pairs)
+
+        extras_assigned = 0
+        max_iterations = extra_games_needed * 10  # Safety limit
+        iteration = 0
+
+        while extras_assigned < extra_games_needed and iteration < max_iterations:
+            iteration += 1
+
+            # Find the team that needs the most extras and hasn't gotten their fair share
+            teams_needing_extras = [
+                (team_extras_needed[t.team_ID] - extras_given[t.team_ID], t)
+                for t in teams
+                if extras_given[t.team_ID] < team_extras_needed[t.team_ID]
+            ]
+
+            if not teams_needing_extras:
+                break
+
+            # Sort by need descending (use team_ID as tiebreaker)
+            teams_needing_extras.sort(key=lambda x: (-x[0], x[1].team_ID))
+            max_need = teams_needing_extras[0][0]
+            neediest_teams = [t for need, t in teams_needing_extras if need == max_need]
+            chosen_team = random.choice(neediest_teams)
+
+            # Find a pair involving chosen_team that hasn't gotten an extra yet
+            # and where the partner also needs extras
+            best_pairs = []
+            for pair in candidate_pairs:
+                t1, t2 = pair
+                pair_key = (min(t1.team_ID, t2.team_ID), max(t1.team_ID, t2.team_ID))
+                if pair_key in pair_has_extra:
+                    continue
+                if t1.team_ID == chosen_team.team_ID:
+                    partner = t2
+                elif t2.team_ID == chosen_team.team_ID:
+                    partner = t1
+                else:
+                    continue
+
+                partner_need = team_extras_needed[partner.team_ID] - extras_given[partner.team_ID]
+                if partner_need > 0:
+                    best_pairs.append((partner_need, pair))
+
+            if not best_pairs:
+                # No valid pair found - try next team
+                continue
+
+            # Pick the pair with the partner that needs the most extras
+            # Sort by partner_need descending
+            best_pairs.sort(key=lambda x: -x[0])
+            _, chosen_pair = best_pairs[0]
+            t1, t2 = chosen_pair
+            pair_key = (min(t1.team_ID, t2.team_ID), max(t1.team_ID, t2.team_ID))
+
+            pair_targets[pair_key] += 1
+            pair_has_extra.add(pair_key)
+            extras_given[t1.team_ID] += 1
+            extras_given[t2.team_ID] += 1
+            extras_assigned += 1
+
+        # Verify team targets sum correctly and fix if needed
+        # LIMIT: Never increase a pair target beyond min_games_per_pair + 1 (to maintain gap ≤ 1)
+        max_pair_target = min_games_per_pair + 1
+
+        for t in teams:
+            team_target_sum = sum(
+                pair_targets[(min(t.team_ID, t2.team_ID), max(t.team_ID, t2.team_ID))]
+                for t2 in teams if t2.team_ID != t.team_ID
+            )
+            # If a team doesn't have enough games from pair targets, try to add more
+            while team_target_sum < games_per_team:
+                # Find a pair involving this team that can be increased
+                best_pair = None
+                best_partner_need = -1
+                for t2 in teams:
+                    if t2.team_ID == t.team_ID:
+                        continue
+                    pair_key = (min(t.team_ID, t2.team_ID), max(t.team_ID, t2.team_ID))
+
+                    # Don't exceed max pair target (to maintain gap ≤ 1)
+                    if pair_targets[pair_key] >= max_pair_target:
+                        continue
+
+                    # Check if the other team can handle more games
+                    partner_sum = sum(
+                        pair_targets[(min(t2.team_ID, t3.team_ID), max(t2.team_ID, t3.team_ID))]
+                        for t3 in teams if t3.team_ID != t2.team_ID
+                    )
+                    partner_need = games_per_team - partner_sum
+                    if partner_need > 0 and partner_need > best_partner_need:
+                        best_partner_need = partner_need
+                        best_pair = pair_key
+
+                if best_pair:
+                    pair_targets[best_pair] += 1
+                    team_target_sum += 1
+                else:
+                    # Can't add more without breaking pair balance
+                    break
+
+        # Now select matchups to meet pair targets while respecting team limits
         pair_counts = defaultdict(int)
         team_counts = {t.team_ID: 0 for t in teams}
         home_counts = {t.team_ID: 0 for t in teams}
         selected = []
 
-        # Process in rounds - each round tries to cover as many pairs as possible
         while len(selected) < total_games_needed:
-            # Find pairs that still need games
+            # Find pairs that still need games AND both teams are under their limit
             pairs_needing_games = []
             for t1, t2 in all_pairs:
+                # CRITICAL: Check team limits first
+                if team_counts[t1.team_ID] >= games_per_team or team_counts[t2.team_ID] >= games_per_team:
+                    continue
+
                 pair_key = (t1.team_ID, t2.team_ID) if t1.team_ID < t2.team_ID else (t2.team_ID, t1.team_ID)
                 target = pair_targets[pair_key]
                 current = pair_counts[pair_key]
 
                 if current < target:
-                    # Check if both teams can still play
-                    if team_counts[t1.team_ID] < games_per_team and team_counts[t2.team_ID] < games_per_team:
-                        # Priority: pairs with fewer games get higher priority
-                        # Secondary: teams that need more games
-                        team_need = (games_per_team - team_counts[t1.team_ID]) + (games_per_team - team_counts[t2.team_ID])
-                        # Use team IDs as tiebreaker to make sorting deterministic
-                        pairs_needing_games.append((current, -team_need, t1.team_ID, t2.team_ID, t1, t2))
+                    # Priority: pairs with fewer games get higher priority
+                    # Secondary: teams that need more games
+                    team_need = (games_per_team - team_counts[t1.team_ID]) + (games_per_team - team_counts[t2.team_ID])
+                    pairs_needing_games.append((current, -team_need, t1.team_ID, t2.team_ID, t1, t2))
 
             if not pairs_needing_games:
                 break
 
-            # Sort by pair count (ascending), then by team need (descending via negative)
+            # Sort by pair count (ascending), then by team need (descending)
             pairs_needing_games.sort()
 
             # Select a matchup - prefer pairs with lowest count
             min_count = pairs_needing_games[0][0]
             top_candidates = [p for p in pairs_needing_games if p[0] == min_count]
 
-            # Among top candidates, pick randomly for variety
+            # Pick randomly for variety
             chosen = random.choice(top_candidates)
-            t1, t2 = chosen[4], chosen[5]  # Extract team objects from tuple
+            t1, t2 = chosen[4], chosen[5]
 
             # Determine home/away based on balance
             if home_counts[t1.team_ID] <= home_counts[t2.team_ID]:
