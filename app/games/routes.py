@@ -381,16 +381,16 @@ def calendar(year, is_spring):
                 game_obj = type('ProposedGame', (), {
                     'ID': g.get('id'),
                     'game_date': datetime.fromisoformat(g['game_date']) if g.get('game_date') else None,
-                    'location': g.get('location'),
+                    'location': g.get('field_name'),  # Proposed games use field_name
                     'league': g.get('league'),
                     'status': 'scheduled',
                     'game_type': g.get('game_type', 'regular'),
                     'is_scrimmage': g.get('is_scrimmage', False),
                     'display_type': g.get('game_type', 'regular') if not g.get('is_scrimmage') else 'scrimmage',
-                    'home_ID': g.get('home_team', {}).get('id') if g.get('home_team') else None,
-                    'away_ID': g.get('away_team', {}).get('id') if g.get('away_team') else None,
-                    'home_team': type('Team', (), {'computed_display_name': g.get('home_team', {}).get('name', 'TBD')})() if g.get('home_team') else None,
-                    'away_team': type('Team', (), {'computed_display_name': g.get('away_team', {}).get('name', 'TBD')})() if g.get('away_team') else None,
+                    'home_ID': g.get('home_team_id'),
+                    'away_ID': g.get('away_team_id'),
+                    'home_team': type('Team', (), {'computed_display_name': g.get('home_team_name', 'TBD')})() if g.get('home_team_id') else None,
+                    'away_team': type('Team', (), {'computed_display_name': g.get('away_team_name', 'TBD')})() if g.get('away_team_id') else None,
                     'no_time_limit': g.get('no_time_limit', False),
                     'is_proposed': True
                 })()
@@ -497,16 +497,16 @@ def day_view(year, is_spring, target_date):
                         game_obj = type('ProposedGame', (), {
                             'ID': g.get('id'),
                             'game_date': dt.fromisoformat(g['game_date']) if g.get('game_date') else None,
-                            'location': g.get('location'),
+                            'location': g.get('field_name'),  # Proposed games use field_name
                             'league': g.get('league'),
                             'status': 'scheduled',
                             'game_type': g.get('game_type', 'regular'),
                             'is_scrimmage': g.get('is_scrimmage', False),
                             'display_type': g.get('game_type', 'regular') if not g.get('is_scrimmage') else 'scrimmage',
-                            'home_ID': g.get('home_team', {}).get('id') if g.get('home_team') else None,
-                            'away_ID': g.get('away_team', {}).get('id') if g.get('away_team') else None,
-                            'home_team': type('Team', (), {'computed_display_name': g.get('home_team', {}).get('name', 'TBD')})() if g.get('home_team') else None,
-                            'away_team': type('Team', (), {'computed_display_name': g.get('away_team', {}).get('name', 'TBD')})() if g.get('away_team') else None,
+                            'home_ID': g.get('home_team_id'),
+                            'away_ID': g.get('away_team_id'),
+                            'home_team': type('Team', (), {'computed_display_name': g.get('home_team_name', 'TBD')})() if g.get('home_team_id') else None,
+                            'away_team': type('Team', (), {'computed_display_name': g.get('away_team_name', 'TBD')})() if g.get('away_team_id') else None,
                             'no_time_limit': g.get('no_time_limit', False),
                             'is_proposed': True
                         })()

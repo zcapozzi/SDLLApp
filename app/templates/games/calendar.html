@@ -19,17 +19,22 @@
         font-weight: bold;
     }
     .calendar-grid {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: 10px;
+        display: flex;
+        gap: 8px;
         margin-bottom: 30px;
     }
     .calendar-day {
         background: white;
         border-radius: 8px;
-        min-height: 200px;
+        min-height: 150px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         overflow: hidden;
+        flex: 1;
+        min-width: 0;
+    }
+    .calendar-day.empty-day {
+        flex: 0.4;
+        min-height: 100px;
     }
     .calendar-day.today {
         box-shadow: 0 0 0 2px rgb(34, 139, 34);
@@ -46,17 +51,18 @@
         color: white;
     }
     .day-content {
-        padding: 8px;
-        max-height: 300px;
+        padding: 6px;
+        max-height: 400px;
         overflow-y: auto;
     }
     .game-card {
-        padding: 8px;
-        margin-bottom: 6px;
-        border-radius: 6px;
-        font-size: 12px;
+        padding: 4px 6px;
+        margin-bottom: 4px;
+        border-radius: 4px;
+        font-size: 11px;
         cursor: pointer;
         transition: transform 0.1s, box-shadow 0.1s;
+        line-height: 1.3;
     }
     .game-card:hover {
         transform: translateY(-1px);
@@ -89,13 +95,19 @@
     .game-time {
         font-weight: bold;
         color: #333;
+        font-size: 10px;
     }
     .game-location {
         color: #666;
-        font-size: 11px;
+        font-size: 10px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .game-teams {
-        margin-top: 4px;
+        margin-top: 2px;
+        font-size: 10px;
+        line-height: 1.2;
     }
     .no-games {
         color: #999;
@@ -221,7 +233,7 @@
 <!-- Calendar Grid -->
 <div class="calendar-grid">
     {% for day in week_days %}
-    <div class="calendar-day {{ 'today' if day.is_today else '' }}">
+    <div class="calendar-day {{ 'today' if day.is_today else '' }} {{ 'empty-day' if not day.games else '' }}">
         <a href="{{ url_for('games.day_view', year=year, is_spring=is_spring, target_date=day.date.strftime('%Y-%m-%d')) }}" class="day-header" style="text-decoration: none; color: inherit; display: block;">
             {{ day.date.strftime('%a') }}<br>
             {{ day.date.strftime('%m/%d') }}
@@ -231,22 +243,19 @@
             <div class="game-card {{ game.display_type }} {{ game.status }}"
                  data-league="{{ game.league }}"
                  data-type="{{ game.display_type }}"
-                 onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.location or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage }}, {{ game.no_time_limit or 0 }}, '{{ game.league }}')">
+                 onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.location or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage|int }}, {{ game.no_time_limit|int if game.no_time_limit else 0 }}, '{{ game.league }}')">
                 <div class="game-time">
-                    <span class="status-dot {{ game.status }}"></span>
                     {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
                 </div>
                 <div class="game-location">{{ game.location or 'TBD' }}</div>
                 <div class="game-teams">
-                    <strong>{{ game.league }}</strong><br>
-                    {% if game.home_team %}{{ game.home_team.computed_display_name }}{% else %}TBD{% endif %}
-                    {% if game.away_team %}
-                    <br>vs {{ game.away_team.computed_display_name }}
-                    {% endif %}
+                    <strong>{{ game.league }}</strong>
+                    {% if game.home_team %} - {{ game.home_team.computed_display_name }}{% endif %}
+                    {% if game.away_team %} vs {{ game.away_team.computed_display_name }}{% endif %}
                 </div>
             </div>
             {% else %}
-            <div class="no-games">No games</div>
+            <div class="no-games">-</div>
             {% endfor %}
         </div>
     </div>
