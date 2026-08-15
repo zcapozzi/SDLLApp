@@ -30,6 +30,11 @@
         background: rgb(34, 139, 34);
         color: white;
     }
+    .day-cell.both {
+        background: linear-gradient(135deg, #3498db 50%, rgb(34, 139, 34) 50%);
+        color: white;
+        font-weight: bold;
+    }
     .day-cell:hover {
         border-color: #333;
     }
@@ -119,7 +124,7 @@
 <div class="card" style="margin-bottom: 20px;">
     <p class="text-muted">
         Configure practice and game days for each league, plus set the first practice date and opening day.
-        Click days to cycle through: <strong>-</strong> (none) → <strong>P</strong> (practice) → <strong>G</strong> (game).
+        Click days to cycle through: <strong>-</strong> (none) → <strong>P</strong> (practice) → <strong>G</strong> (game) → <strong>P/G</strong> (both).
         Changes are saved when you click <strong>Save Changes</strong>.
     </p>
     <div class="legend">
@@ -134,6 +139,10 @@
         <div class="legend-item">
             <div class="legend-box" style="background: rgb(34, 139, 34);"></div>
             <span>Game</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-box" style="background: linear-gradient(135deg, #3498db 50%, rgb(34, 139, 34) 50%);"></div>
+            <span>P/G (Both)</span>
         </div>
         <div class="legend-item" style="margin-left: 20px;">
             <div class="legend-box" style="background: #e67e22; width: 8px; height: 8px; border-radius: 50%;"></div>
@@ -189,7 +198,7 @@
                                  data-day="{{ i }}"
                                  data-type="{{ day_type or '' }}"
                                  data-original="{{ day_type or '' }}">
-                                {% if day_type == 'practice' %}P{% elif day_type == 'game' %}G{% else %}-{% endif %}
+                                {% if day_type == 'practice' %}P{% elif day_type == 'game' %}G{% elif day_type == 'both' %}P/G{% else %}-{% endif %}
                             </div>
                             <input type="hidden" name="league_{{ config.ID }}_day_{{ i }}"
                                    id="day-{{ config.ID }}-{{ i }}"
@@ -262,7 +271,7 @@ function cycleDay(configId, dayIndex, element) {
     var currentType = element.dataset.type;
     var newType, newLabel, newClass;
 
-    // Cycle: empty -> practice -> game -> empty
+    // Cycle: empty -> practice -> game -> both -> empty
     if (currentType === '' || currentType === null) {
         newType = 'practice';
         newLabel = 'P';
@@ -271,6 +280,10 @@ function cycleDay(configId, dayIndex, element) {
         newType = 'game';
         newLabel = 'G';
         newClass = 'game';
+    } else if (currentType === 'game') {
+        newType = 'both';
+        newLabel = 'P/G';
+        newClass = 'both';
     } else {
         newType = '';
         newLabel = '-';

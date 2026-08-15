@@ -55,6 +55,7 @@ class LeagueSeason(db.Model):
     # Day type options
     DAY_TYPE_PRACTICE = 'practice'
     DAY_TYPE_GAME = 'game'
+    DAY_TYPE_BOTH = 'both'  # P/G days - can have either practices or games
 
     # Day name mapping
     DAY_COLUMNS = ['monday_type', 'tuesday_type', 'wednesday_type', 'thursday_type',
@@ -272,13 +273,42 @@ class LeagueSeason(db.Model):
 
     @property
     def practice_days(self):
-        """Get list of day numbers (0=Monday) that are practice days"""
+        """Get list of day numbers (0=Monday) that can have practices.
+
+        Includes both 'practice' days and 'both' (P/G) days.
+        """
+        return [i for i, col in enumerate(self.DAY_COLUMNS)
+                if getattr(self, col) in (self.DAY_TYPE_PRACTICE, self.DAY_TYPE_BOTH)]
+
+    @property
+    def game_days(self):
+        """Get list of day numbers (0=Monday) that can have games.
+
+        Includes both 'game' days and 'both' (P/G) days.
+        """
+        return [i for i, col in enumerate(self.DAY_COLUMNS)
+                if getattr(self, col) in (self.DAY_TYPE_GAME, self.DAY_TYPE_BOTH)]
+
+    @property
+    def both_days(self):
+        """Get list of day numbers (0=Monday) that are P/G days (can have either)."""
+        return [i for i, col in enumerate(self.DAY_COLUMNS)
+                if getattr(self, col) == self.DAY_TYPE_BOTH]
+
+    @property
+    def has_pg_days(self):
+        """Check if this league has any P/G days configured."""
+        return len(self.both_days) > 0
+
+    @property
+    def practice_only_days(self):
+        """Get list of day numbers that are practice-only (not P/G)."""
         return [i for i, col in enumerate(self.DAY_COLUMNS)
                 if getattr(self, col) == self.DAY_TYPE_PRACTICE]
 
     @property
-    def game_days(self):
-        """Get list of day numbers (0=Monday) that are game days"""
+    def game_only_days(self):
+        """Get list of day numbers that are game-only (not P/G)."""
         return [i for i, col in enumerate(self.DAY_COLUMNS)
                 if getattr(self, col) == self.DAY_TYPE_GAME]
 
@@ -288,7 +318,14 @@ class LeagueSeason(db.Model):
         days = self.practice_days
         if not days:
             return None
-        return ', '.join(self.DAY_ABBREVS[d] for d in days)
+        # Mark P/G days with asterisk
+        parts = []
+        for d in days:
+            abbrev = self.DAY_ABBREVS[d]
+            if d in self.both_days:
+                abbrev += '*'
+            parts.append(abbrev)
+        return ', '.join(parts)
 
     @property
     def game_days_display(self):
@@ -296,12 +333,22 @@ class LeagueSeason(db.Model):
         days = self.game_days
         if not days:
             return None
-        return ', '.join(self.DAY_ABBREVS[d] for d in days)
+        # Mark P/G days with asterisk
+        parts = []
+        for d in days:
+            abbrev = self.DAY_ABBREVS[d]
+            if d in self.both_days:
+                abbrev += '*'
+            parts.append(abbrev)
+        return ', '.join(parts)
 
     @property
     def schedule_ready(self):
         """Check if this league has all required schedule settings"""
-        has_game_day = any(getattr(self, col) == self.DAY_TYPE_GAME for col in self.DAY_COLUMNS)
+        has_game_day = any(
+            getattr(self, col) in (self.DAY_TYPE_GAME, self.DAY_TYPE_BOTH)
+            for col in self.DAY_COLUMNS
+        )
         has_dates = (self.first_practice_date is not None and
                      self.opening_day_date is not None and
                      self.regular_season_end_date is not None and

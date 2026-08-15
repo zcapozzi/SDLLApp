@@ -49,3 +49,36 @@ After opening day, games are scheduled on game days and practices only on practi
 Verified that practices now generate correctly:
 - BB AAA: Aug 31 (Mon), Sept 2 (Wed), Sept 4 (Fri), Sept 7 (Mon), Sept 9 (Wed), then scrimmage on Sept 11
 - BB AA: Sept 1 (Tue), Sept 3 (Thu), Sept 5 (Sat), Sept 8 (Tue), etc.
+
+---
+
+## Session: August 15, 2026 - P/G Days and Day-of-Week Balance
+
+### New Features
+
+1. **P/G Days (Both Practice and Game)**: Days can now be configured as 'both' (P/G), meaning they can have either practices or games scheduled.
+   - Click days in schedule settings to cycle: - → P → G → P/G → -
+   - P/G days are included in both `practice_days` and `game_days` properties
+   - Scheduler prioritizes games first (Phase 1), then fills remaining slots with practices (Phase 2)
+
+2. **Day-of-Week Game Balance Rule (f1)**: For leagues with P/G days, validates that game distribution across days of week is balanced.
+   - **Soft violation (f1a)**: Teams differ by 2+ games on a given day of week
+   - **Hard violation (f1b)**: Teams differ by 3+ games on a given day of week
+
+### Files Modified
+- `app/models/league_season.py`:
+  - Added `DAY_TYPE_BOTH = 'both'` constant
+  - Updated `practice_days` and `game_days` to include 'both' days
+  - Added `both_days`, `has_pg_days`, `practice_only_days`, `game_only_days` properties
+  - Updated `schedule_ready` to check for 'both' type
+  - Updated display properties to mark P/G days with asterisk
+
+- `app/utils/scheduler.py`:
+  - Added `_check_day_of_week_game_balance()` validation method
+  - Validates game distribution on P/G days only
+
+- `app/templates/seasons/schedule_settings.html`:
+  - Added CSS for `.day-cell.both` with gradient background
+  - Updated legend to include P/G option
+  - Updated JavaScript cycling to include 'both' option
+  - Updated template to display 'P/G' for both days

@@ -235,6 +235,10 @@ class ScheduleValidator:
         # Also only check counting games (regular + playoff)
         self._check_game_day_balance(league, counting_games, teams)
 
+        # Rule f1: Day-of-week game balance for P/G leagues
+        # No team should have 2+ more games on a given day of week than another team
+        self._check_day_of_week_game_balance(league, counting_games, teams)
+
     def _is_actual_game(self, game):
         """Check if this is an actual game (not practice).
 
@@ -751,6 +755,100 @@ class ScheduleValidator:
                     f'{league}: On {date_str}, {len(teams_sitting)} team(s) not playing: {", ".join(sitting_names)}',
                     teams=[self._build_team_info(t) for t in teams_sitting]
                 ))
+
+    def _check_day_of_week_game_balance(self, league, games, teams):
+        """Rule f1: Day-of-week game balance for P/G leagues.
+
+        For leagues with P/G days (days that can have either practices or games),
+        ensure no team has significantly more games on a given day of week than others.
+
+        - Soft violation (f1a): If any two teams differ by 2+ games on a day of week
+        - Hard violation (f1b): If any two teams differ by 3+ games on a day of week
+        """
+        # Get league config to check for P/G days
+        config = self._league_configs.get(league)
+        if not config:
+            return
+
+        # Only apply this rule to leagues with P/G days
+        if not config.has_pg_days:
+            return
+
+        pg_days = config.both_days  # Days that are P/G
+
+        # Count games per team per day of week (only for P/G days)
+        # day_of_week -> team_id -> game_count
+        games_per_team_per_dow = defaultdict(lambda: defaultdict(int))
+
+        for g in games:
+            game_date = self._get_game_date(g)
+            if not game_date:
+                continue
+
+            dow = game_date.weekday()
+            if dow not in pg_days:
+                continue  # Only check P/G days
+
+            home = self._get_home_team(g)
+            away = self._get_away_team(g)
+
+            if home:
+                games_per_team_per_dow[dow][home] += 1
+            if away:
+                games_per_team_per_dow[dow][away] += 1
+
+        # Check each P/G day for imbalance
+        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+        for dow in pg_days:
+            team_counts = games_per_team_per_dow[dow]
+
+            if not team_counts:
+                continue
+
+            # Include teams with 0 games on this day
+            for team_id in teams:
+                if team_id not in team_counts:
+                    team_counts[team_id] = 0
+
+            counts = list(team_counts.values())
+            if not counts:
+                continue
+
+            min_count = min(counts)
+            max_count = max(counts)
+            diff = max_count - min_count
+
+            if diff >= 2:
+                # Find the teams with max and min games
+                max_teams = [t for t, c in team_counts.items() if c == max_count]
+                min_teams = [t for t, c in team_counts.items() if c == min_count]
+
+                max_names = [self._get_team_name(t) for t in max_teams]
+                min_names = [self._get_team_name(t) for t in min_teams]
+
+                day_name = day_names[dow]
+
+                if diff >= 3:
+                    # Hard violation
+                    self.violations.append(ScheduleViolation(
+                        'f1b', 'Day-of-week game balance (hard)',
+                        ScheduleViolation.HARD,
+                        f'{league}: {day_name} game imbalance of {diff}. '
+                        f'{", ".join(max_names)} have {max_count} games, '
+                        f'{", ".join(min_names)} have {min_count} games.',
+                        teams=[self._build_team_info(t) for t in max_teams + min_teams]
+                    ))
+                else:
+                    # Soft violation (diff == 2)
+                    self.violations.append(ScheduleViolation(
+                        'f1a', 'Day-of-week game balance (soft)',
+                        ScheduleViolation.SOFT,
+                        f'{league}: {day_name} game imbalance of {diff}. '
+                        f'{", ".join(max_names)} have {max_count} games, '
+                        f'{", ".join(min_names)} have {min_count} games.',
+                        teams=[self._build_team_info(t) for t in max_teams + min_teams]
+                    ))
 
 
 class SlotDecision:
