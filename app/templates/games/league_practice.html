@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}League Practice - {{ season_name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>
+        <span class="badge badge-{{ 'spring' if is_spring else 'fall' }}">{{ season_name }}</span>
+        League Practices
+    </h1>
+    <div>
+        <a href="{{ url_for('games.index', year=year, is_spring=is_spring) }}" class="btn btn-outline">View Games</a>
+        <a href="{{ url_for('games.calendar', year=year, is_spring=is_spring) }}" class="btn btn-outline">Calendar</a>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 400px 1fr; gap: 30px;">
+    <!-- Create League Practice Form -->
+    <div class="card">
+        <h3 style="margin-bottom: 20px;">Schedule League Practice</h3>
+        <p class="text-muted text-small" style="margin-bottom: 20px;">
+            A league practice is a group practice where all teams in a league practice together at the same time and place.
+        </p>
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-group">
+                <label for="league">League</label>
+                <select id="league" name="league" class="form-control" required>
+                    <option value="">Select a league...</option>
+                    {% for league in leagues %}
+                    <option value="{{ league }}">{{ league }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="practice_date">Date</label>
+                <input type="date" id="practice_date" name="practice_date" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+                <label for="practice_time">Time</label>
+                <input type="time" id="practice_time" name="practice_time" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+                <label for="field_id">Field</label>
+                <select id="field_id" name="field_id" class="form-control" required>
+                    <option value="">Select a field...</option>
+                    {% for field in fields %}
+                    <option value="{{ field.ID }}">{{ field.location_title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Create League Practice</button>
+        </form>
+    </div>
+
+    <!-- Existing League Practices -->
+    <div class="card">
+        <h3 style="margin-bottom: 20px;">Scheduled League Practices</h3>
+
+        {% if practice_groups %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>League</th>
+                    <th>Field</th>
+                    <th>Teams</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for group in practice_groups | sort(attribute='date') %}
+                <tr>
+                    <td>
+                        {% if group.date %}
+                        {{ group.date.strftime('%a, %b %d, %Y') }}
+                        {% else %}
+                        TBD
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if group.date %}
+                        {{ group.date.strftime('%I:%M %p') }}
+                        {% else %}
+                        TBD
+                        {% endif %}
+                    </td>
+                    <td><strong>{{ group.league }}</strong></td>
+                    <td>{{ group.location or 'TBD' }}</td>
+                    <td>{{ group.teams | length }} teams</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted" style="text-align: center; padding: 40px;">
+            No league practices scheduled yet. Use the form to create one.
+        </p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

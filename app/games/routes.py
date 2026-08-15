@@ -677,3 +677,113 @@ def rainout(year, is_spring):
         practice_dates=practice_dates[:20],  # Limit to next 20 practice dates
         fields=fields
     )
+
+
+@games_bp.route('/<int:year>/<int:is_spring>/league-practice', methods=['GET', 'POST'])
+@login_required
+def league_practice(year, is_spring):
+    """Create a league-based group practice where all teams practice together."""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to create league practices.', 'error')
+        return redirect(url_for('games.index', year=year, is_spring=is_spring))
+
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    # Get leagues for this season
+    from app.models.league_season import LeagueSeason
+    league_configs = LeagueSeason.get_by_season(year, is_spring)
+    leagues = [lc.league for lc in league_configs]
+
+    # Get fields
+    fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
+
+    if request.method == 'POST':
+        league = request.form.get('league')
+        practice_date_str = request.form.get('practice_date')
+        practice_time_str = request.form.get('practice_time')
+        field_id = request.form.get('field_id')
+
+        if not all([league, practice_date_str, practice_time_str, field_id]):
+            flash('All fields are required.', 'error')
+            return redirect(url_for('games.league_practice', year=year, is_spring=is_spring))
+
+        try:
+            practice_date = datetime.strptime(practice_date_str, '%Y-%m-%d').date()
+            practice_time = datetime.strptime(practice_time_str, '%H:%M').time()
+            practice_datetime = datetime.combine(practice_date, practice_time)
+        except ValueError:
+            flash('Invalid date or time format.', 'error')
+            return redirect(url_for('games.league_practice', year=year, is_spring=is_spring))
+
+        field = Field.query.get(int(field_id))
+        if not field:
+            flash('Invalid field selected.', 'error')
+            return redirect(url_for('games.league_practice', year=year, is_spring=is_spring))
+
+        # Get all active teams in this league for this season
+        teams = TeamSeason.query.filter_by(
+            year=year,
+            is_spring=is_spring,
+            league=league,
+            is_placeholder=0,
+            active=1
+        ).all()
+
+        if not teams:
+            flash(f'No teams found for {league}.', 'error')
+            return redirect(url_for('games.league_practice', year=year, is_spring=is_spring))
+
+        # Create a practice for each team, all marked as league practice
+        created_count = 0
+        for team in teams:
+            practice = Game(
+                active=1,
+                game_date=practice_datetime,
+                home_ID=team.team_ID,
+                away_ID=None,  # Practice = no away team
+                league=league,
+                location=field.location_title,
+                status='scheduled',
+                year=year,
+                is_spring=is_spring,
+                game_type='practice',
+                is_league_practice=True
+            )
+            db.session.add(practice)
+            created_count += 1
+
+        db.session.commit()
+        logger.info(f'Created league practice for {league} on {practice_date} with {created_count} teams')
+        flash(f'Created league practice for {league} with {created_count} teams on {practice_date.strftime("%B %d, %Y")} at {practice_time.strftime("%I:%M %p")}', 'success')
+        return redirect(url_for('games.league_practice', year=year, is_spring=is_spring))
+
+    # Get existing league practices for display
+    existing_practices = Game.query.filter(
+        Game.active == 1,
+        Game.year == year,
+        Game.is_spring == is_spring,
+        Game.is_league_practice == True
+    ).order_by(Game.game_date).all()
+
+    # Group by date/time/league
+    practice_groups = {}
+    for p in existing_practices:
+        key = (p.game_date.date() if p.game_date else None, p.league, p.location)
+        if key not in practice_groups:
+            practice_groups[key] = {
+                'date': p.game_date,
+                'league': p.league,
+                'location': p.location,
+                'teams': []
+            }
+        practice_groups[key]['teams'].append(p)
+
+    return render_template(
+        'games/league_practice.html',
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name,
+        leagues=leagues,
+        fields=fields,
+        practice_groups=list(practice_groups.values())
+    )
