@@ -170,6 +170,56 @@
         padding-top: 15px;
         border-top: 1px solid #eee;
     }
+    /* Drag-and-drop enhancements */
+    .field-cell {
+        min-height: 60px;
+        transition: background-color 0.2s;
+    }
+    .field-cell.sortable-ghost {
+        background: #e8f5e9;
+    }
+    .game-slot {
+        cursor: grab;
+    }
+    .game-slot:active {
+        cursor: grabbing;
+    }
+    .game-slot.sortable-chosen {
+        transform: scale(1.02);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        z-index: 100;
+    }
+    .game-slot.sortable-ghost {
+        opacity: 0.4;
+        background: #c8e6c9;
+    }
+    .cancel-drop-zone {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 15px 30px;
+        background: #ffebee;
+        border: 2px dashed #c62828;
+        border-radius: 8px;
+        display: none;
+        font-weight: 500;
+        color: #c62828;
+        z-index: 1000;
+        align-items: center;
+        gap: 10px;
+    }
+    .cancel-drop-zone.drag-active {
+        display: flex;
+    }
+    .cancel-drop-zone.drag-over {
+        background: #ffcdd2;
+        border-style: solid;
+        transform: translateX(-50%) scale(1.05);
+    }
+    body.is-dragging .field-cell:hover {
+        background: #e3f2fd;
+    }
 </style>
 {% endblock %}
 
@@ -226,11 +276,12 @@
                     {{ hour12 }}:{{ time_slot[3:] }} {% if hour24 >= 12 %}PM{% else %}AM{% endif %}
                 </td>
                 {% for field in display_fields %}
-                <td class="field-cell">
+                <td class="field-cell" data-field="{{ field.location_title }}" data-time="{{ time_slot }}">
                     {% set cell_games = grid.get(time_slot, {}).get(field.location_title, []) %}
                     {% if cell_games %}
                         {% for game in cell_games %}
                         <div class="game-slot {{ game.display_type }} {{ game.status }}"
+                             data-game-id="{{ game.ID }}"
                              onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.location or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage }}, {{ game.no_time_limit or 0 }}, '{{ game.league }}')">
                             <div class="game-time">
                                 <span class="status-dot {{ game.status }}"></span>
@@ -245,8 +296,6 @@
                             </div>
                         </div>
                         {% endfor %}
-                    {% else %}
-                        <div class="empty-cell">-</div>
                     {% endif %}
                 </td>
                 {% endfor %}
@@ -273,6 +322,45 @@
     <span style="margin-left: 10px; padding: 2px 8px; background: #f3e5f5; border-radius: 4px;">Practice</span>
     <span style="margin-left: 10px; padding: 2px 8px; background: #e3f2fd; border-radius: 4px;">Scrimmage</span>
     <span style="margin-left: 10px; padding: 2px 8px; background: #fff3e0; border-radius: 4px;">Playoff</span>
+</div>
+
+<!-- Cancel Drop Zone (for drag-and-drop) -->
+<div id="cancel-zone" class="cancel-drop-zone">
+    <span style="font-size: 20px;">X</span>
+    <span>Drop here to cancel game</span>
+</div>
+
+<!-- Move Confirmation Modal -->
+<div id="move-confirm-modal" class="edit-modal">
+    <div class="card" style="max-width: 400px;">
+        <h3 style="margin-bottom: 15px;">Confirm Move</h3>
+        <p>Move this game to a new location?</p>
+        <pre id="move-details" style="background: #f5f5f5; padding: 10px; border-radius: 4px; font-size: 13px; margin: 15px 0;"></pre>
+        <div class="form-group">
+            <label>Reason (optional)</label>
+            <input type="text" id="move-reason" class="form-control" placeholder="e.g., Field conflict, weather">
+        </div>
+        <div class="btn-row">
+            <button type="button" id="move-confirm-btn" class="btn btn-primary">Confirm Move</button>
+            <button type="button" id="move-cancel-btn" class="btn btn-outline">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Cancel Confirmation Modal -->
+<div id="cancel-confirm-modal" class="edit-modal">
+    <div class="card" style="max-width: 400px;">
+        <h3 style="margin-bottom: 15px; color: #c33;">Cancel Game</h3>
+        <p>Are you sure you want to cancel this game?</p>
+        <div class="form-group">
+            <label>Reason (optional)</label>
+            <input type="text" id="cancel-reason" class="form-control" placeholder="e.g., Weather, field unavailable">
+        </div>
+        <div class="btn-row">
+            <button type="button" id="cancel-confirm-btn" class="btn" style="background: #c33; color: white;">Cancel Game</button>
+            <button type="button" id="cancel-cancel-btn" class="btn btn-outline">Go Back</button>
+        </div>
+    </div>
 </div>
 
 <!-- Edit Modal -->
@@ -418,4 +506,8 @@ document.getElementById('edit-modal').addEventListener('click', function(e) {
     if (e.target === this) closeEditModal();
 });
 </script>
+
+<!-- Drag-and-Drop Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script src="{{ url_for('static', filename='js/game-drag-drop.js') }}"></script>
 {% endblock %}

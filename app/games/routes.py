@@ -1,7 +1,7 @@
 """Game management routes"""
 
 from datetime import datetime, timedelta, date
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from app.models.game import Game
 from app.models.team import TeamSeason
@@ -12,6 +12,178 @@ from app.utils.logging import SDLLLogger
 
 games_bp = Blueprint('games', __name__)
 logger = SDLLLogger('games')
+
+
+# =============================================================================
+# API Endpoints for Drag-and-Drop Game Editing
+# =============================================================================
+
+@games_bp.route('/api/move-game', methods=['POST'])
+@login_required
+def api_move_game():
+    """
+    API endpoint for moving a game via drag-and-drop.
+
+    Expects JSON body:
+    {
+        "game_id": int,
+        "new_field": str (optional),
+        "new_time": str (HH:MM format, optional),
+        "new_date": str (YYYY-MM-DD format, optional),
+        "reason": str (optional)
+    }
+
+    Returns JSON with success status and message.
+    """
+    if not current_user.can_edit_schedule():
+        return jsonify({'success': False, 'message': 'Permission denied'}), 403
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+
+        game_id = data.get('game_id')
+        if not game_id:
+            return jsonify({'success': False, 'message': 'game_id is required'}), 400
+
+        new_field = data.get('new_field')
+        new_time = data.get('new_time')
+        new_date = data.get('new_date')
+        reason = data.get('reason', '')
+
+        # Import the service
+        from app.services.game_changes import GameChangeService
+
+        # Move the game
+        game, change, notifications_queued = GameChangeService.move_game(
+            game_id=int(game_id),
+            user_id=current_user.user_id,
+            new_field=new_field,
+            new_time=new_time,
+            new_date=new_date,
+            reason=reason
+        )
+
+        logger.info(f'API: Moved game {game_id} - field={new_field}, time={new_time}, date={new_date}')
+
+        return jsonify({
+            'success': True,
+            'message': 'Game moved successfully',
+            'game_id': game.ID,
+            'notifications_queued': notifications_queued,
+            'change_id': change.id if change else None
+        })
+
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 404
+    except Exception as e:
+        logger.error(f'API: Error moving game: {e}')
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
+
+
+@games_bp.route('/api/cancel-game', methods=['POST'])
+@login_required
+def api_cancel_game():
+    """
+    API endpoint for cancelling a game via drag-and-drop to cancel zone.
+
+    Expects JSON body:
+    {
+        "game_id": int,
+        "reason": str (optional)
+    }
+
+    Returns JSON with success status and message.
+    """
+    if not current_user.can_edit_schedule():
+        return jsonify({'success': False, 'message': 'Permission denied'}), 403
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+
+        game_id = data.get('game_id')
+        if not game_id:
+            return jsonify({'success': False, 'message': 'game_id is required'}), 400
+
+        reason = data.get('reason', '')
+
+        # Import the service
+        from app.services.game_changes import GameChangeService
+
+        # Cancel the game
+        game, change, notifications_queued = GameChangeService.cancel_game(
+            game_id=int(game_id),
+            user_id=current_user.user_id,
+            reason=reason
+        )
+
+        logger.info(f'API: Cancelled game {game_id} - reason: {reason}')
+
+        return jsonify({
+            'success': True,
+            'message': 'Game cancelled',
+            'game_id': game.ID,
+            'notifications_queued': notifications_queued,
+            'change_id': change.id if change else None
+        })
+
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 404
+    except Exception as e:
+        logger.error(f'API: Error cancelling game: {e}')
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
+
+
+@games_bp.route('/api/game/<int:game_id>', methods=['GET'])
+@login_required
+def api_get_game(game_id):
+    """
+    API endpoint to get game details.
+
+    Returns JSON with game details for editing.
+    """
+    game = Game.query.get(game_id)
+    if not game:
+        return jsonify({'success': False, 'message': 'Game not found'}), 404
+
+    # Get team names
+    home_team_name = None
+    away_team_name = None
+    if game.home_ID:
+        home_team = TeamSeason.query.get(game.home_ID)
+        if home_team:
+            home_team_name = home_team.computed_display_name
+    if game.away_ID:
+        away_team = TeamSeason.query.get(game.away_ID)
+        if away_team:
+            away_team_name = away_team.computed_display_name
+
+    return jsonify({
+        'success': True,
+        'game': {
+            'id': game.ID,
+            'date': game.game_date.strftime('%Y-%m-%d') if game.game_date else None,
+            'time': game.game_date.strftime('%H:%M') if game.game_date else None,
+            'field': game.location,
+            'league': game.league,
+            'status': game.status,
+            'game_type': game.game_type,
+            'is_scrimmage': game.is_scrimmage,
+            'no_time_limit': game.no_time_limit,
+            'home_team_id': game.home_ID,
+            'away_team_id': game.away_ID,
+            'home_team_name': home_team_name,
+            'away_team_name': away_team_name
+        }
+    })
+
+
+# =============================================================================
+# Regular Page Routes
+# =============================================================================
 
 
 @games_bp.route('/')
@@ -111,6 +283,12 @@ def manage(year, is_spring):
                 anchor = f'game-{game_id}'
 
                 if action == 'update_game':
+                    # Import change tracking service
+                    from app.services.game_changes import GameChangeService
+
+                    # Capture old values before update
+                    old_values = GameChangeService.capture_old_values(game)
+
                     # Parse date and time
                     game_date_str = request.form.get('game_date')
                     game_time_str = request.form.get('game_time')
@@ -141,10 +319,29 @@ def manage(year, is_spring):
                         game.away_ID = None
 
                     db.session.commit()
+
+                    # Log the change
+                    change = GameChangeService.compare_and_log(
+                        game, old_values, current_user.user_id
+                    )
+                    if change:
+                        GameChangeService.queue_notifications_for_change(change, game)
+
                     logger.info(f'Updated game {game_id}: {game.home_team.computed_display_name if game.home_team else "TBD"} vs {game.away_team.computed_display_name if game.away_team else "N/A"}')
                     flash('Game updated successfully.', 'success')
 
                 elif action == 'delete_game':
+                    # Import change tracking service
+                    from app.services.game_changes import GameChangeService
+
+                    # Log the deletion
+                    GameChangeService.log_change(
+                        game_id=game.ID,
+                        user_id=current_user.user_id,
+                        change_type='delete',
+                        changes_dict={'active': {'old': 1, 'new': 0}}
+                    )
+
                     game.active = 0
                     db.session.commit()
                     logger.info(f'Deleted game {game_id}')
@@ -626,6 +823,9 @@ def rainout(year, is_spring):
     if request.method == 'POST':
         action = request.form.get('action')
 
+        # Import change tracking service
+        from app.services.game_changes import GameChangeService
+
         if action == 'postpone_all':
             rainout_date_str = request.form.get('rainout_date')
             if rainout_date_str:
@@ -642,10 +842,23 @@ def rainout(year, is_spring):
 
                 count = 0
                 for game in games:
+                    old_status = game.status
                     game.status = 'postponed'
                     count += 1
 
                 db.session.commit()
+
+                # Log changes for each game
+                for game in games:
+                    change = GameChangeService.log_change(
+                        game_id=game.ID,
+                        user_id=current_user.user_id,
+                        change_type='update',
+                        changes_dict={'status': {'old': 'scheduled', 'new': 'postponed'}},
+                        reason=f'Rainout on {rainout_date.strftime("%B %d, %Y")}'
+                    )
+                    GameChangeService.queue_notifications_for_change(change, game)
+
                 logger.info(f'Postponed {count} games for rainout on {rainout_date}')
                 flash(f'Postponed {count} games for {rainout_date.strftime("%B %d, %Y")}', 'success')
 
@@ -657,6 +870,9 @@ def rainout(year, is_spring):
 
             game = Game.query.get(game_id)
             if game and new_date_str:
+                # Capture old values
+                old_values = GameChangeService.capture_old_values(game)
+
                 if new_time_str:
                     game.game_date = datetime.strptime(f'{new_date_str} {new_time_str}', '%Y-%m-%d %H:%M')
                 else:
@@ -671,6 +887,15 @@ def rainout(year, is_spring):
 
                 game.status = 'scheduled'
                 db.session.commit()
+
+                # Log the change
+                change = GameChangeService.compare_and_log(
+                    game, old_values, current_user.user_id,
+                    reason='Rescheduled from rainout'
+                )
+                if change:
+                    GameChangeService.queue_notifications_for_change(change, game)
+
                 logger.info(f'Rescheduled game {game_id} to {game.game_date} at {game.location}')
                 flash(f'Rescheduled game to {game.game_date.strftime("%B %d at %I:%M %p")}', 'success')
 
@@ -680,11 +905,23 @@ def rainout(year, is_spring):
 
             game = Game.query.get(game_id)
             if game and practice_date_str:
+                # Capture old values
+                old_values = GameChangeService.capture_old_values(game)
+
                 practice_date = datetime.strptime(practice_date_str, '%Y-%m-%d').date()
                 original_time = game.game_date.time() if game.game_date else datetime.strptime('17:30', '%H:%M').time()
                 game.game_date = datetime.combine(practice_date, original_time)
                 game.status = 'scheduled'
                 db.session.commit()
+
+                # Log the change
+                change = GameChangeService.compare_and_log(
+                    game, old_values, current_user.user_id,
+                    reason='Swapped with practice date'
+                )
+                if change:
+                    GameChangeService.queue_notifications_for_change(change, game)
+
                 logger.info(f'Swapped game {game_id} to practice date {practice_date}')
                 flash(f'Moved game to {practice_date.strftime("%B %d")}', 'success')
 
@@ -697,9 +934,13 @@ def rainout(year, is_spring):
 
             if game_ids and new_date_str:
                 count = 0
+                games_to_log = []
                 for game_id in game_ids:
                     game = Game.query.get(int(game_id))
                     if game:
+                        # Capture old values
+                        old_values = GameChangeService.capture_old_values(game)
+
                         # Update date/time
                         if new_time_str:
                             game.game_date = datetime.strptime(f'{new_date_str} {new_time_str}', '%Y-%m-%d %H:%M')
@@ -714,8 +955,19 @@ def rainout(year, is_spring):
 
                         game.status = 'scheduled'
                         count += 1
+                        games_to_log.append((game, old_values))
 
                 db.session.commit()
+
+                # Log changes for all games
+                for game, old_values in games_to_log:
+                    change = GameChangeService.compare_and_log(
+                        game, old_values, current_user.user_id,
+                        reason='Bulk reschedule from rainout'
+                    )
+                    if change:
+                        GameChangeService.queue_notifications_for_change(change, game)
+
                 logger.info(f'Bulk rescheduled {count} games to {new_date_str}')
                 flash(f'Rescheduled {count} games to {new_date_str}', 'success')
 

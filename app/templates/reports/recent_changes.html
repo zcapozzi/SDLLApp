@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}Recent Game Changes{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-bar {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    .change-type {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+    .change-type.create { background: #e8f5e9; color: #2e7d32; }
+    .change-type.update { background: #e3f2fd; color: #1565c0; }
+    .change-type.cancel { background: #ffebee; color: #c62828; }
+    .change-type.reschedule { background: #fff3e0; color: #e65100; }
+    .change-type.delete { background: #fce4ec; color: #880e4f; }
+    .change-details {
+        font-size: 12px;
+        color: #666;
+        max-width: 300px;
+    }
+    .reason-text {
+        font-style: italic;
+        color: #666;
+        font-size: 12px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Recent Game Changes</h1>
+    <a href="{{ url_for('reports.index') }}" class="btn btn-outline">Back to Reports</a>
+</div>
+
+<!-- Filters -->
+<form method="GET" class="filter-bar">
+    <label>Past
+        <select name="days" class="form-control" style="width: auto;">
+            <option value="1" {{ 'selected' if current_filters.days == 1 }}>1 day</option>
+            <option value="7" {{ 'selected' if current_filters.days == 7 }}>7 days</option>
+            <option value="14" {{ 'selected' if current_filters.days == 14 }}>14 days</option>
+            <option value="30" {{ 'selected' if current_filters.days == 30 }}>30 days</option>
+        </select>
+    </label>
+    <label>League:
+        <select name="league" class="form-control" style="width: auto;">
+            <option value="">All Leagues</option>
+            {% for l in leagues %}
+            <option value="{{ l }}" {{ 'selected' if current_filters.league == l }}>{{ l }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>Type:
+        <select name="change_type" class="form-control" style="width: auto;">
+            <option value="">All Types</option>
+            <option value="create" {{ 'selected' if current_filters.change_type == 'create' }}>Create</option>
+            <option value="update" {{ 'selected' if current_filters.change_type == 'update' }}>Update</option>
+            <option value="cancel" {{ 'selected' if current_filters.change_type == 'cancel' }}>Cancel</option>
+            <option value="reschedule" {{ 'selected' if current_filters.change_type == 'reschedule' }}>Reschedule</option>
+            <option value="delete" {{ 'selected' if current_filters.change_type == 'delete' }}>Delete</option>
+        </select>
+    </label>
+    <label>Changed By:
+        <select name="changed_by" class="form-control" style="width: auto;">
+            <option value="">Anyone</option>
+            {% for user in users %}
+            <option value="{{ user.user_id }}" {{ 'selected' if current_filters.changed_by == user.user_id }}>{{ user.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <button type="submit" class="btn btn-primary">Filter</button>
+</form>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Date/Time</th>
+                <th>Game</th>
+                <th>League</th>
+                <th>Change</th>
+                <th>Changed By</th>
+                <th>Reason</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for change in changes %}
+            <tr>
+                <td>{{ change.changed_at.strftime('%m/%d/%Y %H:%M') }}</td>
+                <td>
+                    <a href="{{ url_for('reports.game_history', game_id=change.game_id) }}">
+                        Game #{{ change.game_id }}
+                    </a>
+                    {% if change.game_date %}
+                    <br><small class="text-muted">{{ change.game_date.strftime('%m/%d/%Y') }}</small>
+                    {% endif %}
+                </td>
+                <td>{{ change.league or 'N/A' }}</td>
+                <td>
+                    <span class="change-type {{ change.change_type }}">{{ change.change_type }}</span>
+                    <div class="change-details">{{ change.describe_change() }}</div>
+                </td>
+                <td>{{ change.user.name if change.user else 'Unknown' }}</td>
+                <td class="reason-text">{{ change.reason or '-' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 40px; color: #666;">
+                    No changes found for the selected filters.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

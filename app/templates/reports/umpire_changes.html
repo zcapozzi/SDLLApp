@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Umpire-Specific Changes{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-bar {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .change-type {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+    .change-type.create { background: #e8f5e9; color: #2e7d32; }
+    .change-type.update { background: #e3f2fd; color: #1565c0; }
+    .change-type.cancel { background: #ffebee; color: #c62828; }
+    .change-type.reschedule { background: #fff3e0; color: #e65100; }
+    .change-type.delete { background: #fce4ec; color: #880e4f; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Umpire-Specific Changes</h1>
+    <a href="{{ url_for('reports.index') }}" class="btn btn-outline">Back to Reports</a>
+</div>
+
+<p class="text-muted">View changes affecting games assigned to specific umpires.</p>
+
+<!-- Filters -->
+<form method="GET" class="filter-bar">
+    <label>Umpire:
+        <select name="umpire_id" class="form-control" style="width: auto;">
+            {% for umpire in umpires %}
+            <option value="{{ umpire.user_id }}" {{ 'selected' if current_umpire_id == umpire.user_id }}>{{ umpire.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>Past
+        <select name="days" class="form-control" style="width: auto;">
+            <option value="7" {{ 'selected' if days == 7 }}>7 days</option>
+            <option value="14" {{ 'selected' if days == 14 }}>14 days</option>
+            <option value="30" {{ 'selected' if days == 30 }}>30 days</option>
+        </select>
+    </label>
+    <button type="submit" class="btn btn-primary">Filter</button>
+</form>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Date/Time</th>
+                <th>Game</th>
+                <th>League</th>
+                <th>Change</th>
+                <th>Changed By</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for change in changes %}
+            <tr>
+                <td>{{ change.changed_at.strftime('%m/%d/%Y %H:%M') }}</td>
+                <td>
+                    <a href="{{ url_for('reports.game_history', game_id=change.game_id) }}">
+                        Game #{{ change.game_id }}
+                    </a>
+                    {% if change.game_date %}
+                    <br><small class="text-muted">{{ change.game_date.strftime('%m/%d/%Y') }}</small>
+                    {% endif %}
+                </td>
+                <td>{{ change.league or 'N/A' }}</td>
+                <td>
+                    <span class="change-type {{ change.change_type }}">{{ change.change_type }}</span>
+                    <div style="font-size: 12px; color: #666;">{{ change.describe_change() }}</div>
+                </td>
+                <td>{{ change.user.name if change.user else 'Unknown' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 40px; color: #666;">
+                    {% if umpires %}
+                    No changes found for this umpire's assigned games.
+                    {% else %}
+                    No umpires found. Assign umpires to games first.
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

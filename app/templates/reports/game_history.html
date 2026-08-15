@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Game History - Game #{{ game.ID }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .game-info {
+        background: #f5f5f5;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    .game-info h2 {
+        margin-top: 0;
+    }
+    .timeline {
+        position: relative;
+        padding-left: 30px;
+    }
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 10px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #ddd;
+    }
+    .timeline-item {
+        position: relative;
+        padding: 15px;
+        background: white;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: -24px;
+        top: 20px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: rgb(34, 139, 34);
+        border: 2px solid white;
+    }
+    .timeline-item.cancel::before { background: #c62828; }
+    .timeline-item.reschedule::before { background: #e65100; }
+    .timeline-item.create::before { background: #2e7d32; }
+    .timeline-item.delete::before { background: #880e4f; }
+    .timeline-time {
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 5px;
+    }
+    .timeline-user {
+        font-weight: 500;
+    }
+    .change-type-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 500;
+        text-transform: uppercase;
+        margin-left: 10px;
+    }
+    .change-type-badge.create { background: #e8f5e9; color: #2e7d32; }
+    .change-type-badge.update { background: #e3f2fd; color: #1565c0; }
+    .change-type-badge.cancel { background: #ffebee; color: #c62828; }
+    .change-type-badge.reschedule { background: #fff3e0; color: #e65100; }
+    .change-type-badge.delete { background: #fce4ec; color: #880e4f; }
+    .change-description {
+        margin-top: 10px;
+        padding: 10px;
+        background: #fafafa;
+        border-radius: 4px;
+        font-size: 13px;
+    }
+    .reason {
+        margin-top: 10px;
+        font-style: italic;
+        color: #666;
+        font-size: 13px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Game History</h1>
+    <a href="{{ url_for('reports.recent_changes') }}" class="btn btn-outline">Back to Recent Changes</a>
+</div>
+
+<div class="game-info">
+    <h2>Game #{{ game.ID }}</h2>
+    <p><strong>League:</strong> {{ game.league or 'N/A' }}</p>
+    <p><strong>Teams:</strong> {{ home_team_name }} vs {{ away_team_name }}</p>
+    <p><strong>Date:</strong> {{ game.game_date.strftime('%A, %B %d, %Y at %I:%M %p') if game.game_date else 'TBD' }}</p>
+    <p><strong>Field:</strong> {{ game.location or 'TBD' }}</p>
+    <p><strong>Status:</strong> {{ game.status }}</p>
+</div>
+
+<h3>Change History</h3>
+
+{% if changes %}
+<div class="timeline">
+    {% for change in changes %}
+    <div class="timeline-item {{ change.change_type }}">
+        <div class="timeline-time">
+            {{ change.changed_at.strftime('%B %d, %Y at %I:%M %p') }}
+        </div>
+        <div>
+            <span class="timeline-user">{{ change.user.name if change.user else 'Unknown' }}</span>
+            <span class="change-type-badge {{ change.change_type }}">{{ change.change_type }}</span>
+        </div>
+        <div class="change-description">
+            {{ change.describe_change() }}
+        </div>
+        {% if change.reason %}
+        <div class="reason">
+            Reason: {{ change.reason }}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card" style="text-align: center; padding: 40px; color: #666;">
+    No change history recorded for this game.
+</div>
+{% endif %}
+{% endblock %}

@@ -189,12 +189,17 @@
                 </div>
             </div>
 
-            {% if current_user.is_admin() %}
+            {% if current_user.is_admin() or current_user.can_edit_schedule() %}
             <div class="nav-item">
                 <a href="#" class="nav-link">Admin ▾</a>
                 <div class="dropdown-menu">
+                    <a href="{{ url_for('reports.index') }}">Reports</a>
+                    <a href="{{ url_for('notifications.queue') }}">Notification Queue</a>
+                    {% if current_user.is_admin() %}
+                    <div class="dropdown-divider"></div>
                     <a href="#">Users</a>
                     <a href="#">Settings</a>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Reports{% endblock %}
+
+{% block content %}
+<h1>Reports</h1>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">
+    <div class="card">
+        <h3>Recent Changes</h3>
+        <p class="text-muted">View all game changes in the past week, filtered by league, type, or user.</p>
+        <a href="{{ url_for('reports.recent_changes') }}" class="btn btn-primary">View Report</a>
+    </div>
+
+    <div class="card">
+        <h3>My Changes</h3>
+        <p class="text-muted">View all changes you've made to games.</p>
+        <a href="{{ url_for('reports.my_changes') }}" class="btn btn-outline">View Report</a>
+    </div>
+
+    {% if current_user.can_edit_schedule() %}
+    <div class="card">
+        <h3>Umpire-Specific Changes</h3>
+        <p class="text-muted">View changes affecting games assigned to specific umpires.</p>
+        <a href="{{ url_for('reports.umpire_changes') }}" class="btn btn-outline">View Report</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

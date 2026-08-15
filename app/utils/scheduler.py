@@ -1065,7 +1065,8 @@ class ScheduleGenerator:
 
             while current_date <= end_date:
                 if current_date.weekday() in all_activity_days and current_date != scrimmage_date:
-                    self._assign_practices_for_date(config, teams, league, all_slots, current_date, practice_slots, start_fresh)
+                    # Pre-opening: schedule practices on ALL activity days (game + practice)
+                    self._assign_practices_for_date(config, teams, league, all_slots, current_date, practice_slots, start_fresh, is_pre_opening=True)
                 current_date += timedelta(days=1)
 
         # Post-opening practices
@@ -1297,7 +1298,8 @@ class ScheduleGenerator:
     def _generate_post_opening_practices(self, config, teams, league, all_slots, practice_slots=None, start_fresh=False):
         """Generate practices after opening day (on P days only).
 
-        Practices are scheduled from opening_day_date through regular_season_end_date.
+        Practices are scheduled from first_practice_date through regular_season_end_date.
+        If first_practice_date is before opening_day, practices start from opening_day.
         Supports team-specific practice days that override the league default.
         """
         if not config.opening_day_date:
@@ -1318,7 +1320,12 @@ class ScheduleGenerator:
         else:
             end_date = config.opening_day_date + timedelta(weeks=12)
 
-        current_date = config.opening_day_date
+        # Practices can only start from first_practice_date (if set)
+        # Use the later of opening_day_date and first_practice_date
+        if config.first_practice_date:
+            current_date = max(config.opening_day_date, config.first_practice_date)
+        else:
+            current_date = config.opening_day_date
 
         while current_date <= end_date:
             # Run on any day that ANY team in this league has as a practice day
@@ -1693,8 +1700,13 @@ class ScheduleGenerator:
                 'message': f'{config.league}: Odd number of teams - {shuffled[-1].display_name} has no scrimmage partner.'
             })
 
-    def _assign_practices_for_date(self, config, teams, league, all_slots, practice_date, existing_slots=None, start_fresh=False):
-        """Assign practices for all teams on a given date."""
+    def _assign_practices_for_date(self, config, teams, league, all_slots, practice_date, existing_slots=None, start_fresh=False, is_pre_opening=False):
+        """Assign practices for all teams on a given date.
+
+        Args:
+            is_pre_opening: If True, schedule practices on ALL activity days (game + practice),
+                           not just practice days. Used for pre-opening period before games start.
+        """
         day_of_week = practice_date.weekday()
 
         # Get available slots for this day
@@ -1742,12 +1754,15 @@ class ScheduleGenerator:
                     })
 
         for team in teams:
-            # Check if this day is a practice day for this team
-            # Use team-specific practice days if set, otherwise use league default
-            team_practice_days = team.get_practice_days(config)
-            if day_of_week not in team_practice_days:
-                # This is not a practice day for this team
-                continue
+            # For pre-opening practices, schedule on all activity days (game + practice)
+            # For post-opening, only schedule on practice days
+            if not is_pre_opening:
+                # Check if this day is a practice day for this team
+                # Use team-specific practice days if set, otherwise use league default
+                team_practice_days = team.get_practice_days(config)
+                if day_of_week not in team_practice_days:
+                    # This is not a practice day for this team
+                    continue
 
             # Check if team already has activity on this day
             team_day_key = (team.team_ID, date_str)

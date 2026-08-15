@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+
+{% block title %}Notification Queue{% endblock %}
+
+{% block extra_css %}
+<style>
+    .queue-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    .summary-card {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .summary-card h3 {
+        font-size: 32px;
+        margin: 0;
+        color: rgb(34, 139, 34);
+    }
+    .summary-card p {
+        margin: 5px 0 15px 0;
+        color: #666;
+    }
+    .summary-card.admin { border-top: 3px solid #7b1fa2; }
+    .summary-card.coach { border-top: 3px solid #1565c0; }
+    .summary-card.umpire { border-top: 3px solid #2e7d32; }
+    .summary-card.parent { border-top: 3px solid #e65100; }
+    .filter-bar {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        margin-bottom: 15px;
+        flex-wrap: wrap;
+    }
+    .notification-table {
+        width: 100%;
+    }
+    .notification-table th {
+        background: rgb(34, 139, 34);
+        color: white;
+    }
+    .notification-table td {
+        vertical-align: middle;
+    }
+    .type-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+    .type-badge.admin { background: #f3e5f5; color: #7b1fa2; }
+    .type-badge.coach { background: #e3f2fd; color: #1565c0; }
+    .type-badge.umpire { background: #e8f5e9; color: #2e7d32; }
+    .type-badge.parent { background: #fff3e0; color: #e65100; }
+    .status-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+    }
+    .status-badge.pending { background: #fff3e0; color: #e65100; }
+    .status-badge.sent { background: #e8f5e9; color: #2e7d32; }
+    .status-badge.failed { background: #ffebee; color: #c62828; }
+    .status-badge.skipped { background: #f5f5f5; color: #666; }
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 15px;
+    }
+    .bulk-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding: 10px;
+        background: #f5f5f5;
+        border-radius: 4px;
+        margin-bottom: 15px;
+    }
+    .warning-banner {
+        background: #fff3e0;
+        border-left: 4px solid #e65100;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Notification Queue</h1>
+    <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline">Back to Dashboard</a>
+</div>
+
+{% if not is_configured %}
+<div class="warning-banner">
+    <strong>Email Service Not Configured</strong><br>
+    Set the <code>GOOGLE_SERVICE_JSON</code> environment variable to enable email sending.
+</div>
+{% endif %}
+
+<!-- Summary Cards -->
+<div class="queue-summary">
+    <div class="summary-card admin">
+        <h3>{{ pending_counts.get('admin', 0) }}</h3>
+        <p>Admin Notifications</p>
+        {% if pending_counts.get('admin', 0) > 0 %}
+        <form method="POST" action="{{ url_for('notifications.send_notifications') }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="send_type">
+            <input type="hidden" name="recipient_type" value="admin">
+            <button type="submit" class="btn btn-sm btn-primary" {{ 'disabled' if not is_configured }}>Send All</button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="summary-card coach">
+        <h3>{{ pending_counts.get('coach', 0) }}</h3>
+        <p>Coach Notifications</p>
+        {% if pending_counts.get('coach', 0) > 0 %}
+        <form method="POST" action="{{ url_for('notifications.send_notifications') }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="send_type">
+            <input type="hidden" name="recipient_type" value="coach">
+            <button type="submit" class="btn btn-sm btn-primary" {{ 'disabled' if not is_configured }}>Send All</button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="summary-card umpire">
+        <h3>{{ pending_counts.get('umpire', 0) }}</h3>
+        <p>Umpire Notifications</p>
+        {% if pending_counts.get('umpire', 0) > 0 %}
+        <form method="POST" action="{{ url_for('notifications.send_notifications') }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="send_type">
+            <input type="hidden" name="recipient_type" value="umpire">
+            <button type="submit" class="btn btn-sm btn-primary" {{ 'disabled' if not is_configured }}>Send All</button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="summary-card parent">
+        <h3>{{ pending_counts.get('parent', 0) }}</h3>
+        <p>Parent Notifications</p>
+        {% if pending_counts.get('parent', 0) > 0 %}
+        <form method="POST" action="{{ url_for('notifications.send_notifications') }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="send_type">
+            <input type="hidden" name="recipient_type" value="parent">
+            <button type="submit" class="btn btn-sm btn-primary" {{ 'disabled' if not is_configured }}>Send All</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="filter-bar">
+    <label>Status:
+        <select onchange="window.location.href='?status=' + this.value + '{% if current_type %}&type={{ current_type }}{% endif %}'" class="form-control">
+            <option value="pending" {{ 'selected' if current_status == 'pending' }}>Pending</option>
+            <option value="sent" {{ 'selected' if current_status == 'sent' }}>Sent</option>
+            <option value="failed" {{ 'selected' if current_status == 'failed' }}>Failed</option>
+            <option value="skipped" {{ 'selected' if current_status == 'skipped' }}>Skipped</option>
+            <option value="" {{ 'selected' if not current_status }}>All</option>
+        </select>
+    </label>
+    <label>Type:
+        <select onchange="window.location.href='?type=' + this.value + '{% if current_status %}&status={{ current_status }}{% endif %}'" class="form-control">
+            <option value="" {{ 'selected' if not current_type }}>All Types</option>
+            <option value="admin" {{ 'selected' if current_type == 'admin' }}>Admin</option>
+            <option value="coach" {{ 'selected' if current_type == 'coach' }}>Coach</option>
+            <option value="umpire" {{ 'selected' if current_type == 'umpire' }}>Umpire</option>
+            <option value="parent" {{ 'selected' if current_type == 'parent' }}>Parent</option>
+        </select>
+    </label>
+
+    {% if current_status == 'failed' %}
+    <form method="POST" action="{{ url_for('notifications.send_notifications') }}" style="margin-left: auto;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="retry_failed">
+        <button type="submit" class="btn btn-secondary" {{ 'disabled' if not is_configured }}>Retry Failed</button>
+    </form>
+    {% endif %}
+</div>
+
+<!-- Notifications Table -->
+<div class="card">
+    <form method="POST" action="{{ url_for('notifications.send_notifications') }}" id="bulk-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" id="bulk-action" value="">
+
+        {% if notifications and current_status == 'pending' %}
+        <div class="bulk-actions">
+            <input type="checkbox" id="select-all" onchange="toggleSelectAll()">
+            <label for="select-all">Select All</label>
+            <button type="button" class="btn btn-sm btn-primary" onclick="submitBulkAction('send_selected')" {{ 'disabled' if not is_configured }}>Send Selected</button>
+            <button type="button" class="btn btn-sm btn-outline" onclick="submitBulkAction('skip_selected')">Skip Selected</button>
+        </div>
+        {% endif %}
+
+        <table class="notification-table">
+            <thead>
+                <tr>
+                    {% if current_status == 'pending' %}<th style="width: 30px;"></th>{% endif %}
+                    <th>Type</th>
+                    <th>Recipient</th>
+                    <th>Subject</th>
+                    <th>Created</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for notif in notifications %}
+                <tr id="notif-{{ notif.id }}">
+                    {% if current_status == 'pending' %}
+                    <td><input type="checkbox" name="notification_ids" value="{{ notif.id }}" class="notif-checkbox"></td>
+                    {% endif %}
+                    <td><span class="type-badge {{ notif.recipient_type }}">{{ notif.recipient_type }}</span></td>
+                    <td>
+                        {{ notif.recipient_name or notif.recipient_email }}
+                        {% if notif.recipient_name %}
+                        <br><small class="text-muted">{{ notif.recipient_email }}</small>
+                        {% endif %}
+                    </td>
+                    <td>{{ notif.subject|truncate(50) }}</td>
+                    <td>{{ notif.created_at.strftime('%m/%d %H:%M') }}</td>
+                    <td>
+                        <span class="status-badge {{ notif.status }}">{{ notif.status }}</span>
+                        {% if notif.sent_at %}
+                        <br><small class="text-muted">{{ notif.sent_at.strftime('%m/%d %H:%M') }}</small>
+                        {% endif %}
+                        {% if notif.error_message %}
+                        <br><small style="color: #c33;">{{ notif.error_message|truncate(30) }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('notifications.preview_notification', notification_id=notif.id) }}" class="btn btn-sm btn-outline" target="_blank">Preview</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="{% if current_status == 'pending' %}7{% else %}6{% endif %}" style="text-align: center; padding: 40px; color: #666;">
+                        No notifications found.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </form>
+</div>
+
+<script>
+function toggleSelectAll() {
+    var selectAll = document.getElementById('select-all');
+    var checkboxes = document.querySelectorAll('.notif-checkbox');
+    checkboxes.forEach(function(cb) {
+        cb.checked = selectAll.checked;
+    });
+}
+
+function submitBulkAction(action) {
+    var checkboxes = document.querySelectorAll('.notif-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('Please select at least one notification.');
+        return;
+    }
+
+    document.getElementById('bulk-action').value = action;
+    document.getElementById('bulk-form').submit();
+}
+</script>
+{% endblock %}

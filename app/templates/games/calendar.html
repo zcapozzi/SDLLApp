@@ -178,6 +178,53 @@
         display: none;
     }
 
+    /* Drag-and-drop enhancements */
+    .game-card {
+        cursor: grab;
+    }
+    .game-card:active {
+        cursor: grabbing;
+    }
+    .game-card.sortable-chosen {
+        transform: scale(1.02);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        z-index: 100;
+    }
+    .game-card.sortable-ghost {
+        opacity: 0.4;
+        background: #c8e6c9;
+    }
+    .games-container {
+        min-height: 60px;
+    }
+    .cancel-drop-zone {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 15px 30px;
+        background: #ffebee;
+        border: 2px dashed #c62828;
+        border-radius: 8px;
+        display: none;
+        font-weight: 500;
+        color: #c62828;
+        z-index: 1000;
+        align-items: center;
+        gap: 10px;
+    }
+    .cancel-drop-zone.drag-active {
+        display: flex;
+    }
+    .cancel-drop-zone.drag-over {
+        background: #ffcdd2;
+        border-style: solid;
+        transform: translateX(-50%) scale(1.05);
+    }
+    body.is-dragging .calendar-day:hover {
+        box-shadow: 0 0 0 2px rgb(34, 139, 34);
+    }
+
     @media (max-width: 900px) {
         .calendar-grid {
             grid-template-columns: 1fr;
@@ -233,14 +280,15 @@
 <!-- Calendar Grid -->
 <div class="calendar-grid">
     {% for day in week_days %}
-    <div class="calendar-day {{ 'today' if day.is_today else '' }} {{ 'empty-day' if not day.games else '' }}">
+    <div class="calendar-day {{ 'today' if day.is_today else '' }} {{ 'empty-day' if not day.games else '' }}" data-date="{{ day.date.strftime('%Y-%m-%d') }}">
         <a href="{{ url_for('games.day_view', year=year, is_spring=is_spring, target_date=day.date.strftime('%Y-%m-%d')) }}" class="day-header" style="text-decoration: none; color: inherit; display: block;">
             {{ day.date.strftime('%a') }}<br>
             {{ day.date.strftime('%m/%d') }}
         </a>
-        <div class="day-content">
+        <div class="day-content games-container">
             {% for game in day.games %}
             <div class="game-card {{ game.display_type }} {{ game.status }}"
+                 data-game-id="{{ game.ID }}"
                  data-league="{{ game.league }}"
                  data-type="{{ game.display_type }}"
                  onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.location or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage|int }}, {{ game.no_time_limit|int if game.no_time_limit else 0 }}, '{{ game.league }}')">
@@ -273,6 +321,45 @@
     <span style="margin-left: 10px; padding: 2px 8px; background: #f3e5f5; border-radius: 4px;">Practice</span>
     <span style="margin-left: 10px; padding: 2px 8px; background: #e3f2fd; border-radius: 4px;">Scrimmage</span>
     <span style="margin-left: 10px; padding: 2px 8px; background: #fff3e0; border-radius: 4px;">Playoff</span>
+</div>
+
+<!-- Cancel Drop Zone (for drag-and-drop) -->
+<div id="cancel-zone" class="cancel-drop-zone">
+    <span style="font-size: 20px;">X</span>
+    <span>Drop here to cancel game</span>
+</div>
+
+<!-- Move Confirmation Modal -->
+<div id="move-confirm-modal" class="edit-modal">
+    <div class="card" style="max-width: 400px;">
+        <h3 style="margin-bottom: 15px;">Confirm Date Change</h3>
+        <p>Move this game to a different day?</p>
+        <pre id="move-details" style="background: #f5f5f5; padding: 10px; border-radius: 4px; font-size: 13px; margin: 15px 0;"></pre>
+        <div class="form-group">
+            <label>Reason (optional)</label>
+            <input type="text" id="move-reason" class="form-control" placeholder="e.g., Field conflict, weather">
+        </div>
+        <div class="btn-row">
+            <button type="button" id="move-confirm-btn" class="btn btn-primary">Confirm Move</button>
+            <button type="button" id="move-cancel-btn" class="btn btn-outline">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Cancel Confirmation Modal -->
+<div id="cancel-confirm-modal" class="edit-modal">
+    <div class="card" style="max-width: 400px;">
+        <h3 style="margin-bottom: 15px; color: #c33;">Cancel Game</h3>
+        <p>Are you sure you want to cancel this game?</p>
+        <div class="form-group">
+            <label>Reason (optional)</label>
+            <input type="text" id="cancel-reason" class="form-control" placeholder="e.g., Weather, field unavailable">
+        </div>
+        <div class="btn-row">
+            <button type="button" id="cancel-confirm-btn" class="btn" style="background: #c33; color: white;">Cancel Game</button>
+            <button type="button" id="cancel-cancel-btn" class="btn btn-outline">Go Back</button>
+        </div>
+    </div>
 </div>
 
 <!-- Edit Modal (same as manage.html) -->
@@ -488,4 +575,8 @@ document.getElementById('edit-modal').addEventListener('click', function(e) {
     if (e.target === this) closeEditModal();
 });
 </script>
+
+<!-- Drag-and-Drop Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script src="{{ url_for('static', filename='js/game-drag-drop.js') }}"></script>
 {% endblock %}

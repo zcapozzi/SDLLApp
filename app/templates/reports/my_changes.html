@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}My Changes{% endblock %}
+
+{% block extra_css %}
+<style>
+    .change-type {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+    .change-type.create { background: #e8f5e9; color: #2e7d32; }
+    .change-type.update { background: #e3f2fd; color: #1565c0; }
+    .change-type.cancel { background: #ffebee; color: #c62828; }
+    .change-type.reschedule { background: #fff3e0; color: #e65100; }
+    .change-type.delete { background: #fce4ec; color: #880e4f; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>My Changes</h1>
+    <a href="{{ url_for('reports.index') }}" class="btn btn-outline">Back to Reports</a>
+</div>
+
+<p class="text-muted">Recent changes you've made to games.</p>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Date/Time</th>
+                <th>Game</th>
+                <th>League</th>
+                <th>Change</th>
+                <th>Reason</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for change in changes %}
+            <tr>
+                <td>{{ change.changed_at.strftime('%m/%d/%Y %H:%M') }}</td>
+                <td>
+                    <a href="{{ url_for('reports.game_history', game_id=change.game_id) }}">
+                        Game #{{ change.game_id }}
+                    </a>
+                    {% if change.game_date %}
+                    <br><small class="text-muted">{{ change.game_date.strftime('%m/%d/%Y') }}</small>
+                    {% endif %}
+                </td>
+                <td>{{ change.league or 'N/A' }}</td>
+                <td>
+                    <span class="change-type {{ change.change_type }}">{{ change.change_type }}</span>
+                    <div style="font-size: 12px; color: #666;">{{ change.describe_change() }}</div>
+                </td>
+                <td style="font-style: italic; color: #666;">{{ change.reason or '-' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 40px; color: #666;">
+                    You haven't made any changes yet.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
