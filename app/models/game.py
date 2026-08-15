@@ -24,6 +24,7 @@ class Game(db.Model):
     is_spring = db.Column(db.SmallInteger)  # 0=Fall, 1=Spring
     game_type = db.Column(db.String(20), default='regular')  # regular, playoff, practice
     is_scrimmage = db.Column(db.SmallInteger, default=0)
+    is_league_practice = db.Column(db.Boolean, default=False)  # True = all teams practice together
     no_time_limit = db.Column(db.SmallInteger, default=0)  # 1 = 3-hour game (no time limit)
     umpire_override = db.Column(db.String(20))
 

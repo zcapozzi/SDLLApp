@@ -93,6 +93,7 @@
                         <tr>
                             <th>Placeholder</th>
                             <th>Team Name</th>
+                            <th style="width: 120px;">Practice Days</th>
                             <th style="width: 100px;">Status</th>
                             <th style="width: 220px;">Actions</th>
                         </tr>
@@ -109,6 +110,13 @@
                                 {% endif %}
                             </td>
                             <td>
+                                {% if team.practice_days %}
+                                <span style="font-size: 12px;">{{ team.practice_days_display }}</span>
+                                {% else %}
+                                <span class="text-muted" style="font-size: 12px;">League Default</span>
+                                {% endif %}
+                            </td>
+                            <td>
                                 {% if team.is_placeholder %}
                                 <span class="badge" style="background: #eee; color: #666;">Playoff</span>
                                 {% elif team.team_name %}
@@ -119,8 +127,8 @@
                             </td>
                             <td>
                                 <button type="button" class="btn btn-outline btn-sm"
-                                        onclick="setTeamName({{ team.team_ID }}, '{{ team.team_name or '' }}', '{{ team.display_name }}')">
-                                    Set Name
+                                        onclick="setTeamSettings({{ team.team_ID }}, '{{ team.team_name or '' }}', '{{ team.display_name }}', '{{ team.practice_days or '' }}')">
+                                    Edit
                                 </button>
                                 <form method="POST" style="display: inline;"
                                       onsubmit="return confirm('Remove this team?');">
@@ -145,17 +153,17 @@
     </div>
 </div>
 
-<!-- Set Team Name Modal -->
+<!-- Edit Team Settings Modal -->
 <div id="name-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
      background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
-    <div class="card" style="max-width: 400px; margin: auto;">
-        <h3 style="margin-bottom: 20px;">Set Team Name</h3>
+    <div class="card" style="max-width: 450px; margin: auto;">
+        <h3 style="margin-bottom: 20px;">Edit Team Settings</h3>
         <p class="text-muted text-small" style="margin-bottom: 15px;">
             Placeholder: <strong id="modal-placeholder"></strong>
         </p>
         <form method="POST" id="name-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="action" value="set_team_name">
+            <input type="hidden" name="action" value="set_team_settings">
             <input type="hidden" name="team_id" id="name-team-id">
 
             <div class="form-group">
@@ -167,6 +175,36 @@
                 </p>
             </div>
 
+            <div class="form-group">
+                <label>Practice Days</label>
+                <p class="text-muted text-small" style="margin-top: 0; margin-bottom: 8px;">
+                    Select specific practice days for this team, or leave unchecked to use league default.
+                </p>
+                <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                        <input type="checkbox" name="practice_day_0" value="0"> Mon
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                        <input type="checkbox" name="practice_day_1" value="1"> Tue
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                        <input type="checkbox" name="practice_day_2" value="2"> Wed
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                        <input type="checkbox" name="practice_day_3" value="3"> Thu
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                        <input type="checkbox" name="practice_day_4" value="4"> Fri
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                        <input type="checkbox" name="practice_day_5" value="5"> Sat
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                        <input type="checkbox" name="practice_day_6" value="6"> Sun
+                    </label>
+                </div>
+            </div>
+
             <div style="display: flex; gap: 10px;">
                 <button type="submit" class="btn btn-primary">Save</button>
                 <button type="button" class="btn btn-outline" onclick="closeNameModal()">Cancel</button>
@@ -176,10 +214,27 @@
 </div>
 
 <script>
-function setTeamName(teamId, currentName, placeholder) {
+function setTeamSettings(teamId, currentName, placeholder, practiceDays) {
     document.getElementById('name-team-id').value = teamId;
     document.getElementById('team_name').value = currentName;
     document.getElementById('modal-placeholder').textContent = placeholder;
+
+    // Clear all practice day checkboxes first
+    for (var i = 0; i < 7; i++) {
+        var checkbox = document.querySelector('input[name="practice_day_' + i + '"]');
+        if (checkbox) checkbox.checked = false;
+    }
+
+    // Set practice day checkboxes based on saved value (e.g., "1,3" for Tue/Thu)
+    if (practiceDays) {
+        var days = practiceDays.split(',');
+        days.forEach(function(day) {
+            var dayNum = parseInt(day.trim());
+            var checkbox = document.querySelector('input[name="practice_day_' + dayNum + '"]');
+            if (checkbox) checkbox.checked = true;
+        });
+    }
+
     document.getElementById('name-modal').style.display = 'flex';
 }
 

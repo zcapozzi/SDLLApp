@@ -25,6 +25,11 @@ class TeamSeason(db.Model):
     resolved_team_id = db.Column(db.BigInteger)  # Actual team that fills this placeholder
     is_spring = db.Column(db.SmallInteger)  # 0=Fall, 1=Spring
 
+    # Team-specific practice days (overrides league default if set)
+    # Format: comma-separated day numbers (0=Mon, 1=Tue, ..., 6=Sun), e.g., "1,3" for Tue/Thu
+    # NULL means use the league default
+    practice_days = db.Column(db.String(50), nullable=True)
+
     # Organization - NULL means SDLL (home org), set for external teams
     organization_id = db.Column(db.BigInteger, db.ForeignKey('sdll_organizations.ID'), nullable=True)
 
@@ -89,6 +94,46 @@ class TeamSeason(db.Model):
         if self.is_external and self.organization:
             return f"{name} ({self.organization.display_name})"
         return name
+
+    def get_practice_days(self, league_season=None):
+        """Get the effective practice days for this team.
+
+        Returns a list of day numbers (0=Monday, ..., 6=Sunday).
+        Uses team-specific practice_days if set, otherwise falls back to league default.
+
+        Args:
+            league_season: Optional LeagueSeason object. If not provided, will be queried.
+        """
+        # If team has specific practice days, parse and return them
+        if self.practice_days:
+            try:
+                return [int(d.strip()) for d in self.practice_days.split(',') if d.strip()]
+            except ValueError:
+                pass  # Fall back to league default if parse fails
+
+        # Get league default
+        if league_season is None:
+            from app.models.league_season import LeagueSeason
+            league_season = LeagueSeason.query.filter_by(
+                year=self.year,
+                is_spring=self.is_spring,
+                league=self.league,
+                active=1
+            ).first()
+
+        if league_season:
+            return league_season.practice_days
+
+        return []  # No practice days configured
+
+    @property
+    def practice_days_display(self):
+        """Get human-readable practice days for this team."""
+        days = self.get_practice_days()
+        if not days:
+            return None
+        day_abbrevs = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        return ', '.join(day_abbrevs[d] for d in days if 0 <= d <= 6)
 
     @classmethod
     def get_by_season(cls, year, is_spring):

@@ -162,6 +162,7 @@
                     <th style="width: 125px;">Opening Day</th>
                     <th style="width: 125px;">Reg. Season End</th>
                     <th style="width: 125px;">Season End</th>
+                    <th style="width: 80px; text-align: center;">Scrimmages</th>
                     <th style="width: 100px;">Status</th>
                 </tr>
             </thead>
@@ -223,6 +224,14 @@
                                data-original="{{ config.season_end_date.strftime('%Y-%m-%d') if config.season_end_date else '' }}"
                                style="width: 115px; font-size: 12px;"
                                onchange="markDirty({{ config.ID }})">
+                    </td>
+                    <td style="text-align: center;">
+                        <input type="checkbox" name="league_{{ config.ID }}_has_scrimmages"
+                               value="1"
+                               {{ 'checked' if config.has_scrimmages else '' }}
+                               data-original="{{ '1' if config.has_scrimmages else '' }}"
+                               onchange="markDirty({{ config.ID }})"
+                               title="Enable pre-season scrimmages for this league">
                     </td>
                     <td>
                         {% if config.schedule_ready %}

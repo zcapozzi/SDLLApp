@@ -241,6 +241,27 @@ def manage_teams(year, is_spring):
                     flash(f'Team name cleared (will show placeholder)', 'success')
                 anchor = f'league-{team.league.replace(" ", "-")}'
 
+        elif action == 'set_team_settings':
+            team_id = int(request.form.get('team_id'))
+            team_name = request.form.get('team_name', '').strip() or None
+            team = TeamSeason.query.get(team_id)
+            if team and team.year == year and team.is_spring == is_spring:
+                team.team_name = team_name
+
+                # Collect selected practice days (checkboxes)
+                practice_days = []
+                for i in range(7):
+                    if request.form.get(f'practice_day_{i}'):
+                        practice_days.append(str(i))
+
+                # Store as comma-separated string, or None for league default
+                team.practice_days = ','.join(practice_days) if practice_days else None
+
+                db.session.commit()
+                logger.info(f'Updated settings for {team.display_name}: name={team_name}, practice_days={team.practice_days}')
+                flash(f'Team settings updated', 'success')
+                anchor = f'league-{team.league.replace(" ", "-")}'
+
         redirect_url = url_for('seasons.manage_teams', year=year, is_spring=is_spring)
         if anchor:
             redirect_url += f'#{anchor}'
@@ -976,6 +997,11 @@ def schedule_settings(year, is_spring):
                     config.opening_day_date = opening_day_date
                     config.regular_season_end_date = regular_season_end_date
                     config.season_end_date = season_end_date
+
+                    # Update has_scrimmages (checkbox - present in form = checked)
+                    has_scrimmages = request.form.get(f'league_{config.ID}_has_scrimmages') == '1'
+                    config.has_scrimmages = has_scrimmages
+
                     updated_count += 1
 
             if validation_errors:

@@ -34,6 +34,7 @@ class LeagueSeason(db.Model):
     opening_day_date = db.Column(db.Date)
     regular_season_end_date = db.Column(db.Date)  # All regular season games must finish by this date
     season_end_date = db.Column(db.Date)          # All playoff games must finish by this date
+    has_scrimmages = db.Column(db.Boolean, default=True)  # Some leagues (tee ball, rookie) don't have scrimmages
 
     # Schedule lock settings (Phase 3 - prevents regeneration once accepted)
     schedule_locked = db.Column(db.Boolean, default=False)
@@ -211,7 +212,8 @@ class LeagueSeason(db.Model):
                     thursday_type=source.thursday_type,
                     friday_type=source.friday_type,
                     saturday_type=source.saturday_type,
-                    sunday_type=source.sunday_type
+                    sunday_type=source.sunday_type,
+                    has_scrimmages=source.has_scrimmages
                 )
                 db.session.add(new_config)
                 new_configs.append(new_config)
