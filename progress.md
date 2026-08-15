@@ -861,6 +861,37 @@ Added support for league-specific game and practice durations:
 - You cannot have all 28 pairs play with only 24 games
 - **Fix**: Either increase games_per_team to 7+ or reduce team count
 
+### Bug Fix: Rule e1 - Team Balance in Round-Robin
+
+**Problem**: Some teams were getting fewer games than target because the extra game distribution didn't ensure each team got their fair share.
+
+**Root Cause**: When distributing "extra" games (beyond the base count per pair), the algorithm shuffled pairs randomly. This could result in all extras going to pairs NOT involving a particular team, leaving that team short.
+
+**Example (BB A - 4 teams, 8 games each):**
+- Base games per pair: 8 ÷ 3 = 2 (floor)
+- Total games: 16
+- Extra games needed: 16 - 12 = 4
+
+If all 4 extras went to pairs (1,2), (1,3), (2,3), Team 4 would only get 6 games (2+2+2) instead of 8.
+
+**Solution:** Rewrote the extra distribution algorithm:
+
+1. Calculate how many extras each team needs: `games_per_team - (base_per_pair × (n-1))`
+2. Use round-robin selection starting with the team that needs the most extras
+3. For each needy team, pick a pair where their partner ALSO needs extras
+4. Track extras given per team to ensure fair distribution
+5. Limit pair targets to `base + 1` to maintain pair balance (gap ≤ 1)
+6. Added team limit check in matchup selection phase to prevent exceeding target
+
+**Test Results (20 random seeds each):**
+| Configuration | Success Rate |
+|---------------|--------------|
+| 4 teams × 8 games | 100% |
+| 8 teams × 8 games | 100% |
+| 6 teams × 8 games | 100% |
+| 4 teams × 10 games | 100% |
+| 8 teams × 6 games | 0% (mathematically impossible) |
+
 ---
 
 ## Session Log (August 13, 2026)
