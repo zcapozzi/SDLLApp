@@ -892,6 +892,37 @@ If all 4 extras went to pairs (1,2), (1,3), (2,3), Team 4 would only get 6 games
 | 4 teams × 10 games | 100% |
 | 8 teams × 6 games | 0% (mathematically impossible) |
 
+### UI Improvement: Schedule Review Page Reorganization
+
+Reorganized the schedule review page layout per user request:
+
+**New Layout Order:**
+1. **Error Summaries (Violations)** - Moved to top, collapsed by default
+   - Clickable rule type cards show counts
+   - Details only shown when clicking a specific rule type
+   - "Click a violation type above to see details" instruction shown initially
+
+2. **Field x League Matrix** - Second position
+   - Shows game/practice counts per field per league
+   - Filter buttons for All/Games Only/Practices Only
+
+3. **Warnings** - Hidden by default behind toggle button
+   - "Show Warnings" button reveals warning list
+   - Reduces visual clutter when warnings aren't needed
+
+4. **Games List/Calendar** - Third position
+   - Calendar and List view toggle
+   - League, type, and team filters
+   - Trace buttons for each date
+
+5. **Final Controls** - Bottom of page
+   - Save & Lock, Force Save, Discard Proposal options
+
+**Additional Changes:**
+- Hidden flash messages on review page (CSS override)
+- Added compact action buttons (Regenerate, Save) to header
+- Removed separate Summary card (counts visible in violation nav cards)
+
 ---
 
 ## Session Log (August 13, 2026)
