@@ -4,7 +4,65 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Fixed AA/AAA practice scheduling for pre-opening period.
+Last session: Implemented weekly activity limits for P/G leagues (2 games + 1 practice per week).
+
+---
+
+## Session: August 16, 2026 - Weekly Activity Limits for P/G Leagues
+
+### Feature
+For leagues that have P/G (both) days configured, teams should play exactly 2 games and have 1 practice per week starting from opening day.
+
+### Implementation
+
+1. **Weekly Trackers** (`app/utils/scheduler.py`):
+   - Added `_team_week_practices` and `_team_week_games` dictionaries to track activity counts
+   - Key: `(team_id, week_num)` → count
+   - Week numbers are calculated relative to opening day using `_get_week_number()`
+
+2. **Practice Limit** (1 per week for P/G leagues):
+   - Modified `_generate_post_opening_practices()` to pass `max_practices_per_week=1` for P/G leagues
+   - Modified `_assign_practices_for_date()` to accept and enforce `max_practices_per_week` parameter
+   - Checks weekly limit before assigning practices, updates counter after assignment
+
+3. **Game Limit** (2 per week for P/G leagues):
+   - Modified `_assign_games_to_slots()` to accept `max_games_per_week` parameter
+   - Calculates week number relative to opening day for each game date
+   - In team availability check, also verifies teams haven't hit weekly game limit
+   - Updates `_team_week_games` counter when games are assigned
+   - Both first pass (full rounds) and catch-up pass respect weekly limits
+
+### Key Code Changes
+
+```python
+# In _assign_games_to_slots signature:
+def _assign_games_to_slots(self, config, matchups, slots_by_date, league,
+                           existing_game_records=None, start_fresh=False,
+                           max_games_per_week=None):
+
+# Weekly limit check for team availability:
+if max_games_per_week and week_num is not None:
+    team_week_key = (team_id, week_num)
+    if self._team_week_games[team_week_key] >= max_games_per_week:
+        unavailable_teams.append(f'Team {team_id} hit weekly limit')
+        continue
+
+# Update counter when game assigned:
+if max_games_per_week and week_num is not None:
+    self._team_week_games[(home.team_ID, week_num)] += 1
+    self._team_week_games[(away.team_ID, week_num)] += 1
+```
+
+### Behavior
+
+- Week 0 starts on opening day
+- Each team can play max 2 games per week (if P/G league)
+- Each team can have max 1 practice per week (if P/G league)
+- Weekly limits only apply AFTER opening day (pre-opening practices are unlimited)
+- Non-P/G leagues are unaffected (no weekly limits)
+
+### Files Modified
+- `app/utils/scheduler.py` - Added weekly limit logic to game and practice assignment
 
 ---
 
