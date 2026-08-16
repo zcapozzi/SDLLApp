@@ -296,6 +296,12 @@ class ScheduleValidator:
             return game_date.hour + game_date.minute / 60
         return None
 
+    def _get_league(self, game):
+        """Get league name from game."""
+        if hasattr(game, 'league'):
+            return game.league
+        return None
+
     def _check_matchup_balance(self, league, games, teams):
         """Rule a1: Play everyone at least once, max 1 game difference."""
         matchup_counts = defaultdict(int)
@@ -582,10 +588,13 @@ class ScheduleValidator:
                 ))
 
     def _check_practice_field_capacity(self, games):
-        """Check practice field capacity limits.
+        """Check practice field capacity limits and same-league sharing.
 
         Rule f1: Practice field capacity - enforces each field's practice_capacity
         setting from the database. If not set, defaults to 1.
+
+        Rule f1c: Same-league sharing - teams can only share a practice field/time
+        if they are in the same league.
         """
         # Group practices by (field_object, date, hour, minute)
         practices_by_slot = defaultdict(list)
@@ -618,9 +627,10 @@ class ScheduleValidator:
             key = (field_id, field_name, field_obj, game_date.date(), game_date.hour, game_date.minute)
             practices_by_slot[key].append(game)
 
-        # Check for capacity violations
+        # Check for capacity violations and cross-league sharing
         for key, practices_at_slot in practices_by_slot.items():
             field_id, field_name, field_obj, date, hour, minute = key
+            time_str = f'{hour:02d}:{minute:02d}'
 
             # Get field's practice_capacity from DB (defaults to 1 if not set)
             if field_obj and hasattr(field_obj, 'get_practice_capacity'):
@@ -629,9 +639,8 @@ class ScheduleValidator:
             else:
                 field_capacity = 1  # Default if no field object
 
+            # Check capacity violation (f1)
             if len(practices_at_slot) > field_capacity:
-                time_str = f'{hour:02d}:{minute:02d}'
-
                 # Get team names for the violation message
                 team_names = []
                 for p in practices_at_slot:
@@ -645,6 +654,31 @@ class ScheduleValidator:
                     f'{field_name} has {len(practices_at_slot)} teams practicing at {date} {time_str} (field capacity: {field_capacity}). Teams: {", ".join(team_names[:5])}{"..." if len(team_names) > 5 else ""}',
                     games=practices_at_slot
                 ))
+
+            # Check cross-league sharing violation (f1c) - only if more than 1 team sharing
+            if len(practices_at_slot) > 1:
+                leagues_in_slot = set()
+                for p in practices_at_slot:
+                    league = self._get_league(p)
+                    if league:
+                        leagues_in_slot.add(league)
+
+                if len(leagues_in_slot) > 1:
+                    # Multiple leagues sharing same practice slot - violation
+                    team_league_info = []
+                    for p in practices_at_slot:
+                        home = self._get_home_team(p)
+                        league = self._get_league(p)
+                        if home:
+                            team_name = self._get_team_name(home)
+                            team_league_info.append(f'{team_name} ({league})')
+
+                    self.violations.append(ScheduleViolation(
+                        'f1c', 'Cross-league practice sharing',
+                        ScheduleViolation.HARD,
+                        f'{field_name} at {date} {time_str} has teams from different leagues sharing practice: {", ".join(team_league_info[:5])}{"..." if len(team_league_info) > 5 else ""}',
+                        games=practices_at_slot
+                    ))
 
     def _check_one_activity_per_day(self, league, games, teams):
         """Rule d1: Each team can have at most one game or practice per day."""
@@ -898,6 +932,7 @@ class ScheduleGenerator:
         self._team_day_usage = set()  # Tracks (team_id, date_str) - one activity per team per day
         self._slot_decisions = []  # Detailed decision log for tracing
         self._practice_slot_counts = defaultdict(int)  # Tracks practice count per (field_id, datetime) - f1 rule
+        self._practice_slot_leagues = {}  # Tracks which league is using each (field_id, datetime) - same-league sharing only
 
     def generate(self, start_fresh=False):
         """Generate a complete proposed schedule.
@@ -1904,14 +1939,25 @@ class ScheduleGenerator:
                     continue
 
             # Find best slot with available capacity (respects field's practice_capacity from DB)
+            # Teams can only share a practice slot if they are in the same league
             assigned_option = None
             for option in practice_options:
                 datetime_key = option['datetime_key']
                 current_count = self._practice_slot_counts[datetime_key]
                 field_capacity = option['field_capacity']
-                if current_count < field_capacity:
-                    assigned_option = option
-                    break
+
+                # Check if slot has capacity
+                if current_count >= field_capacity:
+                    continue
+
+                # Check if slot is being used by a different league (same-league sharing only)
+                slot_league = self._practice_slot_leagues.get(datetime_key)
+                if slot_league is not None and slot_league != config.league:
+                    # Slot is already used by a different league, can't share
+                    continue
+
+                assigned_option = option
+                break
 
             if not assigned_option:
                 # All practice slots at capacity, skip this team's practice
@@ -1921,8 +1967,9 @@ class ScheduleGenerator:
                 })
                 continue
 
-            # Increment the global practice count for this field/time
+            # Increment the global practice count for this field/time and track the league
             self._practice_slot_counts[assigned_option['datetime_key']] += 1
+            self._practice_slot_leagues[assigned_option['datetime_key']] = config.league
 
             practice = ProposedGame(
                 game_type='practice',

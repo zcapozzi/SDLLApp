@@ -4,7 +4,43 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Implemented weekly activity limits for P/G leagues (2 games + 1 practice per week).
+Last session: Added same-league practice sharing constraint.
+
+---
+
+## Session: August 16, 2026 - Same-League Practice Sharing Constraint
+
+### Feature
+Two teams can share a practice field at the same time ONLY if they are in the same league. This prevents cross-league practice conflicts.
+
+### Implementation
+
+1. **New Tracker** (`app/utils/scheduler.py`):
+   - Added `_practice_slot_leagues` dictionary to track which league is using each practice slot
+   - Key: `(field_id, datetime_iso)` → league name
+
+2. **Scheduler Changes** (`_assign_practices_for_date`):
+   - When checking slot capacity, also verifies the slot is either empty or used by the same league
+   - If slot is used by a different league, it's treated as unavailable (even if capacity allows)
+   - When assigning a practice, records the league in `_practice_slot_leagues`
+
+3. **Validator Changes** (`_check_practice_field_capacity`):
+   - Added new rule **f1c: Cross-league practice sharing**
+   - Groups practices by field/time slot
+   - Checks if multiple leagues are sharing the same slot
+   - Reports HARD violation if different leagues share a practice slot
+   - Added `_get_league()` helper method to extract league from game objects
+
+### Rule Codes
+- **f1**: Practice field capacity (existing) - too many teams for field's capacity
+- **f1c**: Cross-league practice sharing (new) - different leagues sharing same practice slot
+
+### Files Modified
+- `app/utils/scheduler.py`:
+  - Added `_practice_slot_leagues` tracker
+  - Updated `_assign_practices_for_date()` to check and track league
+  - Updated `_check_practice_field_capacity()` to validate same-league sharing
+  - Added `_get_league()` helper method
 
 ---
 
