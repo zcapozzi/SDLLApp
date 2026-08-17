@@ -769,6 +769,75 @@ def unlock(year, is_spring):
     return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
 
 
+@scheduler_bp.route('/<int:year>/<int:is_spring>/clear-league', methods=['POST'])
+@login_required
+def clear_league(year, is_spring):
+    """Clear all games for a single league (while schedule is not locked)."""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to modify schedules.', 'error')
+        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+    league = request.form.get('league')
+    clear_type = request.form.get('clear_type', 'all')  # 'all', 'regular', 'playoff', 'practice'
+
+    if not league:
+        flash('No league specified.', 'error')
+        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+    # Check if league schedule is locked
+    config = LeagueSeason.query.filter_by(
+        year=year, is_spring=is_spring, league=league, active=1
+    ).first()
+
+    if config and config.schedule_locked:
+        flash(f'{league} schedule is locked. Unlock it first to clear games.', 'error')
+        return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
+
+    try:
+        # Build query based on clear type
+        query = Game.query.filter_by(
+            year=year, is_spring=is_spring, league=league, active=1
+        )
+
+        if clear_type == 'regular':
+            query = query.filter_by(game_type='regular', is_scrimmage=0)
+        elif clear_type == 'playoff':
+            query = query.filter_by(game_type='playoff')
+        elif clear_type == 'practice':
+            query = query.filter_by(game_type='practice')
+        elif clear_type == 'scrimmage':
+            query = query.filter_by(is_scrimmage=1)
+        # 'all' uses the unfiltered query
+
+        games = query.all()
+        count = len(games)
+
+        # Soft delete the games
+        for game in games:
+            game.active = 0
+
+        db.session.commit()
+
+        type_label = {
+            'all': 'all games',
+            'regular': 'regular season games',
+            'playoff': 'playoff games',
+            'practice': 'practice slots',
+            'scrimmage': 'scrimmage games'
+        }.get(clear_type, 'games')
+
+        logger.info(f'Cleared {count} {type_label} for {league}')
+        flash(f'Cleared {count} {type_label} for {league}.', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        logger.info(f'Failed to clear games for {league}: {str(e)}')
+        flash(f'Error clearing games: {str(e)}', 'error')
+
+    anchor = f'league-{league.replace(" ", "-")}'
+    return redirect(url_for('scheduler.index', year=year, is_spring=is_spring) + f'#{anchor}')
+
+
 @scheduler_bp.route('/<int:year>/<int:is_spring>/start-fresh', methods=['POST'])
 @login_required
 def start_fresh(year, is_spring):

@@ -457,6 +457,24 @@ def properties():
 
             return redirect(url_for('fields.properties', ownership=ownership_filter))
 
+        elif action == 'update_start_date':
+            # Update field start date
+            field_id = int(request.form.get('field_id'))
+            start_date_str = request.form.get('start_date')
+
+            field = Field.query.get(field_id)
+            if field:
+                from datetime import datetime
+                if start_date_str:
+                    field.start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                else:
+                    field.start_date = None
+                db.session.commit()
+                logger.info(f'Updated start date for {field.location_title}: {field.start_date}')
+                flash(f'Updated start date for {field.location_title}', 'success')
+
+            return redirect(url_for('fields.properties', ownership=ownership_filter) + f'#field-{field_id}')
+
         else:
             # Legacy single-field update (keep for backwards compatibility)
             field_id = int(request.form.get('field_id'))
@@ -544,4 +562,55 @@ def time_restrictions():
         'fields/time_restrictions.html',
         fields=fields,
         ownership_filter=ownership_filter
+    )
+
+
+@fields_bp.route('/blackouts/<int:field_id>', methods=['GET', 'POST'])
+@login_required
+def field_blackouts(field_id):
+    """Manage blackout dates for a specific field"""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to manage field blackout dates.', 'error')
+        return redirect(url_for('fields.index'))
+
+    field = Field.query.get_or_404(field_id)
+    from app.models.field_blackout import FieldBlackout
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+
+        if action == 'add_blackout':
+            date_str = request.form.get('blackout_date')
+            reason = request.form.get('reason', '').strip()
+
+            if date_str:
+                from datetime import datetime
+                blackout_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                blackout = FieldBlackout.add_blackout(field_id, blackout_date, reason or None)
+                if blackout:
+                    logger.info(f'Added blackout for {field.location_title}: {blackout_date}')
+                    flash(f'Added blackout date: {blackout_date.strftime("%B %d, %Y")}', 'success')
+                else:
+                    flash(f'Blackout date already exists', 'warning')
+            else:
+                flash('Please select a date.', 'error')
+
+        elif action == 'delete_blackout':
+            blackout_id = request.form.get('blackout_id')
+            if blackout_id:
+                blackout = FieldBlackout.query.get(int(blackout_id))
+                if blackout and blackout.field_ID == field_id:
+                    blackout.delete()
+                    logger.info(f'Deleted blackout for {field.location_title}: {blackout.blackout_date}')
+                    flash('Blackout date removed.', 'success')
+
+        return redirect(url_for('fields.field_blackouts', field_id=field_id))
+
+    # GET - show blackout dates
+    blackouts = FieldBlackout.get_by_field(field_id)
+
+    return render_template(
+        'fields/field_blackouts.html',
+        field=field,
+        blackouts=blackouts
     )

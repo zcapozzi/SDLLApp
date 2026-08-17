@@ -5,12 +5,12 @@
 {% block extra_css %}
 <style>
     .prereq-status {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         width: 20px;
         height: 20px;
         border-radius: 50%;
-        text-align: center;
-        line-height: 20px;
         font-size: 12px;
         margin-right: 8px;
     }
@@ -258,6 +258,12 @@
                 <div class="prereq-detail">
                     {{ prereqs.game_slot_count }} total slots
                     ({{ prereqs.filled_slot_count }} filled, {{ prereqs.empty_slot_count }} empty)
+                    {% if not prereqs.locked %}
+                    <button type="button" class="btn btn-sm btn-outline" style="margin-left: 10px; color: #c0392b; border-color: #c0392b;"
+                            onclick="showClearModal('{{ config.league }}', '{{ display_name }}')">
+                        Clear Games
+                    </button>
+                    {% endif %}
                 </div>
                 {% else %}
                 <div class="prereq-detail">
@@ -292,4 +298,63 @@
         <button type="submit" class="btn btn-outline">Validate Current Schedule</button>
     </form>
 </div>
+
+<!-- Clear Games Modal -->
+<div id="clear-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+     background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+    <div class="card" style="max-width: 400px; margin: auto;">
+        <h3 style="margin-bottom: 15px;">Clear Games for <span id="clear-league-name"></span></h3>
+        <p class="text-muted" style="margin-bottom: 20px;">
+            Select which game types to clear. This cannot be undone.
+        </p>
+        <form method="POST" action="{{ url_for('scheduler.clear_league', year=year, is_spring=is_spring) }}" id="clear-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="league" id="clear-league-id">
+
+            <div class="form-group">
+                <label style="display: block; padding: 8px 0;">
+                    <input type="radio" name="clear_type" value="all" checked> <strong>All Games</strong>
+                    <span class="text-muted" style="display: block; margin-left: 22px; font-size: 13px;">Regular, playoff, practice, and scrimmage games</span>
+                </label>
+                <label style="display: block; padding: 8px 0;">
+                    <input type="radio" name="clear_type" value="regular"> Regular Season Only
+                    <span class="text-muted" style="display: block; margin-left: 22px; font-size: 13px;">Just regular season games (not scrimmages)</span>
+                </label>
+                <label style="display: block; padding: 8px 0;">
+                    <input type="radio" name="clear_type" value="playoff"> Playoff Games Only
+                </label>
+                <label style="display: block; padding: 8px 0;">
+                    <input type="radio" name="clear_type" value="practice"> Practice Slots Only
+                </label>
+                <label style="display: block; padding: 8px 0;">
+                    <input type="radio" name="clear_type" value="scrimmage"> Scrimmage Games Only
+                </label>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="submit" class="btn" style="background: #c0392b; color: white;"
+                        onclick="return confirm('Are you sure you want to clear these games?');">
+                    Clear Games
+                </button>
+                <button type="button" class="btn btn-outline" onclick="closeClearModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function showClearModal(league, displayName) {
+    document.getElementById('clear-league-id').value = league;
+    document.getElementById('clear-league-name').textContent = displayName;
+    document.getElementById('clear-modal').style.display = 'flex';
+}
+
+function closeClearModal() {
+    document.getElementById('clear-modal').style.display = 'none';
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeClearModal();
+});
+</script>
 {% endblock %}

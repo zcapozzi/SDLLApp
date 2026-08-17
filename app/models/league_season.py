@@ -47,6 +47,7 @@ class LeagueSeason(db.Model):
 
     # Playoff format options
     PLAYOFF_FORMATS = [
+        ('none', 'No Post-Season'),
         ('single_elimination', 'Single Elimination'),
         ('double_elimination', 'Double Elimination'),
         ('round_robin_knockout', 'Round Robin + Knockout'),
@@ -97,6 +98,9 @@ class LeagueSeason(db.Model):
     @property
     def playoff_game_count(self):
         """Calculate number of playoff games based on format and teams"""
+        # No post-season means no playoff games
+        if self.playoff_format == 'none':
+            return 0
         n = self.actual_playoff_teams
         if n < 2:
             return 0

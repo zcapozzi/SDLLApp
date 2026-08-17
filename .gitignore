@@ -69,3 +69,14 @@ Thumbs.db
 
 # Flask session files
 flask_session/
+
+# Debug/analysis scripts (temporary scheduler debugging)
+/analyze_*.py
+/debug_*.py
+/check_*.py
+/test_*.py
+
+# Scheduler debug output files
+/proposal_games.json
+/current_proposal.json
+/warnings.json

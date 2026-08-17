@@ -45,18 +45,31 @@
         const cancelZone = document.getElementById('cancel-zone');
 
         fieldCells.forEach(function(cell) {
+            // Check if this cell has an allocation
+            const hasAllocation = cell.dataset.allocated === 'true';
+
             new Sortable(cell, {
-                group: 'day-games',
+                group: {
+                    name: 'day-games',
+                    // Only allow drops into cells with allocations
+                    put: hasAllocation
+                },
                 animation: 150,
                 ghostClass: 'game-slot-ghost',
                 chosenClass: 'game-slot-chosen',
                 dragClass: 'game-slot-dragging',
+                // Prevent dragging items out of non-allocated cells (shouldn't have any, but just in case)
+                sort: hasAllocation,
                 onStart: function(evt) {
                     isDragging = true;
                     document.body.classList.add('is-dragging');
                     if (cancelZone) {
                         cancelZone.classList.add('drag-active');
                     }
+                    // Add visual indicator for non-allocated cells
+                    document.querySelectorAll('.field-cell.slot-no-allocation').forEach(function(noAllocCell) {
+                        noAllocCell.classList.add('drag-no-drop');
+                    });
                 },
                 onEnd: function(evt) {
                     isDragging = false;
@@ -65,9 +78,21 @@
                         cancelZone.classList.remove('drag-active');
                         cancelZone.classList.remove('drag-over');
                     }
+                    // Remove visual indicator
+                    document.querySelectorAll('.field-cell.drag-no-drop').forEach(function(noAllocCell) {
+                        noAllocCell.classList.remove('drag-no-drop');
+                    });
 
                     // Check if dropped in same location
                     if (evt.from === evt.to && evt.oldIndex === evt.newIndex) {
+                        return;
+                    }
+
+                    // Double-check: don't allow drop into non-allocated cell
+                    if (evt.to.dataset.allocated !== 'true') {
+                        // Revert the move
+                        evt.from.appendChild(evt.item);
+                        showNotification('Cannot move game to a slot without allocation', 'error');
                         return;
                     }
 
@@ -613,6 +638,22 @@
             display: flex;
             align-items: center;
             gap: 10px;
+        }
+        /* Visual indicator for non-allocated cells during drag */
+        .field-cell.drag-no-drop {
+            background: #ffebee !important;
+            position: relative;
+        }
+        .field-cell.drag-no-drop::after {
+            content: 'X';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: #c62828;
+            opacity: 0.3;
+            pointer-events: none;
         }
     `;
     document.head.appendChild(style);

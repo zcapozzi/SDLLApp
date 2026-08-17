@@ -348,6 +348,53 @@ def manage(year, is_spring):
                     flash('Game deleted.', 'success')
                     anchor = None  # Don't scroll to deleted game
 
+        # Handle create action (no game_id required)
+        if action == 'create_game':
+            # Get form values
+            league = request.form.get('league')
+            game_type = request.form.get('game_type', 'regular')
+            game_date_str = request.form.get('game_date')
+            game_time_str = request.form.get('game_time')
+            location = request.form.get('location')
+            home_id = request.form.get('home_id')
+            away_id = request.form.get('away_id')
+            is_scrimmage = 1 if request.form.get('is_scrimmage') else 0
+            no_time_limit = 1 if request.form.get('no_time_limit') else 0
+
+            if not league:
+                flash('League is required.', 'error')
+            elif not game_date_str or not game_time_str:
+                flash('Date and time are required.', 'error')
+            elif not location:
+                flash('Field is required.', 'error')
+            else:
+                # Parse date and time
+                game_date = datetime.strptime(
+                    f'{game_date_str} {game_time_str}', '%Y-%m-%d %H:%M'
+                )
+
+                # Create the game
+                new_game = Game(
+                    active=1,
+                    year=year,
+                    is_spring=is_spring,
+                    league=league,
+                    game_type=game_type,
+                    game_date=game_date,
+                    location=location,
+                    home_ID=int(home_id) if home_id else None,
+                    away_ID=int(away_id) if away_id and game_type != 'practice' else None,
+                    is_scrimmage=is_scrimmage,
+                    no_time_limit=no_time_limit,
+                    status='scheduled'
+                )
+                db.session.add(new_game)
+                db.session.commit()
+
+                logger.info(f'Created new game: {new_game.ID} - {league} at {location} on {game_date}')
+                flash(f'Game created successfully.', 'success')
+                anchor = f'game-{new_game.ID}'
+
         redirect_url = url_for('games.manage', year=year, is_spring=is_spring)
         if anchor:
             redirect_url += f'#{anchor}'
@@ -733,11 +780,45 @@ def day_view(year, is_spring, target_date):
     # Get all fields for display (prioritize those with games)
     all_fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
     field_lookup = {f.location_title: f for f in all_fields}
+    field_id_lookup = {f.ID: f for f in all_fields}
 
-    # Build display_fields from fields used on this day
-    if fields_with_games:
+    # Get field slots (allocations) for this day of week
+    day_of_week = view_date.weekday()  # 0=Monday, 6=Sunday
+    from app.models.field_slot import FieldSlot
+    allocations = FieldSlot.query.filter_by(
+        year=year,
+        is_spring=is_spring,
+        day_of_week=day_of_week,
+        active=1
+    ).all()
+
+    # Track fields with allocations and their time slots
+    fields_with_allocations = set()
+    allocation_times = set()
+    allocation_info = {}  # (field_name, time_key) -> {'is_owned': bool, 'slot': FieldSlot}
+
+    for alloc in allocations:
+        field = field_id_lookup.get(alloc.field_ID)
+        if field:
+            fields_with_allocations.add(field.location_title)
+            # Track time slots covered by this allocation
+            start_hour = alloc.start_time.hour
+            end_hour = alloc.end_time.hour
+            for h in range(start_hour, end_hour + 1):
+                for m in [0, 30]:
+                    time_key = f'{h:02d}:{m:02d}'
+                    allocation_times.add(time_key)
+                    allocation_info[(field.location_title, time_key)] = {
+                        'is_owned': alloc.is_owned == 1,
+                        'slot': alloc
+                    }
+
+    # Build display_fields from fields with games OR allocations
+    fields_to_show = fields_with_games | fields_with_allocations
+
+    if fields_to_show:
         display_fields = []
-        for field_name in sorted(fields_with_games):
+        for field_name in sorted(fields_to_show):
             if field_name:
                 # Try to find matching field in DB
                 if field_name in field_lookup:
@@ -749,16 +830,23 @@ def day_view(year, is_spring, target_date):
     else:
         display_fields = all_fields[:8]  # Limit to 8 fields to fit on screen
 
-    # Define time slots based on actual game times (dynamic range)
-    time_slots = []
+    # Define time slots based on actual game times AND allocation times (dynamic range)
+    all_time_keys = set()
     if game_hours:
         min_hour = min(game_hours)
-        max_hour = max(game_hours) + 1  # Include the last hour
+        max_hour = max(game_hours) + 1
         for hour in range(min_hour, max_hour + 1):
             for minute in [0, 30]:
-                time_slots.append(f'{hour:02d}:{minute:02d}')
+                all_time_keys.add(f'{hour:02d}:{minute:02d}')
+
+    # Also include times from allocations
+    all_time_keys.update(allocation_times)
+
+    if all_time_keys:
+        time_slots = sorted(all_time_keys)
     else:
-        # Default to evening if no games
+        # Default to evening if no games or allocations
+        time_slots = []
         for hour in [17, 18, 19, 20]:
             for minute in [0, 30]:
                 time_slots.append(f'{hour:02d}:{minute:02d}')
@@ -793,6 +881,15 @@ def day_view(year, is_spring, target_date):
         active=1
     ).order_by(TeamSeason.league, TeamSeason.display_name).all()
 
+    # Get leagues for create modal
+    leagues = db.session.query(Game.league).filter(
+        Game.active == 1,
+        Game.year == year,
+        Game.is_spring == is_spring,
+        Game.league.isnot(None)
+    ).distinct().order_by(Game.league).all()
+    leagues = [l[0] for l in leagues]
+
     return render_template(
         'games/day_view.html',
         year=year,
@@ -806,7 +903,9 @@ def day_view(year, is_spring, target_date):
         all_fields=all_fields,
         time_slots=time_slots,
         grid=grid,
-        teams=teams
+        teams=teams,
+        allocation_info=allocation_info,
+        leagues=leagues
     )
 
 

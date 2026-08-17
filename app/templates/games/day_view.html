@@ -60,6 +60,32 @@
     .day-grid td.field-cell:hover {
         background: #f8f8f8;
     }
+    /* SDLL-owned slots have a subtle green background */
+    .day-grid td.field-cell.slot-sdll-owned {
+        background: #f0fff0;
+    }
+    .day-grid td.field-cell.slot-sdll-owned:hover {
+        background: #e0f5e0;
+    }
+    /* Away-only (not owned) slots have a subtle blue background */
+    .day-grid td.field-cell.slot-away-only {
+        background: #f0f8ff;
+    }
+    .day-grid td.field-cell.slot-away-only:hover {
+        background: #e0f0fa;
+    }
+    /* Non-allocated slots have a light gray background */
+    .day-grid td.field-cell.slot-no-allocation {
+        background: #f5f5f5;
+        cursor: not-allowed;
+    }
+    .day-grid td.field-cell.slot-no-allocation:hover {
+        background: #efefef;
+    }
+    .day-grid td.field-cell.slot-no-allocation .empty-marker {
+        color: #bbb;
+        font-size: 10px;
+    }
     .game-slot {
         padding: 8px;
         margin-bottom: 6px;
@@ -230,6 +256,7 @@
         Day View
     </h1>
     <div style="display: flex; gap: 10px;">
+        <button type="button" class="btn btn-primary" onclick="openCreateModal()">+ Create Game</button>
         <a href="{{ url_for('games.calendar', year=year, is_spring=is_spring) }}" class="btn btn-outline">Week View</a>
         <a href="{{ url_for('games.manage', year=year, is_spring=is_spring) }}" class="btn btn-outline">List View</a>
     </div>
@@ -276,7 +303,15 @@
                     {{ hour12 }}:{{ time_slot[3:] }} {% if hour24 >= 12 %}PM{% else %}AM{% endif %}
                 </td>
                 {% for field in display_fields %}
-                <td class="field-cell" data-field="{{ field.location_title }}" data-time="{{ time_slot }}">
+                {% set alloc_key = (field.location_title, time_slot) %}
+                {% set alloc = allocation_info.get(alloc_key) %}
+                {% set has_alloc = alloc is not none %}
+                {% set is_owned = alloc.is_owned if alloc else false %}
+                <td class="field-cell {% if not has_alloc %}slot-no-allocation{% elif is_owned %}slot-sdll-owned{% else %}slot-away-only{% endif %}"
+                    data-field="{{ field.location_title }}"
+                    data-time="{{ time_slot }}"
+                    data-allocated="{{ 'true' if has_alloc else 'false' }}"
+                    data-owned="{{ 'true' if is_owned else 'false' }}">
                     {% set cell_games = grid.get(time_slot, {}).get(field.location_title, []) %}
                     {% if cell_games %}
                         {% for game in cell_games %}
@@ -296,6 +331,8 @@
                             </div>
                         </div>
                         {% endfor %}
+                    {% elif not has_alloc %}
+                        <span class="empty-marker">No allocation</span>
                     {% endif %}
                 </td>
                 {% endfor %}
@@ -313,15 +350,26 @@
 
 <!-- Legend -->
 <div class="card" style="padding: 15px;">
-    <strong>Legend:</strong>
-    <span style="margin-left: 15px;"><span class="status-dot scheduled"></span> Scheduled</span>
-    <span style="margin-left: 15px;"><span class="status-dot completed"></span> Completed</span>
-    <span style="margin-left: 15px;"><span class="status-dot postponed"></span> Postponed</span>
-    <span style="margin-left: 15px;"><span class="status-dot cancelled"></span> Cancelled</span>
-    <span style="margin-left: 30px; padding: 2px 8px; background: #e8f5e9; border-radius: 4px;">Game</span>
-    <span style="margin-left: 10px; padding: 2px 8px; background: #f3e5f5; border-radius: 4px;">Practice</span>
-    <span style="margin-left: 10px; padding: 2px 8px; background: #e3f2fd; border-radius: 4px;">Scrimmage</span>
-    <span style="margin-left: 10px; padding: 2px 8px; background: #fff3e0; border-radius: 4px;">Playoff</span>
+    <div style="margin-bottom: 10px;">
+        <strong>Status:</strong>
+        <span style="margin-left: 15px;"><span class="status-dot scheduled"></span> Scheduled</span>
+        <span style="margin-left: 15px;"><span class="status-dot completed"></span> Completed</span>
+        <span style="margin-left: 15px;"><span class="status-dot postponed"></span> Postponed</span>
+        <span style="margin-left: 15px;"><span class="status-dot cancelled"></span> Cancelled</span>
+    </div>
+    <div style="margin-bottom: 10px;">
+        <strong>Game Types:</strong>
+        <span style="margin-left: 15px; padding: 2px 8px; background: #e8f5e9; border-radius: 4px;">Game</span>
+        <span style="margin-left: 10px; padding: 2px 8px; background: #f3e5f5; border-radius: 4px;">Practice</span>
+        <span style="margin-left: 10px; padding: 2px 8px; background: #e3f2fd; border-radius: 4px;">Scrimmage</span>
+        <span style="margin-left: 10px; padding: 2px 8px; background: #fff3e0; border-radius: 4px;">Playoff</span>
+    </div>
+    <div>
+        <strong>Field Slots:</strong>
+        <span style="margin-left: 15px; padding: 2px 8px; background: #f0fff0; border: 1px solid #c0e0c0; border-radius: 4px;">SDLL Owned</span>
+        <span style="margin-left: 10px; padding: 2px 8px; background: #f0f8ff; border: 1px solid #c0d8f0; border-radius: 4px;">Away Only</span>
+        <span style="margin-left: 10px; padding: 2px 8px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; color: #999;">No Allocation</span>
+    </div>
 </div>
 
 <!-- Cancel Drop Zone (for drag-and-drop) -->
@@ -499,13 +547,147 @@ function toggleAwayTeam() {
 }
 
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') closeEditModal();
+    if (e.key === 'Escape') {
+        closeEditModal();
+        closeCreateModal();
+    }
 });
 
 document.getElementById('edit-modal').addEventListener('click', function(e) {
     if (e.target === this) closeEditModal();
 });
+
+// Create modal functions
+function openCreateModal() {
+    // Pre-fill date with current view date
+    document.getElementById('create-game-date').value = '{{ view_date.strftime("%Y-%m-%d") }}';
+    document.getElementById('create-modal').style.display = 'flex';
+}
+
+function closeCreateModal() {
+    document.getElementById('create-modal').style.display = 'none';
+}
+
+function toggleCreateAwayTeam() {
+    var gameType = document.getElementById('create-game-type').value;
+    var awayGroup = document.getElementById('create-away-team-group');
+    if (gameType === 'practice') {
+        awayGroup.style.display = 'none';
+        document.getElementById('create-away-team').value = '';
+    } else {
+        awayGroup.style.display = 'block';
+    }
+}
+
+var createModal = document.getElementById('create-modal');
+if (createModal) {
+    createModal.addEventListener('click', function(e) {
+        if (e.target === this) closeCreateModal();
+    });
+}
 </script>
+
+<!-- Create Game Modal -->
+<div id="create-modal" class="edit-modal">
+    <div class="card">
+        <h3 style="margin-bottom: 20px;">Create Game</h3>
+        <form method="POST" action="{{ url_for('games.manage', year=year, is_spring=is_spring) }}" id="create-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="create_game">
+
+            <!-- League -->
+            <div class="form-group">
+                <label>League</label>
+                <select name="league" id="create-league" class="form-control" required>
+                    <option value="">-- Select League --</option>
+                    {% for l in leagues %}
+                    <option value="{{ l }}">{{ l }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Game Type -->
+            <div class="form-group">
+                <label>Type</label>
+                <select name="game_type" id="create-game-type" class="form-control" onchange="toggleCreateAwayTeam()">
+                    <option value="regular">Regular Game</option>
+                    <option value="playoff">Playoff Game</option>
+                    <option value="practice">Practice</option>
+                </select>
+            </div>
+
+            <!-- Date/Time -->
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" name="game_date" id="create-game-date" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Time</label>
+                    <input type="time" name="game_time" id="create-game-time" class="form-control" required>
+                </div>
+            </div>
+
+            <!-- Field -->
+            <div class="form-group">
+                <label>Field</label>
+                <select name="location" id="create-game-location" class="form-control" required>
+                    <option value="">-- Select Field --</option>
+                    {% for field in all_fields %}
+                    <option value="{{ field.location_title }}">{{ field.location_title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Home Team -->
+            <div class="form-group">
+                <label>Home Team</label>
+                <select name="home_id" id="create-home-team" class="form-control">
+                    <option value="">-- Select (optional) --</option>
+                    {% for team in teams %}
+                    <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
+                        {{ team.computed_display_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Away Team -->
+            <div class="form-group" id="create-away-team-group">
+                <label>Away Team</label>
+                <select name="away_id" id="create-away-team" class="form-control">
+                    <option value="">-- None (Practice) --</option>
+                    {% for team in teams %}
+                    <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
+                        {{ team.computed_display_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Options -->
+            <div class="form-row">
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" name="is_scrimmage" id="create-is-scrimmage">
+                        <span>Scrimmage (no umpire)</span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" name="no_time_limit" id="create-no-time-limit">
+                        <span>No Time Limit (3 hrs)</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="btn-row">
+                <button type="submit" class="btn btn-primary">Create Game</button>
+                <button type="button" class="btn btn-outline" onclick="closeCreateModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <!-- Drag-and-Drop Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>

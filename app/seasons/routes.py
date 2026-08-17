@@ -779,8 +779,9 @@ def manage_leagues(year, is_spring):
             league_id = int(request.form.get('league_id'))
             config = LeagueSeason.query.get(league_id)
             if config and config.year == year and config.is_spring == is_spring:
-                num_playoff_teams = config.actual_playoff_teams
-                if num_playoff_teams < 2:
+                if config.playoff_format == 'none':
+                    flash(f'{config.league}: No post-season configured for this league.', 'warning')
+                elif config.actual_playoff_teams < 2:
                     flash(f'{config.league}: Need at least 2 teams to generate playoff games.', 'error')
                 else:
                     # Auto-generate seed placeholders if they don't exist
@@ -1060,4 +1061,57 @@ def schedule_settings(year, is_spring):
         league_configs=league_configs,
         all_leagues=all_leagues,
         day_abbrevs=LeagueSeason.DAY_ABBREVS
+    )
+
+
+@seasons_bp.route('/<int:year>/<int:is_spring>/blackout-dates', methods=['GET', 'POST'])
+@login_required
+def blackout_dates(year, is_spring):
+    """Manage season-wide blackout dates (e.g., Labor Day, Thanksgiving)."""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to manage blackout dates.', 'error')
+        return redirect(url_for('seasons.view', year=year, is_spring=is_spring))
+
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+    from app.models.season_blackout import SeasonBlackout
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+
+        if action == 'add_blackout':
+            date_str = request.form.get('blackout_date')
+            reason = request.form.get('reason', '').strip()
+
+            if date_str:
+                from datetime import datetime
+                blackout_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                blackout = SeasonBlackout.add_blackout(year, is_spring, blackout_date, reason or None)
+                if blackout:
+                    logger.info(f'Added blackout date: {blackout_date} - {reason}')
+                    flash(f'Added blackout date: {blackout_date.strftime("%B %d, %Y")}', 'success')
+                else:
+                    flash(f'Blackout date already exists: {blackout_date.strftime("%B %d, %Y")}', 'warning')
+            else:
+                flash('Please select a date.', 'error')
+
+        elif action == 'delete_blackout':
+            blackout_id = request.form.get('blackout_id')
+            if blackout_id:
+                blackout = SeasonBlackout.query.get(int(blackout_id))
+                if blackout and blackout.year == year and blackout.is_spring == is_spring:
+                    blackout.delete()
+                    logger.info(f'Deleted blackout date: {blackout.blackout_date}')
+                    flash('Blackout date removed.', 'success')
+
+        return redirect(url_for('seasons.blackout_dates', year=year, is_spring=is_spring))
+
+    # GET - show blackout dates
+    blackouts = SeasonBlackout.get_by_season(year, is_spring)
+
+    return render_template(
+        'seasons/blackout_dates.html',
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name,
+        blackouts=blackouts
     )

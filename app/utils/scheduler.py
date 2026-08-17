@@ -957,6 +957,17 @@ class ScheduleGenerator:
         self._practice_slot_counts = defaultdict(int)  # Tracks practice count per (field_id, datetime) - f1 rule
         self._practice_slot_leagues = {}  # Tracks which league is using each (field_id, datetime) - same-league sharing only
 
+        # Load season-wide blackout dates
+        from app.models.season_blackout import SeasonBlackout
+        self._season_blackout_dates = SeasonBlackout.get_blackout_dates_set(year, is_spring)
+
+    def _is_blackout_date(self, check_date):
+        """Check if a date is a season-wide blackout date."""
+        # Convert datetime to date if needed
+        if hasattr(check_date, 'date'):
+            check_date = check_date.date()
+        return check_date in self._season_blackout_dates
+
     def generate(self, start_fresh=False):
         """Generate a complete proposed schedule.
 
@@ -1157,7 +1168,7 @@ class ScheduleGenerator:
             all_activity_days = set(practice_days + game_days)
             current = scrimmage_date
             while current >= config.first_practice_date:
-                if current.weekday() in all_activity_days:
+                if current.weekday() in all_activity_days and not self._is_blackout_date(current):
                     self._generate_scrimmages(config, teams, league, all_slots, current)
                     break
                 current -= timedelta(days=1)
@@ -1225,6 +1236,10 @@ class ScheduleGenerator:
 
             while current_date <= end_date:
                 if current_date.weekday() in all_activity_days and current_date != scrimmage_date:
+                    # Skip season blackout dates
+                    if self._is_blackout_date(current_date):
+                        current_date += timedelta(days=1)
+                        continue
                     # Pre-opening: schedule practices on ALL activity days (game + practice)
                     self._assign_practices_for_date(config, teams, league, all_slots, current_date, practice_slots, start_fresh, is_pre_opening=True)
                 current_date += timedelta(days=1)
@@ -1310,7 +1325,9 @@ class ScheduleGenerator:
         activity_dates = []
         while current_date <= end_date:
             if current_date.weekday() in all_activity_days:
-                activity_dates.append(current_date)
+                # Skip season blackout dates
+                if not self._is_blackout_date(current_date):
+                    activity_dates.append(current_date)
             current_date += timedelta(days=1)
 
         if not activity_dates:
@@ -1499,6 +1516,10 @@ class ScheduleGenerator:
         while current_date <= end_date:
             # Run on any day that ANY team in this league has as a practice day
             if current_date.weekday() in all_practice_days:
+                # Skip season blackout dates
+                if self._is_blackout_date(current_date):
+                    current_date += timedelta(days=1)
+                    continue
                 if is_pg_league:
                     # For P/G leagues, pass weekly limit constraint
                     self._assign_practices_for_date(
@@ -1951,6 +1972,9 @@ class ScheduleGenerator:
         for slot in available_slots:
             if not slot.field:
                 continue
+            # Check field availability (start date and blackout dates)
+            if not slot.field.is_available_on_date(practice_date):
+                continue
             field_id = slot.field.ID
             time_capacity = self._get_time_based_practice_capacity(slot)
 
@@ -1974,15 +1998,21 @@ class ScheduleGenerator:
                     })
 
         for team in teams:
-            # For pre-opening practices, schedule on all activity days (game + practice)
-            # For post-opening, only schedule on practice days
-            if not is_pre_opening:
-                # Check if this day is a practice day for this team
-                # Use team-specific practice days if set, otherwise use league default
+            # Check if this day is a practice day for this team
+            # Team-specific practice_days ALWAYS takes precedence if set
+            if team.practice_days:
+                # Team has specific practice days set - use those exclusively
                 team_practice_days = team.get_practice_days(config)
                 if day_of_week not in team_practice_days:
                     # This is not a practice day for this team
                     continue
+            elif not is_pre_opening:
+                # For post-opening without team-specific days, use league default
+                team_practice_days = team.get_practice_days(config)
+                if day_of_week not in team_practice_days:
+                    # This is not a practice day for this team
+                    continue
+            # For pre-opening without team-specific days, schedule on all activity days
 
             # Check if team already has activity on this day
             team_day_key = (team.team_ID, date_str)
@@ -2794,7 +2824,9 @@ class ScheduleGenerator:
                 break
 
             if current.weekday() in day_numbers:
-                dates.append(current)
+                # Skip season blackout dates
+                if not self._is_blackout_date(current):
+                    dates.append(current)
             current += timedelta(days=1)
 
         return dates
@@ -2830,7 +2862,9 @@ class ScheduleGenerator:
             day_of_week = target_date.weekday()
             day_slots = [
                 s for s in all_slots
-                if s.day_of_week == day_of_week and self._can_use_slot(s, league, usage_type)
+                if s.day_of_week == day_of_week
+                and self._can_use_slot(s, league, usage_type)
+                and (not s.field or s.field.is_available_on_date(target_date))  # Check field availability
             ]
             if day_slots:
                 # Sort by preference

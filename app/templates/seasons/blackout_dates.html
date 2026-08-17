@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Blackout Dates - {{ season_name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>
+        <span class="badge badge-{{ 'spring' if is_spring else 'fall' }}">{{ season_name }}</span>
+        Blackout Dates
+    </h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('seasons.schedule_settings', year=year, is_spring=is_spring) }}" class="btn btn-outline">Schedule Settings</a>
+        <a href="{{ url_for('scheduler.index', year=year, is_spring=is_spring) }}" class="btn btn-outline">Scheduler</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <p class="text-muted">
+        Blackout dates are dates when no games or practices should be scheduled across all leagues.
+        Use this for holidays like Labor Day Weekend, Thanksgiving, etc.
+    </p>
+</div>
+
+<!-- Add Blackout Date -->
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-top: 0; margin-bottom: 15px;">Add Blackout Date</h3>
+    <form method="POST" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add_blackout">
+
+        <div class="form-group" style="margin-bottom: 0;">
+            <label>Date</label>
+            <input type="date" name="blackout_date" class="form-control" required>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 200px;">
+            <label>Reason (optional)</label>
+            <input type="text" name="reason" class="form-control" placeholder="e.g., Labor Day Weekend">
+        </div>
+
+        <button type="submit" class="btn btn-primary">Add Blackout Date</button>
+    </form>
+</div>
+
+<!-- Current Blackout Dates -->
+<div class="card">
+    <h3 style="margin-top: 0; margin-bottom: 15px;">Current Blackout Dates ({{ blackouts|length }})</h3>
+
+    {% if blackouts %}
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 150px;">Date</th>
+                <th style="width: 120px;">Day</th>
+                <th>Reason</th>
+                <th style="width: 100px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for blackout in blackouts %}
+            <tr>
+                <td>{{ blackout.blackout_date.strftime('%B %d, %Y') }}</td>
+                <td>{{ blackout.blackout_date.strftime('%A') }}</td>
+                <td>{{ blackout.reason or '-' }}</td>
+                <td>
+                    <form method="POST" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="delete_blackout">
+                        <input type="hidden" name="blackout_id" value="{{ blackout.ID }}">
+                        <button type="submit" class="btn btn-outline btn-sm" style="color: #c33; border-color: #c33;"
+                                onclick="return confirm('Remove this blackout date?');">
+                            Remove
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted" style="text-align: center; padding: 30px;">
+        No blackout dates configured for this season.
+    </p>
+    {% endif %}
+</div>
+
+<!-- Common Holidays Reference -->
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0; margin-bottom: 15px;">Common Holiday Reference</h3>
+    <p class="text-muted text-small">
+        Consider adding blackout dates for these holidays:
+    </p>
+    <ul class="text-muted">
+        <li><strong>Spring:</strong> Easter Weekend, Memorial Day Weekend</li>
+        <li><strong>Fall:</strong> Labor Day Weekend, Thanksgiving (Thu-Sun), Halloween</li>
+    </ul>
+</div>
+{% endblock %}

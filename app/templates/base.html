@@ -139,6 +139,9 @@
                     <a href="{{ url_for('seasons.schedule_settings', year=current_season_year, is_spring=current_season_is_spring) }}">
                         Settings: {{ current_season_name }}
                     </a>
+                    <a href="{{ url_for('seasons.blackout_dates', year=current_season_year, is_spring=current_season_is_spring) }}">
+                        Blackout Dates
+                    </a>
                     <div class="dropdown-divider"></div>
                     <a href="{{ url_for('scheduler.picker') }}">Other Seasons...</a>
                     {% elif current_user.can_edit_schedule() %}
@@ -168,7 +171,7 @@
                     <a href="{{ url_for('fields.allocations') }}">Allocations</a>
                     {% if current_user.can_edit_schedule() %}
                     <div class="dropdown-divider"></div>
-                    <a href="{{ url_for('fields.properties') }}">Properties</a>
+                    <a href="{{ url_for('fields.properties') }}">Properties & Availability</a>
                     <a href="{{ url_for('fields.time_restrictions') }}">Time Restrictions</a>
                     <a href="{{ url_for('fields.copy_allocations') }}">Copy Allocations</a>
                     {% endif %}

@@ -170,7 +170,7 @@
                         <input type="hidden" name="action" value="generate_playoff_games">
                         <input type="hidden" name="league_id" value="{{ config.ID }}">
                         <button type="submit" class="btn btn-secondary btn-sm"
-                                {% if team_count < 2 %}disabled title="Need at least 2 teams"{% else %}title="Generate {{ expected_playoff }} playoff games (auto-creates seed placeholders if needed)"{% endif %}>
+                                {% if config.playoff_format == 'none' %}disabled title="No post-season for this league"{% elif team_count < 2 %}disabled title="Need at least 2 teams"{% else %}title="Generate {{ expected_playoff }} playoff games (auto-creates seed placeholders if needed)"{% endif %}>
                             + Playoff
                         </button>
                     </form>
@@ -248,7 +248,11 @@
     <table>
         <tbody>
             <tr>
-                <td style="width: 200px;"><strong>Single Elimination</strong></td>
+                <td style="width: 200px;"><strong>No Post-Season</strong></td>
+                <td class="text-muted">No playoff games. Regular season only.</td>
+            </tr>
+            <tr>
+                <td><strong>Single Elimination</strong></td>
                 <td class="text-muted">n-1 games (4 teams = 3 games). One loss and you're out.</td>
             </tr>
             <tr>

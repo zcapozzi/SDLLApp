@@ -129,6 +129,7 @@
         Manage Games
     </h1>
     <div style="display: flex; gap: 10px;">
+        <button type="button" class="btn btn-primary" onclick="openCreateModal()">+ Create Game</button>
         <a href="{{ url_for('games.external_teams') }}" class="btn btn-outline">External Teams</a>
         <a href="{{ url_for('games.index', year=year, is_spring=is_spring) }}" class="btn btn-outline">View Only</a>
         <a href="{{ url_for('scheduler.index', year=year, is_spring=is_spring) }}" class="btn btn-outline">Scheduler</a>
@@ -318,6 +319,106 @@
     </div>
 </div>
 
+<!-- Create Game Modal -->
+<div id="create-modal" class="edit-modal">
+    <div class="card">
+        <h3 style="margin-bottom: 20px;">Create Game</h3>
+        <form method="POST" id="create-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="create_game">
+
+            <!-- League -->
+            <div class="form-group">
+                <label>League</label>
+                <select name="league" id="create-league" class="form-control" required>
+                    <option value="">-- Select League --</option>
+                    {% for l in leagues %}
+                    <option value="{{ l }}">{{ l }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Game Type -->
+            <div class="form-group">
+                <label>Type</label>
+                <select name="game_type" id="create-game-type" class="form-control" onchange="toggleCreateAwayTeam()">
+                    <option value="regular">Regular Game</option>
+                    <option value="playoff">Playoff Game</option>
+                    <option value="practice">Practice</option>
+                </select>
+            </div>
+
+            <!-- Date/Time -->
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" name="game_date" id="create-game-date" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Time</label>
+                    <input type="time" name="game_time" id="create-game-time" class="form-control" required>
+                </div>
+            </div>
+
+            <!-- Field -->
+            <div class="form-group">
+                <label>Field</label>
+                <select name="location" id="create-game-location" class="form-control" required>
+                    <option value="">-- Select Field --</option>
+                    {% for field in fields %}
+                    <option value="{{ field.location_title }}">{{ field.location_title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Home Team -->
+            <div class="form-group">
+                <label>Home Team</label>
+                <select name="home_id" id="create-home-team" class="form-control">
+                    <option value="">-- Select (optional) --</option>
+                    {% for team in teams %}
+                    <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
+                        {{ team.computed_display_name }}{% if team.is_external %} ({{ team.organization.short_name }}){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Away Team -->
+            <div class="form-group" id="create-away-team-group">
+                <label>Away Team</label>
+                <select name="away_id" id="create-away-team" class="form-control">
+                    <option value="">-- None (Practice) --</option>
+                    {% for team in teams %}
+                    <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
+                        {{ team.computed_display_name }}{% if team.is_external %} ({{ team.organization.short_name }}){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Options -->
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="is_scrimmage" id="create-is-scrimmage">
+                        <span>Scrimmage (no umpire)</span>
+                    </label>
+                    <label class="checkbox-label" style="margin-top: 8px;">
+                        <input type="checkbox" name="no_time_limit" id="create-no-time-limit">
+                        <span>No Time Limit (3 hrs)</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="btn-row">
+                <button type="submit" class="btn btn-primary">Create Game</button>
+                <button type="button" class="btn btn-outline" onclick="closeCreateModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 function applyFilter(name, value) {
     const url = new URL(window.location);
@@ -378,6 +479,35 @@ document.addEventListener('keydown', function(e) {
 document.getElementById('edit-modal').addEventListener('click', function(e) {
     if (e.target === this) {
         closeEditModal();
+    }
+});
+
+// Create modal functions
+function openCreateModal() {
+    // Clear form
+    document.getElementById('create-form').reset();
+    document.getElementById('create-modal').style.display = 'flex';
+}
+
+function closeCreateModal() {
+    document.getElementById('create-modal').style.display = 'none';
+}
+
+function toggleCreateAwayTeam() {
+    var gameType = document.getElementById('create-game-type').value;
+    var awayGroup = document.getElementById('create-away-team-group');
+    if (gameType === 'practice') {
+        awayGroup.style.display = 'none';
+        document.getElementById('create-away-team').value = '';
+    } else {
+        awayGroup.style.display = 'block';
+    }
+}
+
+// Close create modal on background click
+document.getElementById('create-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeCreateModal();
     }
 });
 </script>

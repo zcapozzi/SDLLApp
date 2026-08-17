@@ -27,6 +27,10 @@ class Field(db.Model):
     game_earliest_weekend = db.Column(db.Time)   # Earliest game start Sat-Sun
     game_latest_weekend = db.Column(db.Time)     # Latest game start Sat-Sun
 
+    # Availability start date (NULL = always available)
+    # Field won't be scheduled for games/practices before this date
+    start_date = db.Column(db.Date)
+
     # Restriction type constants
     RESTRICTION_ANYONE = 'anyone'
     RESTRICTION_EXCLUDE = 'exclude'
@@ -99,6 +103,28 @@ class Field(db.Model):
             # Only these leagues
             return league_name in self.restricted_leagues_list
         return True  # Default to allowed
+
+    def is_available_on_date(self, check_date):
+        """Check if field is available on a specific date.
+
+        Returns False if:
+        - Field has start_date and check_date is before it
+        - Field has a blackout for that date
+        """
+        # Convert datetime to date if needed
+        if hasattr(check_date, 'date'):
+            check_date = check_date.date()
+
+        # Check start date
+        if self.start_date and check_date < self.start_date:
+            return False
+
+        # Check field-specific blackouts
+        from app.models.field_blackout import FieldBlackout
+        if FieldBlackout.is_field_blacked_out(self.ID, check_date):
+            return False
+
+        return True
 
     @property
     def restriction_display(self):
