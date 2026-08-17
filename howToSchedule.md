@@ -134,13 +134,37 @@ These are absolute constraints. The scheduler will **never** violate these, even
 
 ---
 
+### Rule g1: Time Restrictions
+
+**Description:** No games or practices can be scheduled before a league's `earliest_start_time` or after a league's `latest_start_time`. These settings are configured per league in `sdll_leagues`.
+
+**Why it matters:** Younger players (Tee Ball, Rookie) should not have late evening games. Time restrictions ensure age-appropriate scheduling.
+
+**Common settings:**
+- Tee Ball leagues: `latest_start_time = 17:30` (no games after 5:30 PM)
+- Machine pitch leagues: `latest_start_time = 17:30`
+- Older leagues: No restrictions (NULL values)
+
+**Validation logic:**
+- Get league's `earliest_start_time` and `latest_start_time` from database
+- Check each game/practice start time against these limits
+- Flag any activities outside the allowed window
+
+**Example violation:**
+- SB Rookie practice at 7:00 PM when `latest_start_time = 17:30`
+
+**Generator behavior:**
+- When building practice options, time blocks outside the allowed window are excluded
+- Games are only assigned to slots within the allowed time range
+
+---
+
 ### Implicit Tier I Constraints
 
 These are enforced during scheduling but don't have explicit rule codes:
 
 - **Team Practice Days**: If a team has specific practice days configured, practices can only be scheduled on those days
 - **Field Restrictions**: League-specific field restrictions (allowed/excluded fields) must be respected
-- **Time Restrictions**: League earliest/latest start times must be respected
 - **Field Allocations**: Games/practices can only be scheduled in allocated time slots
 
 ---
@@ -237,6 +261,33 @@ Soft rules represent preferences for schedule quality. The scheduler should sati
 - Count solo practices (no other teams at field/time) per team
 - Compare across all teams in the league
 - Flag if `max(solo_count) - min(solo_count)` > 1
+
+---
+
+### Rule c4: Practice Count Balance
+
+**Description:** No team in a league should have 2 or more practices than any other team in the same league.
+
+**Why it matters:** Ensures fair practice opportunities across all teams. If slots are limited, they should be distributed evenly.
+
+**Threshold:** Difference of 2 or more practices between any two teams is flagged.
+
+**Validation logic:**
+- Count total practices per team in the league
+- Flag if `max(practice_count) - min(practice_count)` >= 2
+
+**Example violation:**
+- BB Rookie Team 1 has 8 practices, Team 3 has 4 practices (diff: 4)
+
+**Common causes of violations:**
+- Two teams share the same practice day with limited slots (e.g., both want Wednesday)
+- League restricted to a single practice field with low capacity
+- Team-specific practice days limiting available slots
+
+**Generator behavior:**
+- Teams are sorted by practice count before assignment each day
+- Teams with fewer practices get priority for available slots
+- This ensures fair distribution even when slots are limited
 
 ---
 
@@ -420,6 +471,7 @@ Each league can have custom game and practice durations stored in `sdll_leagues`
 | `slot` | Field double-booked | No two games at same time on same field |
 | `f1` | Practice field capacity | Enforces field's `practice_capacity` setting from DB (default: 1) |
 | `f1c` | Cross-league practice sharing | Teams sharing practice slot must be same league |
+| `g1` | Time restrictions | No games/practices before earliest or after latest start time |
 
 ### Tier II: AVOID (Soft Rules)
 | Code | Name | Description |
@@ -430,6 +482,7 @@ Each league can have custom game and practice durations stored in `sdll_leagues`
 | `b2` | Early/late time balance | Balance 4-6 PM vs 6 PM+ games (before 4 PM excluded) |
 | `c2` | Practice field balance | Distribute practice locations evenly |
 | `c3` | Solo practice balance | Equal solo practice opportunities per team |
+| `c4` | Practice count balance | No team has 2+ more practices than another in same league |
 | `e2` | Game day balance | All teams should play on the same game days (no team sits out) |
 | `f1a` | Day of week game balance (soft) | Teams differ by 2+ games on a day of week |
 | `f1b` | Day of week game balance (hard threshold) | Teams differ by 3+ games on a day of week |
