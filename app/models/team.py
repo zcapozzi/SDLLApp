@@ -72,20 +72,47 @@ class TeamSeason(db.Model):
         """Return full season description"""
         return f'{self.season_name} {self.year}'
 
+    # Class-level cache for team name lookups
+    _team_name_cache = {}
+
     @property
     def computed_display_name(self):
         """
         Get the display name based on current state:
         1. team_name if set
-        2. "Team [Coach Last Name]" if coach assigned (future)
+        2. Look for matching team with team_name in same league/season (cached)
         3. display_name (placeholder) otherwise
         """
         if self.team_name:
             return self.team_name
-        # Future: check for coach
-        # if self.coach and self.coach.last_name:
-        #     return f"Team {self.coach.last_name}"
+
+        # If this team doesn't have a team_name, look for a matching team that does
+        # This handles the case where games are linked to placeholder teams
+        # but actual teams with coach names exist separately
+        if self.display_name and self.league and self.year is not None and self.is_spring is not None:
+            cache_key = (self.display_name, self.league, self.year, self.is_spring)
+
+            if cache_key not in TeamSeason._team_name_cache:
+                matching_team = TeamSeason.query.filter(
+                    TeamSeason.display_name == self.display_name,
+                    TeamSeason.league == self.league,
+                    TeamSeason.year == self.year,
+                    TeamSeason.is_spring == self.is_spring,
+                    TeamSeason.team_name.isnot(None),
+                    TeamSeason.team_ID != self.team_ID
+                ).first()
+                TeamSeason._team_name_cache[cache_key] = matching_team.team_name if matching_team else None
+
+            cached_name = TeamSeason._team_name_cache.get(cache_key)
+            if cached_name:
+                return cached_name
+
         return self.display_name
+
+    @classmethod
+    def clear_name_cache(cls):
+        """Clear the team name lookup cache."""
+        cls._team_name_cache = {}
 
     @property
     def display_name_with_org(self):

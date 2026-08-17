@@ -92,9 +92,9 @@ class ProposedGame:
             'year': self.year,
             'is_spring': self.is_spring,
             'home_team_id': self.home_team.team_ID if self.home_team else None,
-            'home_team_name': self.home_team.display_name if self.home_team else None,
+            'home_team_name': self.home_team.computed_display_name if self.home_team else None,
             'away_team_id': self.away_team.team_ID if self.away_team else None,
-            'away_team_name': self.away_team.display_name if self.away_team else None,
+            'away_team_name': self.away_team.computed_display_name if self.away_team else None,
             'field_id': self.field.ID if self.field else None,
             'field_name': self.field.location_title if self.field else None,
             'game_date': self.game_date.isoformat() if self.game_date else None,
@@ -178,6 +178,12 @@ class ScheduleValidator:
 
         # Cross-league validation: Check practice field capacity
         self._check_practice_field_capacity(games)
+
+        # Cross-league validation: Check season blackout dates (HARD)
+        self._check_season_blackouts(games)
+
+        # Cross-league validation: Check field availability (start dates and field blackouts) (HARD)
+        self._check_field_availability(games)
 
         return self.violations
 
@@ -734,6 +740,167 @@ class ScheduleValidator:
                         f'{field_name} at {date} {time_str} has teams from different leagues sharing practice: {", ".join(team_league_info[:5])}{"..." if len(team_league_info) > 5 else ""}',
                         games=practices_at_slot
                     ))
+
+    def _check_season_blackouts(self, games):
+        """Rule h1: No games or practices on season blackout dates.
+
+        Season blackouts are dates when no activities should be scheduled
+        (e.g., Labor Day weekend, holidays).
+        """
+        from app.models.season_blackout import SeasonBlackout
+
+        # Get blackout dates for this season
+        blackout_dates = SeasonBlackout.get_blackout_dates_set(self.year, self.is_spring)
+
+        if not blackout_dates:
+            return
+
+        violations_by_date = defaultdict(list)
+
+        for game in games:
+            game_date = self._get_game_date(game)
+            if not game_date:
+                continue
+
+            check_date = game_date.date() if hasattr(game_date, 'date') else game_date
+            if check_date in blackout_dates:
+                violations_by_date[check_date].append(game)
+
+        # Report violations grouped by date
+        for date, games_on_date in violations_by_date.items():
+            game_count = len([g for g in games_on_date if self._is_actual_game(g)])
+            practice_count = len([g for g in games_on_date if self._is_practice(g)])
+
+            activities = []
+            if game_count > 0:
+                activities.append(f'{game_count} game(s)')
+            if practice_count > 0:
+                activities.append(f'{practice_count} practice(s)')
+
+            self.violations.append(ScheduleViolation(
+                'h1', 'Season blackout violation',
+                ScheduleViolation.HARD,
+                f'{date}: {" and ".join(activities)} scheduled on blackout date',
+                games=games_on_date
+            ))
+
+    def _check_field_availability(self, games):
+        """Rule h2: No games or practices at unavailable fields.
+
+        Checks:
+        1. Field start_date - no activities before field is available
+        2. Field blackout dates - no activities on field-specific blackout dates
+        """
+        from app.models.field import Field
+        from app.models.field_blackout import FieldBlackout
+
+        # Cache field info to avoid repeated queries
+        field_cache = {}
+        field_blackouts_cache = {}
+
+        violations = []
+
+        for game in games:
+            game_date = self._get_game_date(game)
+            if not game_date:
+                continue
+
+            check_date = game_date.date() if hasattr(game_date, 'date') else game_date
+
+            # Get field info
+            field_id = None
+            field_name = None
+            if hasattr(game, 'field') and game.field:
+                field_id = game.field.ID if hasattr(game.field, 'ID') else None
+                field_name = game.field.location_title if hasattr(game.field, 'location_title') else str(field_id)
+            elif hasattr(game, 'location'):
+                field_id = game.location
+                field_name = str(field_id)
+
+            if not field_id:
+                continue
+
+            # Get field start_date from cache or DB
+            if field_id not in field_cache:
+                field = Field.query.get(field_id)
+                field_cache[field_id] = {
+                    'start_date': field.start_date if field else None,
+                    'name': field.location_title if field else str(field_id)
+                }
+
+            field_info = field_cache[field_id]
+            field_name = field_info['name']
+
+            # Check start_date violation
+            if field_info['start_date'] and check_date < field_info['start_date']:
+                game_type = 'practice' if self._is_practice(game) else 'game'
+                violations.append({
+                    'type': 'start_date',
+                    'field_id': field_id,
+                    'field_name': field_name,
+                    'date': check_date,
+                    'game': game,
+                    'game_type': game_type,
+                    'start_date': field_info['start_date']
+                })
+                continue
+
+            # Get field blackouts from cache or DB
+            if field_id not in field_blackouts_cache:
+                blackouts = FieldBlackout.query.filter_by(
+                    field_ID=field_id, active=1
+                ).all()
+                field_blackouts_cache[field_id] = {b.blackout_date for b in blackouts}
+
+            # Check field blackout violation
+            if check_date in field_blackouts_cache[field_id]:
+                game_type = 'practice' if self._is_practice(game) else 'game'
+                violations.append({
+                    'type': 'blackout',
+                    'field_id': field_id,
+                    'field_name': field_name,
+                    'date': check_date,
+                    'game': game,
+                    'game_type': game_type
+                })
+
+        # Group violations by field and type for cleaner reporting
+        start_date_violations = [v for v in violations if v['type'] == 'start_date']
+        blackout_violations = [v for v in violations if v['type'] == 'blackout']
+
+        # Report start_date violations grouped by field
+        fields_with_start_violations = defaultdict(list)
+        for v in start_date_violations:
+            fields_with_start_violations[v['field_id']].append(v)
+
+        for field_id, field_violations in fields_with_start_violations.items():
+            field_name = field_violations[0]['field_name']
+            start_date = field_violations[0]['start_date']
+            game_count = len([v for v in field_violations if v['game_type'] != 'practice'])
+            practice_count = len([v for v in field_violations if v['game_type'] == 'practice'])
+
+            activities = []
+            if game_count > 0:
+                activities.append(f'{game_count} game(s)')
+            if practice_count > 0:
+                activities.append(f'{practice_count} practice(s)')
+
+            affected_games = [v['game'] for v in field_violations]
+            self.violations.append(ScheduleViolation(
+                'h2', 'Field not yet available',
+                ScheduleViolation.HARD,
+                f'{field_name}: {" and ".join(activities)} scheduled before field start date ({start_date})',
+                games=affected_games
+            ))
+
+        # Report blackout violations grouped by field and date
+        for v in blackout_violations:
+            self.violations.append(ScheduleViolation(
+                'h2', 'Field blackout violation',
+                ScheduleViolation.HARD,
+                f'{v["field_name"]}: {v["game_type"]} scheduled on {v["date"]} (field blackout date)',
+                games=[v['game']]
+            ))
 
     def _check_one_activity_per_day(self, league, games, teams):
         """Rule d1: Each team can have at most one game or practice per day."""
