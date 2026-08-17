@@ -241,6 +241,10 @@ class ScheduleValidator:
         # No team should have 2+ more games on a given day of week than another team
         self._check_day_of_week_game_balance(league, counting_games, teams)
 
+        # Rule g1: Time restrictions (HARD)
+        # No games/practices can start after league's latest_start_time or before earliest_start_time
+        self._check_time_restrictions(league, games)
+
     def _is_actual_game(self, game):
         """Check if this is an actual game (not practice).
 
@@ -940,6 +944,77 @@ class ScheduleValidator:
                         f'{", ".join(min_names)} have {min_count} games.',
                         teams=[self._build_team_info(t) for t in max_teams + min_teams]
                     ))
+
+    def _check_time_restrictions(self, league, games):
+        """Rule g1: Time restrictions (HARD).
+
+        No games or practices can start after league's latest_start_time
+        or before league's earliest_start_time.
+        """
+        from app.models.league import League
+
+        # Get the league config to find time restrictions
+        league_obj = League.get_by_name(league)
+        if not league_obj:
+            return
+
+        earliest = league_obj.earliest_start_time
+        latest = league_obj.latest_start_time
+
+        if not earliest and not latest:
+            return  # No time restrictions
+
+        violations = []
+        for g in games:
+            game_date = self._get_game_date(g)
+            if not game_date:
+                continue
+
+            game_time = game_date.time()
+            team = self._get_home_team(g)
+            game_type = g.game_type if hasattr(g, 'game_type') else 'game'
+
+            if earliest and game_time < earliest:
+                violations.append({
+                    'team': team,
+                    'type': game_type,
+                    'time': game_time,
+                    'issue': f'before earliest ({earliest.strftime("%H:%M")})'
+                })
+            elif latest and game_time > latest:
+                violations.append({
+                    'team': team,
+                    'type': game_type,
+                    'time': game_time,
+                    'issue': f'after latest ({latest.strftime("%H:%M")})'
+                })
+
+        if violations:
+            # Group by type
+            game_violations = [v for v in violations if v['type'] != 'practice']
+            practice_violations = [v for v in violations if v['type'] == 'practice']
+
+            if game_violations:
+                affected_teams = list(set(v['team'] for v in game_violations if v['team']))
+                self.violations.append(ScheduleViolation(
+                    'g1', 'Time restriction violation',
+                    ScheduleViolation.HARD,
+                    f'{league}: {len(game_violations)} game(s) scheduled outside allowed times '
+                    f'(earliest: {earliest.strftime("%H:%M") if earliest else "any"}, '
+                    f'latest: {latest.strftime("%H:%M") if latest else "any"})',
+                    teams=[self._build_team_info(t) for t in affected_teams]
+                ))
+
+            if practice_violations:
+                affected_teams = list(set(v['team'] for v in practice_violations if v['team']))
+                self.violations.append(ScheduleViolation(
+                    'g1', 'Time restriction violation',
+                    ScheduleViolation.HARD,
+                    f'{league}: {len(practice_violations)} practice(s) scheduled outside allowed times '
+                    f'(earliest: {earliest.strftime("%H:%M") if earliest else "any"}, '
+                    f'latest: {latest.strftime("%H:%M") if latest else "any"})',
+                    teams=[self._build_team_info(t) for t in affected_teams]
+                ))
 
 
 class SlotDecision:
@@ -2020,6 +2095,17 @@ class ScheduleGenerator:
                     game_datetime = game_datetime + timedelta(minutes=time_offset_minutes)
 
                 if game_datetime:
+                    # Check league time restrictions (latest_start_time)
+                    practice_time = game_datetime.time()
+                    if hasattr(league, 'latest_start_time') and league.latest_start_time:
+                        if practice_time > league.latest_start_time:
+                            # This time block is after the league's latest allowed start time
+                            continue
+                    if hasattr(league, 'earliest_start_time') and league.earliest_start_time:
+                        if practice_time < league.earliest_start_time:
+                            # This time block is before the league's earliest allowed start time
+                            continue
+
                     # Get field's practice capacity from DB, considering late slots
                     is_late = game_datetime.hour >= 19
                     field_capacity = slot.field.get_practice_capacity(is_late_slot=is_late)
