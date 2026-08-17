@@ -1503,6 +1503,17 @@ class ScheduleGenerator:
 
         total_games_needed = (games_per_team * n) // 2
 
+        # Check if configuration is mathematically possible
+        # With n teams and g games/team, total slots = n*g, total games = n*g/2
+        # This must be an integer, so n*g must be even
+        if (games_per_team * n) % 2 != 0:
+            # Odd number of total slots - one team will be short
+            self.warnings.append({
+                'type': 'math_impossible',
+                'message': f'Configuration warning: {n} teams × {games_per_team} games = {games_per_team * n} slots (odd). '
+                          f'One team will have {games_per_team - 1} games. Consider {games_per_team - 1} or {games_per_team + 1} games/team.'
+            })
+
         # Calculate pair frequency requirements
         min_games_per_pair = games_per_team // (n - 1)
         num_pairs = n * (n - 1) // 2
@@ -1531,7 +1542,8 @@ class ScheduleGenerator:
         extras_given = {t.team_ID: 0 for t in teams}
         pair_has_extra = set()  # Track which pairs already have an extra
         candidate_pairs = list(all_pairs)
-        random.shuffle(candidate_pairs)
+        # Sort deterministically by team IDs instead of random shuffle for consistent results
+        candidate_pairs.sort(key=lambda p: (p[0].team_ID, p[1].team_ID))
 
         extras_assigned = 0
         max_iterations = extra_games_needed * 10  # Safety limit
@@ -1550,11 +1562,10 @@ class ScheduleGenerator:
             if not teams_needing_extras:
                 break
 
-            # Sort by need descending (use team_ID as tiebreaker)
+            # Sort by need descending (use team_ID as tiebreaker for determinism)
             teams_needing_extras.sort(key=lambda x: (-x[0], x[1].team_ID))
-            max_need = teams_needing_extras[0][0]
-            neediest_teams = [t for need, t in teams_needing_extras if need == max_need]
-            chosen_team = random.choice(neediest_teams)
+            # Take the first (already sorted by team_ID for determinism)
+            chosen_team = teams_needing_extras[0][1]
 
             # Find a pair involving chosen_team that hasn't gotten an extra yet
             # and where the partner also needs extras
@@ -1633,6 +1644,7 @@ class ScheduleGenerator:
                     break
 
         # Now select matchups to meet pair targets while respecting team limits
+        # Use a smarter approach: prioritize teams with fewer games remaining
         pair_counts = defaultdict(int)
         team_counts = {t.team_ID: 0 for t in teams}
         home_counts = {t.team_ID: 0 for t in teams}
@@ -1642,7 +1654,7 @@ class ScheduleGenerator:
             # Find pairs that still need games AND both teams are under their limit
             pairs_needing_games = []
             for t1, t2 in all_pairs:
-                # CRITICAL: Check team limits first
+                # Check team limits
                 if team_counts[t1.team_ID] >= games_per_team or team_counts[t2.team_ID] >= games_per_team:
                     continue
 
@@ -1651,23 +1663,42 @@ class ScheduleGenerator:
                 current = pair_counts[pair_key]
 
                 if current < target:
-                    # Priority: pairs with fewer games get higher priority
-                    # Secondary: teams that need more games
-                    team_need = (games_per_team - team_counts[t1.team_ID]) + (games_per_team - team_counts[t2.team_ID])
-                    pairs_needing_games.append((current, -team_need, t1.team_ID, t2.team_ID, t1, t2))
+                    # Priority 1: Pairs with fewer games
+                    # Priority 2: Teams closer to their limit (need fewer games) - to avoid leaving them stranded
+                    # This ensures teams approaching their limit get paired with other teams approaching their limit
+                    t1_remaining = games_per_team - team_counts[t1.team_ID]
+                    t2_remaining = games_per_team - team_counts[t2.team_ID]
+                    min_remaining = min(t1_remaining, t2_remaining)
+
+                    # Lower min_remaining = higher priority (schedule these pairs first)
+                    pairs_needing_games.append((current, min_remaining, t1.team_ID, t2.team_ID, t1, t2))
 
             if not pairs_needing_games:
-                break
+                # No pairs available within targets - check if teams still need games
+                # Try to add any valid matchup (may exceed pair targets)
+                for t1, t2 in all_pairs:
+                    if team_counts[t1.team_ID] >= games_per_team or team_counts[t2.team_ID] >= games_per_team:
+                        continue
+                    t1_remaining = games_per_team - team_counts[t1.team_ID]
+                    t2_remaining = games_per_team - team_counts[t2.team_ID]
+                    min_remaining = min(t1_remaining, t2_remaining)
+                    pairs_needing_games.append((0, min_remaining, t1.team_ID, t2.team_ID, t1, t2))
 
-            # Sort by pair count (ascending), then by team need (descending)
+                if not pairs_needing_games:
+                    break
+
+            # Sort by pair count (ascending), then by min_remaining (ascending = tightest constraint first)
             pairs_needing_games.sort()
 
-            # Select a matchup - prefer pairs with lowest count
+            # Select from top candidates (same pair count and similar remaining)
             min_count = pairs_needing_games[0][0]
-            top_candidates = [p for p in pairs_needing_games if p[0] == min_count]
+            min_remaining = pairs_needing_games[0][1]
+            # Allow a small window for remaining games
+            top_candidates = [p for p in pairs_needing_games
+                            if p[0] == min_count and p[1] <= min_remaining + 1]
 
-            # Pick randomly for variety
-            chosen = random.choice(top_candidates)
+            # Pick deterministically (first candidate, already sorted by team IDs)
+            chosen = top_candidates[0]
             t1, t2 = chosen[4], chosen[5]
 
             # Determine home/away based on balance
@@ -1737,13 +1768,12 @@ class ScheduleGenerator:
         return backtrack([], set(), 0)
 
     def _generate_scrimmages(self, config, teams, league, all_slots, scrimmage_date):
-        """Generate scrimmages - one per team, random pairing.
+        """Generate scrimmages - one per team, deterministic pairing.
 
         Scrimmages are treated like games for time-based scheduling (2 hours each).
         """
-        # Shuffle teams and pair them up
-        shuffled = list(teams)
-        random.shuffle(shuffled)
+        # Sort teams by ID for deterministic pairing
+        shuffled = sorted(teams, key=lambda t: t.team_ID)
 
         # Get available slots for this date
         day_of_week = scrimmage_date.weekday()
@@ -2039,6 +2069,7 @@ class ScheduleGenerator:
             all_team_ids.add(away.team_ID)
         num_teams = len(all_team_ids)
         games_per_date = num_teams // 2  # All teams play = n/2 games
+        is_odd_league = num_teams % 2 == 1  # Odd team count - can't have complete rounds
 
         # Build slot info grouped by date
         # Get league-specific game duration
@@ -2101,21 +2132,15 @@ class ScheduleGenerator:
                 )
 
             # Check if we have enough slots for a full round (all teams playing)
-            if len(available_date_slots) < games_per_date:
-                # Not enough capacity - skip this date for full rounds
-                # Record why we skipped this date
-                for slot_info in available_date_slots:
-                    self._record_decision(
-                        date_str, config.league, slot_info['slot'],
-                        'skipped', f'Insufficient capacity for full round (need {games_per_date} slots, have {len(available_date_slots)}). Will retry in catch-up pass.',
-                        game_info=None
-                    )
-                continue
+            # NOTE: We no longer skip dates with insufficient capacity - we use greedy
+            # scheduling to use whatever slots are available. This ensures better
+            # distribution of games and prevents catch-up pass overload.
+            use_greedy_for_partial = len(available_date_slots) < games_per_date
 
             # Find teams that need more games and don't have activity on this day
             available_teams = set()
             unavailable_teams = []
-            for team_id in all_team_ids:
+            for team_id in sorted(all_team_ids):  # Sort for deterministic iteration
                 team_day_key = (team_id, date_str)
                 if team_day_key not in self._team_day_usage:
                     if team_game_counts[team_id] < games_per_team:
@@ -2130,16 +2155,6 @@ class ScheduleGenerator:
                         unavailable_teams.append(f'Team {team_id} has enough games')
                 else:
                     unavailable_teams.append(f'Team {team_id} already has activity')
-
-            # If not all teams are available, skip this date for a full round
-            if len(available_teams) < num_teams:
-                for slot_info in available_date_slots:
-                    self._record_decision(
-                        date_str, config.league, slot_info['slot'],
-                        'skipped', f'Not all teams available ({len(available_teams)}/{num_teams}). Will retry in catch-up pass.',
-                        game_info={'unavailable': unavailable_teams[:3]}
-                    )
-                continue
 
             # Find matchups where both teams are available and need games
             eligible_matchups = []
@@ -2156,19 +2171,72 @@ class ScheduleGenerator:
             # Sort by priority (most needed first)
             eligible_matchups.sort(key=lambda x: -x[1])
 
-            # Try to find a COMPLETE round (all teams play)
-            # Use backtracking to find a valid combination of matchups
-            matchups_for_today = self._find_complete_round(
-                eligible_matchups, available_date_slots, games_per_date, all_team_ids
-            )
+            # For odd team counts, partial capacity dates, or when not all teams available, use greedy scheduling
+            # For even team counts with all teams available and full capacity, try to find complete rounds
+            matchups_for_today = None
 
-            # Only proceed if we found a complete round
-            if matchups_for_today is None:
-                # Can't schedule a complete round - skip this date
+            if is_odd_league or use_greedy_for_partial or len(available_teams) < num_teams:
+                # Greedy scheduling: pick best matchups one at a time
+                matchups_for_today = []
+                teams_used_today = set()
+                slot_idx = 0
+
+                for idx, priority, home, away in eligible_matchups:
+                    if slot_idx >= len(available_date_slots):
+                        break
+                    if home.team_ID in teams_used_today or away.team_ID in teams_used_today:
+                        continue
+
+                    matchups_for_today.append((idx, home, away, available_date_slots[slot_idx]))
+                    teams_used_today.add(home.team_ID)
+                    teams_used_today.add(away.team_ID)
+                    slot_idx += 1
+
+                if not matchups_for_today:
+                    matchups_for_today = None
+            else:
+                # If not all teams are available for even leagues, log and try greedy
+                if len(available_teams) < num_teams:
+                    for slot_info in available_date_slots:
+                        self._record_decision(
+                            date_str, config.league, slot_info['slot'],
+                            'skipped', f'Not all teams available ({len(available_teams)}/{num_teams}). Will retry in catch-up pass.',
+                            game_info={'unavailable': unavailable_teams[:3]}
+                        )
+                    continue
+
+                # Try to find a COMPLETE round (all teams play) for even leagues
+                matchups_for_today = self._find_complete_round(
+                    eligible_matchups, available_date_slots, games_per_date, all_team_ids
+                )
+
+                # If complete round fails, fall back to greedy
+                if matchups_for_today is None:
+                    matchups_for_today = []
+                    teams_used_today = set()
+                    slot_idx = 0
+
+                    for idx, priority, home, away in eligible_matchups:
+                        if slot_idx >= len(available_date_slots):
+                            break
+                        if home.team_ID in teams_used_today or away.team_ID in teams_used_today:
+                            continue
+
+                        matchups_for_today.append((idx, home, away, available_date_slots[slot_idx]))
+                        teams_used_today.add(home.team_ID)
+                        teams_used_today.add(away.team_ID)
+                        slot_idx += 1
+
+                    if not matchups_for_today:
+                        matchups_for_today = None
+
+            # Only proceed if we have matchups to schedule
+            if matchups_for_today is None or len(matchups_for_today) == 0:
+                # Can't schedule any games - skip this date
                 for slot_info in available_date_slots[:games_per_date]:
                     self._record_decision(
                         date_str, config.league, slot_info['slot'],
-                        'skipped', f'Could not form complete round (need {games_per_date} non-overlapping matchups)',
+                        'skipped', f'No valid matchups available for this date',
                         game_info=None
                     )
                 continue
@@ -2436,7 +2504,7 @@ class ScheduleGenerator:
 
         # Check for teams below minimum and report
         teams_below_min = []
-        for team_id in all_team_ids:
+        for team_id in sorted(all_team_ids):  # Sort for deterministic reporting
             count = team_game_counts[team_id]
             if count < games_per_team:
                 # Get team name

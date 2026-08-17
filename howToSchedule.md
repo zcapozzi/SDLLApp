@@ -1,18 +1,31 @@
 # SDLL Scheduling Rules & Principles
 
-This document defines the rules and principles that any schedule generator must follow when creating game schedules for South Durham Little League. Rules are categorized as **HARD** (cannot be violated) or **SOFT** (should be avoided unless necessary to satisfy a hard rule).
+This document defines the rules and principles that any schedule generator must follow when creating game schedules for South Durham Little League.
+
+## Rule Hierarchy (Three Tiers)
+
+Rules are organized into three tiers that define how the scheduler handles conflicts:
+
+| Tier | Name | Behavior | When Violated |
+|------|------|----------|---------------|
+| **I** | NEVER | Absolute constraints that cannot be violated under any circumstances | Schedule is invalid |
+| **II** | AVOID | Preferences that should be satisfied, but can be violated to achieve Tier III goals | Logged as soft violation |
+| **III** | GOAL | Objectives that other rules can be sacrificed to achieve | Tier II rules relaxed |
+
+**Key principle:** The scheduler will progressively relax Tier II constraints to achieve Tier III goals, but will **never** violate Tier I constraints. If a Tier III goal cannot be achieved without violating Tier I, the shortfall is accepted.
 
 ---
 
 ## Table of Contents
 
 1. [Scheduling Workflow](#scheduling-workflow)
-2. [Hard Rules (MUST NOT violate)](#hard-rules-must-not-violate)
-3. [Soft Rules (SHOULD avoid)](#soft-rules-should-avoid)
-4. [Field Restrictions](#field-restrictions)
-5. [Time Restrictions](#time-restrictions)
-6. [Season Configuration](#season-configuration)
-7. [Rule Codes Reference](#rule-codes-reference)
+2. [Tier I: NEVER Violate](#tier-i-never-violate)
+3. [Tier II: AVOID (Soft Rules)](#tier-ii-avoid-soft-rules)
+4. [Tier III: GOAL (Objectives)](#tier-iii-goal-objectives)
+5. [Field Restrictions](#field-restrictions)
+6. [Time Restrictions](#time-restrictions)
+7. [Season Configuration](#season-configuration)
+8. [Rule Codes Reference](#rule-codes-reference)
 
 ---
 
@@ -40,56 +53,9 @@ The schedule generation follows a **three-phase workflow**:
 
 ---
 
-## Hard Rules (MUST NOT violate)
+## Tier I: NEVER Violate
 
-These rules represent fundamental fairness requirements. A schedule that violates any hard rule is **invalid** and must be regenerated.
-
-### Rule a1: Play Everyone / Matchup Balance
-
-**Description:** Every team must play every other team at least once, and the number of times any two teams play should differ by no more than 1.
-
-**Why it matters:** Ensures competitive fairness - no team gets an "easy" schedule by avoiding certain opponents.
-
-**Validation logic:**
-- Count games between each pair of teams
-- All pairs must have count >= 1
-- `max(count) - min(count)` must be <= 1
-
-**Example violation:**
-- Team A plays Team B 3 times, but Team A plays Team C only 1 time (difference > 1)
-
----
-
-### Rule b1: Home/Away Balance
-
-**Description:** Each team's home games and away games must differ by no more than 1.
-
-**Why it matters:** Ensures no team has a significant home-field advantage or disadvantage.
-
-**Validation logic:**
-- Count home games per team
-- Count away games per team
-- For each team: `|home - away|` must be <= 1
-
-**Example violation:**
-- Team A has 6 home games and 4 away games (difference = 2)
-
----
-
-### Rule gap: No games at the same time on the same field
-
-**Description:** Each field can only have a single game at a time; there cannot be two games scheduled on the same slot at the same field
-
-**Why it matters:** One game at a time
-
-**Validation logic:**
-- Confirm that each slot only has a single game
-
-**Example violation:**
-- Week 1: Team A vs Team B play 5:30 at Herndon 1
-- Week 2: Team C vs Team D also play 5:30 at Herndon 1
-
----
+These are absolute constraints. The scheduler will **never** violate these, even if it means Tier III goals cannot be fully achieved. A schedule violating any Tier I rule is invalid.
 
 ### Rule d1: One Activity Per Day
 
@@ -106,25 +72,18 @@ These rules represent fundamental fairness requirements. A schedule that violate
 
 ---
 
-### Rule e1: Minimum Games
+### Rule slot: Field Double-Booking
 
-**Description:** Each team must play at least the configured number of regular season games (default: 10 games per team).
+**Description:** Each field can only have a single game at a time; there cannot be two games scheduled on the same slot at the same field.
 
-**Why it matters:** Ensures all teams get their fair share of playing time. A team shouldn't be short-changed due to scheduling constraints.
-
-**What counts:**
-- Regular season games: YES
-- Playoff games: YES
-- Scrimmages: NO (pre-season practice games don't count toward minimum)
-- Practices: NO
+**Why it matters:** Physical impossibility - one game at a time per field.
 
 **Validation logic:**
-- Get the minimum games requirement from the league configuration
-- Count regular and playoff games per team (scrimmages excluded)
-- Flag any team with fewer counting games than the minimum
+- Confirm that each slot only has a single game
 
 **Example violation:**
-- Team A has only 8 regular/playoff games when the league requires 10 games per team
+- Team A vs Team B at 5:30 at Herndon 1
+- Team C vs Team D also at 5:30 at Herndon 1
 
 ---
 
@@ -149,9 +108,74 @@ These rules represent fundamental fairness requirements. A schedule that violate
 
 ---
 
-## Soft Rules (SHOULD avoid)
+### Rule f1c: Same-League Practice Sharing
 
-Soft rules represent preferences for schedule quality. Violating these is acceptable when necessary to satisfy hard rules, but the generator should minimize violations.
+**Description:** Two teams can share a practice field at the same time ONLY if they are in the same league.
+
+**Why it matters:** Cross-league practice sharing creates conflicts with different age groups and coaching styles.
+
+**Validation logic:**
+- Group practices by (field, date, start_time)
+- Check if all teams in each slot are from the same league
+- Flag any slot with teams from different leagues
+
+---
+
+### Rule gap: Same Team Gap
+
+**Description:** Teams cannot play back-to-back games against the same opponent (no "rematches" on consecutive game dates).
+
+**Why it matters:** Competitive balance - teams need variety in opponents.
+
+**Validation logic:**
+- Sort games by date for each team
+- Check if consecutive games are against the same opponent
+- Flag if two consecutive games are the same matchup
+
+---
+
+### Implicit Tier I Constraints
+
+These are enforced during scheduling but don't have explicit rule codes:
+
+- **Team Practice Days**: If a team has specific practice days configured, practices can only be scheduled on those days
+- **Field Restrictions**: League-specific field restrictions (allowed/excluded fields) must be respected
+- **Time Restrictions**: League earliest/latest start times must be respected
+- **Field Allocations**: Games/practices can only be scheduled in allocated time slots
+
+---
+
+## Tier II: AVOID (Soft Rules)
+
+Soft rules represent preferences for schedule quality. The scheduler should satisfy these when possible, but **can violate them to achieve Tier III goals** (e1: minimum games). The scheduler should minimize violations.
+
+### Rule a1: Play Everyone / Matchup Balance
+
+**Description:** Every team should play every other team at least once, and the number of times any two teams play should differ by no more than 1.
+
+**Why it matters:** Ensures competitive fairness - no team gets an "easy" schedule by avoiding certain opponents.
+
+**Validation logic:**
+- Count games between each pair of teams
+- All pairs should have count >= 1
+- `max(count) - min(count)` should be <= 1
+
+**Note:** With some configurations (e.g., 8 teams × 6 games = 24 games but 28 pairs), not all pairs can play. This is a configuration limitation, not a scheduler failure.
+
+---
+
+### Rule b1: Home/Away Balance
+
+**Description:** Each team's home games and away games should differ by no more than 1.
+
+**Why it matters:** Ensures no team has a significant home-field advantage or disadvantage.
+
+**Validation logic:**
+- Count home games per team
+- Count away games per team
+- For each team: `|home - away|` should be <= 1
+
+---
 
 ### Rule a2: Home/Away Balance vs Specific Opponent
 
@@ -234,6 +258,40 @@ Soft rules represent preferences for schedule quality. Violating these is accept
 - The scheduler tries to schedule full rounds (all teams playing) on each game day
 - Only uses a date if there's enough field capacity for n/2 games (where n = team count)
 - Falls back to partial scheduling only when necessary to meet minimum games requirement
+
+---
+
+## Tier III: GOAL (Objectives)
+
+These are the primary objectives of the scheduler. Tier II rules can be relaxed to achieve these goals, but Tier I rules are never violated.
+
+### Rule e1: Minimum Games
+
+**Description:** Each team must play at least the configured number of regular season games (default: 10 games per team).
+
+**Why it matters:** Ensures all teams get their fair share of playing time. A team shouldn't be short-changed due to scheduling constraints.
+
+**What counts:**
+- Regular season games: YES
+- Playoff games: YES
+- Scrimmages: NO (pre-season practice games don't count toward minimum)
+- Practices: NO
+
+**Validation logic:**
+- Get the minimum games requirement from the league configuration
+- Count regular and playoff games per team (scrimmages excluded)
+- Flag any team with fewer counting games than the minimum
+
+**Example violation:**
+- Team A has only 8 regular/playoff games when the league requires 10 games per team
+
+**Scheduler behavior:**
+1. First attempt: Schedule respecting all Tier I and Tier II rules
+2. If e1 fails: Progressively relax Tier II rules (home/away balance, time balance, etc.)
+3. If e1 still fails: Accept the shortfall rather than violate Tier I rules
+4. Report any teams that couldn't reach minimum games
+
+**Important:** If a league's configuration makes e1 mathematically impossible (e.g., insufficient field slots), this is a configuration issue, not a scheduler failure. The scheduler will report it but cannot solve it.
 
 ---
 
@@ -355,20 +413,32 @@ Each league can have custom game and practice durations stored in `sdll_leagues`
 
 ## Rule Codes Reference
 
-| Code | Name | Severity | Description |
-|------|------|----------|-------------|
-| `a1` | Play everyone / Matchup balance | HARD | All pairs play, max diff of 1 |
-| `b1` | Home/away balance | HARD | Per team, home/away diff <= 1 |
-| `d1` | One activity per day | HARD | Max one game or practice per team per day |
-| `e1` | Minimum games | HARD | Each team must play at least the configured number of regular season games (scrimmages don't count) |
-| `f1` | Practice field capacity | HARD | Enforces field's `practice_capacity` setting from DB (default: 1) |
-| `gap` | Same team gap | HARD | No back-to-back vs same opponent |
-| `slot` | Field double-booked | HARD | No two games at same time on same field |
-| `a2` | Home/away vs opponent | SOFT | Alternate home/away when playing same team |
-| `b2` | Early/late time balance | SOFT | Balance 4-6 PM vs 6 PM+ games (before 4 PM excluded) |
-| `c2` | Practice field balance | SOFT | Distribute practice locations evenly |
-| `c3` | Solo practice balance | SOFT | Equal solo practice opportunities per team |
-| `e2` | Game day balance | SOFT | All teams should play on the same game days (no team sits out) |
+### Tier I: NEVER Violate
+| Code | Name | Description |
+|------|------|-------------|
+| `d1` | One activity per day | Max one game or practice per team per day |
+| `slot` | Field double-booked | No two games at same time on same field |
+| `f1` | Practice field capacity | Enforces field's `practice_capacity` setting from DB (default: 1) |
+| `f1c` | Cross-league practice sharing | Teams sharing practice slot must be same league |
+
+### Tier II: AVOID (Soft Rules)
+| Code | Name | Description |
+|------|------|-------------|
+| `a1` | Play everyone / Matchup balance | All pairs play, max diff of 1 |
+| `b1` | Home/away balance | Per team, home/away diff <= 1 |
+| `a2` | Home/away vs opponent | Alternate home/away when playing same team |
+| `b2` | Early/late time balance | Balance 4-6 PM vs 6 PM+ games (before 4 PM excluded) |
+| `c2` | Practice field balance | Distribute practice locations evenly |
+| `c3` | Solo practice balance | Equal solo practice opportunities per team |
+| `e2` | Game day balance | All teams should play on the same game days (no team sits out) |
+| `f1a` | Day of week game balance (soft) | Teams differ by 2+ games on a day of week |
+| `f1b` | Day of week game balance (hard threshold) | Teams differ by 3+ games on a day of week |
+| `gap` | Same team gap | No back-to-back vs same opponent |
+
+### Tier III: GOAL (Objectives)
+| Code | Name | Description |
+|------|------|-------------|
+| `e1` | Minimum games | Each team must play at least the configured number of regular season games (scrimmages don't count) |
 
 ---
 
