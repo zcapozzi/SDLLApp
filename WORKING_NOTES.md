@@ -4,56 +4,7 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Fixed e1 violations (teams with wrong game counts) in round-robin scheduling.
-
----
-
-## Session: August 16, 2026 - Round-Robin Scheduling Fix (e1 violations)
-
-### Issue
-Multiple leagues (BB Tee Ball, BB AAA) had e1 violations where some teams were getting fewer games than required. The scheduler was generating incorrect matchup lists and failing to schedule all games.
-
-### Root Causes Found
-
-1. **Matchup Generation Bug**: The greedy algorithm for distributing "extras" (pairs that play more than once) could get stuck in a deadlock, failing to generate the correct number of matchups.
-
-2. **Slot Assignment Bug**: Even with correct matchups, the full-round scheduling (requiring all teams to play on the same date) could create situations where teams had no overlapping free dates, making some matchups impossible to schedule.
-
-### Fixes Applied
-
-1. **Perfect Matching Algorithm** (for `skips_per_team == 1`):
-   - Added `_generate_perfect_matching()` helper function
-   - For cases like 8 teams with 6 games (each team misses 1 opponent), generate a random perfect matching to determine which pairs DON'T play
-   - This guarantees correct distribution
-
-2. **Backtracking Algorithm** (for `skips_per_team > 1`):
-   - Added a backtracking search to find valid distributions systematically
-   - Tries to find a set of extra pairs such that each team appears in exactly `extras_per_team` of them
-   - Falls back to greedy with retries if backtracking fails
-
-3. **Last-Resort Scheduling Pass**:
-   - Added a third pass in `_assign_games_to_slots()` after the catch-up pass
-   - Allows "double-booking" (scheduling games for teams that already have activity on a date) when there's no other option
-   - Only used as a last resort when teams have no overlapping free dates
-
-### Algorithms by Configuration
-
-| Teams | Games/Team | Skips/Team | Algorithm |
-|-------|-----------|------------|-----------|
-| 8 | 6 | 1 | Perfect matching |
-| 6 | 8 | 2 | Backtracking |
-| 4 | 3 | 0 | All pairs get extras |
-| 10 | 9 | 0 | All pairs get extras |
-
-### Testing
-- Ran scheduler with 10 different random seeds
-- All seeds now pass with 0 e1 violations across all leagues
-
-### Files Modified
-- `app/utils/scheduler.py`:
-  - Added `_generate_perfect_matching()` helper
-  - Rewrote extras distribution with perfect matching and backtracking
-  - Added last-resort scheduling pass allowing double-booking
+Last session: Added same-league practice sharing constraint.
 
 ---
 

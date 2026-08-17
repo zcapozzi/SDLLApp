@@ -1487,24 +1487,6 @@ class ScheduleGenerator:
                     self._assign_practices_for_date(config, teams, league, all_slots, current_date, practice_slots, start_fresh)
             current_date += timedelta(days=1)
 
-    def _generate_perfect_matching(self, teams):
-        """Generate a random perfect matching on teams.
-
-        A perfect matching pairs up all teams such that each team appears exactly once.
-        For n teams (n must be even), returns n/2 pairs.
-
-        Uses a simple random algorithm: shuffle teams and pair adjacent ones.
-        """
-        shuffled = list(teams)
-        random.shuffle(shuffled)
-        matching = []
-        for i in range(0, len(shuffled), 2):
-            if i + 1 < len(shuffled):
-                t1, t2 = shuffled[i], shuffled[i + 1]
-                pair_key = (min(t1.team_ID, t2.team_ID), max(t1.team_ID, t2.team_ID))
-                matching.append(pair_key)
-        return matching
-
     def _generate_round_robin(self, teams, games_per_team):
         """Generate round-robin matchups ensuring PAIR BALANCE (rule a1) and TEAM BALANCE (rule e1).
 
@@ -1530,177 +1512,125 @@ class ScheduleGenerator:
         # Create all pairs with their base targets
         all_pairs = []
         pair_targets = {}
-        team_id_to_obj = {t.team_ID: t for t in teams}
         for i in range(n):
             for j in range(i + 1, n):
                 pair_key = (teams[i].team_ID, teams[j].team_ID)
                 all_pairs.append((teams[i], teams[j]))
                 pair_targets[pair_key] = min_games_per_pair
 
-        # Calculate how many extras each team needs
-        base_games_per_team = min_games_per_pair * (n - 1)
-        extras_per_team = games_per_team - base_games_per_team
+        # FIXED EXTRA DISTRIBUTION: Guarantee each team gets their fair share
+        # Each team needs: games_per_team total games
+        # Each team's games from base: min_games_per_pair * (n-1)
+        # Each team's extras needed: games_per_team - min_games_per_pair * (n-1)
+        team_extras_needed = {}
+        for t in teams:
+            base_games = min_games_per_pair * (n - 1)
+            team_extras_needed[t.team_ID] = games_per_team - base_games
 
-        # Calculate how many pairs each team must skip (not get an extra with)
-        skips_per_team = (n - 1) - extras_per_team
+        # Distribute extras using a round-robin approach that guarantees balance
+        extras_given = {t.team_ID: 0 for t in teams}
+        pair_has_extra = set()  # Track which pairs already have an extra
+        candidate_pairs = list(all_pairs)
+        random.shuffle(candidate_pairs)
 
-        # SPECIAL CASE: When each team skips exactly 1 opponent, use perfect matching
-        # This guarantees correct distribution for cases like 8 teams with 6 games each
-        if skips_per_team == 1 and n % 2 == 0:
-            # Generate a random perfect matching - these pairs WON'T get an extra
-            skipped_pairs = set(self._generate_perfect_matching(teams))
-            # All other pairs get an extra
-            for pair_key in pair_targets:
-                if pair_key not in skipped_pairs:
-                    pair_targets[pair_key] += 1
-        elif skips_per_team == 0:
-            # Every pair gets an extra
-            for pair_key in pair_targets:
-                pair_targets[pair_key] += 1
-        else:
-            # General case: systematic distribution with backtracking
-            # We need to select extra_games_needed pairs to get an extra
-            # such that each team is in exactly extras_per_team of those pairs
+        extras_assigned = 0
+        max_iterations = extra_games_needed * 10  # Safety limit
+        iteration = 0
 
-            def find_valid_distribution(pairs, n_extras, teams_list, extras_per_team):
-                """Use backtracking to find a valid distribution of extras."""
-                n = len(pairs)
-                team_extras = {t.team_ID: 0 for t in teams_list}
+        while extras_assigned < extra_games_needed and iteration < max_iterations:
+            iteration += 1
 
-                def can_add(pair):
-                    t1, t2 = pair
-                    return (team_extras[t1.team_ID] < extras_per_team and
-                            team_extras[t2.team_ID] < extras_per_team)
+            # Find the team that needs the most extras and hasn't gotten their fair share
+            teams_needing_extras = [
+                (team_extras_needed[t.team_ID] - extras_given[t.team_ID], t)
+                for t in teams
+                if extras_given[t.team_ID] < team_extras_needed[t.team_ID]
+            ]
 
-                def backtrack(idx, selected, remaining):
-                    if len(selected) == n_extras:
-                        # Check if all teams have exactly extras_per_team
-                        if all(v == extras_per_team for v in team_extras.values()):
-                            return selected.copy()
-                        return None
+            if not teams_needing_extras:
+                break
 
-                    if remaining < n_extras - len(selected):
-                        return None  # Not enough pairs left
+            # Sort by need descending (use team_ID as tiebreaker)
+            teams_needing_extras.sort(key=lambda x: (-x[0], x[1].team_ID))
+            max_need = teams_needing_extras[0][0]
+            neediest_teams = [t for need, t in teams_needing_extras if need == max_need]
+            chosen_team = random.choice(neediest_teams)
 
-                    if idx >= n:
-                        return None
+            # Find a pair involving chosen_team that hasn't gotten an extra yet
+            # and where the partner also needs extras
+            best_pairs = []
+            for pair in candidate_pairs:
+                t1, t2 = pair
+                pair_key = (min(t1.team_ID, t2.team_ID), max(t1.team_ID, t2.team_ID))
+                if pair_key in pair_has_extra:
+                    continue
+                if t1.team_ID == chosen_team.team_ID:
+                    partner = t2
+                elif t2.team_ID == chosen_team.team_ID:
+                    partner = t1
+                else:
+                    continue
 
-                    # Try including this pair
-                    t1, t2 = pairs[idx]
-                    pair_key = (min(t1.team_ID, t2.team_ID), max(t1.team_ID, t2.team_ID))
-                    if can_add(pairs[idx]):
-                        team_extras[t1.team_ID] += 1
-                        team_extras[t2.team_ID] += 1
-                        selected.append(pair_key)
+                partner_need = team_extras_needed[partner.team_ID] - extras_given[partner.team_ID]
+                if partner_need > 0:
+                    best_pairs.append((partner_need, pair))
 
-                        result = backtrack(idx + 1, selected, remaining - 1)
-                        if result is not None:
-                            return result
+            if not best_pairs:
+                # No valid pair found - try next team
+                continue
 
-                        selected.pop()
-                        team_extras[t1.team_ID] -= 1
-                        team_extras[t2.team_ID] -= 1
+            # Pick the pair with the partner that needs the most extras
+            # Sort by partner_need descending
+            best_pairs.sort(key=lambda x: -x[0])
+            _, chosen_pair = best_pairs[0]
+            t1, t2 = chosen_pair
+            pair_key = (min(t1.team_ID, t2.team_ID), max(t1.team_ID, t2.team_ID))
 
-                    # Try excluding this pair
-                    return backtrack(idx + 1, selected, remaining - 1)
+            pair_targets[pair_key] += 1
+            pair_has_extra.add(pair_key)
+            extras_given[t1.team_ID] += 1
+            extras_given[t2.team_ID] += 1
+            extras_assigned += 1
 
-                # Shuffle pairs for variety
-                shuffled_pairs = list(pairs)
-                random.shuffle(shuffled_pairs)
-                return backtrack(0, [], len(shuffled_pairs))
+        # Verify team targets sum correctly and fix if needed
+        # LIMIT: Never increase a pair target beyond min_games_per_pair + 1 (to maintain gap ≤ 1)
+        max_pair_target = min_games_per_pair + 1
 
-            # Try to find a valid distribution
-            extra_pairs = find_valid_distribution(all_pairs, extra_games_needed, teams, extras_per_team)
+        for t in teams:
+            team_target_sum = sum(
+                pair_targets[(min(t.team_ID, t2.team_ID), max(t.team_ID, t2.team_ID))]
+                for t2 in teams if t2.team_ID != t.team_ID
+            )
+            # If a team doesn't have enough games from pair targets, try to add more
+            while team_target_sum < games_per_team:
+                # Find a pair involving this team that can be increased
+                best_pair = None
+                best_partner_need = -1
+                for t2 in teams:
+                    if t2.team_ID == t.team_ID:
+                        continue
+                    pair_key = (min(t.team_ID, t2.team_ID), max(t.team_ID, t2.team_ID))
 
-            if extra_pairs:
-                # Apply the valid distribution
-                extra_set = set(extra_pairs)
-                for pair_key in pair_targets:
-                    if pair_key in extra_set:
-                        pair_targets[pair_key] = min_games_per_pair + 1
-                    else:
-                        pair_targets[pair_key] = min_games_per_pair
-            else:
-                # Fallback: greedy algorithm with retries
-                best_pair_targets = None
-                best_count = -1
+                    # Don't exceed max pair target (to maintain gap ≤ 1)
+                    if pair_targets[pair_key] >= max_pair_target:
+                        continue
 
-                for attempt in range(20):
-                    attempt_pair_targets = {pk: min_games_per_pair for pk in pair_targets}
-                    team_extras_needed = {t.team_ID: extras_per_team for t in teams}
-                    extras_given = {t.team_ID: 0 for t in teams}
-                    pair_has_extra = set()
-                    candidate_pairs = list(all_pairs)
-                    random.shuffle(candidate_pairs)
+                    # Check if the other team can handle more games
+                    partner_sum = sum(
+                        pair_targets[(min(t2.team_ID, t3.team_ID), max(t2.team_ID, t3.team_ID))]
+                        for t3 in teams if t3.team_ID != t2.team_ID
+                    )
+                    partner_need = games_per_team - partner_sum
+                    if partner_need > 0 and partner_need > best_partner_need:
+                        best_partner_need = partner_need
+                        best_pair = pair_key
 
-                    extras_assigned = 0
-                    max_iterations = extra_games_needed * 20
-
-                    while extras_assigned < extra_games_needed and max_iterations > 0:
-                        max_iterations -= 1
-
-                        teams_needing_extras = [
-                            (team_extras_needed[t.team_ID] - extras_given[t.team_ID], t)
-                            for t in teams
-                            if extras_given[t.team_ID] < team_extras_needed[t.team_ID]
-                        ]
-
-                        if not teams_needing_extras:
-                            break
-
-                        teams_needing_extras.sort(key=lambda x: (-x[0], x[1].team_ID))
-                        max_need = teams_needing_extras[0][0]
-                        neediest_teams = [t for need, t in teams_needing_extras if need == max_need]
-                        chosen_team = random.choice(neediest_teams)
-
-                        good_pairs = []
-                        ok_pairs = []
-                        for pair in candidate_pairs:
-                            t1, t2 = pair
-                            pair_key = (min(t1.team_ID, t2.team_ID), max(t1.team_ID, t2.team_ID))
-                            if pair_key in pair_has_extra:
-                                continue
-                            if t1.team_ID == chosen_team.team_ID:
-                                partner = t2
-                            elif t2.team_ID == chosen_team.team_ID:
-                                partner = t1
-                            else:
-                                continue
-
-                            partner_need = team_extras_needed[partner.team_ID] - extras_given[partner.team_ID]
-                            if partner_need > 0:
-                                good_pairs.append((partner_need, pair))
-                            else:
-                                ok_pairs.append(pair)
-
-                        chosen_pair = None
-                        if good_pairs:
-                            good_pairs.sort(key=lambda x: -x[0])
-                            _, chosen_pair = good_pairs[0]
-                        elif ok_pairs:
-                            chosen_pair = random.choice(ok_pairs)
-
-                        if chosen_pair is None:
-                            continue
-
-                        t1, t2 = chosen_pair
-                        pair_key = (min(t1.team_ID, t2.team_ID), max(t1.team_ID, t2.team_ID))
-
-                        attempt_pair_targets[pair_key] += 1
-                        pair_has_extra.add(pair_key)
-                        extras_given[t1.team_ID] += 1
-                        extras_given[t2.team_ID] += 1
-                        extras_assigned += 1
-
-                    if extras_assigned > best_count:
-                        best_count = extras_assigned
-                        best_pair_targets = attempt_pair_targets.copy()
-
-                    if extras_assigned >= extra_games_needed:
-                        break
-
-                if best_pair_targets:
-                    pair_targets = best_pair_targets
+                if best_pair:
+                    pair_targets[best_pair] += 1
+                    team_target_sum += 1
+                else:
+                    # Can't add more without breaking pair balance
+                    break
 
         # Now select matchups to meet pair targets while respecting team limits
         pair_counts = defaultdict(int)
@@ -2503,128 +2433,6 @@ class ScheduleGenerator:
                         })
 
         unscheduled_matchups = still_unscheduled
-
-        # Third pass: Last resort - allow double-booking (two games per day for a team)
-        # This handles edge cases where teams have no overlapping free dates
-        if unscheduled_matchups:
-            final_unscheduled = []
-            for idx in unscheduled_matchups:
-                if idx in scheduled_matchups:
-                    continue
-
-                home, away = matchups[idx]
-                pair_key = (min(home.team_ID, away.team_ID), max(home.team_ID, away.team_ID))
-
-                # Skip if both teams have enough games AND pair has played
-                if (team_game_counts[home.team_ID] >= games_per_team and
-                    team_game_counts[away.team_ID] >= games_per_team and
-                    pair_game_counts[pair_key] > 0):
-                    scheduled_matchups.add(idx)
-                    continue
-
-                # Find any available slot, ignoring team-day constraints
-                assigned = False
-                for game_date in sorted(slots_info_by_date.keys()):
-                    if assigned:
-                        break
-                    date_str = game_date.isoformat() if hasattr(game_date, 'isoformat') else str(game_date)
-
-                    # For P/G leagues, still respect weekly game limit
-                    if max_games_per_week and config.opening_day_date:
-                        catch_up_week_num = self._get_week_number(game_date, config.opening_day_date)
-                        home_week_key = (home.team_ID, catch_up_week_num)
-                        away_week_key = (away.team_ID, catch_up_week_num)
-                        if (self._team_week_games[home_week_key] >= max_games_per_week or
-                                self._team_week_games[away_week_key] >= max_games_per_week):
-                            continue
-
-                    for slot_info in slots_info_by_date[game_date]:
-                        field_id = slot_info['field_id']
-                        game_datetime = slot_info['datetime']
-
-                        # Check if slot is available (field/time not used)
-                        if field_id and game_datetime:
-                            usage_key = (field_id, game_datetime.isoformat())
-                            if usage_key in self._global_field_time_usage:
-                                continue
-
-                        slot = slot_info['slot']
-
-                        # Balance home/away
-                        actual_home, actual_away = home, away
-                        if home_counts[home.team_ID] > away_counts[home.team_ID] + 1:
-                            actual_home, actual_away = away, home
-
-                        is_early = game_datetime.hour < 18 if game_datetime else True
-
-                        game = ProposedGame(
-                            game_type='regular',
-                            league=config.league,
-                            year=self.year,
-                            is_spring=self.is_spring,
-                            home_team=actual_home,
-                            away_team=actual_away,
-                            field=slot.field if slot else None,
-                            game_date=game_datetime
-                        )
-                        game.slot = slot
-
-                        if existing_idx < len(records_to_fill):
-                            existing_game = records_to_fill[existing_idx]
-                            game.id = existing_game.ID
-                            game.existing_record = existing_game
-                            self._slot_assignments[existing_game.ID] = {
-                                'game_id': existing_game.ID,
-                                'home_id': actual_home.team_ID,
-                                'away_id': actual_away.team_ID,
-                                'game_date': game_datetime.isoformat() if game_datetime else None,
-                                'field_id': field_id
-                            }
-                            existing_idx += 1
-                        else:
-                            game.id = self._next_id
-                            self._next_id += 1
-
-                        self.proposed_games.append(game)
-
-                        # Record the last-resort assignment
-                        self._record_decision(
-                            date_str, config.league, slot,
-                            'assigned', 'Last-resort scheduling (allows double-booking)',
-                            game_info={
-                                'home': actual_home.display_name,
-                                'away': actual_away.display_name,
-                                'time': game_datetime.strftime('%I:%M %p') if game_datetime else 'N/A',
-                                'phase': 'last_resort'
-                            }
-                        )
-
-                        home_counts[actual_home.team_ID] += 1
-                        away_counts[actual_away.team_ID] += 1
-                        team_game_counts[home.team_ID] += 1
-                        team_game_counts[away.team_ID] += 1
-
-                        if field_id and game_datetime:
-                            self._global_field_time_usage.add((field_id, game_datetime.isoformat()))
-
-                        # Note: NOT updating _team_day_usage since this is double-booking
-
-                        pair_key = (min(home.team_ID, away.team_ID), max(home.team_ID, away.team_ID))
-                        pair_game_counts[pair_key] += 1
-
-                        if max_games_per_week and config.opening_day_date:
-                            catch_up_week_num = self._get_week_number(game_date, config.opening_day_date)
-                            self._team_week_games[(home.team_ID, catch_up_week_num)] += 1
-                            self._team_week_games[(away.team_ID, catch_up_week_num)] += 1
-
-                        scheduled_matchups.add(idx)
-                        assigned = True
-                        break
-
-                if not assigned:
-                    final_unscheduled.append(idx)
-
-            unscheduled_matchups = final_unscheduled
 
         # Check for teams below minimum and report
         teams_below_min = []
