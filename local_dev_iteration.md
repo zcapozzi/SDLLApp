@@ -161,6 +161,7 @@ When working on the scheduler, you may need to analyze why specific games weren'
 | `analyze_pairs.py` | Verify home/away balance between team pairs |
 | `analyze_tier2.py` | Check Tier II scheduling rule violations |
 | `analyze_gap.py` | Find games with too short gaps between them |
+| `analyze_practice_balance.py` | Check practice count balance across teams in each league |
 | `check_d1_violations.py` | Check for d1 (minimum gap) rule violations |
 | `check_game_slots.py` | Verify game slot assignments |
 | `check_pairs.py` | Detailed pair matchup analysis |
@@ -235,6 +236,12 @@ Example: `/scheduler/api/2026/1/trace/2026-03-15` returns JSON with:
 1. Use the "Validate Current Schedule" button in the scheduler UI
 2. Or run the validation API endpoint
 3. Check warnings in the proposal review page
+
+**Practice balance issues:**
+1. Run `analyze_practice_balance.py` to see practice counts per team
+2. The scheduler prioritizes teams with fewer practices when assigning slots
+3. Rule: No team should have 2+ more practices than any other team in the same league
+4. Check if team-specific `practice_days` are limiting some teams to fewer available days
 
 ## Troubleshooting
 

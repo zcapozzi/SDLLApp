@@ -219,6 +219,8 @@ class ScheduleValidator:
             self._check_practice_field_balance(league, practices, teams)
             # Rule c3: Balance solo practices
             self._check_solo_practice_balance(league, practices, teams)
+            # Rule c4: Practice count balance - no team should have 2+ more practices than others
+            self._check_practice_count_balance(league, practices, teams)
 
         # Check no back-to-back against same team
         self._check_same_team_gap(league, actual_games, teams)
@@ -521,6 +523,38 @@ class ScheduleValidator:
                         'c3', 'Solo practice balance',
                         ScheduleViolation.SOFT,
                         f'{league}: Solo practice imbalance - some teams have {max_solo} solo practices while others have {min_solo}'
+                    ))
+
+    def _check_practice_count_balance(self, league, practices, teams):
+        """Rule c4: No team should have 2+ more practices than any other team.
+
+        This ensures fair practice opportunities across all teams in a league.
+        """
+        # Count practices per team
+        practice_counts = defaultdict(int)
+        for p in practices:
+            team = self._get_home_team(p)
+            if team:
+                practice_counts[team] += 1
+
+        # Check balance across teams
+        if practice_counts:
+            counts = [practice_counts.get(t, 0) for t in teams]
+            if counts:
+                min_count = min(counts)
+                max_count = max(counts)
+                if max_count - min_count >= 2:
+                    # Find which teams are affected
+                    min_teams = [t for t in teams if practice_counts.get(t, 0) == min_count]
+                    max_teams = [t for t in teams if practice_counts.get(t, 0) == max_count]
+
+                    self.violations.append(ScheduleViolation(
+                        'c4', 'Practice count balance',
+                        ScheduleViolation.SOFT,
+                        f'{league}: Practice count imbalance of {max_count - min_count}. '
+                        f'{", ".join(self._get_team_name(t) for t in max_teams)} have {max_count} practices, '
+                        f'{", ".join(self._get_team_name(t) for t in min_teams)} have {min_count}.',
+                        teams=[self._build_team_info(t) for t in min_teams + max_teams]
                     ))
 
     def _check_same_team_gap(self, league, games, teams):
@@ -956,6 +990,7 @@ class ScheduleGenerator:
         self._slot_decisions = []  # Detailed decision log for tracing
         self._practice_slot_counts = defaultdict(int)  # Tracks practice count per (field_id, datetime) - f1 rule
         self._practice_slot_leagues = {}  # Tracks which league is using each (field_id, datetime) - same-league sharing only
+        self._team_practice_counts = defaultdict(int)  # Tracks total practice count per team for balance
 
         # Load season-wide blackout dates
         from app.models.season_blackout import SeasonBlackout
@@ -1997,7 +2032,11 @@ class ScheduleGenerator:
                         'field_capacity': field_capacity
                     })
 
-        for team in teams:
+        # Sort teams by practice count (ascending) to prioritize teams with fewer practices
+        # This helps ensure practice balance across the league (no team should have 2+ more than others)
+        sorted_teams = sorted(teams, key=lambda t: self._team_practice_counts[t.team_ID])
+
+        for team in sorted_teams:
             # Check if this day is a practice day for this team
             # Team-specific practice_days ALWAYS takes precedence if set
             if team.practice_days:
@@ -2077,6 +2116,9 @@ class ScheduleGenerator:
 
             # Mark team as having activity on this day
             self._team_day_usage.add(team_day_key)
+
+            # Track total practice count per team for balance
+            self._team_practice_counts[team.team_ID] += 1
 
             # Update weekly practice counter for P/G leagues
             if max_practices_per_week and week_num is not None:
