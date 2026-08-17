@@ -22,6 +22,28 @@ from app.utils.logging import SDLLLogger
 scheduler_bp = Blueprint('scheduler', __name__)
 logger = SDLLLogger('scheduler')
 
+# All scheduling rules with their metadata
+ALL_RULES = {
+    # Tier I - Hard Rules
+    'd1': {'name': 'One activity per day', 'severity': 'hard', 'description': 'Max one game or practice per team per day'},
+    'slot': {'name': 'Field double-booked', 'severity': 'hard', 'description': 'No two games/practices at same time on same field'},
+    'f1': {'name': 'Practice field capacity', 'severity': 'hard', 'description': 'Enforces field practice_capacity setting'},
+    'f1c': {'name': 'Cross-league practice sharing', 'severity': 'hard', 'description': 'Teams sharing practice slot must be same league'},
+    'g1': {'name': 'Time restrictions', 'severity': 'hard', 'description': 'No games/practices outside allowed time window'},
+    'h1': {'name': 'Season blackouts', 'severity': 'hard', 'description': 'No activities on league blackout dates'},
+    'h2': {'name': 'Field availability', 'severity': 'hard', 'description': 'No activities before field start date or on field blackouts'},
+    # Tier II - Soft Rules
+    'a1': {'name': 'Matchup balance', 'severity': 'soft', 'description': 'Play everyone at least once; max 1 game difference between pairs'},
+    'a2': {'name': 'Alternate home/away', 'severity': 'soft', 'description': 'No team is home twice against same opponent while never away'},
+    'b1': {'name': 'Home/away balance', 'severity': 'soft', 'description': 'Balance home/away per team (max 1 game difference)'},
+    'b2': {'name': 'Early/late balance', 'severity': 'soft', 'description': 'Balance early (5:30) vs late (7:30) games per team'},
+    'c1': {'name': 'Practice field balance', 'severity': 'soft', 'description': 'Spread practices across available fields'},
+    'c4': {'name': 'Practice count balance', 'severity': 'soft', 'description': 'No team should have 2+ more practices than another'},
+    'e1': {'name': 'Minimum games', 'severity': 'soft', 'description': 'Each team plays required number of regular season games'},
+    'f1b': {'name': 'Day-of-week game balance', 'severity': 'soft', 'description': 'Balance game days across teams'},
+    'gap': {'name': 'Same team gap', 'severity': 'soft', 'description': 'No back-to-back games against same opponent'},
+}
+
 
 @scheduler_bp.route('/<int:year>/<int:is_spring>')
 @login_required
@@ -399,6 +421,12 @@ def review(year, is_spring):
     all_games = proposal['games']
     leagues = sorted(set(g['league'] for g in all_games if g['league']))
 
+    # Get violated rule codes
+    violated_rules = set(v['rule_code'] for v in proposal['violations'])
+
+    # Build list of passed rules (rules with no violations)
+    passed_rules = {code: info for code, info in ALL_RULES.items() if code not in violated_rules}
+
     return render_template(
         'scheduler/review.html',
         year=year,
@@ -413,7 +441,9 @@ def review(year, is_spring):
         view_mode=view_mode,
         filter_league=filter_league,
         filter_type=filter_type,
-        leagues=leagues
+        leagues=leagues,
+        all_rules=ALL_RULES,
+        passed_rules=passed_rules
     )
 
 

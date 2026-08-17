@@ -801,6 +801,24 @@
 </div>
 {% endif %}
 
+<!-- Rules Passed Section -->
+{% if passed_rules %}
+<div class="card">
+    <h3 style="margin-top: 0; color: rgb(34, 139, 34);">Rules Passed ({{ passed_rules|length }})</h3>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+        {% for code, info in passed_rules.items() | sort %}
+        <div style="padding: 8px 12px; background: rgba(34, 139, 34, 0.1); border-radius: 6px; border-left: 3px solid rgb(34, 139, 34);">
+            <span style="font-weight: 600; font-size: 13px;">[{{ code }}]</span>
+            <span style="font-size: 12px; color: #666;">{{ info.name }}</span>
+            <span style="font-size: 10px; color: #999; text-transform: uppercase; margin-left: 5px;">
+                {{ 'HARD' if info.severity == 'hard' else 'SOFT' }}
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <!-- Field x League Matrix -->
 <div class="card">
     <h3 style="margin-top: 0;">Field Usage by League</h3>
