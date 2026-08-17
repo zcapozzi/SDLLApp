@@ -605,13 +605,17 @@ class ScheduleValidator:
                 last_matchup[key] = i
 
     def _check_field_conflicts(self, games):
-        """Check for games scheduled at the same time on the same field.
+        """Check for games/practices scheduled at the same time on the same field.
 
-        Rule: No two games can be at the same time on the same field.
-        Note: Sequential games (e.g., 5:30 and 7:30) on the same field are OK.
+        Rule slot: Each field can only have one game/scrimmage at a time.
+        - No two games at the same slot
+        - No game and practice at the same slot
+        Note: Sequential activities (e.g., 5:30 and 7:30) on the same field are OK.
+        Note: Multiple practices CAN share a slot (up to practice_capacity) - handled by rule f1.
         """
-        # Group games by (field, exact datetime)
-        field_time_slots = defaultdict(list)
+        # Track games and practices separately at each slot
+        games_at_slot = defaultdict(list)  # Non-practice activities
+        practices_at_slot = defaultdict(list)  # Practice activities
 
         for game in games:
             game_date = self._get_game_date(game)
@@ -620,32 +624,50 @@ class ScheduleValidator:
 
             # Get field
             field = None
+            field_name = None
             if hasattr(game, 'field') and game.field:
                 field = game.field.ID if hasattr(game.field, 'ID') else game.field
+                field_name = game.field.location_title if hasattr(game.field, 'location_title') else str(field)
             elif hasattr(game, 'location'):
                 field = game.location
+                field_name = str(field)
 
             if not field:
                 continue
 
-            # Skip practices - multiple teams can share a field at the same time
+            # Key: (field, field_name, date, hour, minute) - exact time slot
+            key = (field, field_name, game_date.date(), game_date.hour, game_date.minute)
+
             if self._is_practice(game):
-                continue
+                practices_at_slot[key].append(game)
+            else:
+                games_at_slot[key].append(game)
 
-            # Key: (field, date, hour, minute) - exact time slot
-            key = (field, game_date.date(), game_date.hour, game_date.minute)
-            field_time_slots[key].append(game)
-
-        # Check for conflicts
-        for key, games_at_slot in field_time_slots.items():
-            if len(games_at_slot) > 1:
-                field, date, hour, minute = key
+        # Check for multiple games at same slot
+        for key, slot_games in games_at_slot.items():
+            if len(slot_games) > 1:
+                field, field_name, date, hour, minute = key
                 time_str = f'{hour:02d}:{minute:02d}'
                 self.violations.append(ScheduleViolation(
                     'slot', 'Field double-booked',
                     ScheduleViolation.HARD,
-                    f'Field {field} has {len(games_at_slot)} games at {date} {time_str}',
-                    games=games_at_slot
+                    f'{field_name} has {len(slot_games)} games at {date} {time_str}',
+                    games=slot_games
+                ))
+
+        # Check for game + practice at same slot
+        for key, slot_games in games_at_slot.items():
+            if key in practices_at_slot:
+                field, field_name, date, hour, minute = key
+                time_str = f'{hour:02d}:{minute:02d}'
+                all_activities = slot_games + practices_at_slot[key]
+                game_count = len(slot_games)
+                practice_count = len(practices_at_slot[key])
+                self.violations.append(ScheduleViolation(
+                    'slot', 'Field double-booked',
+                    ScheduleViolation.HARD,
+                    f'{field_name} has {game_count} game(s) and {practice_count} practice(s) at {date} {time_str}',
+                    games=all_activities
                 ))
 
     def _check_practice_field_capacity(self, games):
@@ -2272,6 +2294,12 @@ class ScheduleGenerator:
                         if practice_time < league.earliest_start_time:
                             # This time block is before the league's earliest allowed start time
                             continue
+
+                    # Check if this slot already has a game scheduled (from Phase 1)
+                    # Rule: Can't have a practice at the same time as a game
+                    usage_key = (field_id, game_datetime.isoformat())
+                    if usage_key in self._global_field_time_usage:
+                        continue  # Game already scheduled here, skip this practice option
 
                     # Get field's practice capacity from DB, considering late slots
                     is_late = game_datetime.hour >= 19
