@@ -397,6 +397,9 @@ class ScheduleValidator:
         - Early: 4:00 PM to before 6:00 PM
         - Late: 6:00 PM or later
         - Games before 4pm: not counted
+
+        If a league has NO late games at all (no late slots available), skip this
+        check since imbalance is unavoidable due to configuration.
         """
         early_counts = defaultdict(int)  # 4:00 PM to before 6:00 PM
         late_counts = defaultdict(int)   # 6:00 PM or later
@@ -423,6 +426,12 @@ class ScheduleValidator:
                     late_counts[home] += 1
                 if away:
                     late_counts[away] += 1
+
+        # If there are NO late games in this league at all, skip the check
+        # (late slots aren't available, so imbalance is unavoidable)
+        total_late = sum(late_counts.values())
+        if total_late == 0:
+            return
 
         for team_id in teams:
             early = early_counts.get(team_id, 0)
@@ -515,7 +524,15 @@ class ScheduleValidator:
                     ))
 
     def _check_same_team_gap(self, league, games, teams):
-        """Check that same teams don't play back-to-back."""
+        """Check that same teams don't play back-to-back.
+
+        Exception: With 2 teams, there's only 1 possible pair, so back-to-back
+        is unavoidable and not flagged.
+        """
+        # Skip 2-team leagues - only 1 pair possible, back-to-back unavoidable
+        if len(teams) <= 2:
+            return
+
         # Sort games by date
         dated_games = [(g, self._get_game_date(g)) for g in games if self._get_game_date(g)]
         dated_games.sort(key=lambda x: x[1])
@@ -537,7 +554,7 @@ class ScheduleValidator:
                         away_name = self._get_team_name(away)
                         self.violations.append(ScheduleViolation(
                             'gap', 'Same team gap',
-                            ScheduleViolation.HARD,
+                            ScheduleViolation.SOFT,
                             f'{league}: {home_name} vs {away_name} play back-to-back without a game gap',
                             teams=[self._build_team_info(home), self._build_team_info(away)]
                         ))
@@ -757,7 +774,13 @@ class ScheduleValidator:
 
         When games are scheduled on a particular date, all teams in the league
         should be playing on that date. No team should sit out while others play.
+
+        Exception: With odd team counts, exactly 1 team sitting out is expected and
+        is not flagged as a violation.
         """
+        n_teams = len(teams)
+        expected_sit_outs = 1 if n_teams % 2 == 1 else 0
+
         # Group games by date
         games_by_date = defaultdict(list)
         for g in games:
@@ -779,9 +802,9 @@ class ScheduleValidator:
 
             # Check for teams not playing
             teams_sitting = set(teams) - teams_playing
-            if teams_sitting and teams_playing:
-                # Only flag if some teams ARE playing (not an empty date)
-                # and not ALL teams are sitting (which would mean no games that day)
+            # Only flag if MORE teams are sitting than expected (due to odd count)
+            # and some teams ARE playing (not an empty date)
+            if len(teams_sitting) > expected_sit_outs and teams_playing:
                 sitting_names = [self._get_team_name(t) for t in teams_sitting]
                 self.violations.append(ScheduleViolation(
                     'e2', 'Game day balance',
@@ -1740,7 +1763,13 @@ class ScheduleGenerator:
                 # Found a valid combination
                 return selected.copy()
 
-            for idx, priority, home, away in eligible_matchups:
+            for matchup in eligible_matchups:
+                # Handle both 4-element and 5-element tuples (with is_repeat)
+                if len(matchup) == 5:
+                    idx, priority, is_repeat, home, away = matchup
+                else:
+                    idx, priority, home, away = matchup
+
                 # Skip if either team already used
                 if home.team_ID in teams_used or away.team_ID in teams_used:
                     continue
@@ -2055,6 +2084,13 @@ class ScheduleGenerator:
         # Track games per pair for a1 compliance (pair balance)
         pair_game_counts = defaultdict(int)  # (team_id1, team_id2) -> count, where id1 < id2
 
+        # Track per-pair home team for a2 compliance (alternate home/away per pair)
+        # Key: (min_team_id, max_team_id), Value: list of home_team_ids for each game
+        pair_home_history = defaultdict(list)
+
+        # Track last scheduled pair for gap compliance (avoid back-to-back same pairs)
+        last_scheduled_pair = None
+
         # Filter existing records to those needing assignment
         records_to_fill = []
         if existing_game_records:
@@ -2166,10 +2202,13 @@ class ScheduleGenerator:
                     # Prioritize by how many games teams still need
                     home_needs = games_per_team - team_game_counts[home.team_ID]
                     away_needs = games_per_team - team_game_counts[away.team_ID]
-                    eligible_matchups.append((idx, home_needs + away_needs, home, away))
+                    # Deprioritize if this is the same pair as last scheduled (gap rule)
+                    pair_key = (min(home.team_ID, away.team_ID), max(home.team_ID, away.team_ID))
+                    is_repeat = 1 if pair_key == last_scheduled_pair else 0
+                    eligible_matchups.append((idx, home_needs + away_needs, is_repeat, home, away))
 
-            # Sort by priority (most needed first)
-            eligible_matchups.sort(key=lambda x: -x[1])
+            # Sort by priority: avoid repeat pairs first, then most needed
+            eligible_matchups.sort(key=lambda x: (x[2], -x[1]))
 
             # For odd team counts, partial capacity dates, or when not all teams available, use greedy scheduling
             # For even team counts with all teams available and full capacity, try to find complete rounds
@@ -2181,7 +2220,7 @@ class ScheduleGenerator:
                 teams_used_today = set()
                 slot_idx = 0
 
-                for idx, priority, home, away in eligible_matchups:
+                for idx, priority, is_repeat, home, away in eligible_matchups:
                     if slot_idx >= len(available_date_slots):
                         break
                     if home.team_ID in teams_used_today or away.team_ID in teams_used_today:
@@ -2216,7 +2255,7 @@ class ScheduleGenerator:
                     teams_used_today = set()
                     slot_idx = 0
 
-                    for idx, priority, home, away in eligible_matchups:
+                    for idx, priority, is_repeat, home, away in eligible_matchups:
                         if slot_idx >= len(available_date_slots):
                             break
                         if home.team_ID in teams_used_today or away.team_ID in teams_used_today:
@@ -2252,9 +2291,20 @@ class ScheduleGenerator:
                 game_datetime = slot_info['datetime']
                 field_id = slot_info['field_id']
 
-                # Balance home/away
+                # Balance home/away - prioritize per-pair alternation (a2), then overall balance
                 actual_home, actual_away = home, away
-                if home_counts[home.team_ID] > away_counts[home.team_ID] + 1:
+                pair_key = (min(home.team_ID, away.team_ID), max(home.team_ID, away.team_ID))
+
+                # Check per-pair history first
+                pair_history = pair_home_history[pair_key]
+                if pair_history:
+                    # Alternate: if last home was team A, make team B home this time
+                    last_home = pair_history[-1]
+                    if last_home == home.team_ID:
+                        actual_home, actual_away = away, home
+                    # else keep home as is (last_home was away, so home should be home)
+                elif home_counts[home.team_ID] > away_counts[home.team_ID] + 1:
+                    # No pair history - use overall balance
                     actual_home, actual_away = away, home
 
                 is_early = game_datetime.hour < 18 if game_datetime else True
@@ -2325,6 +2375,12 @@ class ScheduleGenerator:
                 # Track pair game count for a1 compliance
                 pair_key = (min(home.team_ID, away.team_ID), max(home.team_ID, away.team_ID))
                 pair_game_counts[pair_key] += 1
+
+                # Track per-pair home history for a2 compliance
+                pair_home_history[pair_key].append(actual_home.team_ID)
+
+                # Track last scheduled pair for gap compliance
+                last_scheduled_pair = pair_key
 
                 # Update weekly game counter for P/G leagues
                 if max_games_per_week and week_num is not None:
@@ -2399,9 +2455,19 @@ class ScheduleGenerator:
 
                     slot = slot_info['slot']
 
-                    # Balance home/away
+                    # Balance home/away - prioritize per-pair alternation (a2), then overall balance
                     actual_home, actual_away = home, away
-                    if home_counts[home.team_ID] > away_counts[home.team_ID] + 1:
+                    pair_key = (min(home.team_ID, away.team_ID), max(home.team_ID, away.team_ID))
+
+                    # Check per-pair history first
+                    pair_history = pair_home_history[pair_key]
+                    if pair_history:
+                        # Alternate: if last home was team A, make team B home this time
+                        last_home = pair_history[-1]
+                        if last_home == home.team_ID:
+                            actual_home, actual_away = away, home
+                    elif home_counts[home.team_ID] > away_counts[home.team_ID] + 1:
+                        # No pair history - use overall balance
                         actual_home, actual_away = away, home
 
                     is_early = game_datetime.hour < 18 if game_datetime else True
@@ -2466,8 +2532,14 @@ class ScheduleGenerator:
                     self._team_day_usage.add((away.team_ID, date_str))
 
                     # Track pair game count for a1 compliance
-                    pair_key = (min(home.team_ID, away.team_ID), max(home.team_ID, away.team_ID))
+                    # Note: pair_key already calculated above for home/away balance
                     pair_game_counts[pair_key] += 1
+
+                    # Track per-pair home history for a2 compliance
+                    pair_home_history[pair_key].append(actual_home.team_ID)
+
+                    # Track last scheduled pair for gap compliance
+                    last_scheduled_pair = pair_key
 
                     # Update weekly game counter for P/G leagues
                     if max_games_per_week and config.opening_day_date:
