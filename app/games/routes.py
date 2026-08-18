@@ -794,6 +794,7 @@ def day_view(year, is_spring, target_date):
 
     # Track fields with allocations and their time slots
     fields_with_allocations = set()
+    fields_with_owned_allocations = set()  # Only SDLL-owned fields
     allocation_times = set()
     allocation_info = {}  # (field_name, time_key) -> {'is_owned': bool, 'slot': FieldSlot}
 
@@ -801,6 +802,9 @@ def day_view(year, is_spring, target_date):
         field = field_id_lookup.get(alloc.field_ID)
         if field:
             fields_with_allocations.add(field.location_title)
+            # Track SDLL-owned fields separately
+            if alloc.is_owned == 1:
+                fields_with_owned_allocations.add(field.location_title)
             # Track time slots covered by this allocation
             start_hour = alloc.start_time.hour
             end_hour = alloc.end_time.hour
@@ -813,8 +817,9 @@ def day_view(year, is_spring, target_date):
                         'slot': alloc
                     }
 
-    # Build display_fields from fields with games OR allocations
-    fields_to_show = fields_with_games | fields_with_allocations
+    # Build display_fields from SDLL-owned fields only
+    # Include fields that have games OR have SDLL-owned allocations
+    fields_to_show = (fields_with_games | fields_with_owned_allocations)
 
     if fields_to_show:
         display_fields = []
@@ -828,7 +833,8 @@ def day_view(year, is_spring, target_date):
                     placeholder = type('Field', (), {'ID': None, 'location_title': field_name})()
                     display_fields.append(placeholder)
     else:
-        display_fields = all_fields[:8]  # Limit to 8 fields to fit on screen
+        # Show only SDLL-owned fields from all fields
+        display_fields = [f for f in all_fields if f.location_title in fields_with_owned_allocations][:8]
 
     # Define time slots based on actual game times AND allocation times (dynamic range)
     all_time_keys = set()
@@ -905,7 +911,8 @@ def day_view(year, is_spring, target_date):
         grid=grid,
         teams=teams,
         allocation_info=allocation_info,
-        leagues=leagues
+        leagues=leagues,
+        fields_with_games=fields_with_games
     )
 
 
