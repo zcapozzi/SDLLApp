@@ -363,11 +363,27 @@
         const reasonField = document.getElementById('move-reason');
         const reason = reasonField ? reasonField.value : '';
 
+        // Check if this is a proposed game
+        const isProposed = pendingMove.element.dataset.isProposed === 'true';
+
+        // Get season context
+        const yearEl = document.getElementById('season-year');
+        const isSpringEl = document.getElementById('season-is-spring');
+        const year = yearEl ? yearEl.value : null;
+        const isSpring = isSpringEl ? isSpringEl.value : null;
+
         // Build request data
         const data = {
             game_id: pendingMove.gameId,
             reason: reason
         };
+
+        // Add proposal context if this is a proposed game
+        if (isProposed && year !== null && isSpring !== null) {
+            data.is_proposed = true;
+            data.year = parseInt(year, 10);
+            data.is_spring = parseInt(isSpring, 10);
+        }
 
         if (pendingMove.newField) {
             data.new_field = pendingMove.newField;

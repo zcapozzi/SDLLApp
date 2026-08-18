@@ -51,8 +51,40 @@ def api_move_game():
         new_time = data.get('new_time')
         new_date = data.get('new_date')
         reason = data.get('reason', '')
+        is_proposed = data.get('is_proposed', False)
+        year = data.get('year')
+        is_spring = data.get('is_spring')
 
-        # Import the service
+        # Check if this is a proposed game (not yet saved to Game table)
+        if is_proposed and year is not None and is_spring is not None:
+            from app.models.schedule_proposal import ScheduleProposal
+            proposal = ScheduleProposal.get_for_season(int(year), int(is_spring))
+
+            if not proposal:
+                return jsonify({'success': False, 'message': 'No proposal found for this season'}), 404
+
+            # Update the game in the proposal
+            updated = proposal.update_game(
+                game_id=int(game_id),
+                new_field=new_field,
+                new_time=new_time,
+                new_date=new_date
+            )
+
+            if not updated:
+                return jsonify({'success': False, 'message': f'Game {game_id} not found in proposal'}), 404
+
+            logger.info(f'API: Moved proposed game {game_id} - field={new_field}, time={new_time}, date={new_date}')
+
+            return jsonify({
+                'success': True,
+                'message': 'Proposed game moved successfully',
+                'game_id': game_id,
+                'notifications_queued': 0,
+                'change_id': None
+            })
+
+        # Otherwise, update the saved game in the Game table
         from app.services.game_changes import GameChangeService
 
         # Move the game

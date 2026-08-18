@@ -127,3 +127,66 @@ class ScheduleProposal(db.Model):
     def assignments(self):
         """Get assignments from the proposal data."""
         return self.data.get('assignments', {}) if self.data else {}
+
+    def update_game(self, game_id, new_field=None, new_time=None, new_date=None):
+        """Update a game in the proposal.
+
+        Args:
+            game_id: ID of the game to update
+            new_field: New field name (optional)
+            new_time: New time as 'HH:MM' string (optional)
+            new_date: New date as 'YYYY-MM-DD' string (optional)
+
+        Returns:
+            True if game was found and updated, False otherwise
+        """
+        if not self.data or 'games' not in self.data:
+            return False
+
+        games = self.data['games']
+        for game in games:
+            if game.get('id') == game_id:
+                # Update field
+                if new_field is not None:
+                    game['field_name'] = new_field
+
+                # Update date/time
+                if new_date is not None or new_time is not None:
+                    # Parse existing datetime
+                    existing_dt = game.get('game_date', '')
+                    if existing_dt:
+                        existing_date = existing_dt[:10]  # YYYY-MM-DD
+                        existing_time = existing_dt[11:16] if len(existing_dt) > 11 else '00:00'  # HH:MM
+                    else:
+                        existing_date = None
+                        existing_time = '00:00'
+
+                    # Apply new values
+                    final_date = new_date if new_date is not None else existing_date
+                    final_time = new_time if new_time is not None else existing_time
+
+                    if final_date and final_time:
+                        game['game_date'] = f'{final_date}T{final_time}:00'
+
+                # Mark the data as modified (needed for SQLAlchemy to detect JSON changes)
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(self, 'data')
+
+                db.session.commit()
+                return True
+
+        return False
+
+    def find_game(self, game_id):
+        """Find a game in the proposal by ID.
+
+        Returns:
+            The game dict if found, None otherwise
+        """
+        if not self.data or 'games' not in self.data:
+            return None
+
+        for game in self.data['games']:
+            if game.get('id') == game_id:
+                return game
+        return None
