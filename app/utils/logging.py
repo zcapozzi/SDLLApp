@@ -37,6 +37,18 @@ class SDLLLogger:
             timestamp = datetime.now().isoformat()
             self.logger.info(f'[{timestamp}] {message}', extra=kwargs)
 
+    def warning(self, message, **kwargs):
+        """Log warning (always logs unless OFF)"""
+        if self._should_log(self.ON):
+            timestamp = datetime.now().isoformat()
+            self.logger.warning(f'[{timestamp}] {message}', extra=kwargs)
+
+    def error(self, message, **kwargs):
+        """Log error (always logs unless OFF)"""
+        if self._should_log(self.ON):
+            timestamp = datetime.now().isoformat()
+            self.logger.error(f'[{timestamp}] {message}', extra=kwargs)
+
     def detail(self, message, **kwargs):
         """Log at EXTREME level (detailed steps)"""
         if self._should_log(self.EXTREME):
