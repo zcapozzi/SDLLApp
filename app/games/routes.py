@@ -58,7 +58,7 @@ def api_move_game():
         # Move the game
         game, change, notifications_queued = GameChangeService.move_game(
             game_id=int(game_id),
-            user_id=current_user.user_id,
+            user_id=current_user.ID,
             new_field=new_field,
             new_time=new_time,
             new_date=new_date,
@@ -116,7 +116,7 @@ def api_cancel_game():
         # Cancel the game
         game, change, notifications_queued = GameChangeService.cancel_game(
             game_id=int(game_id),
-            user_id=current_user.user_id,
+            user_id=current_user.ID,
             reason=reason
         )
 
@@ -322,7 +322,7 @@ def manage(year, is_spring):
 
                     # Log the change
                     change = GameChangeService.compare_and_log(
-                        game, old_values, current_user.user_id
+                        game, old_values, current_user.ID
                     )
                     if change:
                         GameChangeService.queue_notifications_for_change(change, game)
@@ -337,7 +337,7 @@ def manage(year, is_spring):
                     # Log the deletion
                     GameChangeService.log_change(
                         game_id=game.ID,
-                        user_id=current_user.user_id,
+                        user_id=current_user.ID,
                         change_type='delete',
                         changes_dict={'active': {'old': 1, 'new': 0}}
                     )
@@ -958,7 +958,7 @@ def rainout(year, is_spring):
                 for game in games:
                     change = GameChangeService.log_change(
                         game_id=game.ID,
-                        user_id=current_user.user_id,
+                        user_id=current_user.ID,
                         change_type='update',
                         changes_dict={'status': {'old': 'scheduled', 'new': 'postponed'}},
                         reason=f'Rainout on {rainout_date.strftime("%B %d, %Y")}'
@@ -996,7 +996,7 @@ def rainout(year, is_spring):
 
                 # Log the change
                 change = GameChangeService.compare_and_log(
-                    game, old_values, current_user.user_id,
+                    game, old_values, current_user.ID,
                     reason='Rescheduled from rainout'
                 )
                 if change:
@@ -1022,7 +1022,7 @@ def rainout(year, is_spring):
 
                 # Log the change
                 change = GameChangeService.compare_and_log(
-                    game, old_values, current_user.user_id,
+                    game, old_values, current_user.ID,
                     reason='Swapped with practice date'
                 )
                 if change:
@@ -1068,7 +1068,7 @@ def rainout(year, is_spring):
                 # Log changes for all games
                 for game, old_values in games_to_log:
                     change = GameChangeService.compare_and_log(
-                        game, old_values, current_user.user_id,
+                        game, old_values, current_user.ID,
                         reason='Bulk reschedule from rainout'
                     )
                     if change:
