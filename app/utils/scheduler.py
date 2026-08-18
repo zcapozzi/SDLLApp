@@ -2313,6 +2313,32 @@ class ScheduleGenerator:
                         'field_capacity': field_capacity
                     })
 
+        # Sort practice options by time and field preference
+        # Weekdays (Mon-Fri): Earlier time > Preferred field (families want kids home earlier)
+        # Weekends (Sat-Sun): Preferred field > Time (bedtime less of a concern)
+        preferred_field_ids = league.preferred_field_ids if hasattr(league, 'preferred_field_ids') else []
+
+        def get_field_preference_rank(field_id):
+            """Lower rank = more preferred. Non-preferred fields get rank after all preferred."""
+            if field_id in preferred_field_ids:
+                return preferred_field_ids.index(field_id)
+            return len(preferred_field_ids) + 1  # Non-preferred at end
+
+        is_weekday = practice_date.weekday() < 5  # Mon=0 to Fri=4
+
+        if is_weekday:
+            # Weekday: sort by (time, field_preference)
+            practice_options.sort(key=lambda opt: (
+                opt['datetime'].hour * 60 + opt['datetime'].minute,  # Earlier times first
+                get_field_preference_rank(opt['field_id'])  # Then by field preference
+            ))
+        else:
+            # Weekend: sort by (field_preference, time)
+            practice_options.sort(key=lambda opt: (
+                get_field_preference_rank(opt['field_id']),  # Field preference first
+                opt['datetime'].hour * 60 + opt['datetime'].minute  # Then by time
+            ))
+
         # Sort teams by practice count (ascending) to prioritize teams with fewer practices
         # This helps ensure practice balance across the league (no team should have 2+ more than others)
         sorted_teams = sorted(teams, key=lambda t: self._team_practice_counts[t.team_ID])

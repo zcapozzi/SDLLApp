@@ -74,9 +74,9 @@ These are absolute constraints. The scheduler will **never** violate these, even
 
 ### Rule slot: Field Double-Booking
 
-**Description:** Each field can only have a single game at a time; there cannot be two games scheduled on the same slot at the same field.
+**Description:** Each field can only have a single game at a time; there cannot be two games scheduled on the same slot at the same field; there cannot be a game and a practice at the same field at the same time
 
-**Why it matters:** Physical impossibility - one game at a time per field.
+**Why it matters:** Physical impossibility - one game at a time per field. You also can't have a practice going on at a field where they are playing a game.
 
 **Validation logic:**
 - Confirm that each slot only has a single game
@@ -380,6 +380,48 @@ Leagues can have field restrictions that must be respected:
 
 ---
 
+## Scheduling Optimization Principles
+
+These are not rules (violations) but **optimization preferences** that guide the scheduler when choosing between multiple valid options.
+
+### Practice Slot Selection (Weekdays)
+**Principle: Earlier time > Preferred field**
+
+For weekday practices, families prefer earlier times over better fields:
+- A 5:30pm slot at a less-preferred field beats a 7:30pm slot at the most-preferred field
+- This reflects that getting kids home earlier on school nights is more valuable than field quality
+
+**Sort order for weekday practice options:**
+1. Time (earlier first: 5:30 > 6:00 > 6:30 > 7:00 > 7:30)
+2. Field preference (from `League.preferred_fields`)
+
+### Practice Slot Selection (Weekends)
+**Principle: Preferred field > Time**
+
+For weekend practices, field preference takes priority since bedtime is less of a concern.
+
+**Sort order for weekend practice options:**
+1. Field preference (from `League.preferred_fields`)
+2. Time (earlier first)
+
+### Game Slot Selection
+**Principle: Fill both time slots at preferred fields first (umpire efficiency)**
+
+For games, we want to use BOTH the 5:30pm and 7:30pm slots at preferred fields before moving to less-preferred fields. This allows:
+- Same umpire to work both games (doubleheader)
+- Reduced umpire travel/logistics
+- Better utilization of premium fields
+
+**Sort order for game options:**
+1. Field preference (from `League.preferred_fields`)
+2. Time slot (to fill both slots at same field)
+
+**Example:** If Field A is preferred and Field B is allowed:
+- Good: Game 1 at Field A 5:30pm, Game 2 at Field A 7:30pm
+- Avoid: Game 1 at Field A 5:30pm, Game 2 at Field B 5:30pm
+
+---
+
 ## Time Restrictions
 
 ### Field Allocations versus Practice & Game Slots
@@ -468,7 +510,7 @@ Each league can have custom game and practice durations stored in `sdll_leagues`
 | Code | Name | Description |
 |------|------|-------------|
 | `d1` | One activity per day | Max one game or practice per team per day |
-| `slot` | Field double-booked | No two games at same time on same field |
+| `slot` | Field double-booked | No two games/scrimmages/practices at same time on same field |
 | `f1` | Practice field capacity | Enforces field's `practice_capacity` setting from DB (default: 1) |
 | `f1c` | Cross-league practice sharing | Teams sharing practice slot must be same league |
 | `g1` | Time restrictions | No games/practices before earliest or after latest start time |
