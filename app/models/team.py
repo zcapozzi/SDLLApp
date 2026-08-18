@@ -1,5 +1,6 @@
 """Team Season model - maps to sdll_team_seasons table"""
 
+import secrets
 from app.extensions import db
 
 
@@ -32,6 +33,9 @@ class TeamSeason(db.Model):
 
     # Organization - NULL means SDLL (home org), set for external teams
     organization_id = db.Column(db.BigInteger, db.ForeignKey('sdll_organizations.ID'), nullable=True)
+
+    # Public schedule URL token - unique per team for sharing schedules
+    schedule_token = db.Column(db.String(32), unique=True, nullable=True, index=True)
 
     # Future: coach_id will link to sdll_coach_seasons
     # coach_id = db.Column(db.BigInteger, db.ForeignKey('sdll_coach_seasons.ID'))
@@ -170,6 +174,41 @@ class TeamSeason(db.Model):
             is_spring=is_spring,
             active=1
         ).order_by(cls.league, cls.display_name).all()
+
+    @classmethod
+    def get_by_schedule_token(cls, token):
+        """Look up a team by its public schedule token."""
+        if not token:
+            return None
+        return cls.query.filter_by(schedule_token=token, active=1).first()
+
+    def generate_schedule_token(self):
+        """Generate a unique schedule token for this team."""
+        # Generate a 16-character URL-safe token
+        self.schedule_token = secrets.token_urlsafe(12)
+        db.session.commit()
+        return self.schedule_token
+
+    def get_or_create_schedule_token(self):
+        """Get existing token or generate a new one."""
+        if not self.schedule_token:
+            return self.generate_schedule_token()
+        return self.schedule_token
+
+    @classmethod
+    def generate_all_tokens_for_season(cls, year, is_spring):
+        """Generate schedule tokens for all teams in a season that don't have one."""
+        teams = cls.query.filter_by(
+            year=year,
+            is_spring=is_spring,
+            active=1
+        ).filter(cls.schedule_token.is_(None)).all()
+
+        for team in teams:
+            team.schedule_token = secrets.token_urlsafe(12)
+
+        db.session.commit()
+        return len(teams)
 
     @classmethod
     def copy_to_new_season(cls, source_year, source_is_spring, target_year, target_is_spring):

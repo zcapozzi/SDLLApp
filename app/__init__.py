@@ -48,6 +48,7 @@ def create_app(config_name=None):
     from .scheduler.routes import scheduler_bp
     from .notifications import notifications_bp
     from .reports import reports_bp
+    from .public import public_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(main_bp)
@@ -58,6 +59,7 @@ def create_app(config_name=None):
     app.register_blueprint(scheduler_bp, url_prefix='/scheduler')
     app.register_blueprint(notifications_bp)
     app.register_blueprint(reports_bp)
+    app.register_blueprint(public_bp)  # Public team schedules (no auth required)
 
     # User loader for Flask-Login
     from .models.user import User

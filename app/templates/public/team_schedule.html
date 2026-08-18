@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ team.computed_display_name }} Schedule - SDLL</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background: rgb(34, 139, 34);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            margin: -20px -20px 20px -20px;
+        }
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        .header .league {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .header .season {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+
+        /* Next Game Card */
+        .next-game {
+            background: linear-gradient(135deg, rgb(255, 140, 0), rgb(255, 165, 50));
+            color: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3);
+        }
+        .next-game-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+        .next-game-date {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .next-game-time {
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        .next-game-details {
+            font-size: 14px;
+            opacity: 0.95;
+        }
+        .next-game-opponent {
+            font-size: 16px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.3);
+        }
+        .next-game-type {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            text-transform: uppercase;
+            margin-left: 8px;
+        }
+
+        /* No upcoming games */
+        .no-games {
+            text-align: center;
+            padding: 30px;
+            color: #666;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        /* Schedule Section */
+        .section {
+            margin-bottom: 25px;
+        }
+        .section-title {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #666;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid rgb(34, 139, 34);
+        }
+
+        /* Game Cards */
+        .game-card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .game-card.practice {
+            border-left: 4px solid #9c27b0;
+        }
+        .game-card.game {
+            border-left: 4px solid rgb(34, 139, 34);
+        }
+        .game-card.scrimmage {
+            border-left: 4px solid #2196f3;
+        }
+        .game-card.cancelled {
+            opacity: 0.5;
+            text-decoration: line-through;
+        }
+        .game-card.postponed {
+            opacity: 0.7;
+        }
+        .game-date-box {
+            text-align: center;
+            min-width: 50px;
+        }
+        .game-date-box .month {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #666;
+        }
+        .game-date-box .day {
+            font-size: 24px;
+            font-weight: bold;
+            color: rgb(34, 139, 34);
+        }
+        .game-date-box .weekday {
+            font-size: 10px;
+            color: #999;
+        }
+        .game-info {
+            flex: 1;
+        }
+        .game-time {
+            font-weight: 600;
+            font-size: 16px;
+        }
+        .game-location {
+            font-size: 13px;
+            color: #666;
+        }
+        .game-opponent {
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .game-type-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        .game-type-badge.practice {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+        .game-type-badge.scrimmage {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+        .game-type-badge.home {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .game-type-badge.away {
+            background: #fff3e0;
+            color: #e65100;
+        }
+        .game-status {
+            font-size: 11px;
+            color: #c33;
+            margin-top: 3px;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+        .footer a {
+            color: rgb(34, 139, 34);
+            text-decoration: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .container {
+                padding: 15px;
+            }
+            .header {
+                margin: -15px -15px 15px -15px;
+            }
+            .next-game-date {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{{ team.computed_display_name }}</h1>
+            <div class="league">{{ team.league }}</div>
+            <div class="season">{{ season_name }}</div>
+        </div>
+
+        {% if next_game %}
+        <div class="next-game">
+            <div class="next-game-label">Next Game</div>
+            <div class="next-game-date">
+                {{ next_game.game_date.strftime('%A, %B %d') if next_game.game_date else 'TBD' }}
+            </div>
+            <div class="next-game-time">
+                {{ next_game.game_date.strftime('%I:%M %p') if next_game.game_date else '' }}
+            </div>
+            <div class="next-game-details">
+                {{ next_game.location or 'Location TBD' }}
+            </div>
+            {% if next_game.game_type != 'practice' %}
+            <div class="next-game-opponent">
+                {% if next_game.home_ID == team.team_ID %}
+                    vs {{ next_game.away_team.computed_display_name if next_game.away_team else 'TBD' }}
+                    <span class="next-game-type">Home</span>
+                {% else %}
+                    @ {{ next_game.home_team.computed_display_name if next_game.home_team else 'TBD' }}
+                    <span class="next-game-type">Away</span>
+                {% endif %}
+                {% if next_game.is_scrimmage %}
+                    <span class="next-game-type">Scrimmage</span>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="next-game-opponent">
+                <span class="next-game-type">Practice</span>
+            </div>
+            {% endif %}
+        </div>
+        {% elif not upcoming_games %}
+        <div class="no-games">
+            <p>No upcoming games scheduled.</p>
+        </div>
+        {% endif %}
+
+        {% if upcoming_games %}
+        <div class="section">
+            <div class="section-title">Upcoming Schedule</div>
+            {% for game in upcoming_games %}
+            <div class="game-card {{ 'practice' if game.game_type == 'practice' else 'scrimmage' if game.is_scrimmage else 'game' }} {{ game.status }}">
+                <div class="game-date-box">
+                    <div class="month">{{ game.game_date.strftime('%b') if game.game_date else '' }}</div>
+                    <div class="day">{{ game.game_date.strftime('%d') if game.game_date else '?' }}</div>
+                    <div class="weekday">{{ game.game_date.strftime('%a') if game.game_date else '' }}</div>
+                </div>
+                <div class="game-info">
+                    <div class="game-time">
+                        {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
+                        {% if game.game_type == 'practice' %}
+                            <span class="game-type-badge practice">Practice</span>
+                        {% elif game.is_scrimmage %}
+                            <span class="game-type-badge scrimmage">Scrimmage</span>
+                        {% elif game.home_ID == team.team_ID %}
+                            <span class="game-type-badge home">Home</span>
+                        {% else %}
+                            <span class="game-type-badge away">Away</span>
+                        {% endif %}
+                    </div>
+                    <div class="game-location">{{ game.location or 'Location TBD' }}</div>
+                    {% if game.game_type != 'practice' %}
+                    <div class="game-opponent">
+                        {% if game.home_ID == team.team_ID %}
+                            vs {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                        {% else %}
+                            @ {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    {% if game.status != 'scheduled' %}
+                    <div class="game-status">{{ game.status|title }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if past_games %}
+        <div class="section">
+            <div class="section-title">Past Games</div>
+            {% for game in past_games|reverse %}
+            <div class="game-card {{ 'practice' if game.game_type == 'practice' else 'scrimmage' if game.is_scrimmage else 'game' }} {{ game.status }}" style="opacity: 0.7;">
+                <div class="game-date-box">
+                    <div class="month">{{ game.game_date.strftime('%b') if game.game_date else '' }}</div>
+                    <div class="day">{{ game.game_date.strftime('%d') if game.game_date else '?' }}</div>
+                    <div class="weekday">{{ game.game_date.strftime('%a') if game.game_date else '' }}</div>
+                </div>
+                <div class="game-info">
+                    <div class="game-time">
+                        {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
+                        {% if game.game_type == 'practice' %}
+                            <span class="game-type-badge practice">Practice</span>
+                        {% elif game.is_scrimmage %}
+                            <span class="game-type-badge scrimmage">Scrimmage</span>
+                        {% elif game.home_ID == team.team_ID %}
+                            <span class="game-type-badge home">Home</span>
+                        {% else %}
+                            <span class="game-type-badge away">Away</span>
+                        {% endif %}
+                    </div>
+                    <div class="game-location">{{ game.location or 'Location TBD' }}</div>
+                    {% if game.game_type != 'practice' %}
+                    <div class="game-opponent">
+                        {% if game.home_ID == team.team_ID %}
+                            vs {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                        {% else %}
+                            @ {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    {% if game.status != 'scheduled' and game.status != 'completed' %}
+                    <div class="game-status">{{ game.status|title }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="footer">
+            <p>South Durham Little League</p>
+            <p><a href="https://southdurhamlittleleague.org">southdurhamlittleleague.org</a></p>
+        </div>
+    </div>
+</body>
+</html>
