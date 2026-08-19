@@ -126,6 +126,9 @@
                     <a href="{{ url_for('seasons.schedule_settings', year=current_season_year, is_spring=current_season_is_spring) }}">Div. Days & Dates</a>
                     <a href="{{ url_for('leagues.field_rules') }}">Div. Field Pref.</a>
                     <a href="{{ url_for('seasons.blackout_dates', year=current_season_year, is_spring=current_season_is_spring) }}">Blackout Dates</a>
+                    <div class="dropdown-divider"></div>
+                    <a href="{{ url_for('fields.properties') }}">Field Properties</a>
+                    <a href="{{ url_for('fields.availability') }}">Field Availability</a>
                     <a href="{{ url_for('fields.manage_allocations', year=current_season_year, is_spring=current_season_is_spring) }}">Field Allocations</a>
                     <div class="dropdown-divider"></div>
                     <a href="{{ url_for('scheduler.index', year=current_season_year, is_spring=current_season_is_spring) }}">Generate Schedule</a>
@@ -198,7 +201,8 @@
                     <a href="{{ url_for('fields.allocations') }}">Allocations</a>
                     {% if current_user.can_edit_schedule() %}
                     <div class="dropdown-divider"></div>
-                    <a href="{{ url_for('fields.properties') }}">Properties & Availability</a>
+                    <a href="{{ url_for('fields.properties') }}">Properties</a>
+                    <a href="{{ url_for('fields.availability') }}">Availability</a>
                     <a href="{{ url_for('fields.time_restrictions') }}">Time Restrictions</a>
                     <a href="{{ url_for('fields.copy_allocations') }}">Copy Allocations</a>
                     {% endif %}

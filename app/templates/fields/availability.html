@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Field Availability{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-toggle {
+        display: inline-flex;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .filter-toggle a {
+        padding: 8px 16px;
+        text-decoration: none;
+        color: #333;
+        background: #fff;
+        border-right: 1px solid #ddd;
+    }
+    .filter-toggle a:last-child {
+        border-right: none;
+    }
+    .filter-toggle a:hover {
+        background: #f5f5f5;
+    }
+    .filter-toggle a.active {
+        background: rgb(34, 139, 34);
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Field Availability</h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('fields.properties') }}" class="btn btn-outline">Field Properties</a>
+        <a href="{{ url_for('fields.index') }}" class="btn btn-outline">All Fields</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+    <p class="text-muted" style="margin: 0;">
+        Set start dates for fields not available until a certain date (e.g., under construction).
+        Click "Manage Blackouts" to set dates when a specific field is unavailable.
+    </p>
+    <div class="filter-toggle">
+        <a href="{{ url_for('fields.availability', ownership='sdll') }}"
+           class="{{ 'active' if ownership_filter == 'sdll' else '' }}">SDLL Fields</a>
+        <a href="{{ url_for('fields.availability', ownership='away') }}"
+           class="{{ 'active' if ownership_filter == 'away' else '' }}">Away Fields</a>
+        <a href="{{ url_for('fields.availability', ownership='all') }}"
+           class="{{ 'active' if ownership_filter == 'all' else '' }}">All</a>
+    </div>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Field</th>
+                <th style="width: 180px;">Start Date</th>
+                <th style="width: 150px;">Blackout Dates</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for field in fields %}
+            {% if field %}
+            <tr id="field-{{ field.ID }}">
+                <td><strong>{{ field.location_title }}</strong></td>
+                <td>
+                    <form method="POST" style="display: flex; gap: 5px;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="update_start_date">
+                        <input type="hidden" name="field_id" value="{{ field.ID }}">
+                        <input type="date" name="start_date" class="form-control" style="width: 130px;"
+                               value="{{ field.start_date.strftime('%Y-%m-%d') if field.start_date else '' }}">
+                        <button type="submit" class="btn btn-outline btn-sm">Set</button>
+                    </form>
+                </td>
+                <td>
+                    <a href="{{ url_for('fields.field_blackouts', field_id=field.ID) }}" class="btn btn-outline btn-sm">
+                        Manage Blackouts
+                    </a>
+                </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

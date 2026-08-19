@@ -515,6 +515,52 @@ def properties():
     )
 
 
+@fields_bp.route('/availability', methods=['GET', 'POST'])
+@login_required
+def availability():
+    """Manage field availability - start dates and blackout dates"""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to manage field availability.', 'error')
+        return redirect(url_for('fields.index'))
+
+    ownership_filter = request.args.get('ownership', 'sdll')
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+
+        if action == 'update_start_date':
+            field_id = int(request.form.get('field_id'))
+            start_date_str = request.form.get('start_date')
+
+            field = Field.query.get(field_id)
+            if field:
+                from datetime import datetime
+                if start_date_str:
+                    field.start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                else:
+                    field.start_date = None
+                db.session.commit()
+                logger.info(f'Updated start date for {field.location_title}: {field.start_date}')
+                flash(f'Updated start date for {field.location_title}', 'success')
+
+            return redirect(url_for('fields.availability', ownership=ownership_filter) + f'#field-{field_id}')
+
+    # GET - filter fields by ownership
+    query = Field.query.filter_by(active=1)
+    if ownership_filter == 'sdll':
+        query = query.filter_by(is_owned=1)
+    elif ownership_filter == 'away':
+        query = query.filter_by(is_owned=0)
+
+    fields = query.order_by(Field.location_title).all()
+
+    return render_template(
+        'fields/availability.html',
+        fields=fields,
+        ownership_filter=ownership_filter
+    )
+
+
 @fields_bp.route('/time-restrictions', methods=['GET', 'POST'])
 @login_required
 def time_restrictions():
