@@ -312,6 +312,9 @@ def create_all_slots(year, is_spring):
 @login_required
 def generate(year, is_spring):
     """Phase 2: Generate a proposed schedule (fills in matchups, dates, fields)."""
+    import sys
+    print(f"[ROUTE] Generate called for {year}/{is_spring}", flush=True)
+
     if not current_user.can_edit_schedule():
         flash('You do not have permission to generate schedules.', 'error')
         return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
@@ -329,12 +332,16 @@ def generate(year, is_spring):
     # Optionally filter to specific leagues
     selected_leagues = request.form.getlist('leagues')
 
+    print(f"[ROUTE] Starting ScheduleGenerator", flush=True)
     try:
         import time
         start_time = time.time()
+        print(f"[ROUTE] Creating generator object", flush=True)
         generator = ScheduleGenerator(year, is_spring)
+        print(f"[ROUTE] Calling generate()", flush=True)
         result = generator.generate(start_fresh=start_fresh)
         generation_time = time.time() - start_time
+        print(f"[ROUTE] Generation complete in {generation_time:.2f}s", flush=True)
 
         # Check if generation produced anything
         summary = result['summary']

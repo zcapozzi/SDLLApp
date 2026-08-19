@@ -1624,11 +1624,9 @@ class ScheduleGenerator:
             dict with 'games', 'violations', 'warnings', 'assignments'
         """
         import time as time_module
-        import logging
-        logger = logging.getLogger(__name__)
 
         gen_start = time_module.time()
-        logger.info(f"[SCHEDULER] Starting generation for {self.year}/{self.is_spring}")
+        print(f"[SCHEDULER] Starting generation for {self.year}/{self.is_spring}", flush=True)
 
         self.proposed_games = []
         self.violations = []
@@ -1649,12 +1647,12 @@ class ScheduleGenerator:
         t0 = time_module.time()
         if not self._validate_prerequisites():
             return self._build_result()
-        logger.info(f"[SCHEDULER] Prerequisites validated in {time_module.time() - t0:.2f}s")
+        print(f"[SCHEDULER] Prerequisites validated in {time_module.time() - t0:.2f}s", flush=True)
 
         # Get league configurations
         t0 = time_module.time()
         league_configs = LeagueSeason.get_by_season(self.year, self.is_spring)
-        logger.info(f"[SCHEDULER] Got {len(league_configs)} league configs in {time_module.time() - t0:.2f}s")
+        print(f"[SCHEDULER] Got {len(league_configs)} league configs in {time_module.time() - t0:.2f}s", flush=True)
 
         # =================================================================
         # BATCH LOAD ALL DATA UPFRONT (minimizes DB round-trips)
@@ -1705,7 +1703,7 @@ class ScheduleGenerator:
             for bo in all_blackouts:
                 self._field_blackouts_cache[bo.field_ID].append(bo.blackout_date)
 
-        logger.info(f"[SCHEDULER] Batch loaded: {len(all_leagues)} leagues, {len(self._all_field_slots)} slots, {len(all_teams)} teams, {len(all_games)} games, {len(all_fields)} fields in {time_module.time() - t0:.2f}s")
+        print(f"[SCHEDULER] Batch loaded: {len(all_leagues)} leagues, {len(self._all_field_slots)} slots, {len(all_teams)} teams, {len(all_games)} games, {len(all_fields)} fields in {time_module.time() - t0:.2f}s", flush=True)
         # =================================================================
 
         # Sort leagues to prioritize those with FEWER game day options
@@ -1736,8 +1734,8 @@ class ScheduleGenerator:
             after = len(self.proposed_games)
             games_added = after - before
             phase1_game_count += games_added
-            logger.info(f"[SCHEDULER] Phase1 {config.league}: +{games_added} games in {time_module.time() - t1:.2f}s")
-        logger.info(f"[SCHEDULER] Phase 1 complete: {phase1_game_count} games in {time_module.time() - t0:.2f}s")
+            print(f"[SCHEDULER] Phase1 {config.league}: +{games_added} games in {time_module.time() - t1:.2f}s", flush=True)
+        print(f"[SCHEDULER] Phase 1 complete: {phase1_game_count} games in {time_module.time() - t0:.2f}s", flush=True)
 
         # Phase 2: Schedule all practices for all leagues
         t0 = time_module.time()
@@ -1749,8 +1747,8 @@ class ScheduleGenerator:
             after = len(self.proposed_games)
             practices_added = after - before
             phase2_practice_count += practices_added
-            logger.info(f"[SCHEDULER] Phase2 {config.league}: +{practices_added} practices in {time_module.time() - t1:.2f}s")
-        logger.info(f"[SCHEDULER] Phase 2 complete: {phase2_practice_count} practices in {time_module.time() - t0:.2f}s")
+            print(f"[SCHEDULER] Phase2 {config.league}: +{practices_added} practices in {time_module.time() - t1:.2f}s", flush=True)
+        print(f"[SCHEDULER] Phase 2 complete: {phase2_practice_count} practices in {time_module.time() - t0:.2f}s", flush=True)
 
         # Debug: Report phase results
         total_time_ranges = sum(len(ranges) for ranges in self._global_field_time_ranges.values())
@@ -1782,9 +1780,9 @@ class ScheduleGenerator:
         t0 = time_module.time()
         validator = ScheduleValidator(self.year, self.is_spring)
         self.violations = validator.validate(self.proposed_games)
-        logger.info(f"[SCHEDULER] Validation complete: {len(self.violations)} violations in {time_module.time() - t0:.2f}s")
+        print(f"[SCHEDULER] Validation complete: {len(self.violations)} violations in {time_module.time() - t0:.2f}s", flush=True)
 
-        logger.info(f"[SCHEDULER] Total generation time: {time_module.time() - gen_start:.2f}s")
+        print(f"[SCHEDULER] Total generation time: {time_module.time() - gen_start:.2f}s", flush=True)
         return self._build_result()
 
     def _validate_prerequisites(self):
