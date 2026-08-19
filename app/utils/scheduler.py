@@ -1623,6 +1623,13 @@ class ScheduleGenerator:
         Returns:
             dict with 'games', 'violations', 'warnings', 'assignments'
         """
+        import time as time_module
+        import logging
+        logger = logging.getLogger(__name__)
+
+        gen_start = time_module.time()
+        logger.info(f"[SCHEDULER] Starting generation for {self.year}/{self.is_spring}")
+
         self.proposed_games = []
         self.violations = []
         self.warnings = []
@@ -1639,15 +1646,20 @@ class ScheduleGenerator:
         self._team_week_games = defaultdict(int)
 
         # Validate prerequisites
+        t0 = time_module.time()
         if not self._validate_prerequisites():
             return self._build_result()
+        logger.info(f"[SCHEDULER] Prerequisites validated in {time_module.time() - t0:.2f}s")
 
         # Get league configurations
+        t0 = time_module.time()
         league_configs = LeagueSeason.get_by_season(self.year, self.is_spring)
+        logger.info(f"[SCHEDULER] Got {len(league_configs)} league configs in {time_module.time() - t0:.2f}s")
 
         # =================================================================
         # BATCH LOAD ALL DATA UPFRONT (minimizes DB round-trips)
         # =================================================================
+        t0 = time_module.time()
 
         # Pre-load all leagues into cache
         all_leagues = League.query.filter_by(active=1).all()
@@ -1693,6 +1705,7 @@ class ScheduleGenerator:
             for bo in all_blackouts:
                 self._field_blackouts_cache[bo.field_ID].append(bo.blackout_date)
 
+        logger.info(f"[SCHEDULER] Batch loaded: {len(all_leagues)} leagues, {len(self._all_field_slots)} slots, {len(all_teams)} teams, {len(all_games)} games, {len(all_fields)} fields in {time_module.time() - t0:.2f}s")
         # =================================================================
 
         # Sort leagues to prioritize those with FEWER game day options
@@ -1714,22 +1727,30 @@ class ScheduleGenerator:
         # This ensures games get first dibs on all field slots across all leagues
 
         # Phase 1: Schedule all games for all leagues
+        t0 = time_module.time()
         phase1_game_count = 0
         for config in league_configs:
+            t1 = time_module.time()
             before = len(self.proposed_games)
             self._generate_games_only(config, start_fresh)
             after = len(self.proposed_games)
             games_added = after - before
             phase1_game_count += games_added
+            logger.info(f"[SCHEDULER] Phase1 {config.league}: +{games_added} games in {time_module.time() - t1:.2f}s")
+        logger.info(f"[SCHEDULER] Phase 1 complete: {phase1_game_count} games in {time_module.time() - t0:.2f}s")
 
         # Phase 2: Schedule all practices for all leagues
+        t0 = time_module.time()
         phase2_practice_count = 0
         for config in league_configs:
+            t1 = time_module.time()
             before = len(self.proposed_games)
             self._generate_practices_only(config, start_fresh)
             after = len(self.proposed_games)
             practices_added = after - before
             phase2_practice_count += practices_added
+            logger.info(f"[SCHEDULER] Phase2 {config.league}: +{practices_added} practices in {time_module.time() - t1:.2f}s")
+        logger.info(f"[SCHEDULER] Phase 2 complete: {phase2_practice_count} practices in {time_module.time() - t0:.2f}s")
 
         # Debug: Report phase results
         total_time_ranges = sum(len(ranges) for ranges in self._global_field_time_ranges.values())
@@ -1758,9 +1779,12 @@ class ScheduleGenerator:
                 })
 
         # Validate the generated schedule
+        t0 = time_module.time()
         validator = ScheduleValidator(self.year, self.is_spring)
         self.violations = validator.validate(self.proposed_games)
+        logger.info(f"[SCHEDULER] Validation complete: {len(self.violations)} violations in {time_module.time() - t0:.2f}s")
 
+        logger.info(f"[SCHEDULER] Total generation time: {time_module.time() - gen_start:.2f}s")
         return self._build_result()
 
     def _validate_prerequisites(self):
