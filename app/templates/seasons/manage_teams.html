@@ -95,7 +95,7 @@
                             <th>Team Name</th>
                             <th style="width: 120px;">Practice Days</th>
                             <th style="width: 100px;">Status</th>
-                            <th style="width: 220px;">Actions</th>
+                            <th style="width: 340px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -130,6 +130,13 @@
                                         onclick="setTeamSettings({{ team.team_ID }}, '{{ team.team_name or '' }}', '{{ team.display_name }}', '{{ team.practice_days or '' }}')">
                                     Edit
                                 </button>
+                                {% if team.schedule_token and not team.is_placeholder %}
+                                <button type="button" class="btn btn-sm" style="background: #17a2b8; color: white;"
+                                        onclick="copyScheduleLink('{{ team.schedule_token }}', this)"
+                                        title="Copy public schedule link">
+                                    Copy Schedule Link
+                                </button>
+                                {% endif %}
                                 <form method="POST" style="display: inline;"
                                       onsubmit="return confirm('Remove this team?');">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -245,5 +252,35 @@ function closeNameModal() {
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeNameModal();
 });
+
+function copyScheduleLink(token, button) {
+    var url = window.location.origin + '/s/' + token;
+    navigator.clipboard.writeText(url).then(function() {
+        // Show brief "Copied!" feedback
+        var originalText = button.textContent;
+        button.textContent = 'Copied!';
+        button.style.background = '#28a745';
+        setTimeout(function() {
+            button.textContent = originalText;
+            button.style.background = '#17a2b8';
+        }, 1500);
+    }).catch(function(err) {
+        // Fallback for older browsers
+        var textarea = document.createElement('textarea');
+        textarea.value = url;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+
+        var originalText = button.textContent;
+        button.textContent = 'Copied!';
+        button.style.background = '#28a745';
+        setTimeout(function() {
+            button.textContent = originalText;
+            button.style.background = '#17a2b8';
+        }, 1500);
+    });
+}
 </script>
 {% endblock %}

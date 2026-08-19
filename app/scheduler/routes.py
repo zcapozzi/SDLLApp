@@ -330,8 +330,11 @@ def generate(year, is_spring):
     selected_leagues = request.form.getlist('leagues')
 
     try:
+        import time
+        start_time = time.time()
         generator = ScheduleGenerator(year, is_spring)
         result = generator.generate(start_fresh=start_fresh)
+        generation_time = time.time() - start_time
 
         # Check if generation produced anything
         summary = result['summary']
@@ -358,7 +361,7 @@ def generate(year, is_spring):
         action = 'Regenerated (start fresh)' if start_fresh else 'Generated'
         flash(
             f'{action} {summary["total_games"]} games, {summary["total_practices"]} practices, '
-            f'{summary["total_scrimmages"]} scrimmages. '
+            f'{summary["total_scrimmages"]} scrimmages in {generation_time:.1f}s. '
             f'{summary["hard_violations"]} hard violations, {summary["soft_violations"]} soft violations.',
             'success' if summary['hard_violations'] == 0 else 'warning'
         )
@@ -884,13 +887,16 @@ def start_fresh(year, is_spring):
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
 
     try:
+        import time
         # Clear existing assignments
         cleared = Game.clear_slot_assignments(year, is_spring)
         logger.info(f'Cleared {cleared} game assignments for {season_name}')
 
-        # Regenerate
+        # Regenerate with timing
+        start_time = time.time()
         generator = ScheduleGenerator(year, is_spring)
         result = generator.generate(start_fresh=True)
+        generation_time = time.time() - start_time
 
         # Store in database for persistence
         user_id = current_user.ID if current_user.is_authenticated else None
@@ -899,7 +905,7 @@ def start_fresh(year, is_spring):
         summary = result['summary']
         flash(
             f'Started fresh: Cleared {cleared} existing assignments. '
-            f'Generated {summary["total_games"]} games, {summary["total_practices"]} practices. '
+            f'Generated {summary["total_games"]} games, {summary["total_practices"]} practices in {generation_time:.1f}s. '
             f'{summary["hard_violations"]} hard violations, {summary["soft_violations"]} soft violations.',
             'success' if summary['hard_violations'] == 0 else 'warning'
         )

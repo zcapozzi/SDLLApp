@@ -1310,6 +1310,7 @@ class ScheduleGenerator:
         self._practice_slot_counts = defaultdict(int)  # Tracks practice count per (field_id, datetime) - f1 rule
         self._practice_slot_leagues = {}  # Tracks which league is using each (field_id, datetime) - same-league sharing only
         self._team_practice_counts = defaultdict(int)  # Tracks total practice count per team for balance
+        self._league_cache = {}  # Cache: league_name -> League object (avoids repeated DB queries)
 
         # Load season-wide blackout dates
         from app.models.season_blackout import SeasonBlackout
@@ -1324,7 +1325,14 @@ class ScheduleGenerator:
 
     def _get_activity_duration_minutes(self, league, is_practice=False, is_no_time_limit=False):
         """Get the duration in minutes for an activity based on league settings."""
-        league_obj = League.get_by_name(league) if isinstance(league, str) else league
+        # Use cached league object to avoid repeated DB queries
+        if isinstance(league, str):
+            league_obj = self._league_cache.get(league)
+            if not league_obj:
+                # Fallback to DB query if not in cache (shouldn't happen normally)
+                league_obj = League.get_by_name(league)
+        else:
+            league_obj = league
         if is_practice:
             return league_obj.get_practice_duration() if league_obj else PRACTICE_DURATION_MINUTES
         return league_obj.get_game_duration(is_no_time_limit=is_no_time_limit) if league_obj else GAME_DURATION_MINUTES
@@ -1338,23 +1346,44 @@ class ScheduleGenerator:
 
         Practices can share with other practices from the same league
         (capacity is checked separately via f1 rule).
+
+        Optimization: List is kept sorted by start time, so we use binary search
+        to find only entries that could potentially overlap.
         """
         if not field_id or not start_dt:
             return True  # Can't check without field/time
 
         date_str = start_dt.date().isoformat() if hasattr(start_dt, 'date') else str(start_dt)[:10]
         key = (field_id, date_str)
+        entries = self._global_field_time_ranges[key]
+
+        if not entries:
+            return True
+
         end_dt = start_dt + timedelta(minutes=duration_minutes)
 
-        for existing in self._global_field_time_ranges[key]:
+        # Binary search to find first entry that starts at or after end_dt
+        # We only need to check entries with start < end_dt (those that start before we end)
+        lo, hi = 0, len(entries)
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if entries[mid]['start'] < end_dt:
+                lo = mid + 1
+            else:
+                hi = mid
+        # Now check entries 0..lo-1 (those that start before we end)
+
+        for i in range(lo):
+            existing = entries[i]
             existing_start = existing['start']
             existing_end = existing['end']
-            existing_is_practice = existing.get('is_practice', False)
-            existing_league = existing.get('league')
 
-            # Check for time overlap
+            # Check for time overlap: we start before they end AND we end after they start
             if start_dt < existing_end and end_dt > existing_start:
                 # There's an overlap - check if it's allowed
+                existing_is_practice = existing.get('is_practice', False)
+                existing_league = existing.get('league')
+
                 # Two practices from the same league can share (capacity checked elsewhere)
                 if is_practice and existing_is_practice and league == existing_league:
                     continue  # Same-league practice sharing is allowed
@@ -1365,7 +1394,10 @@ class ScheduleGenerator:
         return True
 
     def _add_field_time_usage(self, field_id, start_dt, duration_minutes, league, is_practice=False):
-        """Record that a field is being used for an activity during a time range."""
+        """Record that a field is being used for an activity during a time range.
+
+        Maintains the list sorted by start time for efficient overlap checking.
+        """
         if not field_id or not start_dt:
             return
 
@@ -1373,12 +1405,23 @@ class ScheduleGenerator:
         key = (field_id, date_str)
         end_dt = start_dt + timedelta(minutes=duration_minutes)
 
-        self._global_field_time_ranges[key].append({
+        entry = {
             'start': start_dt,
             'end': end_dt,
             'league': league,
             'is_practice': is_practice
-        })
+        }
+
+        # Insert in sorted order by start time using binary search
+        entries = self._global_field_time_ranges[key]
+        lo, hi = 0, len(entries)
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if entries[mid]['start'] < start_dt:
+                lo = mid + 1
+            else:
+                hi = mid
+        entries.insert(lo, entry)
 
     def generate(self, start_fresh=False):
         """Generate a complete proposed schedule.
@@ -1413,6 +1456,10 @@ class ScheduleGenerator:
 
         # Get league configurations
         league_configs = LeagueSeason.get_by_season(self.year, self.is_spring)
+
+        # Pre-load all leagues into cache to avoid repeated DB queries
+        all_leagues = League.query.filter_by(active=1).all()
+        self._league_cache = {lg.display_name: lg for lg in all_leagues}
 
         # Sort leagues to prioritize those with FEWER game day options
         # This ensures Saturday-only leagues (like Tee Ball) get first dibs on Saturday slots
