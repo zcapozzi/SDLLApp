@@ -701,7 +701,7 @@ class ScheduleValidator:
             actually_empty = []
             for field_id in potentially_empty:
                 # First check if field is available on this specific date (start date, blackouts)
-                field_obj = Field.query.get(field_id)
+                field_obj = self._fields_cache.get(field_id)
                 if field_obj and not field_obj.is_available_on_date(pdate):
                     continue  # Field not available on this date
 
@@ -719,7 +719,7 @@ class ScheduleValidator:
                 # Sharing occurred when other fields were truly empty - violation!
                 for shared_field in shared_fields:
                     shared_count = field_counts[shared_field]
-                    field_obj = Field.query.get(shared_field)
+                    field_obj = self._fields_cache.get(shared_field)
                     field_name = field_obj.location_title if field_obj else f'Field {shared_field}'
 
                     violations_found.append({
@@ -788,7 +788,7 @@ class ScheduleValidator:
     def _get_activity_duration(self, game):
         """Get the duration in minutes for an activity based on its type and league."""
         league_name = game.league if hasattr(game, 'league') else None
-        league_obj = League.get_by_name(league_name) if league_name else None
+        league_obj = self._league_cache.get(league_name) if league_name else None
 
         if self._is_practice(game):
             return league_obj.get_practice_duration() if league_obj else PRACTICE_DURATION_MINUTES
@@ -1493,6 +1493,13 @@ class ScheduleGenerator:
         self._team_practice_counts = defaultdict(int)  # Tracks total practice count per team for balance
         self._league_cache = {}  # Cache: league_name -> League object (avoids repeated DB queries)
 
+        # Batch-loaded caches (populated in generate() to minimize DB round-trips)
+        self._all_field_slots = None  # All FieldSlot objects for season
+        self._teams_by_league = {}  # league_name -> list of TeamSeason
+        self._games_by_league = {}  # league_name -> list of Game
+        self._fields_cache = {}  # field_id -> Field object
+        self._field_blackouts_cache = {}  # field_id -> list of blackout dates
+
         # Load season-wide blackout dates
         from app.models.season_blackout import SeasonBlackout
         self._season_blackout_dates = SeasonBlackout.get_blackout_dates_set(year, is_spring)
@@ -1638,9 +1645,54 @@ class ScheduleGenerator:
         # Get league configurations
         league_configs = LeagueSeason.get_by_season(self.year, self.is_spring)
 
-        # Pre-load all leagues into cache to avoid repeated DB queries
+        # =================================================================
+        # BATCH LOAD ALL DATA UPFRONT (minimizes DB round-trips)
+        # =================================================================
+
+        # Pre-load all leagues into cache
         all_leagues = League.query.filter_by(active=1).all()
         self._league_cache = {lg.display_name: lg for lg in all_leagues}
+
+        # Pre-load ALL field slots for the season (single query instead of N per league)
+        self._all_field_slots = FieldSlot.get_by_season(self.year, self.is_spring)
+
+        # Pre-load ALL teams for the season, grouped by league
+        all_teams = TeamSeason.query.filter_by(
+            year=self.year,
+            is_spring=self.is_spring,
+            active=1,
+            is_placeholder=0
+        ).all()
+        self._teams_by_league = defaultdict(list)
+        for team in all_teams:
+            self._teams_by_league[team.league].append(team)
+
+        # Pre-load ALL games for the season, grouped by league
+        all_games = Game.query.filter_by(
+            year=self.year,
+            is_spring=self.is_spring,
+            active=1
+        ).all()
+        self._games_by_league = defaultdict(list)
+        for game in all_games:
+            self._games_by_league[game.league].append(game)
+
+        # Pre-load ALL fields
+        all_fields = Field.query.filter_by(active=1).all()
+        self._fields_cache = {f.ID: f for f in all_fields}
+
+        # Pre-load ALL field blackouts for fields we care about
+        field_ids = [f.ID for f in all_fields]
+        if field_ids:
+            from app.models.field_blackout import FieldBlackout
+            all_blackouts = FieldBlackout.query.filter(
+                FieldBlackout.field_id.in_(field_ids)
+            ).all()
+            self._field_blackouts_cache = defaultdict(list)
+            for bo in all_blackouts:
+                self._field_blackouts_cache[bo.field_id].append(bo.blackout_date)
+
+        # =================================================================
 
         # Sort leagues to prioritize those with FEWER game day options
         # This ensures Saturday-only leagues (like Tee Ball) get first dibs on Saturday slots
@@ -1762,14 +1814,8 @@ class ScheduleGenerator:
         """
         league_name = config.league
 
-        # Get teams for this league
-        teams = TeamSeason.query.filter_by(
-            year=self.year,
-            is_spring=self.is_spring,
-            league=league_name,
-            active=1,
-            is_placeholder=0
-        ).all()
+        # Get teams for this league (from cache)
+        teams = self._teams_by_league.get(league_name, [])
 
         if len(teams) < 2:
             self.warnings.append({
@@ -1778,19 +1824,14 @@ class ScheduleGenerator:
             })
             return
 
-        # Get league object for field rules
-        league = League.get_by_name(league_name)
+        # Get league object for field rules (from cache)
+        league = self._league_cache.get(league_name)
 
-        # Get available field slots
-        all_slots = FieldSlot.get_by_season(self.year, self.is_spring)
+        # Get available field slots (from cache)
+        all_slots = self._all_field_slots
 
-        # Get existing game slots for this league
-        existing_games = Game.query.filter_by(
-            year=self.year,
-            is_spring=self.is_spring,
-            league=league_name,
-            active=1
-        ).all()
+        # Get existing game slots for this league (from cache)
+        existing_games = self._games_by_league.get(league_name, [])
 
         # Separate by type
         regular_slots = [g for g in existing_games if g.game_type == 'regular']
@@ -1825,31 +1866,20 @@ class ScheduleGenerator:
         """
         league_name = config.league
 
-        # Get teams for this league
-        teams = TeamSeason.query.filter_by(
-            year=self.year,
-            is_spring=self.is_spring,
-            league=league_name,
-            active=1,
-            is_placeholder=0
-        ).all()
+        # Get teams for this league (from cache)
+        teams = self._teams_by_league.get(league_name, [])
 
         if len(teams) < 2:
             return  # Warning already issued in games phase
 
-        # Get league object for field rules
-        league = League.get_by_name(league_name)
+        # Get league object for field rules (from cache)
+        league = self._league_cache.get(league_name)
 
-        # Get available field slots
-        all_slots = FieldSlot.get_by_season(self.year, self.is_spring)
+        # Get available field slots (from cache)
+        all_slots = self._all_field_slots
 
-        # Get existing practice slots for this league
-        existing_games = Game.query.filter_by(
-            year=self.year,
-            is_spring=self.is_spring,
-            league=league_name,
-            active=1
-        ).all()
+        # Get existing practice slots for this league (from cache)
+        existing_games = self._games_by_league.get(league_name, [])
         practice_slots = [g for g in existing_games if g.game_type == 'practice']
 
         # If start_fresh, treat all as unassigned
@@ -1897,14 +1927,8 @@ class ScheduleGenerator:
         """
         league_name = config.league
 
-        # Get teams for this league
-        teams = TeamSeason.query.filter_by(
-            year=self.year,
-            is_spring=self.is_spring,
-            league=league_name,
-            active=1,
-            is_placeholder=0
-        ).all()
+        # Get teams for this league (from cache)
+        teams = self._teams_by_league.get(league_name, [])
 
         if len(teams) < 2:
             self.warnings.append({
@@ -1913,19 +1937,14 @@ class ScheduleGenerator:
             })
             return
 
-        # Get league object for field rules
-        league = League.get_by_name(league_name)
+        # Get league object for field rules (from cache)
+        league = self._league_cache.get(league_name)
 
-        # Get available field slots
-        all_slots = FieldSlot.get_by_season(self.year, self.is_spring)
+        # Get available field slots (from cache)
+        all_slots = self._all_field_slots
 
-        # Get existing game slots for this league
-        existing_games = Game.query.filter_by(
-            year=self.year,
-            is_spring=self.is_spring,
-            league=league_name,
-            active=1
-        ).all()
+        # Get existing game slots for this league (from cache)
+        existing_games = self._games_by_league.get(league_name, [])
 
         # Separate by type
         regular_slots = [g for g in existing_games if g.game_type == 'regular']
