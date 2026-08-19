@@ -306,6 +306,31 @@ Soft rules represent preferences for schedule quality. The scheduler should sati
 
 ---
 
+### Rule f2: Unnecessary Field Sharing
+
+**Description:** Teams should not share a practice field when another eligible practice field for that league is empty at the same time. Coaches prefer being alone at a non-preferred field over sharing their preferred field with another team.
+
+**Why it matters:** Coaches value having the field to themselves for more effective practice sessions. If a second eligible field is available and empty, teams shouldn't be forced to share.
+
+**Validation logic:**
+- For each practice time slot, identify which fields are being used
+- Check if any field has 2+ teams (sharing)
+- If sharing is occurring, check if there are other eligible practice fields that are empty
+- Flag violations where sharing happens while empty fields are available
+
+**Example violation:**
+- Teams A and B both practice at Herndon 1 at 5:30pm on Tuesday
+- Herndon 2 (also eligible for their league) is empty at that same time
+- This is flagged because Team B could have practiced alone at Herndon 2
+
+**Generator behavior:**
+- When assigning practices, the scheduler uses a two-pass approach:
+  1. First pass: Look for an EMPTY field (no other teams)
+  2. Second pass: If no empty fields exist, allow sharing (same league only)
+- This ensures teams only share when all eligible fields are occupied
+
+---
+
 ### Rule e2: Game Day Balance
 
 **Description:** All teams in a league should play on the same game days. When games are scheduled on a particular date, all teams should be playing - no team should sit out while others play.
@@ -400,20 +425,32 @@ Leagues can have field restrictions that must be respected:
 These are not rules (violations) but **optimization preferences** that guide the scheduler when choosing between multiple valid options.
 
 ### Practice Slot Selection (Weekdays)
-**Principle: Earlier time > Preferred field**
+**Principle: Solo > Shared, Earlier time > Preferred field**
 
-For weekday practices, families prefer earlier times over better fields:
-- A 5:30pm slot at a less-preferred field beats a 7:30pm slot at the most-preferred field
-- This reflects that getting kids home earlier on school nights is more valuable than field quality
+For weekday practices:
+1. **Solo beats shared:** A team practicing alone at any eligible field beats sharing their preferred field
+2. **Earlier beats later:** A 5:30pm slot beats a 7:30pm slot (families prefer getting kids home earlier on school nights)
+3. **Preferred beats non-preferred:** When all else is equal, preferred fields are chosen first
+
+**Assignment strategy:**
+1. First pass: Look for EMPTY fields only (no sharing)
+2. Second pass: If all fields occupied, allow sharing (same league only)
 
 **Sort order for weekday practice options:**
 1. Time (earlier first: 5:30 > 6:00 > 6:30 > 7:00 > 7:30)
 2. Field preference (from `League.preferred_fields`)
 
 ### Practice Slot Selection (Weekends)
-**Principle: Preferred field > Time**
+**Principle: Solo > Shared, Preferred field > Time**
 
-For weekend practices, field preference takes priority since bedtime is less of a concern.
+For weekend practices:
+1. **Solo beats shared:** A team practicing alone at any eligible field beats sharing their preferred field
+2. **Preferred beats non-preferred:** Field preference takes priority since bedtime is less of a concern
+3. **Earlier beats later:** When fields are equal, earlier times are preferred
+
+**Assignment strategy:**
+1. First pass: Look for EMPTY fields only (no sharing)
+2. Second pass: If all fields occupied, allow sharing (same league only)
 
 **Sort order for weekend practice options:**
 1. Field preference (from `League.preferred_fields`)
@@ -540,6 +577,7 @@ Each league can have custom game and practice durations stored in `sdll_leagues`
 | `c2` | Practice field balance | Distribute practice locations evenly |
 | `c3` | Solo practice balance | Equal solo practice opportunities per team |
 | `c4` | Practice count balance | No team has 2+ more practices than another in same league |
+| `f2` | Unnecessary field sharing | Don't share a field when another eligible field is empty |
 | `e2` | Game day balance | All teams should play on the same game days (no team sits out) |
 | `f1a` | Day of week game balance (soft) | Teams differ by 2+ games on a day of week |
 | `f1b` | Day of week game balance (hard threshold) | Teams differ by 3+ games on a day of week |

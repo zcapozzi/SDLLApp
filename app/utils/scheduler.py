@@ -227,6 +227,8 @@ class ScheduleValidator:
             self._check_solo_practice_balance(league, practices, teams)
             # Rule c4: Practice count balance - no team should have 2+ more practices than others
             self._check_practice_count_balance(league, practices, teams)
+            # Rule f2: Unnecessary field sharing - flag sharing when empty fields available
+            self._check_unnecessary_sharing(league, practices, teams)
 
         # Check no back-to-back against same team
         self._check_same_team_gap(league, actual_games, teams)
@@ -566,6 +568,122 @@ class ScheduleValidator:
                         f'{", ".join(self._get_team_name(t) for t in min_teams)} have {min_count}.',
                         teams=[self._build_team_info(t) for t in min_teams + max_teams]
                     ))
+
+    def _check_unnecessary_sharing(self, league, practices, teams):
+        """Rule f2: Unnecessary field sharing.
+
+        Teams should not share a practice field when another eligible practice field
+        for that league is empty at the same time. Coaches prefer being alone at a
+        non-preferred field over sharing their preferred field with another team.
+
+        Note: Only considers fields that actually have practices scheduled somewhere
+        in the season (proving they have slot allocations), not just any eligible field.
+        """
+        if not practices:
+            return
+
+        # Build set of fields actually used for this league's practices
+        # (these are fields with slot allocations)
+        fields_with_slots = set()
+        for p in practices:
+            field = None
+            if hasattr(p, 'field') and p.field:
+                field = p.field.ID if hasattr(p.field, 'ID') else p.field
+            elif hasattr(p, 'location'):
+                field = p.location
+            if field:
+                fields_with_slots.add(field)
+
+        if len(fields_with_slots) < 2:
+            # Need at least 2 fields to have a sharing violation
+            return
+
+        # Group practices by (date, start_time)
+        practices_by_datetime = defaultdict(list)
+        for p in practices:
+            game_date = self._get_game_date(p)
+            if not game_date:
+                continue
+
+            field = None
+            if hasattr(p, 'field') and p.field:
+                field = p.field.ID if hasattr(p.field, 'ID') else p.field
+            elif hasattr(p, 'location'):
+                field = p.location
+
+            if field:
+                # Key is (date, hour, minute) to group by time slot
+                key = (game_date.date(), game_date.hour, game_date.minute)
+                practices_by_datetime[key].append({'practice': p, 'field_id': field})
+
+        # Also group by (date) to know which fields are available on each date
+        practices_by_date = defaultdict(set)
+        for p in practices:
+            game_date = self._get_game_date(p)
+            if not game_date:
+                continue
+            field = None
+            if hasattr(p, 'field') and p.field:
+                field = p.field.ID if hasattr(p.field, 'ID') else p.field
+            elif hasattr(p, 'location'):
+                field = p.location
+            if field:
+                practices_by_date[game_date.date()].add(field)
+
+        # Check each time slot
+        violations_found = []
+        for (pdate, hour, minute), slot_practices in practices_by_datetime.items():
+            # Get unique fields being used at this specific time
+            fields_used_now = set(p['field_id'] for p in slot_practices)
+
+            # Check if any field has multiple teams (sharing)
+            field_counts = defaultdict(int)
+            for p in slot_practices:
+                field_counts[p['field_id']] += 1
+
+            shared_fields = [f for f, count in field_counts.items() if count > 1]
+            if not shared_fields:
+                continue  # No sharing at this time slot
+
+            # Get fields that have practices on this DATE (proving they have slots for this day)
+            fields_available_this_day = practices_by_date.get(pdate, set())
+
+            # Empty fields = fields used on this day but not at this specific time
+            empty_fields_at_this_time = fields_available_this_day - fields_used_now
+
+            if empty_fields_at_this_time:
+                # Sharing occurred when other fields with day slots were empty - violation!
+                for shared_field in shared_fields:
+                    shared_count = field_counts[shared_field]
+                    # Get field name
+                    field_obj = Field.query.get(shared_field)
+                    field_name = field_obj.location_title if field_obj else f'Field {shared_field}'
+
+                    violations_found.append({
+                        'date': pdate,
+                        'time': f'{hour:02d}:{minute:02d}',
+                        'field': field_name,
+                        'teams_sharing': shared_count,
+                        'empty_fields': len(empty_fields_at_this_time)
+                    })
+
+        if violations_found:
+            # Group violations for cleaner message
+            total_violations = len(violations_found)
+            sample = violations_found[:3]
+            sample_msgs = [f"{v['field']} on {v['date']} at {v['time']} ({v['teams_sharing']} teams sharing, {v['empty_fields']} empty fields available)"
+                          for v in sample]
+
+            msg = f'{league}: {total_violations} practice slot(s) with unnecessary sharing. '
+            msg += '; '.join(sample_msgs)
+            if total_violations > 3:
+                msg += f' ... and {total_violations - 3} more'
+
+            self.violations.append(ScheduleViolation(
+                'f2', 'Unnecessary field sharing',
+                ScheduleViolation.SOFT,
+                msg
+            ))
 
     def _check_same_team_gap(self, league, games, teams):
         """Check that same teams don't play back-to-back.
@@ -2541,24 +2659,41 @@ class ScheduleGenerator:
 
             # Find best slot with available capacity (respects field's practice_capacity from DB)
             # Teams can only share a practice slot if they are in the same league
+            # PRIORITY: Prefer empty fields over sharing - coaches prefer being alone at a
+            # non-preferred field over sharing their preferred field with another team
             assigned_option = None
+
+            # First pass: Look for an EMPTY field (no other teams)
             for option in practice_options:
                 datetime_key = option['datetime_key']
                 current_count = self._practice_slot_counts[datetime_key]
-                field_capacity = option['field_capacity']
 
-                # Check if slot has capacity
-                if current_count >= field_capacity:
-                    continue
-
-                # Check if slot is being used by a different league (same-league sharing only)
-                slot_league = self._practice_slot_leagues.get(datetime_key)
-                if slot_league is not None and slot_league != config.league:
-                    # Slot is already used by a different league, can't share
+                # Only consider empty slots in first pass
+                if current_count > 0:
                     continue
 
                 assigned_option = option
                 break
+
+            # Second pass: If no empty fields, allow sharing (same league only)
+            if not assigned_option:
+                for option in practice_options:
+                    datetime_key = option['datetime_key']
+                    current_count = self._practice_slot_counts[datetime_key]
+                    field_capacity = option['field_capacity']
+
+                    # Check if slot has capacity
+                    if current_count >= field_capacity:
+                        continue
+
+                    # Check if slot is being used by a different league (same-league sharing only)
+                    slot_league = self._practice_slot_leagues.get(datetime_key)
+                    if slot_league is not None and slot_league != config.league:
+                        # Slot is already used by a different league, can't share
+                        continue
+
+                    assigned_option = option
+                    break
 
             if not assigned_option:
                 # All practice slots at capacity, skip this team's practice
