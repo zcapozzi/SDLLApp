@@ -650,11 +650,18 @@ def calendar(year, is_spring):
             Game.is_league_practice == True
         ).all()
 
+        # Build field lookup for resolving location IDs to names
+        all_fields = Field.query.filter_by(active=1).all()
+        field_lookup = {str(f.ID): f.location_title for f in all_fields}
+        field_lookup.update({f.location_title: f.location_title for f in all_fields})
+
         for lp in league_practices:
             if lp.game_date:
                 lp_date = lp.game_date.date() if hasattr(lp.game_date, 'date') else lp.game_date
                 if lp_date not in proposed_games_by_date:
                     proposed_games_by_date[lp_date] = []
+                # Resolve field name from location
+                field_name = field_lookup.get(str(lp.location), lp.location) if lp.location else None
                 # Convert to proposal-style dict
                 lp_dict = {
                     'id': f'lp_{lp.ID}',
@@ -664,7 +671,7 @@ def calendar(year, is_spring):
                     'home_team_name': lp.home_team.computed_display_name if lp.home_team else 'Unknown',
                     'away_team_id': None,
                     'away_team_name': None,
-                    'field_name': lp.field.location_title if lp.field else lp.location,
+                    'field_name': field_name,
                     'game_date': lp.game_date.isoformat() if lp.game_date else None,
                     'is_scrimmage': False,
                     'is_league_practice': True,
@@ -831,11 +838,19 @@ def day_view(year, is_spring, target_date):
             db.func.date(Game.game_date) == view_date
         ).all()
 
+        # Build field lookup for resolving location IDs to names
+        from app.models.field import Field
+        all_fields_dv = Field.query.filter_by(active=1).all()
+        field_lookup_dv = {str(f.ID): f.location_title for f in all_fields_dv}
+        field_lookup_dv.update({f.location_title: f.location_title for f in all_fields_dv})
+
         for lp in league_practices:
+            # Resolve field name from location
+            field_name = field_lookup_dv.get(str(lp.location), lp.location) if lp.location else None
             game_obj = type('ProposedGame', (), {
                 'ID': f'lp_{lp.ID}',
                 'game_date': lp.game_date,
-                'location': lp.field.location_title if lp.field else lp.location,
+                'location': field_name,
                 'league': lp.league,
                 'status': 'scheduled',
                 'game_type': 'practice',
