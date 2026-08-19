@@ -27,9 +27,11 @@ def _build_game_object_from_proposal(game_data, team, all_teams_by_id, fields_by
         except (ValueError, AttributeError):
             pass
 
-    # Get home/away teams
-    home_team = all_teams_by_id.get(game_data.get('home_id'))
-    away_team = all_teams_by_id.get(game_data.get('away_id'))
+    # Get home/away teams - proposal uses home_team_id/away_team_id
+    home_team_id = game_data.get('home_team_id')
+    away_team_id = game_data.get('away_team_id')
+    home_team = all_teams_by_id.get(home_team_id)
+    away_team = all_teams_by_id.get(away_team_id)
 
     # Build game-like object
     return {
@@ -38,8 +40,8 @@ def _build_game_object_from_proposal(game_data, team, all_teams_by_id, fields_by
         'location': game_data.get('field_name'),
         'game_type': game_data.get('game_type', 'regular'),
         'status': 'scheduled',
-        'home_ID': game_data.get('home_id'),
-        'away_ID': game_data.get('away_id'),
+        'home_ID': home_team_id,
+        'away_ID': away_team_id,
         'home_team': home_team,
         'away_team': away_team,
         'is_scrimmage': game_data.get('is_scrimmage', False),
@@ -128,13 +130,39 @@ def team_schedule(token):
             # Filter proposal games for this team
             proposal_games = []
             for game_data in proposal.games:
-                home_id = game_data.get('home_id')
-                away_id = game_data.get('away_id')
+                home_id = game_data.get('home_team_id')
+                away_id = game_data.get('away_team_id')
                 if home_id == team.team_ID or away_id == team.team_ID:
                     game_obj = _build_game_object_from_proposal(
                         game_data, team, all_teams_by_id, fields_by_name
                     )
                     proposal_games.append(ProposalGameWrapper(game_obj))
+
+            # Also include division practices from the database
+            league_practices = Game.query.filter(
+                Game.active == 1,
+                Game.year == team.year,
+                Game.is_spring == team.is_spring,
+                Game.is_league_practice == True,
+                Game.home_ID == team.team_ID
+            ).all()
+
+            for lp in league_practices:
+                lp_obj = {
+                    'ID': f'lp_{lp.ID}',
+                    'game_date': lp.game_date,
+                    'location': lp.location,
+                    'game_type': 'practice',
+                    'status': 'scheduled',
+                    'home_ID': lp.home_ID,
+                    'away_ID': None,
+                    'home_team': lp.home_team,
+                    'away_team': None,
+                    'is_scrimmage': False,
+                    'is_league_practice': True,
+                    'is_proposal': False
+                }
+                proposal_games.append(ProposalGameWrapper(lp_obj))
 
             # Sort by date
             proposal_games.sort(key=lambda g: g.game_date or datetime.max)
