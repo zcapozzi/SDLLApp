@@ -88,14 +88,14 @@
                 <h3 style="color: rgb(34, 139, 34); border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">
                     {{ league }} ({{ teams|length }})
                 </h3>
-                <table style="margin-top: 10px;">
+                <table style="margin-top: 10px; font-size: 13px;">
                     <thead>
                         <tr>
                             <th>Placeholder</th>
                             <th>Team Name</th>
                             <th style="width: 120px;">Practice Days</th>
                             <th style="width: 100px;">Status</th>
-                            <th style="width: 340px;">Actions</th>
+                            <th style="width: 290px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -134,7 +134,7 @@
                                 <button type="button" class="btn btn-sm" style="background: #17a2b8; color: white;"
                                         onclick="copyScheduleLink('{{ team.schedule_token }}', this)"
                                         title="Copy public schedule link">
-                                    Copy Schedule Link
+                                    Copy Sched Link
                                 </button>
                                 {% endif %}
                                 <form method="POST" style="display: inline;"
