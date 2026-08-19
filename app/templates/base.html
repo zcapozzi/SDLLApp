@@ -112,6 +112,32 @@
                 <a href="{{ url_for('main.dashboard') }}" class="nav-link">Dashboard</a>
             </div>
 
+            {% if current_user.can_edit_schedule() and current_season_year %}
+            <div class="nav-item">
+                <a href="#" class="nav-link">Current Season ▾</a>
+                <div class="dropdown-menu">
+                    <div style="padding: 8px 20px; color: #666; font-size: 12px; border-bottom: 1px solid #eee;">
+                        {{ current_season_name }}
+                    </div>
+                    <a href="{{ url_for('seasons.view', year=current_season_year, is_spring=current_season_is_spring) }}">View Season</a>
+                    <a href="{{ url_for('seasons.manage_teams', year=current_season_year, is_spring=current_season_is_spring) }}">Manage Teams</a>
+                    <a href="{{ url_for('seasons.manage_leagues', year=current_season_year, is_spring=current_season_is_spring) }}">Manage Leagues</a>
+                    <div class="dropdown-divider"></div>
+                    <a href="{{ url_for('seasons.schedule_settings', year=current_season_year, is_spring=current_season_is_spring) }}">Schedule Settings</a>
+                    <a href="{{ url_for('seasons.blackout_dates', year=current_season_year, is_spring=current_season_is_spring) }}">Blackout Dates</a>
+                    <a href="{{ url_for('fields.manage_allocations', year=current_season_year, is_spring=current_season_is_spring) }}">Field Allocations</a>
+                    <div class="dropdown-divider"></div>
+                    <a href="{{ url_for('scheduler.index', year=current_season_year, is_spring=current_season_is_spring) }}">Generate Schedule</a>
+                    <a href="{{ url_for('scheduler.review', year=current_season_year, is_spring=current_season_is_spring) }}">Review Proposal</a>
+                    <div class="dropdown-divider"></div>
+                    <a href="{{ url_for('seasons.manage_leagues', year=current_season_year, is_spring=current_season_is_spring) }}">Playoffs</a>
+                    {% if current_user.is_admin() %}
+                    <a href="{{ url_for('seasons.reset', year=current_season_year, is_spring=current_season_is_spring) }}" style="color: #c33;">Reset Season</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
             <div class="nav-item">
                 <a href="#" class="nav-link">Schedule ▾</a>
                 <div class="dropdown-menu">
