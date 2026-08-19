@@ -257,6 +257,10 @@ class ScheduleValidator:
             # Rule f2: Unnecessary field sharing - flag sharing when empty fields available
             self._check_unnecessary_sharing(league, practices, teams)
 
+        # Rule c5: Expected practice count - each team should have the expected number of practices
+        # Note: Called regardless of whether there are scheduled practices, since division practices count
+        self._check_expected_practice_count(league, practices, teams)
+
         # Check no back-to-back against same team
         self._check_same_team_gap(league, actual_games, teams)
 
@@ -597,6 +601,94 @@ class ScheduleValidator:
                         f'{", ".join(self._get_team_name(t) for t in min_teams)} have {min_count}.',
                         teams=[self._build_team_info(t) for t in min_teams + max_teams]
                     ))
+
+    def _check_expected_practice_count(self, league, practices, teams):
+        """Rule c5: Each team should have the expected number of practices.
+
+        Expected practices = A + B where:
+        - A = number of practice days from first_practice_date to regular_season_end_date (excluding blackouts)
+        - B = number of game days before opening_day (used as practices pre-season)
+
+        Actual practices = division practices (is_league_practice) + scheduled practices
+
+        This ensures that even when slots are limited, the scheduler doesn't "shaft"
+        leagues that are processed later in the allocation order.
+        """
+        from app.models.season_blackout import SeasonBlackout
+        from datetime import timedelta
+
+        config = self._league_configs.get(league)
+        if not config:
+            return
+
+        first_practice = config.first_practice_date
+        opening_day = config.opening_day_date
+        regular_season_end = config.regular_season_end_date
+
+        if not first_practice or not opening_day or not regular_season_end:
+            return
+
+        # Get blackout dates
+        blackout_dates = SeasonBlackout.get_blackout_dates_set(self.year, self.is_spring)
+
+        # Get practice and game day numbers (0=Monday, 1=Tuesday, etc.)
+        practice_day_nums = set(config.practice_days)  # Days marked as practice
+        game_day_nums = set(config.game_days)  # Days marked as game (or both)
+
+        # Calculate A: practice days from first_practice to regular_season_end (excluding blackouts)
+        practice_day_count = 0
+        current_date = first_practice
+        while current_date <= regular_season_end:
+            if current_date not in blackout_dates:
+                day_of_week = current_date.weekday()
+                if day_of_week in practice_day_nums:
+                    practice_day_count += 1
+            current_date += timedelta(days=1)
+
+        # Calculate B: game days before opening_day (these become practices pre-season)
+        pre_opening_game_day_count = 0
+        current_date = first_practice
+        while current_date < opening_day:
+            if current_date not in blackout_dates:
+                day_of_week = current_date.weekday()
+                if day_of_week in game_day_nums:
+                    pre_opening_game_day_count += 1
+            current_date += timedelta(days=1)
+
+        expected_practices = practice_day_count + pre_opening_game_day_count
+
+        if expected_practices == 0:
+            return
+
+        # Count actual practices per team
+        # Division practices (is_league_practice=True) count for ALL teams
+        # Regular practices count only for the assigned team
+        practice_counts = defaultdict(int)
+        division_practice_count = 0
+
+        for p in practices:
+            is_division = getattr(p, 'is_league_practice', False)
+            if is_division:
+                division_practice_count += 1
+            else:
+                team = self._get_home_team(p)
+                if team:
+                    practice_counts[team] += 1
+
+        # Each team's total = individual practices + division practices
+        for team_id in teams:
+            actual = practice_counts.get(team_id, 0) + division_practice_count
+            if actual < expected_practices:
+                shortfall = expected_practices - actual
+                team_name = self._get_team_name(team_id)
+                self.violations.append(ScheduleViolation(
+                    'c5', 'Expected practice count',
+                    ScheduleViolation.SOFT,
+                    f'{league}: {team_name} has {actual} practices but expected {expected_practices} '
+                    f'(shortfall: {shortfall}). Practice days: {practice_day_count}, '
+                    f'Pre-opening game days: {pre_opening_game_day_count}, Division practices: {division_practice_count}.',
+                    teams=[self._build_team_info(team_id)]
+                ))
 
     def _check_unnecessary_sharing(self, league, practices, teams):
         """Rule f2: Unnecessary field sharing.

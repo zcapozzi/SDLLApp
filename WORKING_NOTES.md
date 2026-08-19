@@ -4,7 +4,46 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Implemented balance-aware slot assignment to reduce b2 (early/late time balance) violations.
+Last session: Added rule c5 (Expected Practice Count) to validate that teams receive the expected number of practices.
+
+---
+
+## Session: August 19, 2026 - Expected Practice Count Rule (c5)
+
+### Problem
+SB Minors wasn't getting any practices scheduled until 9/8, missing the first week (9/1-9/7 except 9/4-9/7 blackouts). Investigation revealed:
+
+1. **League processing order**: Leagues are sorted by `(len(game_days), league_name)`, so SB Minors (2 game days) is processed after SB Tee Ball (1 game day).
+2. **Slot consumption**: By the time SB Minors is processed, other leagues (SB Tee Ball, BB AA, BB A, BB Rookie) have already taken the softball-compatible slots on 9/1 and 9/3.
+3. **Result**: SB Minors teams only got 6 practices when they should have had 10.
+
+### Solution
+Added Tier II rule `c5` (Expected Practice Count) to track and flag practice shortfalls:
+
+**Expected practices per team = A + B where:**
+- **A** = practice days from `first_practice_date` to `regular_season_end_date` (excluding blackouts)
+- **B** = game days before `opening_day` (used as practices during pre-season)
+
+**Actual practices** = division practices (`is_league_practice`) + scheduled individual practices
+
+If Actual < Expected, a soft violation is reported for that team.
+
+### Example (SB Minors)
+- Practice days (Saturdays): 6
+- Pre-opening game days (Tue/Thu before 9/15): 4
+- Expected: 10 practices
+- Actual: 6 practices per team
+- Shortfall: 4 (flagged as c5 violation)
+
+### Files Modified
+- `app/utils/scheduler.py`: Added `_check_expected_practice_count()` method
+- `howToSchedule.md`: Documented rule c5
+
+### Next Steps
+The c5 rule provides visibility into the problem. To fix it, the scheduler needs to:
+1. Reserve slots proportionally for each league based on their needs
+2. Or process leagues in round-robin fashion to ensure fair slot access
+3. Or prioritize leagues with limited field options (e.g., softball leagues)
 
 ---
 

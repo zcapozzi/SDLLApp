@@ -306,6 +306,37 @@ Soft rules represent preferences for schedule quality. The scheduler should sati
 
 ---
 
+### Rule c5: Expected Practice Count
+
+**Description:** Each team should have the expected number of practices based on the season configuration. Expected practices = A + B where:
+- **A** = number of practice days from `first_practice_date` to `regular_season_end_date` (excluding blackout dates)
+- **B** = number of game days before `opening_day` (these are used for practices during pre-season)
+
+Actual practices = division practices (`is_league_practice=True`) + scheduled individual practices
+
+**Why it matters:** When the scheduler processes leagues sequentially, leagues processed later may not get fair access to practice slots because earlier leagues consumed them. This rule ensures the scheduler is held accountable for providing each team the expected number of practice opportunities.
+
+**Threshold:** Any shortfall from expected is flagged as a violation.
+
+**Validation logic:**
+1. Calculate practice day count (A): count dates between `first_practice_date` and `regular_season_end_date` that fall on practice days, excluding blackouts
+2. Calculate pre-opening game day count (B): count dates between `first_practice_date` and `opening_day` that fall on game days, excluding blackouts
+3. Expected = A + B
+4. For each team: Actual = (division practices that benefit all teams) + (individual scheduled practices)
+5. Flag any team where Actual < Expected
+
+**Example violation:**
+- SB Minors has `first_practice_date=2026-09-01`, `opening_day=2026-09-15`, practice days on Saturday, game days on Tue/Thu
+- Expected: 7 practice days (Saturdays Sep-Oct) + 4 pre-opening game days (Tue/Thu Sep 1-14) = 11 practices
+- Team 1 has: 0 division practices + 6 scheduled practices = 6 actual
+- Shortfall: 5 practices → violation flagged
+
+**Generator implications:**
+- This rule highlights when the league-by-league allocation strategy leaves some leagues under-served
+- May require reserving slots proportionally or processing leagues in round-robin fashion
+
+---
+
 ### Rule f2: Unnecessary Field Sharing
 
 **Description:** Teams should not share a practice field when another eligible practice field for that league is empty at the same time. Coaches prefer being alone at a non-preferred field over sharing their preferred field with another team.
@@ -577,6 +608,7 @@ Each league can have custom game and practice durations stored in `sdll_leagues`
 | `c2` | Practice field balance | Distribute practice locations evenly |
 | `c3` | Solo practice balance | Equal solo practice opportunities per team |
 | `c4` | Practice count balance | No team has 2+ more practices than another in same league |
+| `c5` | Expected practice count | Each team should have expected practices (practice days + pre-opening game days) |
 | `f2` | Unnecessary field sharing | Don't share a field when another eligible field is empty |
 | `e2` | Game day balance | All teams should play on the same game days (no team sits out) |
 | `f1a` | Day of week game balance (soft) | Teams differ by 2+ games on a day of week |
