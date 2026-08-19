@@ -234,9 +234,23 @@
             <h1>{{ team.computed_display_name }}</h1>
             <div class="league">{{ team.league }}</div>
             <div class="season">{{ season_name }}</div>
+            {% if is_proposal %}
+            <div style="margin-top: 8px; background: rgba(255,140,0,0.9); color: white; padding: 4px 12px; border-radius: 4px; display: inline-block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">
+                Proposed Schedule (Admin View)
+            </div>
+            {% endif %}
         </div>
 
-        {% if next_game %}
+        {% if schedule_not_released %}
+        <div style="background: #fff3e0; border: 1px solid rgb(255, 140, 0); border-radius: 8px; padding: 30px; text-align: center; margin-bottom: 20px;">
+            <div style="font-size: 48px; margin-bottom: 15px;">📋</div>
+            <h2 style="margin: 0 0 10px 0; color: rgb(255, 140, 0);">Schedule Not Yet Released</h2>
+            <p style="color: #666; margin: 0;">
+                The {{ season_name }} schedule is still being prepared.<br>
+                Please check back soon!
+            </p>
+        </div>
+        {% elif next_game %}
         <div class="next-game">
             <div class="next-game-label">Next Game</div>
             <div class="next-game-date">
@@ -286,7 +300,9 @@
                 <div class="game-info">
                     <div class="game-time">
                         {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
-                        {% if game.game_type == 'practice' %}
+                        {% if game.game_type == 'practice' and game.is_league_practice %}
+                            <span class="game-type-badge practice">Div. Practice</span>
+                        {% elif game.game_type == 'practice' %}
                             <span class="game-type-badge practice">Practice</span>
                         {% elif game.is_scrimmage %}
                             <span class="game-type-badge scrimmage">Scrimmage</span>
@@ -328,7 +344,9 @@
                 <div class="game-info">
                     <div class="game-time">
                         {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
-                        {% if game.game_type == 'practice' %}
+                        {% if game.game_type == 'practice' and game.is_league_practice %}
+                            <span class="game-type-badge practice">Div. Practice</span>
+                        {% elif game.game_type == 'practice' %}
                             <span class="game-type-badge practice">Practice</span>
                         {% elif game.is_scrimmage %}
                             <span class="game-type-badge scrimmage">Scrimmage</span>

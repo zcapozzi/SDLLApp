@@ -4,7 +4,89 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Made scheduler deterministic and fixed Tier I/III compliance. All tests passing.
+Last session: Implemented public schedule view with proposal support for admins and division practice badges.
+
+---
+
+## Session: August 19, 2026 - Public Schedule View with Proposals
+
+### Overview
+Enhanced the public team schedule view (`/s/<token>`) to show proposed schedules to admins when the schedule hasn't been locked yet. Non-admins see a "schedule not released" message.
+
+### Changes Made
+
+1. **Public Routes** (`app/public/routes.py`):
+   - Added check for schedule locked status using `LeagueSeason.is_season_locked()`
+   - Added check for `ScheduleProposal.get_for_season()`
+   - For unlocked schedules with a proposal:
+     - Admins (`current_user.can_edit_schedule()`) see the proposed schedule
+     - Non-admins see a "Schedule Not Yet Released" message
+   - Created `ProposalGameWrapper` class to make proposal dicts behave like Game objects
+   - Created `_build_game_object_from_proposal()` helper for converting proposal data
+
+2. **Public Template** (`app/templates/public/team_schedule.html`):
+   - Added "Proposed Schedule (Admin View)" badge in header when viewing proposals
+   - Added "Schedule Not Yet Released" message block for non-admins
+   - Added "Div. Practice" badge for league practices (`is_league_practice=True`)
+
+### Template Changes
+- Both upcoming and past game sections now distinguish between:
+  - `Div. Practice` - League-wide practices (`game.game_type == 'practice' and game.is_league_practice`)
+  - `Practice` - Individual team practices (`game.game_type == 'practice'`)
+
+### Behavior
+| Schedule Status | User Type | Shows |
+|-----------------|-----------|-------|
+| Locked | Anyone | Saved games from database |
+| Unlocked + No proposal | Anyone | Empty schedule |
+| Unlocked + Has proposal | Admin | Proposed schedule with "Admin View" badge |
+| Unlocked + Has proposal | Non-admin | "Schedule Not Yet Released" message |
+
+### Files Modified
+- `app/public/routes.py` - Added proposal display logic
+- `app/templates/public/team_schedule.html` - Added badges and messages
+
+---
+
+## Session: August 19, 2026 - Rule f2 Implementation & Validation Fixes
+
+### Overview
+Implemented Rule f2 (Unnecessary Field Sharing) as a Tier II rule. Teams should prefer solo practice at any eligible field over sharing their preferred field with another team.
+
+### Changes Made
+
+1. **Assignment Logic (Two-Pass Approach)**:
+   - First pass: Look for completely EMPTY fields (no other teams)
+   - Second pass: If no empty fields, allow sharing within same league only
+   - Teams are processed in order of practice count (fewest first) for balance
+
+2. **f2 Validation Rule**:
+   - Detects when teams share a field while another eligible field was empty at the same time
+   - Checks fields by (day_of_week, hour, minute) to match slot allocation logic
+   - Considers all activities across ALL leagues when checking for "empty"
+   - Uses proper duration (game or practice) for overlap detection
+   - Verifies field availability on specific date (start date, blackouts)
+
+3. **Performance Optimizations Applied Earlier**:
+   - Strategy 1: Cache League objects (eliminate N+1 queries)
+   - Strategy 2: Binary search for field time availability checks
+   - Result: 21% faster generation (2.44s → 1.92s)
+
+4. **Copy Schedule Link Button**:
+   - Added "Copy Sched Link" button on manage teams page
+   - Copies public schedule URL to clipboard
+   - Reduced table font size for better fit
+
+### Test Results (Fall 2026)
+```
+Generation: ~6 seconds
+Total violations: 71
+f2 violations: 0 (correctly detecting no unnecessary sharing)
+```
+
+### Commits
+- `ff80a31` - Copy Sched Link button on manage teams page
+- `2de2864` - Fix f2 validation to accurately detect unnecessary sharing
 
 ---
 
