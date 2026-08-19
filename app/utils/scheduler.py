@@ -135,6 +135,28 @@ class ScheduleValidator:
         """Build team info dict for violation."""
         return {'id': team_id, 'name': self._get_team_name(team_id)}
 
+    def _is_field_available_on_date(self, field_id, check_date):
+        """Check if field is available on date using cached data (no DB queries)."""
+        # Convert datetime to date if needed
+        if hasattr(check_date, 'date'):
+            check_date = check_date.date()
+
+        # Get field from cache
+        field = self._fields_cache.get(field_id)
+        if not field:
+            return True  # If not in cache, assume available
+
+        # Check start date
+        if field.start_date and check_date < field.start_date:
+            return False
+
+        # Check field-specific blackouts from cache
+        blackout_dates = self._field_blackouts_cache.get(field_id, [])
+        if check_date in blackout_dates:
+            return False
+
+        return True
+
     def validate(self, games):
         """Validate a list of games/proposed games.
 
