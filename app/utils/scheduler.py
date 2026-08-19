@@ -701,8 +701,7 @@ class ScheduleValidator:
             actually_empty = []
             for field_id in potentially_empty:
                 # First check if field is available on this specific date (start date, blackouts)
-                field_obj = self._fields_cache.get(field_id)
-                if field_obj and not field_obj.is_available_on_date(pdate):
+                if not self._is_field_available_on_date(field_id, pdate):
                     continue  # Field not available on this date
 
                 is_empty = True
@@ -1510,6 +1509,33 @@ class ScheduleGenerator:
         if hasattr(check_date, 'date'):
             check_date = check_date.date()
         return check_date in self._season_blackout_dates
+
+    def _is_field_available_on_date(self, field_id, check_date):
+        """Check if field is available on date using cached data (no DB queries).
+
+        Returns False if:
+        - Field has start_date and check_date is before it
+        - Field has a blackout for that date
+        """
+        # Convert datetime to date if needed
+        if hasattr(check_date, 'date'):
+            check_date = check_date.date()
+
+        # Get field from cache
+        field = self._fields_cache.get(field_id)
+        if not field:
+            return False
+
+        # Check start date
+        if field.start_date and check_date < field.start_date:
+            return False
+
+        # Check field-specific blackouts from cache
+        blackout_dates = self._field_blackouts_cache.get(field_id, [])
+        if check_date in blackout_dates:
+            return False
+
+        return True
 
     def _get_activity_duration_minutes(self, league, is_practice=False, is_no_time_limit=False):
         """Get the duration in minutes for an activity based on league settings."""
@@ -2656,10 +2682,10 @@ class ScheduleGenerator:
         for slot in available_slots:
             if not slot.field:
                 continue
-            # Check field availability (start date and blackout dates)
-            if not slot.field.is_available_on_date(practice_date):
-                continue
             field_id = slot.field.ID
+            # Check field availability using cache (no DB query)
+            if not self._is_field_available_on_date(field_id, practice_date):
+                continue
             time_capacity = self._get_time_based_practice_capacity(slot)
 
             for time_block in range(time_capacity):
@@ -3632,7 +3658,7 @@ class ScheduleGenerator:
                 s for s in all_slots
                 if s.day_of_week == day_of_week
                 and self._can_use_slot(s, league, usage_type)
-                and (not s.field or s.field.is_available_on_date(target_date))  # Check field availability
+                and (not s.field or self._is_field_available_on_date(s.field.ID, target_date))  # Check field availability (cached)
             ]
             if day_slots:
                 # Sort by preference
