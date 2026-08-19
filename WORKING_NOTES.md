@@ -4,7 +4,50 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Implemented public schedule view with proposal support for admins and division practice badges.
+Last session: Fixed division practices not showing in schedule review, calendar, and day views.
+
+---
+
+## Session: August 19, 2026 - Division Practices in All Views
+
+### Problem
+Division practices (manually created via "Add Division-Practice" with `is_league_practice=True`) were not showing up in:
+- Schedule review page
+- Calendar view
+- Day view
+
+This was because these views pulled data from the `ScheduleProposal` which doesn't include manually-created league practices.
+
+### Solution
+Modified all relevant views to also query `sdll_games` for records where `is_league_practice=True` and merge them with the proposal data.
+
+### Changes Made
+
+1. **Scheduler Review** (`app/scheduler/routes.py`):
+   - Added query for league practices from database
+   - Converted them to proposal-style dict format
+   - Added to the games list being displayed
+
+2. **Calendar View** (`app/games/routes.py:calendar`):
+   - Added query for league practices when a proposal exists
+   - Converted to proposal-style dict and added to `proposed_games_by_date`
+   - Added `is_league_practice` attribute to ProposedGame objects
+
+3. **Day View** (`app/games/routes.py:day_view`):
+   - Added query for league practices on the viewed date
+   - Created ProposedGame objects with `display_type='div-practice'`
+
+4. **CSS Styling**:
+   - Added `.game-card.div-practice` (pink: #fce4ec, border: #c2185b) to calendar.html
+   - Added `.game-slot.div-practice` (same colors) to day_view.html
+
+### Visual Distinction
+- Regular practices: Purple background
+- Division practices: Pink background with "div-practice" badge and "(all teams)" label
+
+### Commits
+- `a5959c3` - Include division practices in schedule review and calendar views
+- `43c9c76` - Add admin preview of proposed schedules on public team pages
 
 ---
 
