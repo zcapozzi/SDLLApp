@@ -604,18 +604,39 @@ class ScheduleValidator:
                         ))
                 last_matchup[key] = i
 
+    def _get_activity_duration(self, game):
+        """Get the duration in minutes for an activity based on its type and league."""
+        league_name = game.league if hasattr(game, 'league') else None
+        league_obj = League.get_by_name(league_name) if league_name else None
+
+        if self._is_practice(game):
+            return league_obj.get_practice_duration() if league_obj else PRACTICE_DURATION_MINUTES
+        else:
+            # Check for no_time_limit games
+            is_no_limit = getattr(game, 'no_time_limit', False) or (
+                hasattr(game, 'no_time_limit') and game.no_time_limit == 1
+            )
+            return league_obj.get_game_duration(is_no_time_limit=is_no_limit) if league_obj else GAME_DURATION_MINUTES
+
     def _check_field_conflicts(self, games):
-        """Check for games/practices scheduled at the same time on the same field.
+        """Check for games/practices that overlap on the same field.
 
         Rule slot: Each field can only have one game/scrimmage at a time.
-        - No two games at the same slot
-        - No game and practice at the same slot
-        Note: Sequential activities (e.g., 5:30 and 7:30) on the same field are OK.
+        - No two games can overlap at the same field (even if start times differ)
+        - No game and practice can overlap at the same field
+        - Activities are considered to overlap if one starts before another ends
+
+        Duration-based checking:
+        - Games: default 120 min (2 hrs), configurable per league
+        - Practices: default 90 min, configurable per league
+        - No-time-limit games: 180 min (3 hrs)
+
+        Example: A 5:30pm game (2hr) ends at 7:30pm, so a 7:00pm activity would overlap.
+
         Note: Multiple practices CAN share a slot (up to practice_capacity) - handled by rule f1.
         """
-        # Track games and practices separately at each slot
-        games_at_slot = defaultdict(list)  # Non-practice activities
-        practices_at_slot = defaultdict(list)  # Practice activities
+        # Build list of activities with start/end times
+        activities = []  # List of (game, field, field_name, date, start_dt, end_dt, is_practice)
 
         for game in games:
             game_date = self._get_game_date(game)
@@ -635,40 +656,64 @@ class ScheduleValidator:
             if not field:
                 continue
 
-            # Key: (field, field_name, date, hour, minute) - exact time slot
-            key = (field, field_name, game_date.date(), game_date.hour, game_date.minute)
+            # Calculate end time based on duration
+            duration = self._get_activity_duration(game)
+            end_dt = game_date + timedelta(minutes=duration)
+            is_practice = self._is_practice(game)
 
-            if self._is_practice(game):
-                practices_at_slot[key].append(game)
-            else:
-                games_at_slot[key].append(game)
+            activities.append((game, field, field_name, game_date.date(), game_date, end_dt, is_practice))
 
-        # Check for multiple games at same slot
-        for key, slot_games in games_at_slot.items():
-            if len(slot_games) > 1:
-                field, field_name, date, hour, minute = key
-                time_str = f'{hour:02d}:{minute:02d}'
-                self.violations.append(ScheduleViolation(
-                    'slot', 'Field double-booked',
-                    ScheduleViolation.HARD,
-                    f'{field_name} has {len(slot_games)} games at {date} {time_str}',
-                    games=slot_games
-                ))
+        # Group by field and date
+        by_field_date = defaultdict(list)
+        for activity in activities:
+            game, field, field_name, act_date, start_dt, end_dt, is_practice = activity
+            key = (field, field_name, act_date)
+            by_field_date[key].append(activity)
 
-        # Check for game + practice at same slot
-        for key, slot_games in games_at_slot.items():
-            if key in practices_at_slot:
-                field, field_name, date, hour, minute = key
-                time_str = f'{hour:02d}:{minute:02d}'
-                all_activities = slot_games + practices_at_slot[key]
-                game_count = len(slot_games)
-                practice_count = len(practices_at_slot[key])
-                self.violations.append(ScheduleViolation(
-                    'slot', 'Field double-booked',
-                    ScheduleViolation.HARD,
-                    f'{field_name} has {game_count} game(s) and {practice_count} practice(s) at {date} {time_str}',
-                    games=all_activities
-                ))
+        # Check for overlaps within each field/date group
+        for (field, field_name, act_date), field_activities in by_field_date.items():
+            if len(field_activities) < 2:
+                continue
+
+            # Sort by start time
+            field_activities.sort(key=lambda x: x[4])  # Sort by start_dt
+
+            # Check each pair for overlaps
+            for i in range(len(field_activities)):
+                for j in range(i + 1, len(field_activities)):
+                    game1, _, _, _, start1, end1, is_practice1 = field_activities[i]
+                    game2, _, _, _, start2, end2, is_practice2 = field_activities[j]
+
+                    # Check if activities overlap (activity2 starts before activity1 ends)
+                    if start2 < end1:
+                        # Both practices at same time are OK (handled by f1 rule for capacity)
+                        if is_practice1 and is_practice2:
+                            continue
+
+                        # Calculate overlap duration for message
+                        overlap_end = min(end1, end2)
+                        overlap_minutes = int((overlap_end - start2).total_seconds() / 60)
+
+                        # Determine activity types for message
+                        if is_practice1 and not is_practice2:
+                            conflict_type = 'practice and game'
+                        elif not is_practice1 and is_practice2:
+                            conflict_type = 'game and practice'
+                        else:
+                            conflict_type = '2 games'
+
+                        time1_str = start1.strftime('%H:%M')
+                        time2_str = start2.strftime('%H:%M')
+                        end1_str = end1.strftime('%H:%M')
+
+                        self.violations.append(ScheduleViolation(
+                            'slot', 'Field double-booked (duration overlap)',
+                            ScheduleViolation.HARD,
+                            f'{field_name} on {act_date}: {conflict_type} overlap - '
+                            f'activity at {time1_str} ends at {end1_str}, but another starts at {time2_str} '
+                            f'({overlap_minutes} min overlap)',
+                            games=[game1, game2]
+                        ))
 
     def _check_practice_field_capacity(self, games):
         """Check practice field capacity limits and same-league sharing.
@@ -1139,8 +1184,15 @@ class ScheduleValidator:
 
         No games or practices can start after league's latest_start_time
         or before league's earliest_start_time.
+
+        Default behavior: If no latest_start_time is set for a league,
+        all activities must start by 7:30pm (19:30).
         """
+        from datetime import time as dt_time
         from app.models.league import League
+
+        # Default latest start time if none is set
+        DEFAULT_LATEST_START = dt_time(19, 30)  # 7:30pm
 
         # Get the league config to find time restrictions
         league_obj = League.get_by_name(league)
@@ -1150,8 +1202,9 @@ class ScheduleValidator:
         earliest = league_obj.earliest_start_time
         latest = league_obj.latest_start_time
 
-        if not earliest and not latest:
-            return  # No time restrictions
+        # Apply default latest_start_time if not explicitly set
+        if not latest:
+            latest = DEFAULT_LATEST_START
 
         violations = []
         for g in games:
@@ -1249,7 +1302,9 @@ class ScheduleGenerator:
         self.warnings = []
         self._next_id = 1
         self._slot_assignments = {}  # Maps game_id to proposed assignment
-        self._global_field_time_usage = set()  # Tracks (field_id, datetime) across all leagues
+        # Track field usage with time ranges for duration-based overlap detection
+        # Key: (field_id, date_str) -> list of {'start': datetime, 'end': datetime, 'league': str, 'is_practice': bool}
+        self._global_field_time_ranges = defaultdict(list)
         self._team_day_usage = set()  # Tracks (team_id, date_str) - one activity per team per day
         self._slot_decisions = []  # Detailed decision log for tracing
         self._practice_slot_counts = defaultdict(int)  # Tracks practice count per (field_id, datetime) - f1 rule
@@ -1267,6 +1322,64 @@ class ScheduleGenerator:
             check_date = check_date.date()
         return check_date in self._season_blackout_dates
 
+    def _get_activity_duration_minutes(self, league, is_practice=False, is_no_time_limit=False):
+        """Get the duration in minutes for an activity based on league settings."""
+        league_obj = League.get_by_name(league) if isinstance(league, str) else league
+        if is_practice:
+            return league_obj.get_practice_duration() if league_obj else PRACTICE_DURATION_MINUTES
+        return league_obj.get_game_duration(is_no_time_limit=is_no_time_limit) if league_obj else GAME_DURATION_MINUTES
+
+    def _check_field_time_available(self, field_id, start_dt, duration_minutes, league, is_practice=False):
+        """Check if a field/time slot is available considering activity duration.
+
+        Returns True if the slot is available (no overlaps with existing activities).
+        Returns False if the slot would overlap with an existing game or
+        non-same-league activity.
+
+        Practices can share with other practices from the same league
+        (capacity is checked separately via f1 rule).
+        """
+        if not field_id or not start_dt:
+            return True  # Can't check without field/time
+
+        date_str = start_dt.date().isoformat() if hasattr(start_dt, 'date') else str(start_dt)[:10]
+        key = (field_id, date_str)
+        end_dt = start_dt + timedelta(minutes=duration_minutes)
+
+        for existing in self._global_field_time_ranges[key]:
+            existing_start = existing['start']
+            existing_end = existing['end']
+            existing_is_practice = existing.get('is_practice', False)
+            existing_league = existing.get('league')
+
+            # Check for time overlap
+            if start_dt < existing_end and end_dt > existing_start:
+                # There's an overlap - check if it's allowed
+                # Two practices from the same league can share (capacity checked elsewhere)
+                if is_practice and existing_is_practice and league == existing_league:
+                    continue  # Same-league practice sharing is allowed
+
+                # Any other overlap (game+practice, game+game, cross-league practice) is not allowed
+                return False
+
+        return True
+
+    def _add_field_time_usage(self, field_id, start_dt, duration_minutes, league, is_practice=False):
+        """Record that a field is being used for an activity during a time range."""
+        if not field_id or not start_dt:
+            return
+
+        date_str = start_dt.date().isoformat() if hasattr(start_dt, 'date') else str(start_dt)[:10]
+        key = (field_id, date_str)
+        end_dt = start_dt + timedelta(minutes=duration_minutes)
+
+        self._global_field_time_ranges[key].append({
+            'start': start_dt,
+            'end': end_dt,
+            'league': league,
+            'is_practice': is_practice
+        })
+
     def generate(self, start_fresh=False):
         """Generate a complete proposed schedule.
 
@@ -1283,9 +1396,9 @@ class ScheduleGenerator:
         self.violations = []
         self.warnings = []
         self._slot_assignments = {}
-        # Global tracker for field/time usage across all leagues
-        # Key: (field_id, datetime_isoformat) - prevents double-booking
-        self._global_field_time_usage = set()
+        # Global tracker for field/time usage across all leagues with duration support
+        # Key: (field_id, date_str) -> list of {'start': datetime, 'end': datetime, 'league': str, 'is_practice': bool}
+        self._global_field_time_ranges = defaultdict(list)
         # Global tracker for team-day usage (one game/practice per team per day)
         # Key: (team_id, date_str) - prevents multiple activities on same day
         self._team_day_usage = set()
@@ -1338,9 +1451,10 @@ class ScheduleGenerator:
             phase2_practice_count += practices_added
 
         # Debug: Report phase results
+        total_time_ranges = sum(len(ranges) for ranges in self._global_field_time_ranges.values())
         self.warnings.append({
             'type': 'debug_phases',
-            'message': f'Phase 1 (games/scrimmages): {phase1_game_count} scheduled. Phase 2 (practices): {phase2_practice_count} scheduled. Field slots used after Phase 1: {len(self._global_field_time_usage)}.'
+            'message': f'Phase 1 (games/scrimmages): {phase1_game_count} scheduled. Phase 2 (practices): {phase2_practice_count} scheduled. Field time ranges used after Phase 1: {total_time_ranges}.'
         })
 
         # Debug: Show what's scheduled on a Thursday in October (for debugging BB A issue)
@@ -2174,11 +2288,12 @@ class ScheduleGenerator:
                     if test_datetime and test_offset > 0:
                         test_datetime = test_datetime + timedelta(minutes=test_offset)
 
-                    # Check global usage
+                    # Check global usage (duration-aware)
                     if field_id and test_datetime:
-                        usage_key = (field_id, test_datetime.isoformat())
-                        if usage_key in self._global_field_time_usage:
-                            continue  # Already used by another league
+                        if not self._check_field_time_available(
+                            field_id, test_datetime, game_duration, config.league, is_practice=False
+                        ):
+                            continue  # Would overlap with another activity
 
                     # Found an available slot/time
                     assigned_slot = slot
@@ -2217,10 +2332,10 @@ class ScheduleGenerator:
             self._next_id += 1
             self.proposed_games.append(game)
 
-            # Mark as used globally
+            # Mark as used globally (with duration)
             field_id = assigned_slot.field.ID if assigned_slot and assigned_slot.field else None
             if field_id and game_datetime:
-                self._global_field_time_usage.add((field_id, game_datetime.isoformat()))
+                self._add_field_time_usage(field_id, game_datetime, game_duration, config.league, is_practice=False)
 
             # Mark both teams as having activity on this day
             self._team_day_usage.add((home.team_ID, date_str))
@@ -2284,22 +2399,26 @@ class ScheduleGenerator:
                     game_datetime = game_datetime + timedelta(minutes=time_offset_minutes)
 
                 if game_datetime:
-                    # Check league time restrictions (latest_start_time)
+                    from datetime import time as dt_time
+                    DEFAULT_LATEST_START = dt_time(19, 30)  # 7:30pm default
+
+                    # Check league time restrictions (latest_start_time with default)
                     practice_time = game_datetime.time()
-                    if hasattr(league, 'latest_start_time') and league.latest_start_time:
-                        if practice_time > league.latest_start_time:
-                            # This time block is after the league's latest allowed start time
-                            continue
+                    latest_time = getattr(league, 'latest_start_time', None) or DEFAULT_LATEST_START
+                    if practice_time > latest_time:
+                        # This time block is after the league's latest allowed start time
+                        continue
                     if hasattr(league, 'earliest_start_time') and league.earliest_start_time:
                         if practice_time < league.earliest_start_time:
                             # This time block is before the league's earliest allowed start time
                             continue
 
-                    # Check if this slot already has a game scheduled (from Phase 1)
-                    # Rule: Can't have a practice at the same time as a game
-                    usage_key = (field_id, game_datetime.isoformat())
-                    if usage_key in self._global_field_time_usage:
-                        continue  # Game already scheduled here, skip this practice option
+                    # Check if this slot would overlap with a game (duration-aware)
+                    practice_duration = self._get_activity_duration_minutes(league, is_practice=True)
+                    if not self._check_field_time_available(
+                        field_id, game_datetime, practice_duration, config.league, is_practice=True
+                    ):
+                        continue  # Would overlap with another activity
 
                     # Get field's practice capacity from DB, considering late slots
                     is_late = game_datetime.hour >= 19
@@ -2405,6 +2524,16 @@ class ScheduleGenerator:
             # Increment the global practice count for this field/time and track the league
             self._practice_slot_counts[assigned_option['datetime_key']] += 1
             self._practice_slot_leagues[assigned_option['datetime_key']] = config.league
+
+            # Also add to global field time ranges for duration-based overlap checking
+            practice_duration = self._get_activity_duration_minutes(config.league, is_practice=True)
+            self._add_field_time_usage(
+                assigned_option['field_id'],
+                assigned_option['datetime'],
+                practice_duration,
+                config.league,
+                is_practice=True
+            )
 
             practice = ProposedGame(
                 game_type='practice',
@@ -2523,15 +2652,17 @@ class ScheduleGenerator:
             if max_games_per_week and config.opening_day_date:
                 week_num = self._get_week_number(game_date, config.opening_day_date)
 
-            # Filter out slots already used by other leagues
+            # Filter out slots already used by other leagues (duration-aware)
             available_date_slots = []
             used_by_other_league = []
+            game_duration = self._get_activity_duration_minutes(config.league, is_practice=False)
             for slot_info in date_slots:
                 field_id = slot_info['field_id']
                 game_datetime = slot_info['datetime']
                 if field_id and game_datetime:
-                    usage_key = (field_id, game_datetime.isoformat())
-                    if usage_key not in self._global_field_time_usage:
+                    if self._check_field_time_available(
+                        field_id, game_datetime, game_duration, config.league, is_practice=False
+                    ):
                         available_date_slots.append(slot_info)
                     else:
                         used_by_other_league.append(slot_info)
@@ -2743,9 +2874,9 @@ class ScheduleGenerator:
                     late_counts[actual_home.team_ID] += 1
                     late_counts[actual_away.team_ID] += 1
 
-                # Mark field/time as used globally
+                # Mark field/time as used globally (with duration)
                 if field_id and game_datetime:
-                    self._global_field_time_usage.add((field_id, game_datetime.isoformat()))
+                    self._add_field_time_usage(field_id, game_datetime, game_duration, config.league, is_practice=False)
 
                 # Mark teams as having activity on this day
                 self._team_day_usage.add((home.team_ID, date_str))
@@ -2826,10 +2957,11 @@ class ScheduleGenerator:
                     field_id = slot_info['field_id']
                     game_datetime = slot_info['datetime']
 
-                    # Check if slot is available
+                    # Check if slot is available (duration-aware)
                     if field_id and game_datetime:
-                        usage_key = (field_id, game_datetime.isoformat())
-                        if usage_key in self._global_field_time_usage:
+                        if not self._check_field_time_available(
+                            field_id, game_datetime, game_duration, config.league, is_practice=False
+                        ):
                             continue
 
                     slot = slot_info['slot']
@@ -2905,7 +3037,7 @@ class ScheduleGenerator:
                         late_counts[actual_away.team_ID] += 1
 
                     if field_id and game_datetime:
-                        self._global_field_time_usage.add((field_id, game_datetime.isoformat()))
+                        self._add_field_time_usage(field_id, game_datetime, game_duration, config.league, is_practice=False)
 
                     self._team_day_usage.add((home.team_ID, date_str))
                     self._team_day_usage.add((away.team_ID, date_str))
@@ -2940,7 +3072,7 @@ class ScheduleGenerator:
                         home_busy = (home.team_ID, date_str) in self._team_day_usage
                         away_busy = (away.team_ID, date_str) in self._team_day_usage
                         slots_available = sum(1 for s in slots_info_by_date[game_date]
-                                              if (s['field_id'], s['datetime'].isoformat()) not in self._global_field_time_usage
+                                              if self._check_field_time_available(s['field_id'], s['datetime'], game_duration, config.league, is_practice=False)
                                               if s['field_id'] and s['datetime'])
                         if home_busy or away_busy or slots_available == 0:
                             if game_date.month == 10 and game_date.day >= 10:

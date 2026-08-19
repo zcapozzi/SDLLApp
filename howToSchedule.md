@@ -72,18 +72,26 @@ These are absolute constraints. The scheduler will **never** violate these, even
 
 ---
 
-### Rule slot: Field Double-Booking
+### Rule slot: Field Double-Booking (Duration-Aware)
 
-**Description:** Each field can only have a single game at a time; there cannot be two games scheduled on the same slot at the same field; there cannot be a game and a practice at the same field at the same time
+**Description:** Each field can only have one game/scrimmage at a time, accounting for activity duration. Activities cannot overlap based on their duration - not just start time. A game starting at 5:30pm with 2-hour duration (ending at 7:30pm) cannot coexist with any activity that starts before 7:30pm.
 
-**Why it matters:** Physical impossibility - one game at a time per field. You also can't have a practice going on at a field where they are playing a game.
+**Why it matters:** Physical impossibility - one game at a time per field. You can't have a practice starting at 7pm if a game that started at 5:30pm won't end until 7:30pm.
+
+**Duration rules:**
+- Regular games: 120 minutes (2 hours) by default, configurable per league
+- Practices: 90 minutes by default, configurable per league
+- No-time-limit games: 180 minutes (3 hours)
+- Tee Ball leagues: 75 minutes for both games and practices
 
 **Validation logic:**
-- Confirm that each slot only has a single game
+- For each field and date, track all activities with their start and end times
+- Check if any non-practice activities overlap (start2 < end1)
+- Practices can share time slots with other practices from the same league (capacity handled by f1)
 
-**Example violation:**
-- Team A vs Team B at 5:30 at Herndon 1
-- Team C vs Team D also at 5:30 at Herndon 1
+**Example violations:**
+- Team A vs Team B at 5:30pm at Herndon 1 (ends 7:30pm)
+- Team C practice at 7:00pm at Herndon 1 (starts before game ends - 30 min overlap)
 
 ---
 
@@ -136,26 +144,33 @@ These are absolute constraints. The scheduler will **never** violate these, even
 
 ### Rule g1: Time Restrictions
 
-**Description:** No games or practices can be scheduled before a league's `earliest_start_time` or after a league's `latest_start_time`. These settings are configured per league in `sdll_leagues`.
+**Description:** No games or practices can be scheduled before a league's `earliest_start_time` or after a league's `latest_start_time`. These settings are configured per league in `sdll_leagues`. **If no `latest_start_time` is set for a league, a default of 7:30pm (19:30) is enforced.**
 
-**Why it matters:** Younger players (Tee Ball, Rookie) should not have late evening games. Time restrictions ensure age-appropriate scheduling.
+**Why it matters:** Younger players (Tee Ball, Rookie) should not have late evening games. Time restrictions ensure age-appropriate scheduling. The 7:30pm default prevents extremely late games when no explicit limit is configured.
 
 **Common settings:**
 - Tee Ball leagues: `latest_start_time = 17:30` (no games after 5:30 PM)
 - Machine pitch leagues: `latest_start_time = 17:30`
-- Older leagues: No restrictions (NULL values)
+- Older leagues: NULL values (default to 7:30pm)
+
+**Default behavior:**
+- If `latest_start_time` is NULL/not set: **defaults to 7:30pm (19:30)**
+- This means no activities can start after 7:30pm unless explicitly configured
 
 **Validation logic:**
 - Get league's `earliest_start_time` and `latest_start_time` from database
+- If `latest_start_time` is NULL, use default of 7:30pm
 - Check each game/practice start time against these limits
 - Flag any activities outside the allowed window
 
 **Example violation:**
+- SB Minors game at 8:30pm when no `latest_start_time` is set (defaults to 7:30pm)
 - SB Rookie practice at 7:00 PM when `latest_start_time = 17:30`
 
 **Generator behavior:**
 - When building practice options, time blocks outside the allowed window are excluded
 - Games are only assigned to slots within the allowed time range
+- The default 7:30pm is applied during both generation and validation
 
 ---
 
@@ -510,10 +525,10 @@ Each league can have custom game and practice durations stored in `sdll_leagues`
 | Code | Name | Description |
 |------|------|-------------|
 | `d1` | One activity per day | Max one game or practice per team per day |
-| `slot` | Field double-booked | No two games/scrimmages/practices at same time on same field |
+| `slot` | Field double-booked (duration-aware) | No overlapping activities based on duration (e.g., 5:30pm 2hr game blocks until 7:30pm) |
 | `f1` | Practice field capacity | Enforces field's `practice_capacity` setting from DB (default: 1) |
 | `f1c` | Cross-league practice sharing | Teams sharing practice slot must be same league |
-| `g1` | Time restrictions | No games/practices before earliest or after latest start time |
+| `g1` | Time restrictions | No games/practices before earliest or after latest start time (default 7:30pm if not set) |
 
 ### Tier II: AVOID (Soft Rules)
 | Code | Name | Description |
