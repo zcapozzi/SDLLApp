@@ -2759,6 +2759,10 @@ class ScheduleGenerator:
                     is_late = game_datetime.hour >= 19
                     field_capacity = slot.field.get_practice_capacity(is_late_slot=is_late)
 
+                    # Skip if field has no capacity at this time
+                    if field_capacity == 0:
+                        continue
+
                     practice_options.append({
                         'slot': slot,
                         'field_id': field_id,
