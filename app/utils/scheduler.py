@@ -106,12 +106,16 @@ class ProposedGame:
 class ScheduleValidator:
     """Validates schedules against hard and soft rules."""
 
-    def __init__(self, year, is_spring):
+    def __init__(self, year, is_spring, fields_cache=None, field_blackouts_cache=None, league_cache=None):
         self.year = year
         self.is_spring = is_spring
         self.violations = []
         self._team_names = {}  # Cache: team_id -> team_name
         self._league_configs = {}  # Cache: league_name -> LeagueSeason config
+        # Accept pre-loaded caches to avoid DB queries
+        self._fields_cache = fields_cache or {}
+        self._field_blackouts_cache = field_blackouts_cache or {}
+        self._league_cache = league_cache or {}
 
     def _get_team_name(self, team_id):
         """Get team name from ID (with caching)."""
@@ -1067,9 +1071,12 @@ class ScheduleValidator:
             if not field_id:
                 continue
 
-            # Get field start_date from cache or DB
+            # Get field from pre-loaded cache or local cache
             if field_id not in field_cache:
-                field = Field.query.get(field_id)
+                field = self._fields_cache.get(field_id)
+                if not field:
+                    # Fallback to DB query if not in pre-loaded cache
+                    field = Field.query.get(field_id)
                 field_cache[field_id] = {
                     'start_date': field.start_date if field else None,
                     'name': field.location_title if field else str(field_id)
@@ -1092,12 +1099,17 @@ class ScheduleValidator:
                 })
                 continue
 
-            # Get field blackouts from cache or DB
+            # Get field blackouts from pre-loaded cache or local cache
             if field_id not in field_blackouts_cache:
-                blackouts = FieldBlackout.query.filter_by(
-                    field_ID=field_id, active=1
-                ).all()
-                field_blackouts_cache[field_id] = {b.blackout_date for b in blackouts}
+                if field_id in self._field_blackouts_cache:
+                    # Use pre-loaded cache (already a list of dates)
+                    field_blackouts_cache[field_id] = set(self._field_blackouts_cache[field_id])
+                else:
+                    # Fallback to DB query
+                    blackouts = FieldBlackout.query.filter_by(
+                        field_ID=field_id, active=1
+                    ).all()
+                    field_blackouts_cache[field_id] = {b.blackout_date for b in blackouts}
 
             # Check field blackout violation
             if check_date in field_blackouts_cache[field_id]:
@@ -1802,9 +1814,14 @@ class ScheduleGenerator:
                     'message': f'Oct 15 activities: {summary}'
                 })
 
-        # Validate the generated schedule
+        # Validate the generated schedule (pass pre-loaded caches to avoid DB queries)
         t0 = time_module.time()
-        validator = ScheduleValidator(self.year, self.is_spring)
+        validator = ScheduleValidator(
+            self.year, self.is_spring,
+            fields_cache=self._fields_cache,
+            field_blackouts_cache=self._field_blackouts_cache,
+            league_cache=self._league_cache
+        )
         self.violations = validator.validate(self.proposed_games)
         print(f"[SCHEDULER] Validation complete: {len(self.violations)} violations in {time_module.time() - t0:.2f}s", flush=True)
 
