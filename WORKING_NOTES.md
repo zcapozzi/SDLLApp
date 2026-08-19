@@ -4,7 +4,46 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Fixed division practices not showing in schedule review, calendar, and day views.
+Last session: Implemented balance-aware slot assignment to reduce b2 (early/late time balance) violations.
+
+---
+
+## Session: August 19, 2026 - Late Game Balance Between Teams (b2 Fix)
+
+### Problem
+The scheduler was fully deterministic - teams sorted by `team_ID` consistently got the same time slots:
+- First eligible matchup always got the first available slot (earliest time)
+- Teams with lower IDs got early slots, higher IDs got late slots
+- `late_counts` were tracked but **never used** during slot assignment
+
+**Example:** BB Juniors - Team Morris: 0 late games. Team Crispell: 4 late games.
+
+### Understanding the Requirement
+The goal is NOT to balance early/late WITHIN each team. The goal is to ensure all teams in a league have roughly the SAME NUMBER of late games. Teams should get early slots whenever possible, but when late slots must be used, they should be distributed evenly among all teams.
+
+### Solution
+1. **Updated validation** (`_check_time_balance`): Now checks if all teams have similar late game counts, flagging teams that are at the min or max of the range when diff > 2.
+
+2. **Updated scheduling in 3 locations** (key insight: preserve slot order, just change which matchups get which slots):
+   - **`_find_complete_round`**: After finding valid matchups, identifies which slot positions are late, then assigns matchups so teams with fewer late games get those late slot positions.
+   - **Greedy slot assignment (2 locations)**: Process slots in original order. For each slot, pick the best matchup: for late slots prefer teams with fewer late games; for early slots prefer teams with more late games.
+
+3. **Key principle**: The total number of late games is unchanged - we're just redistributing WHICH teams get them.
+
+### Results
+- **b2 violations reduced from 24 to 0** ✓
+- **Same late game totals**: BB AA still has 24 early, 8 late (unchanged)
+- **Better distribution**: BB AA range 1-3 (was 0-4), all teams within 2 games of each other
+
+### Files Modified
+- `app/utils/scheduler.py`:
+  - Updated `_check_time_balance()` validation to check between-team balance
+  - Added `_get_late_need_score()` helper method
+  - Modified `_find_complete_round()` to accept `late_counts` and assign slots with balance awareness
+  - Modified greedy slot assignment (2 locations) with improved sorting
+  - Modified catch-up pass
+
+---
 
 ---
 

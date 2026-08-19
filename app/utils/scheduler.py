@@ -432,17 +432,14 @@ class ScheduleValidator:
                     ))
 
     def _check_time_balance(self, league, games, teams):
-        """Rule b2: Balance early vs late start times per team.
+        """Rule b2: Balance late game counts BETWEEN teams.
 
-        Only games starting at 4pm or later count toward this balance:
-        - Early: 4:00 PM to before 6:00 PM
-        - Late: 6:00 PM or later
-        - Games before 4pm: not counted
+        All teams in a league should have roughly the same number of late games.
+        Late games = 6:00 PM or later.
 
         If a league has NO late games at all (no late slots available), skip this
-        check since imbalance is unavoidable due to configuration.
+        check since there's nothing to balance.
         """
-        early_counts = defaultdict(int)  # 4:00 PM to before 6:00 PM
         late_counts = defaultdict(int)   # 6:00 PM or later
 
         for g in games:
@@ -450,43 +447,48 @@ class ScheduleValidator:
             if start_time is None:
                 continue
 
-            # Only count games starting at 4pm or later
-            if start_time < 16:
-                continue
-
-            home = self._get_home_team(g)
-            away = self._get_away_team(g)
-
-            if start_time < 18:  # 4pm to before 6pm = early
-                if home:
-                    early_counts[home] += 1
-                if away:
-                    early_counts[away] += 1
-            else:  # 6pm or later = late
+            # Only count late games (6pm or later)
+            if start_time >= 18:
+                home = self._get_home_team(g)
+                away = self._get_away_team(g)
                 if home:
                     late_counts[home] += 1
                 if away:
                     late_counts[away] += 1
 
         # If there are NO late games in this league at all, skip the check
-        # (late slots aren't available, so imbalance is unavoidable)
         total_late = sum(late_counts.values())
         if total_late == 0:
             return
 
-        for team_id in teams:
-            early = early_counts.get(team_id, 0)
-            late = late_counts.get(team_id, 0)
-            total = early + late
-            if total > 0:
-                diff = abs(early - late)
-                # Allow some imbalance, but flag if more than 2 difference
-                if diff > 2:
+        # Check balance BETWEEN teams - all should have similar late game counts
+        team_late_counts = [late_counts.get(team_id, 0) for team_id in teams]
+        if not team_late_counts:
+            return
+
+        min_late = min(team_late_counts)
+        max_late = max(team_late_counts)
+
+        # Allow difference of up to 2 late games between teams
+        if max_late - min_late > 2:
+            # Find teams that are outliers
+            for team_id in teams:
+                team_late = late_counts.get(team_id, 0)
+                # Flag teams with significantly more or fewer late games than average
+                if team_late == max_late and max_late - min_late > 2:
                     team_name = self._get_team_name(team_id)
                     self.violations.append(ScheduleViolation(
-                        'b2', 'Early/late time balance',
+                        'b2', 'Late game balance between teams',
                         ScheduleViolation.SOFT,
-                        f'{league}: Team {team_name} has {early} early games and {late} late games',
+                        f'{league}: Team {team_name} has {team_late} late games (league range: {min_late}-{max_late})',
+                        teams=[self._build_team_info(team_id)]
+                    ))
+                elif team_late == min_late and max_late - min_late > 2:
+                    team_name = self._get_team_name(team_id)
+                    self.violations.append(ScheduleViolation(
+                        'b2', 'Late game balance between teams',
+                        ScheduleViolation.SOFT,
+                        f'{league}: Team {team_name} has {team_late} late games (league range: {min_late}-{max_late})',
                         teams=[self._build_team_info(team_id)]
                     ))
 
@@ -2509,16 +2511,18 @@ class ScheduleGenerator:
 
         return selected
 
-    def _find_complete_round(self, eligible_matchups, available_slots, games_needed, all_team_ids):
+    def _find_complete_round(self, eligible_matchups, available_slots, games_needed, all_team_ids, late_counts=None):
         """Find a combination of matchups that covers all teams.
 
         Uses backtracking to find games_needed matchups where all teams play exactly once.
+        Then assigns slots with late game balance awareness if late_counts is provided.
 
         Args:
             eligible_matchups: List of (idx, priority, home, away) tuples
             available_slots: List of slot_info dicts
             games_needed: Number of games to schedule (n_teams / 2)
             all_team_ids: Set of all team IDs that must be covered
+            late_counts: Optional dict of team_id -> late game count for balancing
 
         Returns:
             List of (idx, home, away, slot_info) tuples, or None if no valid combination
@@ -2526,10 +2530,9 @@ class ScheduleGenerator:
         if len(available_slots) < games_needed:
             return None
 
-        # Try to find a combination using backtracking
-        def backtrack(selected, teams_used, slot_idx):
+        # Try to find a combination using backtracking (without slot assignment)
+        def backtrack(selected, teams_used):
             if len(selected) == games_needed:
-                # Found a valid combination
                 return selected.copy()
 
             for matchup in eligible_matchups:
@@ -2547,12 +2550,12 @@ class ScheduleGenerator:
                 if any(s[0] == idx for s in selected):
                     continue
 
-                # Try adding this matchup
-                selected.append((idx, home, away, available_slots[slot_idx]))
+                # Try adding this matchup (without slot - we'll assign later)
+                selected.append((idx, home, away))
                 teams_used.add(home.team_ID)
                 teams_used.add(away.team_ID)
 
-                result = backtrack(selected, teams_used, slot_idx + 1)
+                result = backtrack(selected, teams_used)
                 if result is not None:
                     return result
 
@@ -2563,7 +2566,49 @@ class ScheduleGenerator:
 
             return None
 
-        return backtrack([], set(), 0)
+        matchups = backtrack([], set())
+        if matchups is None:
+            return None
+
+        # Now assign slots with late game balance awareness
+        # Keep the same slots in the same positions, but assign matchups
+        # so that teams with fewer late games get the late slots
+        if late_counts is not None:
+            # Identify which slot positions are late (6pm or later)
+            late_slot_indices = set()
+            for i, slot in enumerate(available_slots[:len(matchups)]):
+                if slot['datetime'] and slot['datetime'].hour >= 18:
+                    late_slot_indices.add(i)
+
+            if late_slot_indices:
+                # Sort matchups by late need: teams with fewer late games should get late slots
+                def matchup_late_need(m):
+                    idx, home, away = m
+                    home_late = late_counts.get(home.team_ID, 0)
+                    away_late = late_counts.get(away.team_ID, 0)
+                    return (min(home_late, away_late), home_late + away_late)
+
+                matchups_sorted = sorted(matchups, key=matchup_late_need)
+
+                # Assign: matchups with LOWEST late_need get late slot positions
+                # matchups with HIGHEST late_need get early slot positions
+                result = [None] * len(matchups)
+                late_indices = sorted(late_slot_indices)
+                early_indices = [i for i in range(len(matchups)) if i not in late_slot_indices]
+
+                # Teams needing late slots (lowest late_need) get late positions
+                for i, matchup in enumerate(matchups_sorted):
+                    if i < len(late_indices):
+                        pos = late_indices[i]
+                    else:
+                        pos = early_indices[i - len(late_indices)]
+                    idx, home, away = matchup
+                    result[pos] = (idx, home, away, available_slots[pos])
+
+                return result
+
+        # No late balancing needed - assign sequentially
+        return [(idx, home, away, available_slots[i]) for i, (idx, home, away) in enumerate(matchups)]
 
     def _generate_scrimmages(self, config, teams, league, all_slots, scrimmage_date):
         """Generate scrimmages - one per team, deterministic pairing.
@@ -3081,21 +3126,45 @@ class ScheduleGenerator:
             matchups_for_today = None
 
             if is_odd_league or use_greedy_for_partial or len(available_teams) < num_teams:
-                # Greedy scheduling: pick best matchups one at a time
+                # Greedy scheduling with late game balance awareness
+                # Process slots in order, picking best matchup for each slot
+                # For late slots: prefer teams with fewer late games
+                # For early slots: prefer teams with more late games (so they get early)
                 matchups_for_today = []
                 teams_used_today = set()
-                slot_idx = 0
 
-                for idx, priority, is_repeat, home, away in eligible_matchups:
-                    if slot_idx >= len(available_date_slots):
-                        break
-                    if home.team_ID in teams_used_today or away.team_ID in teams_used_today:
-                        continue
+                for slot in available_date_slots:
+                    is_late_slot = slot['datetime'] and slot['datetime'].hour >= 18
 
-                    matchups_for_today.append((idx, home, away, available_date_slots[slot_idx]))
-                    teams_used_today.add(home.team_ID)
-                    teams_used_today.add(away.team_ID)
-                    slot_idx += 1
+                    # Find best available matchup for this slot
+                    best_matchup = None
+                    best_score = None
+
+                    for idx, priority, is_repeat, home, away in eligible_matchups:
+                        if home.team_ID in teams_used_today or away.team_ID in teams_used_today:
+                            continue
+
+                        home_late = late_counts.get(home.team_ID, 0)
+                        away_late = late_counts.get(away.team_ID, 0)
+                        min_late = min(home_late, away_late)
+                        sum_late = home_late + away_late
+
+                        # For late slots: lower late count = better (teams need late games)
+                        # For early slots: higher late count = better (teams already have late games)
+                        if is_late_slot:
+                            score = (min_late, sum_late, is_repeat, -priority)  # Lower is better
+                        else:
+                            score = (-min_late, -sum_late, is_repeat, -priority)  # Higher late count is better
+
+                        if best_score is None or score < best_score:
+                            best_score = score
+                            best_matchup = (idx, home, away)
+
+                    if best_matchup:
+                        idx, home, away = best_matchup
+                        matchups_for_today.append((idx, home, away, slot))
+                        teams_used_today.add(home.team_ID)
+                        teams_used_today.add(away.team_ID)
 
                 if not matchups_for_today:
                     matchups_for_today = None
@@ -3111,26 +3180,50 @@ class ScheduleGenerator:
                     continue
 
                 # Try to find a COMPLETE round (all teams play) for even leagues
+                # Pass late_counts for balance-aware slot assignment
                 matchups_for_today = self._find_complete_round(
-                    eligible_matchups, available_date_slots, games_per_date, all_team_ids
+                    eligible_matchups, available_date_slots, games_per_date, all_team_ids,
+                    late_counts=late_counts
                 )
 
-                # If complete round fails, fall back to greedy
+                # If complete round fails, fall back to greedy with late game balance awareness
                 if matchups_for_today is None:
                     matchups_for_today = []
                     teams_used_today = set()
-                    slot_idx = 0
 
-                    for idx, priority, is_repeat, home, away in eligible_matchups:
-                        if slot_idx >= len(available_date_slots):
-                            break
-                        if home.team_ID in teams_used_today or away.team_ID in teams_used_today:
-                            continue
+                    # Process slots in order, picking best matchup for each slot
+                    for slot in available_date_slots:
+                        is_late_slot = slot['datetime'] and slot['datetime'].hour >= 18
 
-                        matchups_for_today.append((idx, home, away, available_date_slots[slot_idx]))
-                        teams_used_today.add(home.team_ID)
-                        teams_used_today.add(away.team_ID)
-                        slot_idx += 1
+                        # Find best available matchup for this slot
+                        best_matchup = None
+                        best_score = None
+
+                        for idx, priority, is_repeat, home, away in eligible_matchups:
+                            if home.team_ID in teams_used_today or away.team_ID in teams_used_today:
+                                continue
+
+                            home_late = late_counts.get(home.team_ID, 0)
+                            away_late = late_counts.get(away.team_ID, 0)
+                            min_late = min(home_late, away_late)
+                            sum_late = home_late + away_late
+
+                            # For late slots: lower late count = better
+                            # For early slots: higher late count = better
+                            if is_late_slot:
+                                score = (min_late, sum_late, is_repeat, -priority)
+                            else:
+                                score = (-min_late, -sum_late, is_repeat, -priority)
+
+                            if best_score is None or score < best_score:
+                                best_score = score
+                                best_matchup = (idx, home, away)
+
+                        if best_matchup:
+                            idx, home, away = best_matchup
+                            matchups_for_today.append((idx, home, away, slot))
+                            teams_used_today.add(home.team_ID)
+                            teams_used_today.add(away.team_ID)
 
                     if not matchups_for_today:
                         matchups_for_today = None
@@ -3287,8 +3380,16 @@ class ScheduleGenerator:
                 scheduled_matchups.add(idx)
                 continue
 
-            # Find any available slot
+            # Find any available slot with early/late balance awareness
             assigned = False
+            # Calculate late need for this matchup - teams with fewer late games need late slots more
+            matchup_late_count = self._get_late_need_score(
+                [home.team_ID, away.team_ID], late_counts
+            )
+            # Get average late count for the league to determine if this matchup needs late slots
+            all_late_counts = [late_counts.get(tid, 0) for tid in all_team_ids]
+            avg_late = sum(all_late_counts) / len(all_late_counts) if all_late_counts else 0
+
             for game_date in sorted(slots_info_by_date.keys()):
                 if assigned:
                     break
@@ -3309,6 +3410,9 @@ class ScheduleGenerator:
                             self._team_week_games[away_week_key] >= max_games_per_week):
                         continue
 
+                # Collect available slots for this date, separated by early/late
+                available_early_slots = []
+                available_late_slots = []
                 for slot_info in slots_info_by_date[game_date]:
                     field_id = slot_info['field_id']
                     game_datetime = slot_info['datetime']
@@ -3320,103 +3424,125 @@ class ScheduleGenerator:
                         ):
                             continue
 
-                    slot = slot_info['slot']
+                    if game_datetime and game_datetime.hour < 18:
+                        available_early_slots.append(slot_info)
+                    else:
+                        available_late_slots.append(slot_info)
 
-                    # Balance home/away - prioritize per-pair alternation (a2), then overall balance
-                    actual_home, actual_away = home, away
-                    pair_key = (min(home.team_ID, away.team_ID), max(home.team_ID, away.team_ID))
+                # Choose slot: prefer early slots for everyone
+                # Only use late slots when no early available, and prioritize teams with fewer late games
+                slot_info = None
+                if available_early_slots:
+                    # Early slots preferred for everyone
+                    slot_info = available_early_slots[0]
+                elif available_late_slots:
+                    # Must use late slot - this will be balanced by the outer loop
+                    # (catch-up iterates through matchups, and teams with fewer late games
+                    # will tend to get late slots when early slots run out)
+                    slot_info = available_late_slots[0]
 
-                    # Check per-pair history first
-                    pair_history = pair_home_history[pair_key]
-                    if pair_history:
-                        # Alternate: if last home was team A, make team B home this time
-                        last_home = pair_history[-1]
-                        if last_home == home.team_ID:
-                            actual_home, actual_away = away, home
-                    elif home_counts[home.team_ID] > away_counts[home.team_ID] + 1:
-                        # No pair history - use overall balance
+                if slot_info is None:
+                    continue
+
+                field_id = slot_info['field_id']
+                game_datetime = slot_info['datetime']
+                slot = slot_info['slot']
+
+                # Balance home/away - prioritize per-pair alternation (a2), then overall balance
+                actual_home, actual_away = home, away
+                pair_key = (min(home.team_ID, away.team_ID), max(home.team_ID, away.team_ID))
+
+                # Check per-pair history first
+                pair_history = pair_home_history[pair_key]
+                if pair_history:
+                    # Alternate: if last home was team A, make team B home this time
+                    last_home = pair_history[-1]
+                    if last_home == home.team_ID:
                         actual_home, actual_away = away, home
+                elif home_counts[home.team_ID] > away_counts[home.team_ID] + 1:
+                    # No pair history - use overall balance
+                    actual_home, actual_away = away, home
 
-                    is_early = game_datetime.hour < 18 if game_datetime else True
+                is_early = game_datetime.hour < 18 if game_datetime else True
 
-                    game = ProposedGame(
-                        game_type='regular',
-                        league=config.league,
-                        year=self.year,
-                        is_spring=self.is_spring,
-                        home_team=actual_home,
-                        away_team=actual_away,
-                        field=slot.field if slot else None,
-                        game_date=game_datetime
-                    )
-                    game.slot = slot
+                game = ProposedGame(
+                    game_type='regular',
+                    league=config.league,
+                    year=self.year,
+                    is_spring=self.is_spring,
+                    home_team=actual_home,
+                    away_team=actual_away,
+                    field=slot.field if slot else None,
+                    game_date=game_datetime
+                )
+                game.slot = slot
 
-                    if existing_idx < len(records_to_fill):
-                        existing_game = records_to_fill[existing_idx]
-                        game.id = existing_game.ID
-                        game.existing_record = existing_game
-                        self._slot_assignments[existing_game.ID] = {
-                            'game_id': existing_game.ID,
-                            'home_id': actual_home.team_ID,
-                            'away_id': actual_away.team_ID,
-                            'game_date': game_datetime.isoformat() if game_datetime else None,
-                            'field_id': field_id
-                        }
-                        existing_idx += 1
-                    else:
-                        game.id = self._next_id
-                        self._next_id += 1
+                if existing_idx < len(records_to_fill):
+                    existing_game = records_to_fill[existing_idx]
+                    game.id = existing_game.ID
+                    game.existing_record = existing_game
+                    self._slot_assignments[existing_game.ID] = {
+                        'game_id': existing_game.ID,
+                        'home_id': actual_home.team_ID,
+                        'away_id': actual_away.team_ID,
+                        'game_date': game_datetime.isoformat() if game_datetime else None,
+                        'field_id': field_id
+                    }
+                    existing_idx += 1
+                else:
+                    game.id = self._next_id
+                    self._next_id += 1
 
-                    self.proposed_games.append(game)
+                self.proposed_games.append(game)
 
-                    # Record the catch-up assignment
-                    self._record_decision(
-                        date_str, config.league, slot,
-                        'assigned', 'Catch-up scheduling (partial round)',
-                        game_info={
-                            'home': actual_home.display_name,
-                            'away': actual_away.display_name,
-                            'time': game_datetime.strftime('%I:%M %p') if game_datetime else 'N/A',
-                            'phase': 'catch_up'
-                        }
-                    )
+                # Record the catch-up assignment
+                self._record_decision(
+                    date_str, config.league, slot,
+                    'assigned', 'Catch-up scheduling (partial round)',
+                    game_info={
+                        'home': actual_home.display_name,
+                        'away': actual_away.display_name,
+                        'time': game_datetime.strftime('%I:%M %p') if game_datetime else 'N/A',
+                        'phase': 'catch_up'
+                    }
+                )
 
-                    home_counts[actual_home.team_ID] += 1
-                    away_counts[actual_away.team_ID] += 1
-                    team_game_counts[home.team_ID] += 1
-                    team_game_counts[away.team_ID] += 1
-                    if is_early:
-                        early_counts[actual_home.team_ID] += 1
-                        early_counts[actual_away.team_ID] += 1
-                    else:
-                        late_counts[actual_home.team_ID] += 1
-                        late_counts[actual_away.team_ID] += 1
+                home_counts[actual_home.team_ID] += 1
+                away_counts[actual_away.team_ID] += 1
+                team_game_counts[home.team_ID] += 1
+                team_game_counts[away.team_ID] += 1
+                if is_early:
+                    early_counts[actual_home.team_ID] += 1
+                    early_counts[actual_away.team_ID] += 1
+                else:
+                    late_counts[actual_home.team_ID] += 1
+                    late_counts[actual_away.team_ID] += 1
 
-                    if field_id and game_datetime:
-                        self._add_field_time_usage(field_id, game_datetime, game_duration, config.league, is_practice=False)
+                if field_id and game_datetime:
+                    self._add_field_time_usage(field_id, game_datetime, game_duration, config.league, is_practice=False)
 
-                    self._team_day_usage.add((home.team_ID, date_str))
-                    self._team_day_usage.add((away.team_ID, date_str))
+                self._team_day_usage.add((home.team_ID, date_str))
+                self._team_day_usage.add((away.team_ID, date_str))
 
-                    # Track pair game count for a1 compliance
-                    # Note: pair_key already calculated above for home/away balance
-                    pair_game_counts[pair_key] += 1
+                # Track pair game count for a1 compliance
+                # Note: pair_key already calculated above for home/away balance
+                pair_game_counts[pair_key] += 1
 
-                    # Track per-pair home history for a2 compliance
-                    pair_home_history[pair_key].append(actual_home.team_ID)
+                # Track per-pair home history for a2 compliance
+                pair_home_history[pair_key].append(actual_home.team_ID)
 
-                    # Track last scheduled pair for gap compliance
-                    last_scheduled_pair = pair_key
+                # Track last scheduled pair for gap compliance
+                last_scheduled_pair = pair_key
 
-                    # Update weekly game counter for P/G leagues
-                    if max_games_per_week and config.opening_day_date:
-                        catch_up_week_num = self._get_week_number(game_date, config.opening_day_date)
-                        self._team_week_games[(home.team_ID, catch_up_week_num)] += 1
-                        self._team_week_games[(away.team_ID, catch_up_week_num)] += 1
+                # Update weekly game counter for P/G leagues
+                if max_games_per_week and config.opening_day_date:
+                    catch_up_week_num = self._get_week_number(game_date, config.opening_day_date)
+                    self._team_week_games[(home.team_ID, catch_up_week_num)] += 1
+                    self._team_week_games[(away.team_ID, catch_up_week_num)] += 1
 
-                    scheduled_matchups.add(idx)
-                    assigned = True
-                    break
+                scheduled_matchups.add(idx)
+                assigned = True
+                break
 
             if not assigned:
                 still_unscheduled.append(idx)
@@ -3638,6 +3764,17 @@ class ScheduleGenerator:
         else:
             # Use ISO week number
             return target_date.isocalendar()[1]
+
+    def _get_late_need_score(self, team_ids, late_counts):
+        """Calculate how much a matchup needs a late slot.
+
+        Returns a LOWER score if teams need late slots (have fewer late games).
+        Teams with fewer late games should get priority for late slots.
+        """
+        total_late = 0
+        for team_id in team_ids:
+            total_late += late_counts.get(team_id, 0)
+        return total_late  # Lower = needs late slot more
 
     def _get_dates_for_days(self, start_date, day_numbers, count_needed, end_date=None):
         """Get dates that fall on specified days of week.
