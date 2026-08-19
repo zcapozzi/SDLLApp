@@ -609,6 +609,9 @@ class ScheduleValidator:
         - A = number of practice days from first_practice_date to regular_season_end_date (excluding blackouts)
         - B = number of game days before opening_day (used as practices pre-season)
 
+        Note: If a team has specific practice days configured, those are used instead of
+        the league's practice days to avoid overcounting.
+
         Actual practices = division practices (is_league_practice) + scheduled practices
 
         This ensures that even when slots are limited, the scheduler doesn't "shaft"
@@ -631,34 +634,15 @@ class ScheduleValidator:
         # Get blackout dates
         blackout_dates = SeasonBlackout.get_blackout_dates_set(self.year, self.is_spring)
 
-        # Get practice and game day numbers (0=Monday, 1=Tuesday, etc.)
-        practice_day_nums = set(config.practice_days)  # Days marked as practice
+        # Get game day numbers from league config (0=Monday, 1=Tuesday, etc.)
         game_day_nums = set(config.game_days)  # Days marked as game (or both)
 
-        # Calculate A: practice days from first_practice to regular_season_end (excluding blackouts)
-        practice_day_count = 0
-        current_date = first_practice
-        while current_date <= regular_season_end:
-            if current_date not in blackout_dates:
-                day_of_week = current_date.weekday()
-                if day_of_week in practice_day_nums:
-                    practice_day_count += 1
-            current_date += timedelta(days=1)
-
-        # Calculate B: game days before opening_day (these become practices pre-season)
-        pre_opening_game_day_count = 0
-        current_date = first_practice
-        while current_date < opening_day:
-            if current_date not in blackout_dates:
-                day_of_week = current_date.weekday()
-                if day_of_week in game_day_nums:
-                    pre_opening_game_day_count += 1
-            current_date += timedelta(days=1)
-
-        expected_practices = practice_day_count + pre_opening_game_day_count
-
-        if expected_practices == 0:
-            return
+        # Get teams for this league to access team-specific practice days
+        from app.models.team import TeamSeason
+        league_teams = TeamSeason.query.filter_by(
+            league=league, year=self.year, is_spring=self.is_spring, active=True
+        ).all()
+        team_objects = {t.team_ID: t for t in league_teams}
 
         # Count actual practices per team
         # Division practices (is_league_practice=True) count for ALL teams
@@ -675,8 +659,43 @@ class ScheduleValidator:
                 if team:
                     practice_counts[team] += 1
 
-        # Each team's total = individual practices + division practices
+        # Calculate expected practices per team (team-specific practice days may differ)
         for team_id in teams:
+            team_obj = team_objects.get(team_id)
+
+            # Get practice days for this specific team (uses team's days if set, else league's)
+            if team_obj:
+                practice_day_nums = set(team_obj.get_practice_days(config))
+            else:
+                practice_day_nums = set(config.practice_days)
+
+            # Calculate A: practice days from first_practice to regular_season_end (excluding blackouts)
+            practice_day_count = 0
+            current_date = first_practice
+            while current_date <= regular_season_end:
+                if current_date not in blackout_dates:
+                    day_of_week = current_date.weekday()
+                    if day_of_week in practice_day_nums:
+                        practice_day_count += 1
+                current_date += timedelta(days=1)
+
+            # Calculate B: game days before opening_day (these become practices pre-season)
+            # Note: Pre-opening game days apply to all teams regardless of team-specific practice days
+            pre_opening_game_day_count = 0
+            current_date = first_practice
+            while current_date < opening_day:
+                if current_date not in blackout_dates:
+                    day_of_week = current_date.weekday()
+                    if day_of_week in game_day_nums:
+                        pre_opening_game_day_count += 1
+                current_date += timedelta(days=1)
+
+            expected_practices = practice_day_count + pre_opening_game_day_count
+
+            if expected_practices == 0:
+                continue
+
+            # Each team's total = individual practices + division practices
             actual = practice_counts.get(team_id, 0) + division_practice_count
             if actual < expected_practices:
                 shortfall = expected_practices - actual
