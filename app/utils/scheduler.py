@@ -1686,11 +1686,12 @@ class ScheduleGenerator:
         if field_ids:
             from app.models.field_blackout import FieldBlackout
             all_blackouts = FieldBlackout.query.filter(
-                FieldBlackout.field_id.in_(field_ids)
+                FieldBlackout.field_ID.in_(field_ids),
+                FieldBlackout.active == 1
             ).all()
             self._field_blackouts_cache = defaultdict(list)
             for bo in all_blackouts:
-                self._field_blackouts_cache[bo.field_id].append(bo.blackout_date)
+                self._field_blackouts_cache[bo.field_ID].append(bo.blackout_date)
 
         # =================================================================
 
