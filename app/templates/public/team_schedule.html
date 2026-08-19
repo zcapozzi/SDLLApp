@@ -252,7 +252,15 @@
         </div>
         {% elif next_game %}
         <div class="next-game">
-            <div class="next-game-label">Next Game</div>
+            <div class="next-game-label">
+                {%- if next_game.game_type == 'practice' -%}
+                    Next Practice
+                {%- elif next_game.is_scrimmage -%}
+                    Next Scrimmage
+                {%- else -%}
+                    Next Game
+                {%- endif -%}
+            </div>
             <div class="next-game-date">
                 {{ next_game.game_date.strftime('%A, %B %d') if next_game.game_date else 'TBD' }}
             </div>
