@@ -1009,7 +1009,11 @@
              data-away-name="{{ game.away_team_name|lower if game.away_team_name else '' }}"
              data-league="{{ game.league }}"
              data-type="{{ game.game_type }}">
+            {% if game.is_league_practice %}
+            <span class="game-type-badge practice">div-practice</span>
+            {% else %}
             <span class="game-type-badge {{ game.game_type }}">{{ game.game_type }}</span>
+            {% endif %}
             <span class="game-time">
                 {% if game.game_date %}
                 {{ game.game_date | format_time }}
@@ -1017,7 +1021,7 @@
             </span>
             <span class="game-teams">
                 {% if game.game_type == 'practice' %}
-                    <strong>{{ game.home_team_name or 'TBD' }}</strong>
+                    <strong>{{ game.home_team_name or 'TBD' }}</strong>{% if game.is_league_practice %} <em style="font-size: 11px; color: #666;">(all teams)</em>{% endif %}
                 {% else %}
                     <strong>{{ game.home_team_name or 'TBD' }}</strong> vs {{ game.away_team_name or 'TBD' }}
                 {% endif %}
@@ -1057,9 +1061,15 @@
                 data-type="{{ game.game_type }}">
                 <td>{{ game.game_date | format_date_with_day if game.game_date else 'TBD' }}</td>
                 <td>{{ game.game_date | format_time if game.game_date else '' }}</td>
-                <td><span class="game-type-badge {{ game.game_type }}">{{ game.game_type }}</span></td>
+                <td>
+                    {% if game.is_league_practice %}
+                    <span class="game-type-badge practice">div-practice</span>
+                    {% else %}
+                    <span class="game-type-badge {{ game.game_type }}">{{ game.game_type }}</span>
+                    {% endif %}
+                </td>
                 <td>{{ game.league }}</td>
-                <td>{{ game.home_team_name or 'TBD' }}</td>
+                <td>{{ game.home_team_name or 'TBD' }}{% if game.is_league_practice %} <em style="font-size: 10px;">(all)</em>{% endif %}</td>
                 <td>{{ game.away_team_name or '-' }}</td>
                 <td>{{ game.field_name or 'TBD' }}</td>
             </tr>

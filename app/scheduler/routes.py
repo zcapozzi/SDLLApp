@@ -408,6 +408,39 @@ def review(year, is_spring):
 
     games = proposal.get('games', [])
 
+    # Include manually-created league practices from the database
+    # These are division-wide practices that were created outside the scheduler
+    league_practices = Game.query.filter(
+        Game.active == 1,
+        Game.year == year,
+        Game.is_spring == is_spring,
+        Game.is_league_practice == True
+    ).all()
+
+    for lp in league_practices:
+        # Convert to proposal-style dict format
+        lp_dict = {
+            'id': f'lp_{lp.ID}',  # Prefix to distinguish from proposal games
+            'game_type': 'practice',
+            'league': lp.league,
+            'year': lp.year,
+            'is_spring': lp.is_spring,
+            'home_team_id': lp.home_ID,
+            'home_team_name': lp.home_team.computed_display_name if lp.home_team else 'Unknown',
+            'away_team_id': None,
+            'away_team_name': None,
+            'field_id': lp.location,
+            'field_name': lp.field.location_title if lp.field else lp.location,
+            'game_date': lp.game_date.isoformat() if lp.game_date else None,
+            'is_scrimmage': False,
+            'is_league_practice': True,
+            'slot_id': None
+        }
+        games.append(lp_dict)
+
+    # Also add to proposal for template access (field usage matrix, etc.)
+    proposal['games'] = games
+
     # Apply filters
     if filter_league:
         games = [g for g in games if g['league'] == filter_league]

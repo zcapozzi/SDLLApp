@@ -642,6 +642,36 @@ def calendar(year, is_spring):
                 except (ValueError, TypeError):
                     pass
 
+        # Also include manually-created league practices from the database
+        league_practices = Game.query.filter(
+            Game.active == 1,
+            Game.year == year,
+            Game.is_spring == is_spring,
+            Game.is_league_practice == True
+        ).all()
+
+        for lp in league_practices:
+            if lp.game_date:
+                lp_date = lp.game_date.date() if hasattr(lp.game_date, 'date') else lp.game_date
+                if lp_date not in proposed_games_by_date:
+                    proposed_games_by_date[lp_date] = []
+                # Convert to proposal-style dict
+                lp_dict = {
+                    'id': f'lp_{lp.ID}',
+                    'game_type': 'practice',
+                    'league': lp.league,
+                    'home_team_id': lp.home_ID,
+                    'home_team_name': lp.home_team.computed_display_name if lp.home_team else 'Unknown',
+                    'away_team_id': None,
+                    'away_team_name': None,
+                    'field_name': lp.field.location_title if lp.field else lp.location,
+                    'game_date': lp.game_date.isoformat() if lp.game_date else None,
+                    'is_scrimmage': False,
+                    'is_league_practice': True,
+                    'no_time_limit': False
+                }
+                proposed_games_by_date[lp_date].append(lp_dict)
+
     for i in range(7):
         day_date = week_start + timedelta(days=i)
 
@@ -662,7 +692,8 @@ def calendar(year, is_spring):
                     'status': 'scheduled',
                     'game_type': g.get('game_type', 'regular'),
                     'is_scrimmage': g.get('is_scrimmage', False),
-                    'display_type': g.get('game_type', 'regular') if not g.get('is_scrimmage') else 'scrimmage',
+                    'is_league_practice': g.get('is_league_practice', False),
+                    'display_type': 'div-practice' if g.get('is_league_practice') else (g.get('game_type', 'regular') if not g.get('is_scrimmage') else 'scrimmage'),
                     'home_ID': g.get('home_team_id'),
                     'away_ID': g.get('away_team_id'),
                     'home_team': type('Team', (), {'computed_display_name': g.get('home_team_name', 'TBD')})() if g.get('home_team_id') else None,
@@ -778,7 +809,8 @@ def day_view(year, is_spring, target_date):
                             'status': 'scheduled',
                             'game_type': g.get('game_type', 'regular'),
                             'is_scrimmage': g.get('is_scrimmage', False),
-                            'display_type': g.get('game_type', 'regular') if not g.get('is_scrimmage') else 'scrimmage',
+                            'is_league_practice': g.get('is_league_practice', False),
+                            'display_type': 'div-practice' if g.get('is_league_practice') else (g.get('game_type', 'regular') if not g.get('is_scrimmage') else 'scrimmage'),
                             'home_ID': g.get('home_team_id'),
                             'away_ID': g.get('away_team_id'),
                             'home_team': type('Team', (), {'computed_display_name': g.get('home_team_name', 'TBD')})() if g.get('home_team_id') else None,
@@ -789,6 +821,36 @@ def day_view(year, is_spring, target_date):
                         games.append(game_obj)
                 except (ValueError, TypeError):
                     pass
+
+        # Also include manually-created league practices from the database
+        league_practices = Game.query.filter(
+            Game.active == 1,
+            Game.year == year,
+            Game.is_spring == is_spring,
+            Game.is_league_practice == True,
+            db.func.date(Game.game_date) == view_date
+        ).all()
+
+        for lp in league_practices:
+            game_obj = type('ProposedGame', (), {
+                'ID': f'lp_{lp.ID}',
+                'game_date': lp.game_date,
+                'location': lp.field.location_title if lp.field else lp.location,
+                'league': lp.league,
+                'status': 'scheduled',
+                'game_type': 'practice',
+                'is_scrimmage': False,
+                'is_league_practice': True,
+                'display_type': 'div-practice',
+                'home_ID': lp.home_ID,
+                'away_ID': None,
+                'home_team': lp.home_team,
+                'away_team': None,
+                'no_time_limit': False,
+                'is_proposed': False  # These are saved in DB
+            })()
+            games.append(game_obj)
+
         # Sort by game_date
         games.sort(key=lambda x: x.game_date if x.game_date else dt.min)
     else:
