@@ -11,7 +11,7 @@ A field slot's capacity is determined by both:
 3. The league's game/practice duration settings
 """
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from collections import defaultdict
 import random
 
@@ -143,6 +143,7 @@ class ScheduleValidator:
         self.violations = []
         self._team_names = {}  # Reset cache
         self._league_configs = {}  # Reset league config cache
+        self._all_games = games  # Store for cross-reference in f2 validation
 
         # Load league configurations for minimum games requirement
         league_configs = LeagueSeason.get_by_season(self.year, self.is_spring)
@@ -576,14 +577,20 @@ class ScheduleValidator:
         for that league is empty at the same time. Coaches prefer being alone at a
         non-preferred field over sharing their preferred field with another team.
 
-        Note: Only considers fields that actually have practices scheduled somewhere
-        in the season (proving they have slot allocations), not just any eligible field.
+        Note: Only considers fields that have slots at the SAME TIME (hour:minute)
+        across any date in the season. Also considers practice duration - a field
+        must be empty for the entire practice duration to be considered available.
         """
         if not practices:
             return
 
+        # Get practice duration for this league
+        league_obj = self._league_cache.get(league) if hasattr(self, '_league_cache') else None
+        if not league_obj:
+            league_obj = League.get_by_name(league)
+        practice_duration = league_obj.get_practice_duration() if league_obj else 90
+
         # Build set of fields actually used for this league's practices
-        # (these are fields with slot allocations)
         fields_with_slots = set()
         for p in practices:
             field = None
@@ -598,42 +605,72 @@ class ScheduleValidator:
             # Need at least 2 fields to have a sharing violation
             return
 
-        # Group practices by (date, start_time)
+        # Build map of which fields have slots at which (day_of_week, hour, minute) combinations
+        # across ALL dates. This tells us which fields have time slots on specific days at specific times.
+        # Key is (day_of_week, hour, minute) to match the assignment logic's day-based slot filtering.
+        fields_by_dow_time_slot = defaultdict(set)  # (day_of_week, hour, minute) -> set of field_ids
+        for p in practices:
+            game_date = self._get_game_date(p)
+            if not game_date:
+                continue
+            field = None
+            if hasattr(p, 'field') and p.field:
+                field = p.field.ID if hasattr(p.field, 'ID') else p.field
+            elif hasattr(p, 'location'):
+                field = p.location
+            if field:
+                time_key = (game_date.weekday(), game_date.hour, game_date.minute)
+                fields_by_dow_time_slot[time_key].add(field)
+
+        # Group practices by (date, hour, minute) - slot level
         practices_by_datetime = defaultdict(list)
         for p in practices:
             game_date = self._get_game_date(p)
             if not game_date:
                 continue
-
             field = None
             if hasattr(p, 'field') and p.field:
                 field = p.field.ID if hasattr(p.field, 'ID') else p.field
             elif hasattr(p, 'location'):
                 field = p.location
-
             if field:
-                # Key is (date, hour, minute) to group by time slot
                 key = (game_date.date(), game_date.hour, game_date.minute)
-                practices_by_datetime[key].append({'practice': p, 'field_id': field})
+                practices_by_datetime[key].append({
+                    'practice': p,
+                    'field_id': field,
+                    'datetime': game_date
+                })
 
-        # Also group by (date) to know which fields are available on each date
-        practices_by_date = defaultdict(set)
-        for p in practices:
-            game_date = self._get_game_date(p)
+        # Build a lookup of ALL activities by (field_id, date) for overlap checking
+        # Uses self._all_games to check against ALL leagues' activities, not just this league
+        all_activities_by_field_date = defaultdict(list)
+        for activity in getattr(self, '_all_games', practices):
+            game_date = self._get_game_date(activity)
             if not game_date:
                 continue
             field = None
-            if hasattr(p, 'field') and p.field:
-                field = p.field.ID if hasattr(p.field, 'ID') else p.field
-            elif hasattr(p, 'location'):
-                field = p.location
+            if hasattr(activity, 'field') and activity.field:
+                field = activity.field.ID if hasattr(activity.field, 'ID') else activity.field
+            elif hasattr(activity, 'location'):
+                field = activity.location
             if field:
-                practices_by_date[game_date.date()].add(field)
+                # Store tuple of (start_time, duration) for accurate overlap checking
+                # Use game duration for games, practice duration for practices
+                is_practice = self._is_practice(activity)
+                activity_league = getattr(activity, 'league', league)
+                league_obj = self._league_cache.get(activity_league) if hasattr(self, '_league_cache') else None
+                if not league_obj:
+                    league_obj = League.get_by_name(activity_league)
+                if is_practice:
+                    duration = league_obj.get_practice_duration() if league_obj else 90
+                else:
+                    duration = league_obj.get_game_duration() if league_obj else 120
+                all_activities_by_field_date[(field, game_date.date())].append((game_date, duration))
 
-        # Check each time slot
+        # Check each time slot for unnecessary sharing
         violations_found = []
         for (pdate, hour, minute), slot_practices in practices_by_datetime.items():
-            # Get unique fields being used at this specific time
+            # Get fields being used at this specific time slot
             fields_used_now = set(p['field_id'] for p in slot_practices)
 
             # Check if any field has multiple teams (sharing)
@@ -645,17 +682,43 @@ class ScheduleValidator:
             if not shared_fields:
                 continue  # No sharing at this time slot
 
-            # Get fields that have practices on this DATE (proving they have slots for this day)
-            fields_available_this_day = practices_by_date.get(pdate, set())
+            # Get fields that have slots at this DAY OF WEEK and TIME across any date
+            # Only consider fields that have practices on the SAME day of week at the same time
+            # This matches the assignment logic which uses day-of-week specific slots
+            day_of_week = pdate.weekday()
+            fields_available_at_this_time = fields_by_dow_time_slot.get((day_of_week, hour, minute), set())
 
-            # Empty fields = fields used on this day but not at this specific time
-            empty_fields_at_this_time = fields_available_this_day - fields_used_now
+            # Potentially empty = fields that have this time slot but aren't being used now
+            potentially_empty = fields_available_at_this_time - fields_used_now
 
-            if empty_fields_at_this_time:
-                # Sharing occurred when other fields with day slots were empty - violation!
+            if not potentially_empty:
+                continue  # No alternative fields have slots at this time
+
+            # Check if these fields are TRULY empty considering practice duration
+            start_dt = datetime.combine(pdate, time(hour, minute))
+            end_dt = start_dt + timedelta(minutes=practice_duration)
+
+            actually_empty = []
+            for field_id in potentially_empty:
+                # First check if field is available on this specific date (start date, blackouts)
+                field_obj = Field.query.get(field_id)
+                if field_obj and not field_obj.is_available_on_date(pdate):
+                    continue  # Field not available on this date
+
+                is_empty = True
+                # Check if this field has any activity that overlaps with our time window
+                for existing_start, existing_duration in all_activities_by_field_date.get((field_id, pdate), []):
+                    existing_end = existing_start + timedelta(minutes=existing_duration)
+                    if start_dt < existing_end and end_dt > existing_start:
+                        is_empty = False
+                        break
+                if is_empty:
+                    actually_empty.append(field_id)
+
+            if actually_empty:
+                # Sharing occurred when other fields were truly empty - violation!
                 for shared_field in shared_fields:
                     shared_count = field_counts[shared_field]
-                    # Get field name
                     field_obj = Field.query.get(shared_field)
                     field_name = field_obj.location_title if field_obj else f'Field {shared_field}'
 
@@ -664,7 +727,7 @@ class ScheduleValidator:
                         'time': f'{hour:02d}:{minute:02d}',
                         'field': field_name,
                         'teams_sharing': shared_count,
-                        'empty_fields': len(empty_fields_at_this_time)
+                        'empty_fields': len(actually_empty)
                     })
 
         if violations_found:
