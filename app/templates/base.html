@@ -132,7 +132,7 @@
                     <div class="dropdown-divider"></div>
                     <a href="{{ url_for('seasons.manage_leagues', year=current_season_year, is_spring=current_season_is_spring) }}">Playoffs</a>
                     {% if current_user.is_admin() %}
-                    <a href="{{ url_for('seasons.reset', year=current_season_year, is_spring=current_season_is_spring) }}" style="color: #c33;">Reset Season</a>
+                    <a href="{{ url_for('seasons.reset_season', year=current_season_year, is_spring=current_season_is_spring) }}" style="color: #c33;">Reset Season</a>
                     {% endif %}
                 </div>
             </div>
