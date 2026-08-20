@@ -200,6 +200,54 @@
             margin-top: 3px;
         }
 
+        /* Ad Block */
+        .ad-container {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .ad-container a {
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        .ad-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+        .ad-headline {
+            font-size: 16px;
+            font-weight: 600;
+            color: rgb(34, 139, 34);
+            margin-bottom: 5px;
+        }
+        .ad-description {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        .ad-cta {
+            display: inline-block;
+            background: rgb(34, 139, 34);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .ad-label {
+            display: block;
+            font-size: 10px;
+            color: #999;
+            margin-top: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
         /* Footer */
         .footer {
             text-align: center;
@@ -289,6 +337,30 @@
             </div>
             {% endif %}
         </div>
+
+        {# Ad Block - shown after next game #}
+        {% if ad %}
+        <div class="ad-container" id="ad-{{ ad.ID }}" data-ad-id="{{ ad.ID }}" data-impression-token="{{ impression_token }}">
+            <a href="{{ url_for('public.ad_click', token=impression_token) }}?ad_id={{ ad.ID }}"
+               class="ad-link"
+               onclick="return trackAdClick(event, this);">
+                {% if ad.image_url %}
+                <img src="{{ ad.image_url }}" alt="{{ ad.alt_text or ad.name }}">
+                {% endif %}
+                {% if ad.headline %}
+                <div class="ad-headline">{{ ad.headline }}</div>
+                {% endif %}
+                {% if ad.description %}
+                <div class="ad-description">{{ ad.description }}</div>
+                {% endif %}
+                {% if ad.click_url %}
+                <div class="ad-cta">Learn More</div>
+                {% endif %}
+            </a>
+            <span class="ad-label">Presented by {{ ad.sponsor or 'SDLL' }}</span>
+        </div>
+        {% endif %}
+
         {% elif not upcoming_games %}
         <div class="no-games">
             <p>No upcoming games scheduled.</p>
@@ -386,7 +458,121 @@
         <div class="footer">
             <p>South Durham Little League</p>
             <p><a href="https://southdurhamlittleleague.org">southdurhamlittleleague.org</a></p>
+            <p style="margin-top: 10px;"><a href="{{ url_for('public.privacy') }}">Privacy</a></p>
         </div>
     </div>
+
+    {# Analytics and Ad Tracking - Privacy Respecting, First-Party Only #}
+    <script>
+    (function() {
+        var pageLoadTime = Date.now();
+        var pageViewId = {{ page_view_id|default('null') }};
+        var impressionToken = {{ impression_token|tojson if impression_token else 'null' }};
+
+        // Send beacon on page unload with time on page
+        function sendPageBeacon() {
+            var timeOnPage = Math.floor((Date.now() - pageLoadTime) / 1000);
+            if (pageViewId && navigator.sendBeacon) {
+                navigator.sendBeacon('/s/beacon', JSON.stringify({
+                    page_view_id: pageViewId,
+                    viewport_width: window.innerWidth,
+                    viewport_height: window.innerHeight,
+                    time_on_page: timeOnPage
+                }));
+            }
+        }
+
+        // Track ad viewability (IAB standard: 50% visible for 1+ second)
+        var adViewStart = null;
+        var adViewableTime = 0;
+        var adWasViewable = false;
+
+        function checkAdViewability() {
+            var adEl = document.querySelector('.ad-container');
+            if (!adEl || !impressionToken) return;
+
+            var rect = adEl.getBoundingClientRect();
+            var viewportHeight = window.innerHeight;
+            var adHeight = rect.height;
+
+            // Calculate percentage visible
+            var visibleTop = Math.max(0, rect.top);
+            var visibleBottom = Math.min(viewportHeight, rect.bottom);
+            var visibleHeight = Math.max(0, visibleBottom - visibleTop);
+            var percentVisible = visibleHeight / adHeight;
+
+            if (percentVisible >= 0.5) {
+                // Ad is 50%+ visible
+                if (!adViewStart) {
+                    adViewStart = Date.now();
+                }
+                var currentViewTime = (Date.now() - adViewStart) / 1000;
+                adViewableTime += currentViewTime;
+                adViewStart = Date.now();
+
+                if (adViewableTime >= 1 && !adWasViewable) {
+                    adWasViewable = true;
+                    // Send viewability beacon
+                    if (navigator.sendBeacon) {
+                        navigator.sendBeacon('/s/ad/viewability', JSON.stringify({
+                            impression_token: impressionToken,
+                            was_viewable: true,
+                            viewable_seconds: adViewableTime,
+                            viewport_width: window.innerWidth
+                        }));
+                    }
+                }
+            } else {
+                adViewStart = null;
+            }
+        }
+
+        // Check viewability periodically
+        if (impressionToken) {
+            setInterval(checkAdViewability, 200);
+        }
+
+        // Send final viewability on unload
+        function sendAdBeacon() {
+            if (impressionToken && navigator.sendBeacon) {
+                navigator.sendBeacon('/s/ad/viewability', JSON.stringify({
+                    impression_token: impressionToken,
+                    was_viewable: adWasViewable,
+                    viewable_seconds: adViewableTime,
+                    viewport_width: window.innerWidth
+                }));
+            }
+        }
+
+        // Handle page visibility changes and unload
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'hidden') {
+                sendPageBeacon();
+                sendAdBeacon();
+            }
+        });
+
+        window.addEventListener('pagehide', function() {
+            sendPageBeacon();
+            sendAdBeacon();
+        });
+
+        // Track ad clicks with validation data
+        window.trackAdClick = function(event, link) {
+            var timeToClick = Date.now() - pageLoadTime;
+            var clickX = event.clientX;
+            var clickY = event.clientY;
+
+            // Append validation params to URL
+            var url = new URL(link.href, window.location.origin);
+            url.searchParams.set('ttc', timeToClick);
+            url.searchParams.set('x', clickX);
+            url.searchParams.set('y', clickY);
+            link.href = url.toString();
+
+            return true; // Allow the click to proceed
+        };
+    })();
+    </script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 """Public routes for team schedules (no authentication required)."""
 
-from flask import render_template, abort
+from flask import render_template, abort, request, make_response, jsonify
 from flask_login import current_user
 from datetime import datetime, date
 from app.public import public_bp
@@ -9,7 +9,32 @@ from app.models.game import Game
 from app.models.league_season import LeagueSeason
 from app.models.schedule_proposal import ScheduleProposal
 from app.models.field import Field
+from app.models.analytics import PageView, Ad, AdImpression, AdClick, generate_session_id
 from app.extensions import db
+
+# Cookie name for anonymous session tracking
+SESSION_COOKIE_NAME = 'sdll_session'
+SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 days
+
+
+def _get_or_create_session_id():
+    """Get existing session ID from cookie or create a new one."""
+    session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    if not session_id:
+        session_id = generate_session_id()
+    return session_id
+
+
+def _set_session_cookie(response, session_id):
+    """Set the session cookie on the response."""
+    response.set_cookie(
+        SESSION_COOKIE_NAME,
+        session_id,
+        max_age=SESSION_COOKIE_MAX_AGE,
+        httponly=True,
+        samesite='Lax',
+        secure=request.is_secure
+    )
 
 
 def _build_game_object_from_proposal(game_data, team, all_teams_by_id, fields_by_name):
@@ -102,8 +127,14 @@ def team_schedule(token):
         proposal = ScheduleProposal.get_for_season(team.year, team.is_spring)
 
         if proposal and not can_see_proposal:
-            # Non-admin viewing unreleased schedule
-            return render_template(
+            # Non-admin viewing unreleased schedule - still track the visit
+            session_id = _get_or_create_session_id()
+            try:
+                PageView.log_view('team_schedule', token, request, session_id)
+            except Exception:
+                pass
+
+            response = make_response(render_template(
                 'public/team_schedule.html',
                 team=team,
                 season_name=season_name,
@@ -112,7 +143,9 @@ def team_schedule(token):
                 upcoming_games=[],
                 past_games=[],
                 today=today
-            )
+            ))
+            _set_session_cookie(response, session_id)
+            return response
 
         if proposal and can_see_proposal:
             # Admin viewing proposed schedule
@@ -183,7 +216,24 @@ def team_schedule(token):
                     else:
                         past_games.append(game)
 
-            return render_template(
+            # Track page view and get ad (for admin viewing proposal)
+            session_id = _get_or_create_session_id()
+            page_view = None
+            ad = None
+            impression = None
+
+            try:
+                page_view = PageView.log_view('team_schedule', token, request, session_id)
+                ad = Ad.get_active_ad(team.league)
+                if ad and page_view:
+                    impression = AdImpression.log_impression(
+                        ad, page_view, session_id, token,
+                        PageView._detect_device_type(request.headers.get('User-Agent', ''))
+                    )
+            except Exception:
+                pass
+
+            response = make_response(render_template(
                 'public/team_schedule.html',
                 team=team,
                 season_name=season_name,
@@ -191,8 +241,13 @@ def team_schedule(token):
                 upcoming_games=upcoming_games,
                 past_games=past_games,
                 today=today,
-                is_proposal=True  # Flag for template to show "Proposed" badge
-            )
+                is_proposal=True,  # Flag for template to show "Proposed" badge
+                page_view_id=page_view.ID if page_view else None,
+                ad=ad,
+                impression_token=impression.impression_token if impression else None
+            ))
+            _set_session_cookie(response, session_id)
+            return response
 
     # Default: Show saved games (locked schedule or no proposal)
     games = Game.query.filter(
@@ -218,12 +273,137 @@ def team_schedule(token):
             else:
                 past_games.append(game)
 
-    return render_template(
+    # Track page view and get ad
+    session_id = _get_or_create_session_id()
+    page_view = None
+    ad = None
+    impression = None
+
+    try:
+        page_view = PageView.log_view('team_schedule', token, request, session_id)
+        ad = Ad.get_active_ad(team.league)
+        if ad and page_view:
+            impression = AdImpression.log_impression(
+                ad, page_view, session_id, token,
+                PageView._detect_device_type(request.headers.get('User-Agent', ''))
+            )
+    except Exception:
+        pass  # Don't fail the page if tracking fails
+
+    response = make_response(render_template(
         'public/team_schedule.html',
         team=team,
         season_name=season_name,
         next_game=next_game,
         upcoming_games=upcoming_games,
         past_games=past_games,
-        today=today
-    )
+        today=today,
+        page_view_id=page_view.ID if page_view else None,
+        ad=ad,
+        impression_token=impression.impression_token if impression else None
+    ))
+    _set_session_cookie(response, session_id)
+    return response
+
+
+@public_bp.route('/privacy')
+def privacy():
+    """Privacy policy page."""
+    session_id = _get_or_create_session_id()
+
+    try:
+        PageView.log_view('privacy', None, request, session_id)
+    except Exception:
+        pass
+
+    response = make_response(render_template('public/privacy.html'))
+    _set_session_cookie(response, session_id)
+    return response
+
+
+@public_bp.route('/beacon', methods=['POST'])
+def tracking_beacon():
+    """Receive tracking beacon data from JavaScript.
+
+    Updates page view with viewport size and time on page.
+    """
+    try:
+        data = request.get_json() or {}
+        page_view_id = data.get('page_view_id')
+        viewport_width = data.get('viewport_width')
+        viewport_height = data.get('viewport_height')
+        time_on_page = data.get('time_on_page')
+
+        if page_view_id:
+            PageView.update_from_beacon(
+                page_view_id,
+                viewport_width,
+                viewport_height,
+                time_on_page
+            )
+        return jsonify({'status': 'ok'})
+    except Exception:
+        return jsonify({'status': 'error'}), 500
+
+
+@public_bp.route('/ad/viewability', methods=['POST'])
+def ad_viewability_beacon():
+    """Receive ad viewability beacon data from JavaScript."""
+    try:
+        data = request.get_json() or {}
+        impression_token = data.get('impression_token')
+        was_viewable = data.get('was_viewable', False)
+        viewable_seconds = data.get('viewable_seconds', 0)
+        viewport_width = data.get('viewport_width')
+
+        if impression_token:
+            AdImpression.update_viewability(
+                impression_token,
+                was_viewable,
+                viewable_seconds,
+                viewport_width
+            )
+        return jsonify({'status': 'ok'})
+    except Exception:
+        return jsonify({'status': 'error'}), 500
+
+
+@public_bp.route('/ad/click/<token>')
+def ad_click(token):
+    """Handle ad click with validation."""
+    session_id = _get_or_create_session_id()
+
+    # Get click data from query params
+    ad_id = request.args.get('ad_id', type=int)
+    time_to_click = request.args.get('ttc', type=int)
+    click_x = request.args.get('x', type=int)
+    click_y = request.args.get('y', type=int)
+
+    if not ad_id:
+        abort(400)
+
+    # Get the ad
+    ad = Ad.query.get(ad_id)
+    if not ad:
+        abort(404)
+
+    # Log and validate the click
+    try:
+        AdClick.log_click(
+            ad_id=ad_id,
+            impression_id=None,  # Will be looked up by token
+            click_token=token,
+            session_id=session_id,
+            time_to_click_ms=time_to_click,
+            click_x=click_x,
+            click_y=click_y
+        )
+    except Exception:
+        pass  # Don't fail redirect if tracking fails
+
+    # Redirect to ad destination
+    if ad.click_url:
+        from flask import redirect
+        return redirect(ad.click_url)
+    else:
+        return redirect('/')

@@ -4,7 +4,74 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Added Practice Pairings feature - allows two teams to be permanently paired for shared practices on a specific day of the week.
+Last session: Added privacy-respecting analytics and self-hosted ad system for public schedule pages.
+
+---
+
+## Session: August 20, 2026 - Analytics & Ad System
+
+### Overview
+Implemented first-party analytics and self-hosted ad inventory for public schedule pages. No third-party tracking, no PII collection, fully privacy-respecting.
+
+### Privacy Approach (see privacyApproach.md)
+- **First-party only**: All data stays in our database
+- **No PII**: IP addresses are hashed, session IDs are random UUIDs
+- **No cross-site tracking**: Session cookies are same-site only
+- **Transparent**: Public privacy page explains our approach
+
+### Database Models (`app/models/analytics.py`)
+
+1. **PageView**: Tracks anonymous page views
+   - Hashed IP, device type, viewport, time on page
+   - Session ID via anonymous cookie
+
+2. **Ad**: Self-hosted ad/sponsor content
+   - Headline, description, image, click URL
+   - Optional targeting by league
+   - Scheduling (start/end dates)
+
+3. **AdImpression**: Tracks ad displays
+   - IAB viewability (50% visible for 1+ sec)
+   - Device type, viewport
+
+4. **AdClick**: Tracks validated clicks
+   - Time-to-click validation (bot detection)
+   - Click position validation
+   - Nonce token to prevent replays
+
+### Implementation
+
+**Server-side (routes.py)**:
+- `_get_or_create_session_id()`: Anonymous session cookie management
+- `/s/<token>`: Logs PageView, gets active Ad, logs AdImpression
+- `/s/privacy`: Privacy policy page
+- `/s/beacon`: Receives JS beacon data (viewport, time on page)
+- `/s/ad/viewability`: Receives viewability data
+- `/s/ad/click/<token>`: Validates and logs clicks, redirects to destination
+
+**Client-side (team_schedule.html)**:
+- Beacon on page unload (time on page, viewport)
+- Intersection Observer for ad viewability
+- Click tracking with validation params
+
+### Files Created/Modified
+
+| File | Action |
+|------|--------|
+| `privacyApproach.md` | CREATE - Privacy principles document |
+| `app/models/analytics.py` | CREATE - PageView, Ad, AdImpression, AdClick models |
+| `app/templates/public/privacy.html` | CREATE - Public privacy page |
+| `app/templates/public/team_schedule.html` | MODIFY - Add ad block and tracking JS |
+| `app/public/routes.py` | MODIFY - Add tracking and ad routes |
+| `app/models/__init__.py` | MODIFY - Add analytics imports |
+| `scripts/add_analytics_tables.sql` | CREATE - Database migration |
+
+### SQL Migration Required
+Run `scripts/add_analytics_tables.sql` on the database to create:
+- `sdll_page_views`
+- `sdll_ads`
+- `sdll_ad_impressions`
+- `sdll_ad_clicks`
 
 ---
 
