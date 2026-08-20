@@ -123,7 +123,10 @@ def api_cancel_game():
     Expects JSON body:
     {
         "game_id": int,
-        "reason": str (optional)
+        "reason": str (optional),
+        "is_proposed": bool (optional),
+        "year": int (optional, required if is_proposed),
+        "is_spring": int (optional, required if is_proposed)
     }
 
     Returns JSON with success status and message.
@@ -141,8 +144,35 @@ def api_cancel_game():
             return jsonify({'success': False, 'message': 'game_id is required'}), 400
 
         reason = data.get('reason', '')
+        is_proposed = data.get('is_proposed', False)
+        year = data.get('year')
+        is_spring = data.get('is_spring')
 
-        # Import the service
+        # Check if this is a proposed game (negative ID or explicitly marked)
+        if is_proposed and year is not None and is_spring is not None:
+            from app.models.schedule_proposal import ScheduleProposal
+            proposal = ScheduleProposal.get_for_season(int(year), int(is_spring))
+
+            if not proposal:
+                return jsonify({'success': False, 'message': 'No proposal found for this season'}), 404
+
+            # Delete the game from the proposal
+            deleted = proposal.delete_game(int(game_id))
+
+            if not deleted:
+                return jsonify({'success': False, 'message': f'Game {game_id} not found in proposal'}), 404
+
+            logger.info(f'API: Deleted proposed game {game_id} from proposal')
+
+            return jsonify({
+                'success': True,
+                'message': 'Proposed game deleted',
+                'game_id': game_id,
+                'notifications_queued': 0,
+                'change_id': None
+            })
+
+        # Otherwise, cancel the saved game in the Game table
         from app.services.game_changes import GameChangeService
 
         # Cancel the game
