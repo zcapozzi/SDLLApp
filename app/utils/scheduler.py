@@ -348,7 +348,12 @@ class ScheduleValidator:
         return None
 
     def _check_matchup_balance(self, league, games, teams):
-        """Rule a1: Play everyone at least once, max 1 game difference."""
+        """Rule a1: Play everyone at least once, max 1 game difference.
+
+        Note: If total games < total pairs, it's mathematically impossible
+        for all pairs to play. In that case, unplayed pairs are reported
+        as SOFT (unavoidable) rather than HARD (fixable).
+        """
         matchup_counts = defaultdict(int)
 
         for g in games:
@@ -357,6 +362,12 @@ class ScheduleValidator:
             if home and away:
                 key = tuple(sorted([home, away]))
                 matchup_counts[key] += 1
+
+        # Calculate mathematical limits
+        n = len(teams)
+        total_games = len(games)
+        total_pairs = n * (n - 1) // 2
+        all_pairs_possible = total_games >= total_pairs
 
         # Check each pair of teams
         min_games = float('inf')
@@ -373,12 +384,18 @@ class ScheduleValidator:
                 max_games = max(max_games, count)
 
         if unplayed_pairs:
+            # Only HARD violation if mathematically possible to have all pairs play
+            severity = ScheduleViolation.HARD if all_pairs_possible else ScheduleViolation.SOFT
+            note = "" if all_pairs_possible else f" (only {total_games} games for {total_pairs} pairs)"
             self.violations.append(ScheduleViolation(
                 'a1', 'Play everyone at least once',
-                ScheduleViolation.HARD,
-                f'{league}: {len(unplayed_pairs)} team pairs have not played each other'
+                severity,
+                f'{league}: {len(unplayed_pairs)} team pairs have not played each other{note}'
             ))
 
+        # Check matchup imbalance (max gap > 1)
+        # For cases where total_games < total_pairs, min_games will be 0, max_games 1,
+        # and gap = 1 is acceptable (unavoidable)
         if max_games - min_games > 1:
             self.violations.append(ScheduleViolation(
                 'a1', 'Matchup balance',
@@ -605,17 +622,20 @@ class ScheduleValidator:
     def _check_expected_practice_count(self, league, practices, teams):
         """Rule c5: Each team should have the expected number of practices.
 
-        Expected practices = A + B where:
-        - A = number of practice days from first_practice_date to regular_season_end_date (excluding blackouts)
-        - B = number of game days before opening_day (used as practices pre-season)
+        For non-P/G leagues:
+            Expected = A + B where:
+            - A = practice days from first_practice to regular_season_end (excluding blackouts)
+            - B = game days before opening_day (pre-season practices)
+
+        For P/G leagues (where practice and game days overlap):
+            Expected = A + B where:
+            - A = weeks from opening_day to regular_season_end (1 practice per week)
+            - B = all activity days before opening_day (pre-season practices)
 
         Note: If a team has specific practice days configured, those are used instead of
         the league's practice days to avoid overcounting.
 
         Actual practices = division practices (is_league_practice) + scheduled practices
-
-        This ensures that even when slots are limited, the scheduler doesn't "shaft"
-        leagues that are processed later in the allocation order.
         """
         from app.models.season_blackout import SeasonBlackout
         from datetime import timedelta
@@ -634,8 +654,13 @@ class ScheduleValidator:
         # Get blackout dates
         blackout_dates = SeasonBlackout.get_blackout_dates_set(self.year, self.is_spring)
 
+        # Check if this is a P/G league
+        is_pg_league = config.has_pg_days
+
         # Get game day numbers from league config (0=Monday, 1=Tuesday, etc.)
         game_day_nums = set(config.game_days)  # Days marked as game (or both)
+        practice_day_nums_league = set(config.practice_days)  # Days marked as practice (or both)
+        all_activity_days = game_day_nums | practice_day_nums_league
 
         # Get teams for this league to access team-specific practice days
         from app.models.team import TeamSeason
@@ -669,28 +694,39 @@ class ScheduleValidator:
             else:
                 practice_day_nums = set(config.practice_days)
 
-            # Calculate A: practice days from first_practice to regular_season_end (excluding blackouts)
-            practice_day_count = 0
-            current_date = first_practice
-            while current_date <= regular_season_end:
-                if current_date not in blackout_dates:
-                    day_of_week = current_date.weekday()
-                    if day_of_week in practice_day_nums:
-                        practice_day_count += 1
-                current_date += timedelta(days=1)
+            # Check if team has specific practice days configured
+            team_has_specific_days = team_obj and team_obj.practice_days
 
-            # Calculate B: game days before opening_day (these become practices pre-season)
-            # Note: Pre-opening game days apply to all teams regardless of team-specific practice days
-            pre_opening_game_day_count = 0
+            # Calculate pre-opening practices
+            # Count only practice days (league's or team's specific days)
+            # The scheduler only schedules practices on practice days, not game days
+            pre_opening_practice_count = 0
             current_date = first_practice
             while current_date < opening_day:
                 if current_date not in blackout_dates:
                     day_of_week = current_date.weekday()
-                    if day_of_week in game_day_nums:
-                        pre_opening_game_day_count += 1
+                    # Always use practice_day_nums (team's specific days or league's practice days)
+                    if day_of_week in practice_day_nums:
+                        pre_opening_practice_count += 1
                 current_date += timedelta(days=1)
 
-            expected_practices = practice_day_count + pre_opening_game_day_count
+            # Calculate post-opening expected practices
+            if is_pg_league:
+                # P/G leagues: 1 practice per week after opening day
+                post_opening_weeks = (regular_season_end - opening_day).days // 7 + 1
+                post_opening_practice_count = post_opening_weeks
+            else:
+                # Non-P/G leagues: count actual practice days
+                post_opening_practice_count = 0
+                current_date = opening_day
+                while current_date <= regular_season_end:
+                    if current_date not in blackout_dates:
+                        day_of_week = current_date.weekday()
+                        if day_of_week in practice_day_nums:
+                            post_opening_practice_count += 1
+                    current_date += timedelta(days=1)
+
+            expected_practices = pre_opening_practice_count + post_opening_practice_count
 
             if expected_practices == 0:
                 continue
@@ -700,12 +736,15 @@ class ScheduleValidator:
             if actual < expected_practices:
                 shortfall = expected_practices - actual
                 team_name = self._get_team_name(team_id)
+                if is_pg_league:
+                    detail = f'Pre-opening: {pre_opening_practice_count}, Post-opening weeks: {post_opening_practice_count}'
+                else:
+                    detail = f'Pre-opening: {pre_opening_practice_count}, Post-opening days: {post_opening_practice_count}'
                 self.violations.append(ScheduleViolation(
                     'c5', 'Expected practice count',
                     ScheduleViolation.SOFT,
                     f'{league}: {team_name} has {actual} practices but expected {expected_practices} '
-                    f'(shortfall: {shortfall}). Practice days: {practice_day_count}, '
-                    f'Pre-opening game days: {pre_opening_game_day_count}, Division practices: {division_practice_count}.',
+                    f'(shortfall: {shortfall}). {detail}, Division practices: {division_practice_count}.',
                     teams=[self._build_team_info(team_id)]
                 ))
 
@@ -1910,18 +1949,13 @@ class ScheduleGenerator:
             print(f"[SCHEDULER] Phase1 {config.league}: +{games_added} games in {time_module.time() - t1:.2f}s", flush=True)
         print(f"[SCHEDULER] Phase 1 complete: {phase1_game_count} games in {time_module.time() - t0:.2f}s", flush=True)
 
-        # Phase 2: Schedule all practices for all leagues
+        # Phase 2: Schedule all practices for all leagues using round-robin
+        # This ensures fair slot allocation - each league gets one practice before any gets a second
         t0 = time_module.time()
-        phase2_practice_count = 0
-        for config in league_configs:
-            t1 = time_module.time()
-            before = len(self.proposed_games)
-            self._generate_practices_only(config, start_fresh)
-            after = len(self.proposed_games)
-            practices_added = after - before
-            phase2_practice_count += practices_added
-            print(f"[SCHEDULER] Phase2 {config.league}: +{practices_added} practices in {time_module.time() - t1:.2f}s", flush=True)
-        print(f"[SCHEDULER] Phase 2 complete: {phase2_practice_count} practices in {time_module.time() - t0:.2f}s", flush=True)
+        before_count = len(self.proposed_games)
+        self._schedule_practices_round_robin(league_configs, start_fresh)
+        phase2_practice_count = len(self.proposed_games) - before_count
+        print(f"[SCHEDULER] Phase 2 complete: {phase2_practice_count} practices (round-robin) in {time_module.time() - t0:.2f}s", flush=True)
 
         # Debug: Report phase results
         total_time_ranges = sum(len(ranges) for ranges in self._global_field_time_ranges.values())
@@ -2839,7 +2873,7 @@ class ScheduleGenerator:
                 'message': f'{config.league}: Odd number of teams - {shuffled[-1].display_name} has no scrimmage partner.'
             })
 
-    def _assign_practices_for_date(self, config, teams, league, all_slots, practice_date, existing_slots=None, start_fresh=False, is_pre_opening=False, max_practices_per_week=None):
+    def _assign_practices_for_date(self, config, teams, league, all_slots, practice_date, existing_slots=None, start_fresh=False, is_pre_opening=False, max_practices_per_week=None, force_sharing=False):
         """Assign practices for all teams on a given date.
 
         Args:
@@ -2847,6 +2881,8 @@ class ScheduleGenerator:
                            not just practice days. Used for pre-opening period before games start.
             max_practices_per_week: If set, limits practices per team to this number per week.
                                    Used for P/G leagues (typically 1 practice per week).
+            force_sharing: If True, skip Pass 1 (solo field preference) and go straight to
+                          Pass 2 (sharing allowed). Used when other leagues need slots.
         """
         day_of_week = practice_date.weekday()
 
@@ -2991,21 +3027,24 @@ class ScheduleGenerator:
             # Teams can only share a practice slot if they are in the same league
             # PRIORITY: Prefer empty fields over sharing - coaches prefer being alone at a
             # non-preferred field over sharing their preferred field with another team
+            # UNLESS force_sharing is True (to free up fields for other leagues)
             assigned_option = None
 
             # First pass: Look for an EMPTY field (no other teams)
-            for option in practice_options:
-                datetime_key = option['datetime_key']
-                current_count = self._practice_slot_counts[datetime_key]
+            # Skip this pass if force_sharing is True (need to share to free slots for other leagues)
+            if not force_sharing:
+                for option in practice_options:
+                    datetime_key = option['datetime_key']
+                    current_count = self._practice_slot_counts[datetime_key]
 
-                # Only consider empty slots in first pass
-                if current_count > 0:
-                    continue
+                    # Only consider empty slots in first pass
+                    if current_count > 0:
+                        continue
 
-                assigned_option = option
-                break
+                    assigned_option = option
+                    break
 
-            # Second pass: If no empty fields, allow sharing (same league only)
+            # Second pass: If no empty fields (or force_sharing), allow sharing (same league only)
             if not assigned_option:
                 for option in practice_options:
                     datetime_key = option['datetime_key']
@@ -3072,6 +3111,388 @@ class ScheduleGenerator:
             if max_practices_per_week and week_num is not None:
                 team_week_key = (team.team_ID, week_num)
                 self._team_week_practices[team_week_key] += 1
+
+    def _schedule_practices_round_robin(self, league_configs, start_fresh=False):
+        """Schedule practices using round-robin across leagues to ensure fairness.
+
+        Instead of processing all practices for League A then League B (sequential),
+        this processes one practice per league at a time (round-robin). This ensures
+        all leagues get at least one practice slot before any league gets a second.
+
+        When there are more leagues needing practices than empty slots, force_sharing
+        is enabled to make teams within a league share fields, freeing up slots for
+        other leagues.
+        """
+        # Build practice dates and team info for each league
+        league_info = {}
+        all_practice_dates = set()
+
+        for config in league_configs:
+            league_name = config.league
+            teams = self._teams_by_league.get(league_name, [])
+            if len(teams) < 2:
+                continue
+
+            league = self._league_cache.get(league_name)
+            all_slots = self._all_field_slots
+
+            # Collect all practice dates for this league (pre-opening + post-opening)
+            practice_dates = []
+
+            # Pre-opening dates
+            if config.first_practice_date and config.opening_day_date:
+                practice_days = config.practice_days or []
+                game_days = config.game_days or []
+                all_activity_days = set(practice_days + game_days)
+
+                current_date = config.first_practice_date
+                end_date = config.opening_day_date - timedelta(days=1)
+
+                # Find scrimmage date to skip
+                scrimmage_date = None
+                if config.has_scrimmages:
+                    check_date = end_date
+                    while check_date >= config.first_practice_date:
+                        if check_date.weekday() in all_activity_days and not self._is_blackout_date(check_date):
+                            scrimmage_date = check_date
+                            break
+                        check_date -= timedelta(days=1)
+
+                while current_date <= end_date:
+                    if current_date.weekday() in all_activity_days and not self._is_blackout_date(current_date):
+                        if current_date != scrimmage_date:
+                            practice_dates.append(('pre', current_date))
+                    current_date += timedelta(days=1)
+
+            # Post-opening dates
+            if config.opening_day_date and config.regular_season_end_date:
+                practice_days = config.practice_days or []
+                if practice_days:
+                    current_date = config.opening_day_date
+                    while current_date <= config.regular_season_end_date:
+                        if current_date.weekday() in practice_days and not self._is_blackout_date(current_date):
+                            practice_dates.append(('post', current_date))
+                        current_date += timedelta(days=1)
+
+            if practice_dates:
+                league_info[league_name] = {
+                    'config': config,
+                    'teams': teams,
+                    'league': league,
+                    'all_slots': all_slots,
+                    'practice_dates': practice_dates
+                }
+                all_practice_dates.update(d for _, d in practice_dates)
+
+        # Process each date in chronological order
+        for practice_date in sorted(all_practice_dates):
+            # Get leagues that need practices on this date
+            leagues_today = []
+            for league_name, info in league_info.items():
+                dates_for_league = [(phase, d) for phase, d in info['practice_dates'] if d == practice_date]
+                if dates_for_league:
+                    leagues_today.append((league_name, info, dates_for_league[0][0]))
+
+            if not leagues_today:
+                continue
+
+            # Count empty slots available on this date
+            empty_slot_count = self._count_empty_practice_slots_for_date(practice_date)
+
+            # Count leagues that have at least one team needing practice
+            leagues_needing_practice = 0
+            for league_name, info, phase in leagues_today:
+                config = info['config']
+                teams = info['teams']
+                is_pre_opening = (phase == 'pre')
+                day_of_week = practice_date.weekday()
+                date_str = practice_date.isoformat()
+
+                for team in teams:
+                    # Check if team needs practice on this day
+                    # If team has specific practice days, use those (even pre-opening)
+                    # Otherwise: pre-opening = all activity days, post-opening = league default
+                    if team.practice_days:
+                        team_practice_days = team.get_practice_days(config)
+                        if day_of_week not in team_practice_days:
+                            continue
+                    elif not is_pre_opening:
+                        team_practice_days = team.get_practice_days(config)
+                        if day_of_week not in team_practice_days:
+                            continue
+
+                    team_day_key = (team.team_ID, date_str)
+                    if team_day_key not in self._team_day_usage:
+                        leagues_needing_practice += 1
+                        break
+
+            # Force sharing if more leagues need practices than empty slots
+            force_sharing = empty_slot_count < leagues_needing_practice
+
+            # Round-robin: process one team per league at a time until all done
+            # Build queue of teams needing practice, grouped by league
+            team_queues = {}
+            for league_name, info, phase in leagues_today:
+                config = info['config']
+                teams = info['teams']
+                is_pre_opening = (phase == 'pre')
+
+                # Sort teams by practice count to prioritize those with fewer
+                sorted_teams = sorted(teams, key=lambda t: self._team_practice_counts[t.team_ID])
+                team_queues[league_name] = {
+                    'teams': list(sorted_teams),
+                    'config': config,
+                    'info': info,
+                    'phase': phase
+                }
+
+            # Round-robin loop with retry tracking to prevent infinite loops
+            # Track how many times each team has been tried without success
+            retry_counts = defaultdict(int)
+            max_retries = 3  # Give up after this many failed attempts
+
+            made_progress = True
+            while made_progress:
+                made_progress = False
+                for league_name in list(team_queues.keys()):
+                    queue_info = team_queues[league_name]
+                    if not queue_info['teams']:
+                        continue
+
+                    config = queue_info['config']
+                    info = queue_info['info']
+                    phase = queue_info['phase']
+                    teams = queue_info['teams']
+                    is_pre_opening = (phase == 'pre')
+
+                    # Try to assign practice to the first team in queue
+                    team = teams[0]
+                    success = self._assign_single_practice(
+                        config, team, info['league'], info['all_slots'],
+                        practice_date, is_pre_opening, force_sharing
+                    )
+
+                    if success:
+                        # Remove team from queue - they got their practice
+                        teams.pop(0)
+                        retry_counts[team.team_ID] = 0  # Reset retry count
+                        made_progress = True
+                    else:
+                        # Check if we should retry or give up
+                        retry_counts[team.team_ID] += 1
+                        teams.pop(0)
+                        if retry_counts[team.team_ID] < max_retries:
+                            # Move team to end of queue to retry later
+                            teams.append(team)
+                        # else: team has exhausted retries, don't re-add
+
+    def _count_empty_practice_slots_for_date(self, practice_date):
+        """Count how many practice slots are currently empty (unused) for a given date."""
+        count = 0
+
+        # Check all field slots
+        for slot in self._all_field_slots:
+            # Check if this slot's day_of_week matches practice_date
+            if slot.day_of_week != practice_date.weekday():
+                continue
+
+            # Check field availability (start date, blackouts)
+            field = slot.field
+            if field.start_date and practice_date < field.start_date:
+                continue
+
+            # Get time-based practice capacity
+            slot_datetime = self._slot_to_datetime(slot, practice_date)
+            if not slot_datetime:
+                continue
+
+            # Get practice capacity (number of sequential practices that fit)
+            time_capacity = self._get_time_based_practice_capacity(slot, league=None)
+            practice_duration = 90  # Default
+
+            for time_offset in range(0, time_capacity):
+                actual_time = slot_datetime + timedelta(minutes=time_offset * practice_duration)
+                datetime_key = (field.ID, actual_time.isoformat())
+
+                # Check if slot is empty
+                if self._practice_slot_counts[datetime_key] == 0:
+                    count += 1
+
+        return count
+
+    def _assign_single_practice(self, config, team, league, all_slots, practice_date, is_pre_opening, force_sharing):
+        """Assign a single practice to a team on a given date.
+
+        Returns True if practice was assigned, False otherwise.
+        """
+        day_of_week = practice_date.weekday()
+        date_str = practice_date.isoformat()
+
+        # Check if team should practice on this day
+        # If team has specific practice days, use those (even pre-opening)
+        # Otherwise: pre-opening = all activity days, post-opening = league default
+        if team.practice_days:
+            team_practice_days = team.get_practice_days(config)
+            if day_of_week not in team_practice_days:
+                return False
+        elif not is_pre_opening:
+            team_practice_days = team.get_practice_days(config)
+            if day_of_week not in team_practice_days:
+                return False
+
+        # Check if team already has activity today
+        team_day_key = (team.team_ID, date_str)
+        if team_day_key in self._team_day_usage:
+            return False
+
+        # Build practice options for this date
+        practice_options = []
+        practice_duration = self._get_activity_duration_minutes(config.league, is_practice=True)
+        is_weekend = practice_date.weekday() >= 5
+
+        for slot in all_slots:
+            if slot.day_of_week != day_of_week:
+                continue
+
+            # Check field availability using cache
+            field = slot.field
+            if not self._is_field_available_on_date(field.ID, practice_date):
+                continue
+
+            # Check if league can use this field for practice
+            if league and not league.can_play_at_field(field.ID, is_practice=True):
+                continue
+
+            # Get slot datetime
+            slot_datetime = self._slot_to_datetime(slot, practice_date)
+            if not slot_datetime:
+                continue
+
+            # Check field capacity
+            is_late = slot_datetime.hour >= 19
+            field_capacity = field.get_practice_capacity(is_late_slot=is_late)
+            if field_capacity == 0:
+                continue
+
+            # Get time-based capacity (how many practice slots fit in the field slot)
+            time_capacity = self._get_time_based_practice_capacity(slot, league)
+
+            # Get league time restrictions
+            from datetime import time as dt_time
+            DEFAULT_LATEST_START = dt_time(19, 30)
+            latest_time = getattr(league, 'latest_start_time', None) or DEFAULT_LATEST_START
+            earliest_time = getattr(league, 'earliest_start_time', None)
+
+            for time_offset in range(0, time_capacity):
+                actual_time = slot_datetime + timedelta(minutes=time_offset * practice_duration)
+                datetime_key = (field.ID, actual_time.isoformat())
+
+                # Check league time restrictions on actual_time (not slot start time)
+                actual_time_only = actual_time.time()
+                if actual_time_only > latest_time:
+                    continue
+                if earliest_time and actual_time_only < earliest_time:
+                    continue
+
+                # Check for overlap with existing activities
+                if not self._check_field_time_available(field.ID, actual_time, practice_duration, config.league, is_practice=True):
+                    continue
+
+                practice_options.append({
+                    'slot': slot,
+                    'field_id': field.ID,
+                    'datetime': actual_time,
+                    'datetime_key': datetime_key,
+                    'field_capacity': field_capacity
+                })
+
+        if not practice_options:
+            return False
+
+        # Sort options (weekday: time first, weekend: field preference first)
+        preferred_fields = []
+        if league:
+            preferred_fields = league.preferred_fields or []
+        preferred_set = set(preferred_fields)
+
+        def get_field_preference_rank(field_id):
+            if field_id in preferred_set:
+                return preferred_fields.index(field_id)
+            return len(preferred_fields) + 1000
+
+        if not is_weekend:
+            practice_options.sort(key=lambda opt: (
+                opt['datetime'].hour * 60 + opt['datetime'].minute,
+                get_field_preference_rank(opt['field_id'])
+            ))
+        else:
+            practice_options.sort(key=lambda opt: (
+                get_field_preference_rank(opt['field_id']),
+                opt['datetime'].hour * 60 + opt['datetime'].minute
+            ))
+
+        # Find best slot (Pass 1: empty, Pass 2: sharing allowed)
+        assigned_option = None
+
+        if not force_sharing:
+            # First pass: Look for EMPTY field
+            for option in practice_options:
+                datetime_key = option['datetime_key']
+                if self._practice_slot_counts[datetime_key] == 0:
+                    assigned_option = option
+                    break
+
+        # Second pass: Allow sharing (same league only)
+        if not assigned_option:
+            for option in practice_options:
+                datetime_key = option['datetime_key']
+                current_count = self._practice_slot_counts[datetime_key]
+                field_capacity = option['field_capacity']
+
+                if current_count >= field_capacity:
+                    continue
+
+                slot_league = self._practice_slot_leagues.get(datetime_key)
+                if slot_league is not None and slot_league != config.league:
+                    continue
+
+                assigned_option = option
+                break
+
+        if not assigned_option:
+            return False
+
+        # Assign the practice
+        self._practice_slot_counts[assigned_option['datetime_key']] += 1
+        self._practice_slot_leagues[assigned_option['datetime_key']] = config.league
+
+        self._add_field_time_usage(
+            assigned_option['field_id'],
+            assigned_option['datetime'],
+            practice_duration,
+            config.league,
+            is_practice=True
+        )
+
+        practice = ProposedGame(
+            game_type='practice',
+            league=config.league,
+            year=self.year,
+            is_spring=self.is_spring,
+            home_team=team,
+            away_team=None,
+            field=assigned_option['slot'].field,
+            game_date=assigned_option['datetime']
+        )
+        practice.slot = assigned_option['slot']
+        practice.id = self._next_id
+        self._next_id += 1
+        self.proposed_games.append(practice)
+
+        self._team_day_usage.add(team_day_key)
+        self._team_practice_counts[team.team_ID] += 1
+
+        return True
 
     def _assign_games_to_slots(self, config, matchups, slots_by_date, league, existing_game_records=None, start_fresh=False, max_games_per_week=None):
         """Assign game matchups to available slots.
