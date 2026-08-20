@@ -81,15 +81,15 @@ CREATE TABLE IF NOT EXISTS sdll_ad_clicks (
     INDEX idx_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Insert a default "house ad" for SDLL Softball
+-- Insert a simple "Presented by SDLL" placeholder ad
 INSERT INTO sdll_ads (name, sponsor, headline, description, click_url, alt_text, priority, active)
 VALUES (
-    'SDLL Softball Promo',
-    'SDLL',
-    'Play Softball with SDLL!',
-    'Registration open for Spring 2027. All skill levels welcome.',
-    '/register',
-    'SDLL Softball registration',
+    'SDLL Placeholder',
+    'South Durham Little League',
+    'Go SDLL!',
+    'Proud to serve Durham''s youth baseball and softball community since 1968.',
+    'https://southdurhamlittleleague.org',
+    'South Durham Little League',
     1,
     1
 );
