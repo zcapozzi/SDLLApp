@@ -354,10 +354,15 @@
 
         {# Ad Block - shown after next game #}
         {% if ad %}
-        <div class="ad-container" id="ad-{{ ad.ID }}" data-ad-id="{{ ad.ID }}" data-impression-token="{{ impression_token }}">
+        <div class="ad-container" id="ad-{{ ad.ID }}" data-ad-id="{{ ad.ID }}" data-impression-token="{{ impression_token or '' }}">
+            {# If we have impression tracking, route through ad_click for tracking. Otherwise link directly. #}
+            {% if impression_token %}
             <a href="{{ url_for('public.ad_click', token=impression_token) }}?ad_id={{ ad.ID }}"
                class="ad-link"
                onclick="return trackAdClick(event, this);">
+            {% else %}
+            <a href="{{ ad.click_url or '#' }}" class="ad-link">
+            {% endif %}
                 {% if ad.image_url %}
                 <img src="{{ ad.image_url }}" alt="{{ ad.alt_text or ad.name }}">
                 {% endif %}
