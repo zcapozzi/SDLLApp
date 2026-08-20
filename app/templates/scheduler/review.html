@@ -1147,6 +1147,60 @@
                 <p>Loading schedule...</p>
             </div>
             <div id="team-modal-content" style="display: none;">
+                <!-- UX Hint -->
+                <div style="background: #f0f7ff; border: 1px solid #cce5ff; border-radius: 4px; padding: 10px 15px; margin-bottom: 15px; font-size: 13px; color: #004085;">
+                    <strong>Tip:</strong> Use filters below to narrow results. Click "See Summary" for counts by day, time, field, and type.
+                </div>
+
+                <!-- Filter Controls -->
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #eee;">
+                    <select id="team-modal-field-filter" onchange="applyTeamModalFilters()" style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="">All Fields</option>
+                    </select>
+                    <select id="team-modal-type-filter" onchange="applyTeamModalFilters()" style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="">All Types</option>
+                        <option value="regular">Regular</option>
+                        <option value="practice">Practice</option>
+                        <option value="scrimmage">Scrimmage</option>
+                        <option value="playoff">Playoff</option>
+                    </select>
+                    <select id="team-modal-day-filter" onchange="applyTeamModalFilters()" style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="">All Days</option>
+                        <option value="Mon">Monday</option>
+                        <option value="Tue">Tuesday</option>
+                        <option value="Wed">Wednesday</option>
+                        <option value="Thu">Thursday</option>
+                        <option value="Fri">Friday</option>
+                        <option value="Sat">Saturday</option>
+                        <option value="Sun">Sunday</option>
+                    </select>
+                    <button type="button" onclick="clearTeamModalFilters()" style="padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; background: #f8f8f8; cursor: pointer;">Clear</button>
+                    <span id="team-modal-filter-count" style="color: #666; font-size: 13px; margin-left: auto;"></span>
+                    <button type="button" id="team-modal-summary-btn" onclick="toggleTeamModalSummary()" style="padding: 6px 12px; border: 1px solid rgb(34, 139, 34); border-radius: 4px; background: white; color: rgb(34, 139, 34); cursor: pointer; font-weight: 500;">See Summary</button>
+                </div>
+
+                <!-- Summary Panel (hidden by default) -->
+                <div id="team-modal-summary" style="display: none; background: #f8f9fa; border-radius: 4px; padding: 15px; margin-bottom: 15px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <div>
+                            <h4 style="margin: 0 0 10px 0; font-size: 13px; color: #666; text-transform: uppercase;">By Day</h4>
+                            <div id="team-summary-by-day"></div>
+                        </div>
+                        <div>
+                            <h4 style="margin: 0 0 10px 0; font-size: 13px; color: #666; text-transform: uppercase;">By Time</h4>
+                            <div id="team-summary-by-time"></div>
+                        </div>
+                        <div>
+                            <h4 style="margin: 0 0 10px 0; font-size: 13px; color: #666; text-transform: uppercase;">By Field</h4>
+                            <div id="team-summary-by-field"></div>
+                        </div>
+                        <div>
+                            <h4 style="margin: 0 0 10px 0; font-size: 13px; color: #666; text-transform: uppercase;">By Type</h4>
+                            <div id="team-summary-by-type"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <table class="team-schedule-table">
                     <thead>
                         <tr>
@@ -1414,6 +1468,7 @@ function toggleViolationExpand(ruleCode) {
 // Team schedule lookup
 var currentYear = {{ year }};
 var currentIsSpring = {{ is_spring }};
+var teamModalGames = [];  // Store games for filtering
 
 function openTeamModal(teamId, teamName) {
     var modal = document.getElementById('team-modal');
@@ -1429,6 +1484,13 @@ function openTeamModal(teamId, teamName) {
     empty.style.display = 'none';
     title.textContent = (teamName || 'Team ' + teamId) + ' - Schedule';
 
+    // Reset filters and summary
+    document.getElementById('team-modal-field-filter').value = '';
+    document.getElementById('team-modal-type-filter').value = '';
+    document.getElementById('team-modal-day-filter').value = '';
+    document.getElementById('team-modal-summary').style.display = 'none';
+    document.getElementById('team-modal-summary-btn').textContent = 'See Summary';
+
     // Fetch team schedule using team ID
     var url = '/scheduler/api/' + currentYear + '/' + currentIsSpring + '/team-schedule/' + teamId;
     fetch(url)
@@ -1438,33 +1500,19 @@ function openTeamModal(teamId, teamName) {
 
             if (data.games && data.games.length > 0) {
                 content.style.display = 'block';
-                var tbody = document.getElementById('team-schedule-body');
-                tbody.innerHTML = '';
+                teamModalGames = data.games;
 
-                data.games.forEach(function(game) {
-                    var row = document.createElement('tr');
-                    if (game.is_home) row.classList.add('home-game');
-
-                    var matchup = '';
-                    if (game.type === 'practice') {
-                        matchup = game.home + ' (Practice)';
-                    } else {
-                        matchup = game.home + ' vs ' + (game.away || 'TBD');
-                        if (game.is_home) {
-                            matchup = '<strong>' + game.home + '</strong> vs ' + (game.away || 'TBD');
-                        } else {
-                            matchup = game.home + ' vs <strong>' + (game.away || 'TBD') + '</strong>';
-                        }
-                    }
-
-                    row.innerHTML = '<td>' + game.date + '</td>' +
-                        '<td>' + game.time + '</td>' +
-                        '<td><span class="type-badge type-' + game.type + '">' + game.type + '</span></td>' +
-                        '<td>' + matchup + '</td>' +
-                        '<td>' + game.field + '</td>';
-
-                    tbody.appendChild(row);
+                // Populate field filter options
+                var fields = [...new Set(data.games.map(g => g.field))].sort();
+                var fieldSelect = document.getElementById('team-modal-field-filter');
+                fieldSelect.innerHTML = '<option value="">All Fields</option>';
+                fields.forEach(function(f) {
+                    fieldSelect.innerHTML += '<option value="' + f + '">' + f + '</option>';
                 });
+
+                // Render table and summary
+                renderTeamModalTable(data.games);
+                updateTeamModalSummary(data.games);
 
                 title.textContent = teamName + ' - ' + data.total + ' Games/Practices';
             } else {
@@ -1478,8 +1526,168 @@ function openTeamModal(teamId, teamName) {
         });
 }
 
+function renderTeamModalTable(games) {
+    var tbody = document.getElementById('team-schedule-body');
+    tbody.innerHTML = '';
+
+    games.forEach(function(game) {
+        var row = document.createElement('tr');
+        if (game.is_home) row.classList.add('home-game');
+
+        // Store data attributes for filtering
+        row.dataset.field = game.field;
+        row.dataset.type = game.type;
+        row.dataset.day = game.day_abbrev || '';
+
+        var matchup = '';
+        if (game.type === 'practice') {
+            matchup = game.home + ' (Practice)';
+        } else {
+            matchup = game.home + ' vs ' + (game.away || 'TBD');
+            if (game.is_home) {
+                matchup = '<strong>' + game.home + '</strong> vs ' + (game.away || 'TBD');
+            } else {
+                matchup = game.home + ' vs <strong>' + (game.away || 'TBD') + '</strong>';
+            }
+        }
+
+        row.innerHTML = '<td>' + game.date + '</td>' +
+            '<td>' + game.time + '</td>' +
+            '<td><span class="type-badge type-' + game.type + '">' + game.type + '</span></td>' +
+            '<td>' + matchup + '</td>' +
+            '<td>' + game.field + '</td>';
+
+        tbody.appendChild(row);
+    });
+
+    updateTeamModalFilterCount();
+}
+
+function applyTeamModalFilters() {
+    var fieldFilter = document.getElementById('team-modal-field-filter').value;
+    var typeFilter = document.getElementById('team-modal-type-filter').value;
+    var dayFilter = document.getElementById('team-modal-day-filter').value;
+
+    var rows = document.querySelectorAll('#team-schedule-body tr');
+    var visibleCount = 0;
+
+    rows.forEach(function(row) {
+        var show = true;
+        if (fieldFilter && row.dataset.field !== fieldFilter) show = false;
+        if (typeFilter && row.dataset.type !== typeFilter) show = false;
+        if (dayFilter && row.dataset.day !== dayFilter) show = false;
+
+        row.style.display = show ? '' : 'none';
+        if (show) visibleCount++;
+    });
+
+    updateTeamModalFilterCount();
+
+    // Update summary with filtered data
+    var filteredGames = teamModalGames.filter(function(game) {
+        if (fieldFilter && game.field !== fieldFilter) return false;
+        if (typeFilter && game.type !== typeFilter) return false;
+        if (dayFilter && game.day_abbrev !== dayFilter) return false;
+        return true;
+    });
+    updateTeamModalSummary(filteredGames);
+}
+
+function clearTeamModalFilters() {
+    document.getElementById('team-modal-field-filter').value = '';
+    document.getElementById('team-modal-type-filter').value = '';
+    document.getElementById('team-modal-day-filter').value = '';
+    applyTeamModalFilters();
+}
+
+function updateTeamModalFilterCount() {
+    var rows = document.querySelectorAll('#team-schedule-body tr');
+    var visible = Array.from(rows).filter(r => r.style.display !== 'none').length;
+    var total = rows.length;
+    var countEl = document.getElementById('team-modal-filter-count');
+    if (visible === total) {
+        countEl.textContent = total + ' items';
+    } else {
+        countEl.textContent = visible + ' of ' + total + ' items';
+    }
+}
+
+function toggleTeamModalSummary() {
+    var summary = document.getElementById('team-modal-summary');
+    var btn = document.getElementById('team-modal-summary-btn');
+    if (summary.style.display === 'none') {
+        summary.style.display = 'block';
+        btn.textContent = 'Hide Summary';
+    } else {
+        summary.style.display = 'none';
+        btn.textContent = 'See Summary';
+    }
+}
+
+function updateTeamModalSummary(games) {
+    // By Day
+    var byDay = {};
+    var dayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    games.forEach(function(g) {
+        var day = g.day_abbrev || 'Unknown';
+        byDay[day] = (byDay[day] || 0) + 1;
+    });
+    var dayHtml = '';
+    dayOrder.forEach(function(d) {
+        if (byDay[d]) {
+            dayHtml += '<div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>' + d + '</span><strong>' + byDay[d] + '</strong></div>';
+        }
+    });
+    document.getElementById('team-summary-by-day').innerHTML = dayHtml || '<span style="color: #999;">No data</span>';
+
+    // By Time (Early vs Late - before/after 5pm)
+    var early = 0, late = 0;
+    games.forEach(function(g) {
+        var timeParts = g.time.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+        if (timeParts) {
+            var hour = parseInt(timeParts[1]);
+            var ampm = timeParts[3] ? timeParts[3].toUpperCase() : '';
+            if (ampm === 'PM' && hour !== 12) hour += 12;
+            if (ampm === 'AM' && hour === 12) hour = 0;
+            if (hour >= 17) {
+                late++;
+            } else {
+                early++;
+            }
+        } else {
+            early++;
+        }
+    });
+    document.getElementById('team-summary-by-time').innerHTML =
+        '<div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Early (before 5pm)</span><strong>' + early + '</strong></div>' +
+        '<div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Late (5pm+)</span><strong>' + late + '</strong></div>';
+
+    // By Field
+    var byField = {};
+    games.forEach(function(g) {
+        byField[g.field] = (byField[g.field] || 0) + 1;
+    });
+    var fieldHtml = '';
+    Object.keys(byField).sort().forEach(function(f) {
+        fieldHtml += '<div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>' + f + '</span><strong>' + byField[f] + '</strong></div>';
+    });
+    document.getElementById('team-summary-by-field').innerHTML = fieldHtml || '<span style="color: #999;">No data</span>';
+
+    // By Type
+    var byType = {};
+    games.forEach(function(g) {
+        byType[g.type] = (byType[g.type] || 0) + 1;
+    });
+    var typeHtml = '';
+    Object.keys(byType).sort().forEach(function(t) {
+        typeHtml += '<div style="display: flex; justify-content: space-between; padding: 3px 0;"><span style="text-transform: capitalize;">' + t + '</span><strong>' + byType[t] + '</strong></div>';
+    });
+    document.getElementById('team-summary-by-type').innerHTML = typeHtml || '<span style="color: #999;">No data</span>';
+}
+
 function closeTeamModal() {
     document.getElementById('team-modal').classList.remove('visible');
+    teamModalGames = [];
 }
 
 // Close modal on escape key

@@ -742,7 +742,7 @@ class ScheduleValidator:
                     detail = f'Pre-opening: {pre_opening_practice_count}, Post-opening days: {post_opening_practice_count}'
                 self.violations.append(ScheduleViolation(
                     'c5', 'Expected practice count',
-                    ScheduleViolation.SOFT,
+                    ScheduleViolation.HARD,
                     f'{league}: {team_name} has {actual} practices but expected {expected_practices} '
                     f'(shortfall: {shortfall}). {detail}, Division practices: {division_practice_count}.',
                     teams=[self._build_team_info(team_id)]

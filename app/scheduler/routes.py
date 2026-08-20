@@ -772,16 +772,28 @@ def api_team_schedule(year, is_spring, team_id):
             away_id = game.get('away_team_id')
 
             if team_id in (home_id, away_id):
+                # Calculate day abbreviation from date
+                day_abbrev = ''
+                game_date_str = game.get('game_date', '')
+                if game_date_str and len(game_date_str) >= 10:
+                    try:
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(game_date_str[:19])
+                        day_abbrev = dt.strftime('%a')[:3]  # Mon, Tue, etc.
+                    except (ValueError, TypeError):
+                        pass
+
                 games_list.append({
                     'id': game.get('id'),
-                    'date': game.get('game_date', '')[:10] if game.get('game_date') else 'TBD',
-                    'time': game.get('game_date', '')[11:16] if game.get('game_date') and len(game.get('game_date', '')) > 11 else 'TBD',
+                    'date': game_date_str[:10] if game_date_str else 'TBD',
+                    'time': game_date_str[11:16] if game_date_str and len(game_date_str) > 11 else 'TBD',
                     'type': game.get('game_type', 'regular'),
                     'home': game.get('home_team_name') or 'TBD',
                     'away': game.get('away_team_name') or '-',
                     'field': game.get('field_name', 'TBD'),
                     'league': game.get('league', ''),
-                    'is_home': team_id == home_id
+                    'is_home': team_id == home_id,
+                    'day_abbrev': day_abbrev
                 })
 
     # Always check database for saved games too (in case proposal is incomplete)
@@ -809,7 +821,8 @@ def api_team_schedule(year, is_spring, team_id):
                     'away': away_name,
                     'field': game.location or 'TBD',
                     'league': game.league,
-                    'is_home': team_id == home_id
+                    'is_home': team_id == home_id,
+                    'day_abbrev': game.game_date.strftime('%a')[:3] if game.game_date else ''
                 })
 
     # Sort by date/time

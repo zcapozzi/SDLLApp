@@ -109,6 +109,20 @@
     .save-bar .changes-count {
         color: #666;
     }
+    /* Opening day mismatch warning */
+    .opening-day-warning {
+        display: none;
+        color: #dc3545;
+        font-size: 11px;
+        margin-top: 4px;
+    }
+    .opening-day-warning.visible {
+        display: block;
+    }
+    input.opening-day-mismatch {
+        border-color: #dc3545 !important;
+        background-color: #fff5f5 !important;
+    }
 </style>
 {% endblock %}
 
@@ -216,10 +230,14 @@
                     </td>
                     <td>
                         <input type="date" name="league_{{ config.ID }}_opening_day"
+                               id="opening-day-{{ config.ID }}"
                                value="{{ config.opening_day_date.strftime('%Y-%m-%d') if config.opening_day_date else '' }}"
                                data-original="{{ config.opening_day_date.strftime('%Y-%m-%d') if config.opening_day_date else '' }}"
                                style="width: 115px; font-size: 12px;"
-                               onchange="markDirty({{ config.ID }})">
+                               onchange="markDirty({{ config.ID }}); checkOpeningDayMismatch({{ config.ID }})">
+                        <div class="opening-day-warning" id="opening-warning-{{ config.ID }}">
+                            Not a game day!
+                        </div>
                     </td>
                     <td>
                         <input type="date" name="league_{{ config.ID }}_regular_season_end"
@@ -401,5 +419,60 @@ window.addEventListener('beforeunload', function(e) {
         e.returnValue = '';
     }
 });
+
+// Check if opening day matches a game day or P/G day
+function checkOpeningDayMismatch(configId) {
+    var input = document.getElementById('opening-day-' + configId);
+    var warning = document.getElementById('opening-warning-' + configId);
+    var row = document.getElementById('league-' + configId);
+
+    if (!input.value) {
+        // No date set, remove warning
+        input.classList.remove('opening-day-mismatch');
+        warning.classList.remove('visible');
+        return;
+    }
+
+    // Get day of week (0=Sunday, 1=Monday, ... 6=Saturday in JS)
+    // But our grid is 0=Monday, 1=Tuesday, ... 6=Sunday
+    var date = new Date(input.value + 'T12:00:00');  // Use noon to avoid timezone issues
+    var jsDayOfWeek = date.getDay();  // 0=Sun, 1=Mon, etc.
+    // Convert to our format: 0=Mon, 1=Tue, ..., 6=Sun
+    var dayIndex = (jsDayOfWeek + 6) % 7;
+
+    // Get the day type for that day
+    var dayCells = row.querySelectorAll('.day-cell');
+    var dayCell = dayCells[dayIndex];
+    var dayType = dayCell ? dayCell.dataset.type : '';
+
+    // Opening day should be on a game day or P/G day
+    var isGameDay = dayType === 'game' || dayType === 'both';
+
+    if (!isGameDay) {
+        input.classList.add('opening-day-mismatch');
+        warning.classList.add('visible');
+        // Show which day it is
+        var dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        warning.textContent = dayNames[dayIndex] + ' is not a game day!';
+    } else {
+        input.classList.remove('opening-day-mismatch');
+        warning.classList.remove('visible');
+    }
+}
+
+// Check all opening days on page load
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('tr[data-league-id]').forEach(function(row) {
+        var configId = row.dataset.leagueId;
+        checkOpeningDayMismatch(configId);
+    });
+});
+
+// Also check when day types change
+var originalCycleDay = cycleDay;
+cycleDay = function(configId, dayIndex, element) {
+    originalCycleDay(configId, dayIndex, element);
+    checkOpeningDayMismatch(configId);
+};
 </script>
 {% endblock %}
