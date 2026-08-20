@@ -213,6 +213,241 @@ def api_get_game(game_id):
     })
 
 
+@games_bp.route('/api/<int:year>/<int:is_spring>/add-event', methods=['POST'])
+@login_required
+def api_add_event(year, is_spring):
+    """
+    API endpoint for adding a new game/practice/scrimmage.
+
+    Expects JSON body:
+    {
+        "event_type": str ('game', 'practice', 'scrimmage', 'division_practice'),
+        "league": str,
+        "game_date": str (YYYY-MM-DD),
+        "game_time": str (HH:MM),
+        "field_name": str,
+        "home_team_id": int (optional),
+        "away_team_id": int (optional, for games/scrimmages)
+    }
+    """
+    if not current_user.can_edit_schedule():
+        return jsonify({'success': False, 'message': 'Permission denied'}), 403
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+
+        event_type = data.get('event_type', 'game')
+        league = data.get('league')
+        game_date = data.get('game_date')
+        game_time = data.get('game_time')
+        field_name = data.get('field_name')
+        home_team_id = data.get('home_team_id')
+        away_team_id = data.get('away_team_id')
+
+        if not league or not game_date or not game_time or not field_name:
+            return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+
+        # Build datetime
+        game_datetime = f'{game_date}T{game_time}:00'
+
+        # Check if there's an active proposal
+        from app.models.schedule_proposal import ScheduleProposal
+        proposal = ScheduleProposal.get_for_season(year, is_spring)
+
+        if proposal:
+            # Add to proposal
+            # Get team names if provided
+            home_team_name = None
+            away_team_name = None
+            if home_team_id:
+                home_team = TeamSeason.query.get(int(home_team_id))
+                if home_team:
+                    home_team_name = home_team.computed_display_name
+            if away_team_id:
+                away_team = TeamSeason.query.get(int(away_team_id))
+                if away_team:
+                    away_team_name = away_team.computed_display_name
+
+            game_data = {
+                'game_type': 'practice' if event_type in ['practice', 'division_practice'] else 'regular',
+                'game_date': game_datetime,
+                'field_name': field_name,
+                'league': league,
+                'home_team_id': int(home_team_id) if home_team_id else None,
+                'home_team_name': home_team_name or 'TBD',
+                'away_team_id': int(away_team_id) if away_team_id and event_type in ['game', 'scrimmage'] else None,
+                'away_team_name': away_team_name,
+                'is_scrimmage': event_type == 'scrimmage',
+                'is_league_practice': event_type == 'division_practice'
+            }
+
+            new_id = proposal.add_game(game_data)
+            logger.info(f'API: Added event to proposal - ID={new_id}, type={event_type}, league={league}')
+
+            return jsonify({
+                'success': True,
+                'message': 'Event added to proposal',
+                'event_id': new_id,
+                'is_proposal': True
+            })
+        else:
+            # No proposal - add directly to Game table
+            game_dt = datetime.strptime(f'{game_date} {game_time}', '%Y-%m-%d %H:%M')
+
+            new_game = Game(
+                active=1,
+                year=year,
+                is_spring=is_spring,
+                league=league,
+                game_type='practice' if event_type in ['practice', 'division_practice'] else 'regular',
+                game_date=game_dt,
+                location=field_name,
+                home_ID=int(home_team_id) if home_team_id else None,
+                away_ID=int(away_team_id) if away_team_id and event_type in ['game', 'scrimmage'] else None,
+                is_scrimmage=1 if event_type == 'scrimmage' else 0,
+                is_league_practice=event_type == 'division_practice',
+                status='scheduled'
+            )
+            db.session.add(new_game)
+            db.session.commit()
+
+            logger.info(f'API: Added game directly - ID={new_game.ID}, type={event_type}, league={league}')
+
+            return jsonify({
+                'success': True,
+                'message': 'Event added',
+                'event_id': new_game.ID,
+                'is_proposal': False
+            })
+
+    except Exception as e:
+        logger.error(f'API: Error adding event: {e}')
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
+
+
+@games_bp.route('/api/<int:year>/<int:is_spring>/delete-event', methods=['POST'])
+@login_required
+def api_delete_event(year, is_spring):
+    """
+    API endpoint for deleting a game/practice.
+
+    Expects JSON body:
+    {
+        "event_id": int or str,
+        "is_proposed": bool (optional)
+    }
+    """
+    if not current_user.can_edit_schedule():
+        return jsonify({'success': False, 'message': 'Permission denied'}), 403
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+
+        event_id = data.get('event_id')
+        is_proposed = data.get('is_proposed', False)
+
+        if event_id is None:
+            return jsonify({'success': False, 'message': 'event_id is required'}), 400
+
+        # Check if there's an active proposal
+        from app.models.schedule_proposal import ScheduleProposal
+        proposal = ScheduleProposal.get_for_season(year, is_spring)
+
+        if proposal and is_proposed:
+            # Delete from proposal
+            try:
+                event_id_int = int(event_id)
+            except (ValueError, TypeError):
+                return jsonify({'success': False, 'message': 'Invalid event_id for proposal'}), 400
+
+            deleted = proposal.delete_game(event_id_int)
+            if deleted:
+                logger.info(f'API: Deleted event from proposal - ID={event_id}')
+                return jsonify({
+                    'success': True,
+                    'message': 'Event deleted from proposal'
+                })
+            else:
+                return jsonify({'success': False, 'message': 'Event not found in proposal'}), 404
+        else:
+            # Delete from Game table (soft delete)
+            try:
+                event_id_int = int(event_id)
+            except (ValueError, TypeError):
+                return jsonify({'success': False, 'message': 'Invalid event_id'}), 400
+
+            game = Game.query.get(event_id_int)
+            if not game:
+                return jsonify({'success': False, 'message': 'Game not found'}), 404
+
+            game.active = 0
+            db.session.commit()
+
+            logger.info(f'API: Soft-deleted game - ID={event_id}')
+
+            return jsonify({
+                'success': True,
+                'message': 'Event deleted'
+            })
+
+    except Exception as e:
+        logger.error(f'API: Error deleting event: {e}')
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
+
+
+@games_bp.route('/api/<int:year>/<int:is_spring>/event-options')
+@login_required
+def api_event_options(year, is_spring):
+    """
+    API endpoint to get options for the Add Event modal.
+
+    Returns leagues, teams by league, fields, and time slots.
+    """
+    # Get leagues for this season
+    from app.models.league_season import LeagueSeason
+    league_configs = LeagueSeason.get_by_season(year, is_spring)
+    leagues = [lc.league for lc in league_configs]
+
+    # Get teams by league
+    teams = TeamSeason.query.filter_by(
+        year=year,
+        is_spring=is_spring,
+        active=1,
+        is_placeholder=0
+    ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+
+    teams_by_league = {}
+    for team in teams:
+        if team.league not in teams_by_league:
+            teams_by_league[team.league] = []
+        teams_by_league[team.league].append({
+            'id': team.team_ID,
+            'name': team.computed_display_name
+        })
+
+    # Get fields
+    fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
+    field_list = [{'id': f.ID, 'name': f.location_title} for f in fields]
+
+    # Standard time slots
+    time_slots = []
+    for hour in range(17, 21):  # 5 PM to 8 PM
+        for minute in [0, 30]:
+            time_slots.append(f'{hour:02d}:{minute:02d}')
+
+    return jsonify({
+        'success': True,
+        'leagues': leagues,
+        'teams_by_league': teams_by_league,
+        'fields': field_list,
+        'time_slots': time_slots
+    })
+
+
 # =============================================================================
 # Regular Page Routes
 # =============================================================================

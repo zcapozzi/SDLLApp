@@ -229,6 +229,95 @@
         box-shadow: 0 0 0 2px rgb(34, 139, 34);
     }
 
+    /* Context Menu */
+    .context-menu {
+        position: fixed;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        min-width: 160px;
+        z-index: 3000;
+        display: none;
+        padding: 4px 0;
+    }
+    .context-menu.show {
+        display: block;
+    }
+    .context-menu-item {
+        padding: 8px 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+    }
+    .context-menu-item:hover {
+        background: #f0f0f0;
+    }
+    .context-menu-item.danger {
+        color: #c33;
+    }
+    .context-menu-item.danger:hover {
+        background: #ffebee;
+    }
+    .context-menu-divider {
+        height: 1px;
+        background: #e0e0e0;
+        margin: 4px 0;
+    }
+
+    /* Day header clickable for add */
+    .day-header {
+        position: relative;
+    }
+    .day-header:hover::after {
+        content: '+ Add';
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 10px;
+        color: #228b22;
+        font-weight: 500;
+    }
+    .calendar-day.today .day-header:hover::after {
+        color: #fff;
+    }
+
+    /* Add Event Modal */
+    .event-type-selector {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    .event-type-btn {
+        flex: 1;
+        padding: 12px 8px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        background: white;
+        cursor: pointer;
+        text-align: center;
+        transition: all 0.2s;
+    }
+    .event-type-btn:hover {
+        border-color: #228b22;
+        background: #f0fff0;
+    }
+    .event-type-btn.selected {
+        border-color: #228b22;
+        background: #e8f5e9;
+    }
+    .event-type-btn .icon {
+        font-size: 20px;
+        margin-bottom: 4px;
+    }
+    .event-type-btn .label {
+        font-size: 12px;
+        font-weight: 500;
+    }
+
     @media (max-width: 900px) {
         .calendar-grid {
             grid-template-columns: 1fr;
@@ -241,6 +330,10 @@
 {% endblock %}
 
 {% block content %}
+<!-- Season context for JavaScript -->
+<input type="hidden" id="season-year" value="{{ year }}">
+<input type="hidden" id="season-is-spring" value="{{ is_spring }}">
+
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
     <h1>
         <span class="badge badge-{{ 'spring' if is_spring else 'fall' }}">{{ season_name }}</span>
@@ -331,6 +424,118 @@
 <div id="cancel-zone" class="cancel-drop-zone">
     <span style="font-size: 20px;">X</span>
     <span>Drop here to cancel game</span>
+</div>
+
+<!-- Context Menu -->
+<div id="context-menu" class="context-menu">
+    <div class="context-menu-item" onclick="openAddEventModal()">
+        <span>+</span> Add Event
+    </div>
+    <div class="context-menu-divider" id="context-menu-divider"></div>
+    <div class="context-menu-item danger" id="context-delete-item" onclick="deleteContextEvent()">
+        <span>X</span> Delete Event
+    </div>
+</div>
+
+<!-- Add Event Modal -->
+<div id="add-event-modal" class="edit-modal">
+    <div class="card">
+        <h3 style="margin-bottom: 20px;">Add Event</h3>
+
+        <!-- Event Type Selector -->
+        <div class="event-type-selector">
+            <div class="event-type-btn selected" data-type="game" onclick="selectEventType('game')">
+                <div class="icon">vs</div>
+                <div class="label">Game</div>
+            </div>
+            <div class="event-type-btn" data-type="practice" onclick="selectEventType('practice')">
+                <div class="icon">P</div>
+                <div class="label">Practice</div>
+            </div>
+            <div class="event-type-btn" data-type="scrimmage" onclick="selectEventType('scrimmage')">
+                <div class="icon">S</div>
+                <div class="label">Scrimmage</div>
+            </div>
+            <div class="event-type-btn" data-type="division_practice" onclick="selectEventType('division_practice')">
+                <div class="icon">DP</div>
+                <div class="label">Div Practice</div>
+            </div>
+        </div>
+
+        <form id="add-event-form" onsubmit="submitAddEvent(event)">
+            <input type="hidden" id="add-event-type" value="game">
+
+            <div class="form-group">
+                <label>League</label>
+                <select id="add-event-league" class="form-control" required onchange="updateTeamOptions()">
+                    <option value="">-- Select League --</option>
+                    {% for l in leagues %}
+                    <option value="{{ l }}">{{ l }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" id="add-event-date-input" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Time</label>
+                    <select id="add-event-time" class="form-control" required>
+                        <option value="">-- Select --</option>
+                        <option value="17:00">5:00 PM</option>
+                        <option value="17:30">5:30 PM</option>
+                        <option value="18:00">6:00 PM</option>
+                        <option value="18:30">6:30 PM</option>
+                        <option value="19:00">7:00 PM</option>
+                        <option value="19:30">7:30 PM</option>
+                        <option value="20:00">8:00 PM</option>
+                        <option value="20:30">8:30 PM</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Field</label>
+                <select id="add-event-field" class="form-control" required>
+                    <option value="">-- Select Field --</option>
+                    {% for field in fields %}
+                    <option value="{{ field.location_title }}">{{ field.location_title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group" id="add-event-home-group">
+                <label id="add-event-home-label">Home Team</label>
+                <select id="add-event-home-team" class="form-control">
+                    <option value="">-- Select --</option>
+                    {% for team in teams %}
+                    <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
+                        {{ team.computed_display_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group" id="add-event-away-group">
+                <label>Away Team</label>
+                <select id="add-event-away-team" class="form-control">
+                    <option value="">-- Select --</option>
+                    {% for team in teams %}
+                    <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
+                        {{ team.computed_display_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="btn-row">
+                <button type="submit" class="btn btn-primary">Add Event</button>
+                <button type="button" class="btn btn-outline" onclick="closeAddEventModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <!-- Move Confirmation Modal -->
@@ -577,6 +782,252 @@ document.addEventListener('keydown', function(e) {
 
 document.getElementById('edit-modal').addEventListener('click', function(e) {
     if (e.target === this) closeEditModal();
+});
+
+// ==========================================
+// Context Menu and Add Event Functionality
+// ==========================================
+
+var contextMenu = document.getElementById('context-menu');
+var contextEventId = null;
+var contextIsProposed = false;
+var contextDate = null;
+
+// Hide context menu on click outside
+document.addEventListener('click', function(e) {
+    if (!contextMenu.contains(e.target)) {
+        hideContextMenu();
+    }
+});
+
+// Hide context menu on scroll
+document.addEventListener('scroll', function() {
+    hideContextMenu();
+});
+
+function showContextMenu(e, dateStr, eventId, isProposed) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    contextDate = dateStr;
+    contextEventId = eventId;
+    contextIsProposed = isProposed;
+
+    // Show/hide delete option based on whether an event was clicked
+    var deleteItem = document.getElementById('context-delete-item');
+    var divider = document.getElementById('context-menu-divider');
+    if (eventId) {
+        deleteItem.style.display = 'flex';
+        divider.style.display = 'block';
+    } else {
+        deleteItem.style.display = 'none';
+        divider.style.display = 'none';
+    }
+
+    // Position the menu
+    contextMenu.style.left = e.clientX + 'px';
+    contextMenu.style.top = e.clientY + 'px';
+    contextMenu.classList.add('show');
+
+    // Ensure menu stays in viewport
+    var rect = contextMenu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+        contextMenu.style.left = (window.innerWidth - rect.width - 10) + 'px';
+    }
+    if (rect.bottom > window.innerHeight) {
+        contextMenu.style.top = (window.innerHeight - rect.height - 10) + 'px';
+    }
+}
+
+function hideContextMenu() {
+    contextMenu.classList.remove('show');
+}
+
+// Add right-click handlers to day content areas and game cards
+document.querySelectorAll('.calendar-day').forEach(function(dayElem) {
+    var dateStr = dayElem.dataset.date;
+
+    // Right-click on day content area
+    dayElem.querySelector('.day-content').addEventListener('contextmenu', function(e) {
+        // Don't trigger if clicking on a game card (handled separately)
+        if (!e.target.closest('.game-card')) {
+            showContextMenu(e, dateStr, null, false);
+        }
+    });
+
+    // Click on day header to add event
+    var header = dayElem.querySelector('.day-header');
+    header.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openAddEventModalWithDate(dateStr);
+    });
+});
+
+document.querySelectorAll('.game-card').forEach(function(card) {
+    card.addEventListener('contextmenu', function(e) {
+        var dayElem = card.closest('.calendar-day');
+        var dateStr = dayElem ? dayElem.dataset.date : null;
+        var eventId = card.dataset.gameId;
+        // Check if proposed (ID is negative or starts with 'lp_')
+        var isProposed = eventId && (parseInt(eventId) < 0 || String(eventId).startsWith('lp_'));
+        showContextMenu(e, dateStr, eventId, isProposed);
+    });
+});
+
+// Add Event Modal
+var addEventModal = document.getElementById('add-event-modal');
+var selectedEventType = 'game';
+
+function openAddEventModal() {
+    hideContextMenu();
+    openAddEventModalWithDate(contextDate);
+}
+
+function openAddEventModalWithDate(dateStr) {
+    // Pre-fill date
+    document.getElementById('add-event-date-input').value = dateStr || '';
+
+    // Reset to game type
+    selectEventType('game');
+
+    addEventModal.style.display = 'flex';
+}
+
+function closeAddEventModal() {
+    addEventModal.style.display = 'none';
+}
+
+function selectEventType(type) {
+    selectedEventType = type;
+    document.getElementById('add-event-type').value = type;
+
+    // Update button styles
+    document.querySelectorAll('.event-type-btn').forEach(function(btn) {
+        btn.classList.remove('selected');
+        if (btn.dataset.type === type) {
+            btn.classList.add('selected');
+        }
+    });
+
+    // Show/hide away team based on type
+    var awayGroup = document.getElementById('add-event-away-group');
+    var homeLabel = document.getElementById('add-event-home-label');
+
+    if (type === 'practice') {
+        awayGroup.style.display = 'none';
+        homeLabel.textContent = 'Team';
+    } else if (type === 'division_practice') {
+        awayGroup.style.display = 'none';
+        homeLabel.textContent = 'Division / Team';
+    } else {
+        awayGroup.style.display = 'block';
+        homeLabel.textContent = 'Home Team';
+    }
+}
+
+function updateTeamOptions() {
+    var league = document.getElementById('add-event-league').value;
+    var homeSelect = document.getElementById('add-event-home-team');
+    var awaySelect = document.getElementById('add-event-away-team');
+
+    // Show/hide team options based on league
+    [homeSelect, awaySelect].forEach(function(select) {
+        var options = select.querySelectorAll('option[data-league]');
+        options.forEach(function(opt) {
+            if (!league || opt.dataset.league === league) {
+                opt.style.display = '';
+            } else {
+                opt.style.display = 'none';
+            }
+        });
+    });
+}
+
+function submitAddEvent(e) {
+    e.preventDefault();
+
+    var data = {
+        event_type: selectedEventType,
+        league: document.getElementById('add-event-league').value,
+        game_date: document.getElementById('add-event-date-input').value,
+        game_time: document.getElementById('add-event-time').value,
+        field_name: document.getElementById('add-event-field').value,
+        home_team_id: document.getElementById('add-event-home-team').value || null,
+        away_team_id: document.getElementById('add-event-away-team').value || null
+    };
+
+    var year = document.getElementById('season-year').value;
+    var isSpring = document.getElementById('season-is-spring').value;
+
+    fetch('/games/api/' + year + '/' + isSpring + '/add-event', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(result) {
+        if (result.success) {
+            closeAddEventModal();
+            // Reload page to show new event
+            window.location.reload();
+        } else {
+            alert('Error: ' + result.message);
+        }
+    })
+    .catch(function(err) {
+        alert('Error adding event: ' + err);
+    });
+}
+
+function deleteContextEvent() {
+    if (!contextEventId) return;
+
+    if (!confirm('Are you sure you want to delete this event?')) {
+        hideContextMenu();
+        return;
+    }
+
+    var year = document.getElementById('season-year').value;
+    var isSpring = document.getElementById('season-is-spring').value;
+
+    fetch('/games/api/' + year + '/' + isSpring + '/delete-event', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({
+            event_id: contextEventId,
+            is_proposed: contextIsProposed
+        })
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(result) {
+        if (result.success) {
+            hideContextMenu();
+            window.location.reload();
+        } else {
+            alert('Error: ' + result.message);
+        }
+    })
+    .catch(function(err) {
+        alert('Error deleting event: ' + err);
+    });
+}
+
+// Close modal on Escape and outside click
+addEventModal.addEventListener('click', function(e) {
+    if (e.target === this) closeAddEventModal();
+});
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeAddEventModal();
+    }
 });
 </script>
 
