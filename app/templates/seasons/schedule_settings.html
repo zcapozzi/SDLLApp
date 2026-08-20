@@ -131,6 +131,7 @@
     <h1>Schedule Settings - {{ season_name }}</h1>
     <div style="display: flex; gap: 10px;">
         <a href="{{ url_for('seasons.blackout_dates', year=year, is_spring=is_spring) }}" class="btn btn-outline">Blackout Dates</a>
+        <a href="{{ url_for('seasons.practice_pairings', year=year, is_spring=is_spring) }}" class="btn btn-outline">Practice Pairings</a>
         <a href="{{ url_for('seasons.manage_leagues', year=year, is_spring=is_spring) }}" class="btn btn-outline">League Settings</a>
         <a href="{{ url_for('seasons.view', year=year, is_spring=is_spring) }}" class="btn btn-outline">View Season</a>
     </div>

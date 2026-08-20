@@ -1115,3 +1115,87 @@ def blackout_dates(year, is_spring):
         season_name=season_name,
         blackouts=blackouts
     )
+
+
+@seasons_bp.route('/<int:year>/<int:is_spring>/practice-pairings', methods=['GET', 'POST'])
+@login_required
+def practice_pairings(year, is_spring):
+    """Manage practice pairings - teams that always share a field on specific days."""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to manage practice pairings.', 'error')
+        return redirect(url_for('seasons.view', year=year, is_spring=is_spring))
+
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+    from app.models.practice_pairing import PracticePairing
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        anchor = None
+
+        if action == 'add_pairing':
+            team_one_id = request.form.get('team_one_id')
+            team_two_id = request.form.get('team_two_id')
+            day_of_week = request.form.get('day_of_week')
+            notes = request.form.get('notes', '').strip()
+
+            if team_one_id and team_two_id and day_of_week is not None:
+                team_one_id = int(team_one_id)
+                team_two_id = int(team_two_id)
+                day_of_week = int(day_of_week)
+
+                # Validate teams are different
+                if team_one_id == team_two_id:
+                    flash('Cannot pair a team with itself.', 'error')
+                else:
+                    pairing = PracticePairing.add_pairing(
+                        year, is_spring, team_one_id, team_two_id,
+                        day_of_week, notes or None
+                    )
+                    if pairing:
+                        day_name = PracticePairing.DAY_NAMES[day_of_week]
+                        logger.info(f'Added practice pairing for {day_name}: teams {team_one_id} + {team_two_id}')
+                        flash(f'Added practice pairing for {day_name}', 'success')
+                        anchor = f'pairing-{pairing.ID}'
+                    else:
+                        flash('Pairing already exists for these teams on this day.', 'warning')
+            else:
+                flash('Please select both teams and a day of week.', 'error')
+
+        elif action == 'delete_pairing':
+            pairing_id = request.form.get('pairing_id')
+            if pairing_id:
+                pairing = PracticePairing.query.get(int(pairing_id))
+                if pairing and pairing.year == year and pairing.is_spring == is_spring:
+                    day_name = pairing.day_name
+                    pairing.delete()
+                    logger.info(f'Deleted practice pairing ID {pairing_id}')
+                    flash(f'Practice pairing removed for {day_name}.', 'success')
+
+        redirect_url = url_for('seasons.practice_pairings', year=year, is_spring=is_spring)
+        if anchor:
+            redirect_url += f'#{anchor}'
+        return redirect(redirect_url)
+
+    # GET - show practice pairings
+    pairings = PracticePairing.get_by_season(year, is_spring)
+
+    # Get teams grouped by league for the dropdown
+    teams = TeamSeason.get_by_season(year, is_spring)
+    # Filter out placeholders
+    teams = [t for t in teams if not t.is_placeholder]
+
+    teams_by_league = {}
+    for team in teams:
+        league = team.league or 'Unknown'
+        if league not in teams_by_league:
+            teams_by_league[league] = []
+        teams_by_league[league].append(team)
+
+    return render_template(
+        'seasons/practice_pairings.html',
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name,
+        pairings=pairings,
+        teams_by_league=teams_by_league
+    )

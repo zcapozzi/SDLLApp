@@ -4,7 +4,96 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Added rule c5 (Expected Practice Count) to validate that teams receive the expected number of practices.
+Last session: Added Practice Pairings feature - allows two teams to be permanently paired for shared practices on a specific day of the week.
+
+---
+
+## Session: August 20, 2026 - Practice Pairings Feature
+
+### Overview
+Added a feature that allows two teams to be permanently paired for shared practices on a specific day of the week. When both teams are scheduled to practice on that day, they automatically share a field.
+
+### Use Case Example
+SB Tee Ball Team 1 and SB Tee Ball Team 2 always share a field on Mondays. Both coaches have agreed to do joint practices.
+
+### Requirements
+1. **Day-specific**: Pairing only applies on the specified day of week (Monday pairing doesn't affect Thursday practices)
+2. **Override field availability**: Paired teams always share, regardless of other field constraints
+3. **Process first**: Handle paired practices before regular practice assignment
+4. **Skip error detection**: Paired teams exempt from shared-field violations (f1c, f2)
+5. **CRUD interface**: Add and delete pairings via dedicated page
+
+### Implementation
+
+#### 1. Database Model (`app/models/practice_pairing.py`)
+- New `PracticePairing` model with columns: ID, year, is_spring, team_one_id, team_two_id, day_of_week, notes, active
+- Class methods: `get_by_season()`, `get_pairings_for_day()`, `get_paired_team_ids()`, `get_pairing_pairs()`, `add_pairing()`, `are_teams_paired()`
+- Relationships to `TeamSeason` for both teams
+
+#### 2. Route (`app/seasons/routes.py`)
+- New route: `/<year>/<is_spring>/practice-pairings`
+- Actions: `add_pairing`, `delete_pairing`
+- Validation: prevents pairing a team with itself, prevents duplicates
+
+#### 3. Template (`app/templates/seasons/practice_pairings.html`)
+- Form to add pairings: two team dropdowns (grouped by league), day of week dropdown, optional notes
+- Table listing current pairings with remove buttons
+- Info cards explaining the feature
+
+#### 4. Scheduler Integration (`app/utils/scheduler.py`)
+
+**Initialization:**
+- Load practice pairings: `_practice_pairings`, `_paired_team_ids`, `_paired_team_pairs`
+- Track assigned paired practices: `_paired_practice_assigned`
+
+**Paired Practice Scheduling:**
+- New method: `_schedule_paired_practices_for_date()`
+- Called before regular practice assignment in `_schedule_practices_round_robin()`
+- For each pairing on the current day:
+  - Check if both teams need practice today
+  - Find a field with capacity >= 2
+  - Assign both teams to the same field/time
+  - Mark both teams as having activity for the day
+
+**Violation Exemptions:**
+- **f1c (Cross-league practice sharing)**: Modified `_check_practice_field_capacity()` to skip violation if exactly 2 teams are sharing and they are in a pairing
+- **f2 (Unnecessary field sharing)**: Modified `_check_unnecessary_sharing()` to skip violation if all teams sharing a field are paired together
+
+#### 5. Navigation
+- Added "Practice Pairings" link to Schedule Settings page
+- Added "Practice Pairings" link to Blackout Dates page
+
+### Files Created/Modified
+
+| File | Action |
+|------|--------|
+| `app/models/practice_pairing.py` | CREATE |
+| `app/models/__init__.py` | MODIFY - add import |
+| `app/templates/seasons/practice_pairings.html` | CREATE |
+| `app/seasons/routes.py` | MODIFY - add route |
+| `app/utils/scheduler.py` | MODIFY - add pairing logic |
+| `app/templates/seasons/schedule_settings.html` | MODIFY - add nav link |
+| `app/templates/seasons/blackout_dates.html` | MODIFY - add nav link |
+
+### Scheduler Flow (Updated)
+```
+For each practice date:
+  1. Check day of week
+  2. Get pairings that apply to this day
+  3. For each pairing where BOTH teams need practice:
+     - Assign them together to a shared field (FIRST)
+     - Mark both as practiced
+  4. Continue with regular practice assignment for remaining teams
+```
+
+### Edge Cases
+| Case | Handling |
+|------|----------|
+| Only one team needs practice that day | Skip pairing, normal assignment |
+| No fields available | Report as regular field shortage |
+| Team in multiple pairings same day | Process each pairing separately |
+| Pairing deleted mid-season | Only affects future schedule generations |
+| Cross-league pairing | Allowed - pairings override f1c |
 
 ---
 

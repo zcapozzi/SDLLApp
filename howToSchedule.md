@@ -122,9 +122,12 @@ These are absolute constraints. The scheduler will **never** violate these, even
 
 **Why it matters:** Cross-league practice sharing creates conflicts with different age groups and coaching styles.
 
+**Exception:** Teams with a Practice Pairing configured for that day are exempt from this rule. Practice Pairings allow two teams (potentially from different leagues) to intentionally share a field on specific days.
+
 **Validation logic:**
 - Group practices by (field, date, start_time)
 - Check if all teams in each slot are from the same league
+- If exactly 2 teams are sharing and they are in a Practice Pairing, skip the violation
 - Flag any slot with teams from different leagues
 
 ---
@@ -343,9 +346,12 @@ Actual practices = division practices (`is_league_practice=True`) + scheduled in
 
 **Why it matters:** Coaches value having the field to themselves for more effective practice sessions. If a second eligible field is available and empty, teams shouldn't be forced to share.
 
+**Exception:** Teams with a Practice Pairing configured for that day are exempt from this rule. Practice Pairings represent intentional sharing agreed to by both coaches.
+
 **Validation logic:**
 - For each practice time slot, identify which fields are being used
 - Check if any field has 2+ teams (sharing)
+- If all teams sharing are in Practice Pairings with each other, skip the violation (intentional sharing)
 - If sharing is occurring, check if there are other eligible practice fields that are empty
 - Flag violations where sharing happens while empty fields are available
 
@@ -566,6 +572,25 @@ First Practice Date < Opening Day Date < Regular Season End Date < Season End Da
 - Practices scheduled on practice days only
 - Scrimmages can be scheduled as needed
 
+### Practice Pairings
+Practice pairings allow two teams to be permanently paired for shared practices on a specific day of the week.
+
+**Configuration:**
+- Access via: Seasons → Schedule Settings → Practice Pairings
+- Select two teams, a day of week, and optional notes
+- Pairings are season-specific (year + spring/fall)
+
+**Behavior:**
+- Paired practices are scheduled BEFORE regular practice assignment
+- Both teams are assigned to the same field at the same time
+- Exempted from f1c (cross-league sharing) and f2 (unnecessary sharing) violations
+- If only one team needs practice that day, normal assignment applies
+
+**Use cases:**
+- Two coaches want to run combined practices
+- Siblings on different teams need aligned schedules
+- Limited field availability requires guaranteed sharing
+
 ### Game & Practice Durations
 
 Each league can have custom game and practice durations stored in `sdll_leagues`:
@@ -597,6 +622,7 @@ Each league can have custom game and practice durations stored in `sdll_leagues`
 | `f1` | Practice field capacity | Enforces field's `practice_capacity` setting from DB (default: 1) |
 | `f1c` | Cross-league practice sharing | Teams sharing practice slot must be same league |
 | `g1` | Time restrictions | No games/practices before earliest or after latest start time (default 7:30pm if not set) |
+| `c5` | Expected practice count | Each team should have expected practices (practice days + pre-opening game days) |
 
 ### Tier II: AVOID (Soft Rules)
 | Code | Name | Description |
@@ -608,7 +634,6 @@ Each league can have custom game and practice durations stored in `sdll_leagues`
 | `c2` | Practice field balance | Distribute practice locations evenly |
 | `c3` | Solo practice balance | Equal solo practice opportunities per team |
 | `c4` | Practice count balance | No team has 2+ more practices than another in same league |
-| `c5` | Expected practice count | Each team should have expected practices (practice days + pre-opening game days) |
 | `f2` | Unnecessary field sharing | Don't share a field when another eligible field is empty |
 | `e2` | Game day balance | All teams should play on the same game days (no team sits out) |
 | `f1a` | Day of week game balance (soft) | Teams differ by 2+ games on a day of week |

@@ -116,6 +116,9 @@ class ScheduleValidator:
         self._fields_cache = fields_cache or {}
         self._field_blackouts_cache = field_blackouts_cache or {}
         self._league_cache = league_cache or {}
+        # Load practice pairings for violation exemptions
+        from app.models.practice_pairing import PracticePairing
+        self._paired_team_pairs = PracticePairing.get_pairing_pairs(year, is_spring)
 
     def _get_team_name(self, team_id):
         """Get team name from ID (with caching)."""
@@ -853,12 +856,48 @@ class ScheduleValidator:
 
             # Check if any field has multiple teams (sharing)
             field_counts = defaultdict(int)
+            field_teams = defaultdict(list)  # field_id -> list of team_ids
             for p in slot_practices:
                 field_counts[p['field_id']] += 1
+                # Get team ID from practice
+                practice_obj = p['practice']
+                team_id = None
+                if hasattr(practice_obj, 'home_team') and practice_obj.home_team:
+                    team_id = practice_obj.home_team.team_ID if hasattr(practice_obj.home_team, 'team_ID') else None
+                elif hasattr(practice_obj, 'home_ID'):
+                    team_id = practice_obj.home_ID
+                if team_id:
+                    field_teams[p['field_id']].append(team_id)
 
             shared_fields = [f for f, count in field_counts.items() if count > 1]
             if not shared_fields:
                 continue  # No sharing at this time slot
+
+            # Filter out paired teams from shared_fields (intentional sharing)
+            # If all teams sharing a field are paired together, it's not a violation
+            non_paired_shared_fields = []
+            for field_id in shared_fields:
+                teams_on_field = field_teams[field_id]
+                # Check if all pairs of teams on this field are in paired relationships
+                all_paired = True
+                if len(teams_on_field) == 2:
+                    if (teams_on_field[0], teams_on_field[1]) not in self._paired_team_pairs:
+                        all_paired = False
+                else:
+                    # More than 2 teams - check all combinations
+                    for i in range(len(teams_on_field)):
+                        for j in range(i + 1, len(teams_on_field)):
+                            if (teams_on_field[i], teams_on_field[j]) not in self._paired_team_pairs:
+                                all_paired = False
+                                break
+                        if not all_paired:
+                            break
+                if not all_paired:
+                    non_paired_shared_fields.append(field_id)
+
+            shared_fields = non_paired_shared_fields
+            if not shared_fields:
+                continue  # All sharing is intentional via pairings
 
             # Get fields that have slots at this DAY OF WEEK and TIME across any date
             # Only consider fields that have practices on the SAME day of week at the same time
@@ -1144,27 +1183,40 @@ class ScheduleValidator:
             # Check cross-league sharing violation (f1c) - only if more than 1 team sharing
             if len(practices_at_slot) > 1:
                 leagues_in_slot = set()
+                team_ids_in_slot = []
                 for p in practices_at_slot:
                     league = self._get_league(p)
                     if league:
                         leagues_in_slot.add(league)
+                    home = self._get_home_team(p)
+                    if home:
+                        team_ids_in_slot.append(home)
 
                 if len(leagues_in_slot) > 1:
-                    # Multiple leagues sharing same practice slot - violation
-                    team_league_info = []
-                    for p in practices_at_slot:
-                        home = self._get_home_team(p)
-                        league = self._get_league(p)
-                        if home:
-                            team_name = self._get_team_name(home)
-                            team_league_info.append(f'{team_name} ({league})')
+                    # Multiple leagues sharing same practice slot - check if exempt via pairing
+                    # If exactly 2 teams and they are paired, this is intentional sharing
+                    is_paired_sharing = False
+                    if len(team_ids_in_slot) == 2:
+                        pair = (team_ids_in_slot[0], team_ids_in_slot[1])
+                        if pair in self._paired_team_pairs:
+                            is_paired_sharing = True
 
-                    self.violations.append(ScheduleViolation(
-                        'f1c', 'Cross-league practice sharing',
-                        ScheduleViolation.HARD,
-                        f'{field_name} at {date} {time_str} has teams from different leagues sharing practice: {", ".join(team_league_info[:5])}{"..." if len(team_league_info) > 5 else ""}',
-                        games=practices_at_slot
-                    ))
+                    if not is_paired_sharing:
+                        # Violation - multiple leagues sharing without a pairing
+                        team_league_info = []
+                        for p in practices_at_slot:
+                            home = self._get_home_team(p)
+                            league = self._get_league(p)
+                            if home:
+                                team_name = self._get_team_name(home)
+                                team_league_info.append(f'{team_name} ({league})')
+
+                        self.violations.append(ScheduleViolation(
+                            'f1c', 'Cross-league practice sharing',
+                            ScheduleViolation.HARD,
+                            f'{field_name} at {date} {time_str} has teams from different leagues sharing practice: {", ".join(team_league_info[:5])}{"..." if len(team_league_info) > 5 else ""}',
+                            games=practices_at_slot
+                        ))
 
     def _check_season_blackouts(self, games):
         """Rule h1: No games or practices on season blackout dates.
@@ -1688,6 +1740,14 @@ class ScheduleGenerator:
         # Load season-wide blackout dates
         from app.models.season_blackout import SeasonBlackout
         self._season_blackout_dates = SeasonBlackout.get_blackout_dates_set(year, is_spring)
+
+        # Load practice pairings (teams that always share on specific days)
+        from app.models.practice_pairing import PracticePairing
+        self._practice_pairings = PracticePairing.get_by_season(year, is_spring)
+        self._paired_team_ids = PracticePairing.get_paired_team_ids(year, is_spring)
+        self._paired_team_pairs = PracticePairing.get_pairing_pairs(year, is_spring)
+        # Track which teams have been assigned paired practices for each date
+        self._paired_practice_assigned = set()  # (team_id, date_str)
 
     def _is_blackout_date(self, check_date):
         """Check if a date is a season-wide blackout date."""
@@ -2873,6 +2933,207 @@ class ScheduleGenerator:
                 'message': f'{config.league}: Odd number of teams - {shuffled[-1].display_name} has no scrimmage partner.'
             })
 
+    def _schedule_paired_practices_for_date(self, practice_date, all_slots, all_teams_by_id):
+        """Schedule paired practices for this date. Called before regular practice assignment.
+
+        Paired practices are processed first so both teams in a pairing get scheduled
+        together on the same field. This bypasses normal solo-first logic.
+
+        Args:
+            practice_date: The date to schedule for
+            all_slots: All available field slots for the season
+            all_teams_by_id: Dict mapping team_id -> TeamSeason object
+
+        Returns:
+            Set of team IDs that have been assigned paired practices on this date
+        """
+        day_of_week = practice_date.weekday()
+        date_str = practice_date.isoformat() if hasattr(practice_date, 'isoformat') else str(practice_date)
+        assigned_team_ids = set()
+
+        # Get pairings for this day of week
+        pairings_today = [p for p in self._practice_pairings if p.day_of_week == day_of_week]
+        if not pairings_today:
+            return assigned_team_ids
+
+        # Get available slots for this day
+        available_slots = [
+            s for s in all_slots
+            if s.day_of_week == day_of_week
+        ]
+        if not available_slots:
+            return assigned_team_ids
+
+        for pairing in pairings_today:
+            team_one = all_teams_by_id.get(pairing.team_one_id)
+            team_two = all_teams_by_id.get(pairing.team_two_id)
+
+            if not team_one or not team_two:
+                continue
+
+            # Check if either team already has activity today
+            if (pairing.team_one_id, date_str) in self._team_day_usage:
+                continue
+            if (pairing.team_two_id, date_str) in self._team_day_usage:
+                continue
+
+            # Check if either team has already been assigned a paired practice today
+            if (pairing.team_one_id, date_str) in self._paired_practice_assigned:
+                continue
+            if (pairing.team_two_id, date_str) in self._paired_practice_assigned:
+                continue
+
+            # Find an available slot (check both teams' league constraints if different leagues)
+            league_one = self._league_cache.get(team_one.league)
+            league_two = self._league_cache.get(team_two.league)
+
+            # For time constraints, use the more restrictive of the two leagues
+            from datetime import time as dt_time
+            DEFAULT_LATEST_START = dt_time(19, 30)  # 7:30pm default
+
+            latest_one = getattr(league_one, 'latest_start_time', None) or DEFAULT_LATEST_START if league_one else DEFAULT_LATEST_START
+            latest_two = getattr(league_two, 'latest_start_time', None) or DEFAULT_LATEST_START if league_two else DEFAULT_LATEST_START
+            latest_time = min(latest_one, latest_two)
+
+            earliest_one = getattr(league_one, 'earliest_start_time', None) if league_one else None
+            earliest_two = getattr(league_two, 'earliest_start_time', None) if league_two else None
+            earliest_time = None
+            if earliest_one and earliest_two:
+                earliest_time = max(earliest_one, earliest_two)
+            elif earliest_one:
+                earliest_time = earliest_one
+            elif earliest_two:
+                earliest_time = earliest_two
+
+            assigned_option = None
+            practice_duration = self._get_activity_duration_minutes(team_one.league, is_practice=True)
+
+            for slot in available_slots:
+                if not slot.field:
+                    continue
+                field_id = slot.field.ID
+
+                # Check field availability
+                if not self._is_field_available_on_date(field_id, practice_date):
+                    continue
+
+                # Build time options for this slot
+                time_capacity = self._get_time_based_practice_capacity(slot)
+                for time_block in range(time_capacity):
+                    time_offset_minutes = time_block * PRACTICE_DURATION_MINUTES
+                    game_datetime = self._slot_to_datetime(slot, practice_date)
+                    if game_datetime and time_offset_minutes > 0:
+                        game_datetime = game_datetime + timedelta(minutes=time_offset_minutes)
+
+                    if not game_datetime:
+                        continue
+
+                    practice_time = game_datetime.time()
+
+                    # Check time constraints
+                    if practice_time > latest_time:
+                        continue
+                    if earliest_time and practice_time < earliest_time:
+                        continue
+
+                    # Check if slot would overlap with existing activities
+                    if not self._check_field_time_available(
+                        field_id, game_datetime, practice_duration, team_one.league, is_practice=True
+                    ):
+                        continue
+
+                    # Get field capacity - for paired practice we need at least 2
+                    is_late = game_datetime.hour >= 19
+                    field_capacity = slot.field.get_practice_capacity(is_late_slot=is_late)
+                    if field_capacity < 2:
+                        continue
+
+                    datetime_key = (field_id, game_datetime.isoformat())
+                    current_count = self._practice_slot_counts[datetime_key]
+                    if current_count + 2 > field_capacity:
+                        continue  # Not enough capacity for both teams
+
+                    assigned_option = {
+                        'slot': slot,
+                        'field_id': field_id,
+                        'datetime': game_datetime,
+                        'datetime_key': datetime_key,
+                        'field_capacity': field_capacity
+                    }
+                    break
+
+                if assigned_option:
+                    break
+
+            if not assigned_option:
+                self.warnings.append({
+                    'type': 'paired_practice_capacity',
+                    'message': f'No slot available for paired practice: {team_one.display_name} + {team_two.display_name} on {practice_date}'
+                })
+                continue
+
+            # Assign paired practice - create two practice entries at the same time/field
+            datetime_key = assigned_option['datetime_key']
+            self._practice_slot_counts[datetime_key] += 2  # Both teams count
+
+            # Add to global field time ranges
+            self._add_field_time_usage(
+                assigned_option['field_id'],
+                assigned_option['datetime'],
+                practice_duration,
+                team_one.league,  # Use first team's league
+                is_practice=True
+            )
+
+            # Create practice for team one
+            practice_one = ProposedGame(
+                game_type='practice',
+                league=team_one.league,
+                year=self.year,
+                is_spring=self.is_spring,
+                home_team=team_one,
+                away_team=None,
+                field=assigned_option['slot'].field,
+                game_date=assigned_option['datetime']
+            )
+            practice_one.slot = assigned_option['slot']
+            practice_one.id = self._next_id
+            self._next_id += 1
+            self.proposed_games.append(practice_one)
+
+            # Create practice for team two
+            practice_two = ProposedGame(
+                game_type='practice',
+                league=team_two.league,
+                year=self.year,
+                is_spring=self.is_spring,
+                home_team=team_two,
+                away_team=None,
+                field=assigned_option['slot'].field,
+                game_date=assigned_option['datetime']
+            )
+            practice_two.slot = assigned_option['slot']
+            practice_two.id = self._next_id
+            self._next_id += 1
+            self.proposed_games.append(practice_two)
+
+            # Mark both teams as having activity on this day
+            self._team_day_usage.add((pairing.team_one_id, date_str))
+            self._team_day_usage.add((pairing.team_two_id, date_str))
+
+            # Mark both teams as having been assigned a paired practice
+            self._paired_practice_assigned.add((pairing.team_one_id, date_str))
+            self._paired_practice_assigned.add((pairing.team_two_id, date_str))
+
+            # Track practice counts
+            self._team_practice_counts[pairing.team_one_id] += 1
+            self._team_practice_counts[pairing.team_two_id] += 1
+
+            assigned_team_ids.add(pairing.team_one_id)
+            assigned_team_ids.add(pairing.team_two_id)
+
+        return assigned_team_ids
+
     def _assign_practices_for_date(self, config, teams, league, all_slots, practice_date, existing_slots=None, start_fresh=False, is_pre_opening=False, max_practices_per_week=None, force_sharing=False):
         """Assign practices for all teams on a given date.
 
@@ -3184,8 +3445,22 @@ class ScheduleGenerator:
                 }
                 all_practice_dates.update(d for _, d in practice_dates)
 
+        # Build team lookup by ID for paired practice scheduling
+        all_teams_by_id = {}
+        for league_name, teams in self._teams_by_league.items():
+            for team in teams:
+                all_teams_by_id[team.team_ID] = team
+
         # Process each date in chronological order
         for practice_date in sorted(all_practice_dates):
+            # FIRST: Schedule paired practices for this date
+            # Paired practices are processed before regular assignment so both teams
+            # in a pairing get scheduled together on the same field.
+            if self._practice_pairings:
+                self._schedule_paired_practices_for_date(
+                    practice_date, self._all_field_slots, all_teams_by_id
+                )
+
             # Get leagues that need practices on this date
             leagues_today = []
             for league_name, info in league_info.items():

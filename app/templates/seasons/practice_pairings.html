@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Practice Pairings - {{ season_name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>
+        <span class="badge badge-{{ 'spring' if is_spring else 'fall' }}">{{ season_name }}</span>
+        Practice Pairings
+    </h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('seasons.schedule_settings', year=year, is_spring=is_spring) }}" class="btn btn-outline">Schedule Settings</a>
+        <a href="{{ url_for('scheduler.index', year=year, is_spring=is_spring) }}" class="btn btn-outline">Scheduler</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <p class="text-muted">
+        Practice pairings allow two teams to always share a field on a specific day of the week.
+        When both teams are scheduled to practice on that day, they will automatically be scheduled together.
+    </p>
+    <p class="text-muted text-small" style="margin-top: 10px;">
+        <strong>Note:</strong> Paired practices are processed before regular practice assignment and are exempt
+        from shared-field violations (f1c, f2).
+    </p>
+</div>
+
+<!-- Add Pairing Form -->
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-top: 0; margin-bottom: 15px;">Add Practice Pairing</h3>
+    <form method="POST" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add_pairing">
+
+        <div class="form-group" style="margin-bottom: 0; min-width: 180px;">
+            <label>Team 1</label>
+            <select name="team_one_id" class="form-control" required>
+                <option value="">Select team...</option>
+                {% for league_name, league_teams in teams_by_league.items() %}
+                <optgroup label="{{ league_name }}">
+                    {% for team in league_teams %}
+                    <option value="{{ team.team_ID }}">{{ team.computed_display_name }}</option>
+                    {% endfor %}
+                </optgroup>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0; min-width: 180px;">
+            <label>Team 2</label>
+            <select name="team_two_id" class="form-control" required>
+                <option value="">Select team...</option>
+                {% for league_name, league_teams in teams_by_league.items() %}
+                <optgroup label="{{ league_name }}">
+                    {% for team in league_teams %}
+                    <option value="{{ team.team_ID }}">{{ team.computed_display_name }}</option>
+                    {% endfor %}
+                </optgroup>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0; min-width: 140px;">
+            <label>Day of Week</label>
+            <select name="day_of_week" class="form-control" required>
+                <option value="0">Monday</option>
+                <option value="1">Tuesday</option>
+                <option value="2">Wednesday</option>
+                <option value="3">Thursday</option>
+                <option value="4">Friday</option>
+                <option value="5">Saturday</option>
+                <option value="6">Sunday</option>
+            </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 200px;">
+            <label>Notes (optional)</label>
+            <input type="text" name="notes" class="form-control" placeholder="e.g., Coaches requested joint practices">
+        </div>
+
+        <button type="submit" class="btn btn-primary">Add Pairing</button>
+    </form>
+</div>
+
+<!-- Current Pairings -->
+<div class="card">
+    <h3 style="margin-top: 0; margin-bottom: 15px;">Current Practice Pairings ({{ pairings|length }})</h3>
+
+    {% if pairings %}
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 200px;">Team 1</th>
+                <th style="width: 200px;">Team 2</th>
+                <th style="width: 120px;">Day</th>
+                <th>Notes</th>
+                <th style="width: 100px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for pairing in pairings %}
+            <tr id="pairing-{{ pairing.ID }}">
+                <td>
+                    {% if pairing.team_one %}
+                        {{ pairing.team_one.computed_display_name }}
+                        <span class="text-muted text-small">({{ pairing.team_one.league }})</span>
+                    {% else %}
+                        <span class="text-muted">Team #{{ pairing.team_one_id }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if pairing.team_two %}
+                        {{ pairing.team_two.computed_display_name }}
+                        <span class="text-muted text-small">({{ pairing.team_two.league }})</span>
+                    {% else %}
+                        <span class="text-muted">Team #{{ pairing.team_two_id }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ pairing.day_name }}</td>
+                <td>{{ pairing.notes or '-' }}</td>
+                <td>
+                    <form method="POST" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="delete_pairing">
+                        <input type="hidden" name="pairing_id" value="{{ pairing.ID }}">
+                        <button type="submit" class="btn btn-outline btn-sm" style="color: #c33; border-color: #c33;"
+                                onclick="return confirm('Remove this practice pairing?');">
+                            Remove
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted" style="text-align: center; padding: 30px;">
+        No practice pairings configured for this season.
+    </p>
+    {% endif %}
+</div>
+
+<!-- Use Case Examples -->
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0; margin-bottom: 15px;">Example Use Cases</h3>
+    <ul class="text-muted">
+        <li><strong>Joint Coaching:</strong> Two coaches from the same league want to run combined practices</li>
+        <li><strong>Limited Field Availability:</strong> Guarantees certain teams always share on a specific day</li>
+        <li><strong>Sibling Teams:</strong> Parents with kids on different teams request aligned practice times</li>
+    </ul>
+</div>
+{% endblock %}

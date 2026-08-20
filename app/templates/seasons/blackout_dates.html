@@ -10,6 +10,7 @@
     </h1>
     <div style="display: flex; gap: 10px;">
         <a href="{{ url_for('seasons.schedule_settings', year=year, is_spring=is_spring) }}" class="btn btn-outline">Schedule Settings</a>
+        <a href="{{ url_for('seasons.practice_pairings', year=year, is_spring=is_spring) }}" class="btn btn-outline">Practice Pairings</a>
         <a href="{{ url_for('scheduler.index', year=year, is_spring=is_spring) }}" class="btn btn-outline">Scheduler</a>
     </div>
 </div>
