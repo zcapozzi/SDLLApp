@@ -691,6 +691,168 @@
         border: 1px solid #ddd;
         border-radius: 4px;
     }
+
+    /* Context Menu */
+    .context-menu {
+        display: none;
+        position: fixed;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 4000;
+        min-width: 160px;
+        padding: 4px 0;
+    }
+    .context-menu.visible {
+        display: block;
+    }
+    .context-menu-item {
+        padding: 8px 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+    }
+    .context-menu-item:hover {
+        background: #f5f5f5;
+    }
+    .context-menu-item.danger {
+        color: #dc3545;
+    }
+    .context-menu-item.danger:hover {
+        background: #fff5f5;
+    }
+    .context-menu-divider {
+        height: 1px;
+        background: #eee;
+        margin: 4px 0;
+    }
+
+    /* Add Event Modal */
+    .add-event-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 3000;
+        justify-content: center;
+        align-items: center;
+    }
+    .add-event-modal.visible {
+        display: flex;
+    }
+    .add-event-modal-content {
+        background: white;
+        border-radius: 8px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 80vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    .add-event-modal-header {
+        padding: 15px 20px;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgb(34, 139, 34);
+        color: white;
+    }
+    .add-event-modal-header h3 {
+        margin: 0;
+    }
+    .add-event-modal-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: white;
+    }
+    .add-event-modal-body {
+        padding: 20px;
+        overflow-y: auto;
+        flex: 1;
+    }
+    .add-event-form-group {
+        margin-bottom: 15px;
+    }
+    .add-event-form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+        font-size: 13px;
+    }
+    .add-event-form-group select,
+    .add-event-form-group input {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    .add-event-form-group select:focus,
+    .add-event-form-group input:focus {
+        outline: none;
+        border-color: rgb(34, 139, 34);
+    }
+    .add-event-form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+    }
+    .add-event-type-selector {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-bottom: 15px;
+    }
+    .add-event-type-btn {
+        padding: 10px 8px;
+        border: 2px solid #ddd;
+        border-radius: 6px;
+        background: white;
+        cursor: pointer;
+        text-align: center;
+        font-size: 12px;
+        transition: all 0.15s;
+    }
+    .add-event-type-btn:hover {
+        border-color: #999;
+    }
+    .add-event-type-btn.active {
+        border-color: rgb(34, 139, 34);
+        background: rgba(34, 139, 34, 0.1);
+        color: rgb(34, 139, 34);
+        font-weight: 600;
+    }
+    .add-event-footer {
+        padding: 15px 20px;
+        border-top: 1px solid #eee;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+
+    /* Empty slot click hint */
+    .date-header.clickable {
+        cursor: pointer;
+    }
+    .date-header .add-hint {
+        float: right;
+        font-size: 12px;
+        opacity: 0.7;
+        font-weight: normal;
+    }
+    .game-row.clickable {
+        cursor: pointer;
+    }
 </style>
 {% endblock %}
 
@@ -996,13 +1158,15 @@
 <div class="card" id="schedule-display">
     {% for date_str, day_games in games_by_date | dictsort %}
     {% set date_obj = day_games[0].game_date[:10] %}
-    <div class="date-header" data-date="{{ date_str }}">
+    <div class="date-header clickable" data-date="{{ date_str }}" onclick="onDateHeaderClick(event, '{{ date_str }}')" title="Click to add event, right-click for menu">
         {{ date_str | format_date_with_day }}
-        <button class="trace-btn" onclick="openTraceModal('{{ date_str }}')" title="View slot assignment decisions">Trace</button>
+        <span class="add-hint">+ Add</span>
+        <button class="trace-btn" onclick="event.stopPropagation(); openTraceModal('{{ date_str }}')" title="View slot assignment decisions">Trace</button>
     </div>
     <div class="date-games" data-date="{{ date_str }}">
         {% for game in day_games | sort(attribute='game_date') %}
         <div class="game-row"
+             data-game-id="{{ game.id }}"
              data-home-id="{{ game.home_team_id }}"
              data-away-id="{{ game.away_team_id }}"
              data-home-name="{{ game.home_team_name|lower if game.home_team_name else '' }}"
@@ -1259,6 +1423,91 @@
             <div id="trace-modal-empty" style="display: none; text-align: center; padding: 40px; color: #666;">
                 No trace data available for this date.
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Context Menu -->
+<div id="context-menu" class="context-menu">
+    <div class="context-menu-item" onclick="openAddEventModal()">
+        <span>&#43;</span> Add Event
+    </div>
+    <div class="context-menu-divider" id="context-menu-divider"></div>
+    <div class="context-menu-item danger" id="context-delete-item" onclick="deleteContextEvent()">
+        <span>&#128465;</span> Delete Event
+    </div>
+</div>
+
+<!-- Add Event Modal -->
+<div id="add-event-modal" class="add-event-modal">
+    <div class="add-event-modal-content">
+        <div class="add-event-modal-header">
+            <h3>Add Event</h3>
+            <button class="add-event-modal-close" onclick="closeAddEventModal()">&times;</button>
+        </div>
+        <div class="add-event-modal-body">
+            <!-- Event Type Selector -->
+            <div class="add-event-type-selector">
+                <button type="button" class="add-event-type-btn active" data-type="regular" onclick="selectEventType('regular')">
+                    Game
+                </button>
+                <button type="button" class="add-event-type-btn" data-type="practice" onclick="selectEventType('practice')">
+                    Practice
+                </button>
+                <button type="button" class="add-event-type-btn" data-type="scrimmage" onclick="selectEventType('scrimmage')">
+                    Scrimmage
+                </button>
+                <button type="button" class="add-event-type-btn" data-type="division_practice" onclick="selectEventType('division_practice')">
+                    Div Practice
+                </button>
+            </div>
+
+            <form id="add-event-form">
+                <div class="add-event-form-row">
+                    <div class="add-event-form-group">
+                        <label>Date</label>
+                        <input type="date" id="add-event-date" required>
+                    </div>
+                    <div class="add-event-form-group">
+                        <label>Time</label>
+                        <select id="add-event-time" required>
+                            <option value="">Select time...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="add-event-form-group">
+                    <label>Field</label>
+                    <select id="add-event-field" required>
+                        <option value="">Select field...</option>
+                    </select>
+                </div>
+
+                <div class="add-event-form-group">
+                    <label>League</label>
+                    <select id="add-event-league" required onchange="updateTeamOptions()">
+                        <option value="">Select league...</option>
+                    </select>
+                </div>
+
+                <div class="add-event-form-group" id="home-team-group">
+                    <label id="home-team-label">Home Team</label>
+                    <select id="add-event-home-team">
+                        <option value="">Select team...</option>
+                    </select>
+                </div>
+
+                <div class="add-event-form-group" id="away-team-group">
+                    <label>Away Team</label>
+                    <select id="add-event-away-team">
+                        <option value="">Select team...</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+        <div class="add-event-footer">
+            <button type="button" class="btn btn-outline" onclick="closeAddEventModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="submitAddEvent()">Add Event</button>
         </div>
     </div>
 </div>
@@ -2097,5 +2346,330 @@ document.getElementById('trace-modal').addEventListener('click', function(e) {
         closeTraceModal();
     }
 });
+
+// ============================================
+// Context Menu and Add Event Functionality
+// ============================================
+
+var contextMenuTarget = null;  // The element that was right-clicked
+var contextMenuGameId = null;  // The game ID if clicking on a game
+var contextMenuDate = null;    // The date for adding events
+var eventOptions = null;       // Cached event options from API
+var selectedEventType = 'regular';
+
+// Context Menu
+function showContextMenu(e, date, gameId) {
+    e.preventDefault();
+
+    contextMenuDate = date;
+    contextMenuGameId = gameId;
+    contextMenuTarget = e.target.closest('.game-row') || e.target.closest('.date-header');
+
+    var menu = document.getElementById('context-menu');
+    var deleteItem = document.getElementById('context-delete-item');
+    var divider = document.getElementById('context-menu-divider');
+
+    // Show/hide delete option based on whether we clicked a game
+    if (gameId) {
+        deleteItem.style.display = 'flex';
+        divider.style.display = 'block';
+    } else {
+        deleteItem.style.display = 'none';
+        divider.style.display = 'none';
+    }
+
+    // Position menu
+    var x = e.clientX;
+    var y = e.clientY;
+
+    // Ensure menu doesn't go off screen
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    menu.classList.add('visible');
+
+    // Adjust if off screen
+    setTimeout(function() {
+        var rect = menu.getBoundingClientRect();
+        if (rect.right > window.innerWidth) {
+            menu.style.left = (x - rect.width) + 'px';
+        }
+        if (rect.bottom > window.innerHeight) {
+            menu.style.top = (y - rect.height) + 'px';
+        }
+    }, 0);
+}
+
+function hideContextMenu() {
+    document.getElementById('context-menu').classList.remove('visible');
+    contextMenuTarget = null;
+}
+
+// Hide context menu when clicking elsewhere
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.context-menu')) {
+        hideContextMenu();
+    }
+});
+
+// Add right-click handler to game rows and date headers
+document.addEventListener('contextmenu', function(e) {
+    var gameRow = e.target.closest('.game-row');
+    var dateHeader = e.target.closest('.date-header');
+    var dateGames = e.target.closest('.date-games');
+
+    if (gameRow) {
+        // Right-clicked on a game
+        var gameId = parseInt(gameRow.dataset.gameId || '0');
+        var dateStr = gameRow.closest('.date-games').dataset.date;
+        showContextMenu(e, dateStr, gameId);
+    } else if (dateHeader) {
+        // Right-clicked on a date header
+        var dateStr = dateHeader.dataset.date;
+        showContextMenu(e, dateStr, null);
+    } else if (dateGames) {
+        // Right-clicked on date games area (but not on a game)
+        var dateStr = dateGames.dataset.date;
+        showContextMenu(e, dateStr, null);
+    }
+});
+
+// Add Event Modal
+function openAddEventModal(date) {
+    var modal = document.getElementById('add-event-modal');
+    modal.classList.add('visible');
+
+    // Use context menu date or passed date
+    var useDate = date || contextMenuDate;
+    if (useDate) {
+        document.getElementById('add-event-date').value = useDate;
+    }
+
+    hideContextMenu();
+
+    // Load options if not cached
+    if (!eventOptions) {
+        loadEventOptions();
+    } else {
+        populateEventOptions();
+    }
+
+    // Reset form
+    selectEventType('regular');
+}
+
+function closeAddEventModal() {
+    document.getElementById('add-event-modal').classList.remove('visible');
+    document.getElementById('add-event-form').reset();
+    contextMenuDate = null;
+}
+
+function loadEventOptions() {
+    var url = '/scheduler/api/' + currentYear + '/' + currentIsSpring + '/event-options';
+    fetch(url)
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            eventOptions = data;
+            populateEventOptions();
+        })
+        .catch(function(err) {
+            console.error('Failed to load event options:', err);
+            alert('Failed to load options. Please try again.');
+        });
+}
+
+function populateEventOptions() {
+    if (!eventOptions) return;
+
+    // Populate time slots
+    var timeSelect = document.getElementById('add-event-time');
+    timeSelect.innerHTML = '<option value="">Select time...</option>';
+    eventOptions.time_slots.forEach(function(time) {
+        var formatted = formatTimeDisplay(time);
+        timeSelect.innerHTML += '<option value="' + time + '">' + formatted + '</option>';
+    });
+
+    // Populate fields
+    var fieldSelect = document.getElementById('add-event-field');
+    fieldSelect.innerHTML = '<option value="">Select field...</option>';
+    eventOptions.fields.forEach(function(field) {
+        fieldSelect.innerHTML += '<option value="' + field.name + '">' + field.name + '</option>';
+    });
+
+    // Populate leagues
+    var leagueSelect = document.getElementById('add-event-league');
+    leagueSelect.innerHTML = '<option value="">Select league...</option>';
+    eventOptions.leagues.forEach(function(league) {
+        leagueSelect.innerHTML += '<option value="' + league.name + '">' + league.name + '</option>';
+    });
+}
+
+function formatTimeDisplay(time24) {
+    var parts = time24.split(':');
+    var hour = parseInt(parts[0]);
+    var minute = parts[1];
+    var ampm = hour >= 12 ? 'PM' : 'AM';
+    var hour12 = hour % 12 || 12;
+    return hour12 + ':' + minute + ' ' + ampm;
+}
+
+function selectEventType(type) {
+    selectedEventType = type;
+
+    // Update buttons
+    document.querySelectorAll('.add-event-type-btn').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.type === type);
+    });
+
+    // Show/hide team selectors based on type
+    var homeGroup = document.getElementById('home-team-group');
+    var awayGroup = document.getElementById('away-team-group');
+    var homeLabel = document.getElementById('home-team-label');
+
+    if (type === 'division_practice') {
+        homeGroup.style.display = 'none';
+        awayGroup.style.display = 'none';
+    } else if (type === 'practice') {
+        homeGroup.style.display = 'block';
+        awayGroup.style.display = 'none';
+        homeLabel.textContent = 'Team';
+    } else {
+        homeGroup.style.display = 'block';
+        awayGroup.style.display = 'block';
+        homeLabel.textContent = 'Home Team';
+    }
+}
+
+function updateTeamOptions() {
+    var league = document.getElementById('add-event-league').value;
+    var homeSelect = document.getElementById('add-event-home-team');
+    var awaySelect = document.getElementById('add-event-away-team');
+
+    homeSelect.innerHTML = '<option value="">Select team...</option>';
+    awaySelect.innerHTML = '<option value="">Select team...</option>';
+
+    if (league && eventOptions && eventOptions.teams_by_league[league]) {
+        eventOptions.teams_by_league[league].forEach(function(team) {
+            homeSelect.innerHTML += '<option value="' + team.id + '">' + team.name + '</option>';
+            awaySelect.innerHTML += '<option value="' + team.id + '">' + team.name + '</option>';
+        });
+    }
+}
+
+function submitAddEvent() {
+    var date = document.getElementById('add-event-date').value;
+    var time = document.getElementById('add-event-time').value;
+    var field = document.getElementById('add-event-field').value;
+    var league = document.getElementById('add-event-league').value;
+    var homeTeam = document.getElementById('add-event-home-team').value;
+    var awayTeam = document.getElementById('add-event-away-team').value;
+
+    // Validation
+    if (!date || !time || !field || !league) {
+        alert('Please fill in all required fields (Date, Time, Field, League)');
+        return;
+    }
+
+    if (selectedEventType === 'regular' || selectedEventType === 'scrimmage') {
+        if (!homeTeam || !awayTeam) {
+            alert('Please select both home and away teams');
+            return;
+        }
+        if (homeTeam === awayTeam) {
+            alert('Home and away teams must be different');
+            return;
+        }
+    }
+
+    if (selectedEventType === 'practice' && !homeTeam) {
+        alert('Please select a team for the practice');
+        return;
+    }
+
+    // Submit via API
+    var payload = {
+        game_type: selectedEventType,
+        date: date,
+        time: time,
+        field_name: field,
+        league: league,
+        home_team_id: homeTeam ? parseInt(homeTeam) : null,
+        away_team_id: awayTeam ? parseInt(awayTeam) : null
+    };
+
+    fetch('/scheduler/api/' + currentYear + '/' + currentIsSpring + '/add-event', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.success) {
+            closeAddEventModal();
+            // Reload page to show new event
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(function(err) {
+        alert('Failed to add event: ' + err.message);
+    });
+}
+
+function deleteContextEvent() {
+    if (!contextMenuGameId) return;
+
+    if (!confirm('Delete this event?')) {
+        hideContextMenu();
+        return;
+    }
+
+    fetch('/scheduler/api/' + currentYear + '/' + currentIsSpring + '/delete-event', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ game_id: contextMenuGameId })
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.success) {
+            hideContextMenu();
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(function(err) {
+        alert('Failed to delete event: ' + err.message);
+    });
+}
+
+// Close add event modal on escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeAddEventModal();
+        hideContextMenu();
+    }
+});
+
+// Close add event modal on background click
+document.getElementById('add-event-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeAddEventModal();
+    }
+});
+
+// Date header click - directly open add event modal
+function onDateHeaderClick(e, dateStr) {
+    // Don't trigger if clicking on trace button
+    if (e.target.closest('.trace-btn')) return;
+
+    openAddEventModal(dateStr);
+}
 </script>
 {% endblock %}

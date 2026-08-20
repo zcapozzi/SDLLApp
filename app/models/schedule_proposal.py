@@ -190,3 +190,77 @@ class ScheduleProposal(db.Model):
             if game.get('id') == game_id:
                 return game
         return None
+
+    def add_game(self, game_data):
+        """Add a new game to the proposal.
+
+        Args:
+            game_data: Dict with game fields:
+                - game_type: 'regular', 'practice', 'scrimmage', or 'division_practice'
+                - game_date: ISO datetime string 'YYYY-MM-DDTHH:MM:SS'
+                - field_name: Name of the field
+                - league: League name
+                - home_team_id: Home team ID (optional for division_practice)
+                - home_team_name: Home team name
+                - away_team_id: Away team ID (optional for practices)
+                - away_team_name: Away team name (optional for practices)
+
+        Returns:
+            The ID of the newly added game
+        """
+        if not self.data:
+            self.data = {'games': [], 'violations': [], 'warnings': [], 'summary': {}}
+        if 'games' not in self.data:
+            self.data['games'] = []
+
+        # Generate a new unique ID (negative to distinguish from real game IDs)
+        existing_ids = [g.get('id', 0) for g in self.data['games']]
+        min_id = min(existing_ids) if existing_ids else 0
+        new_id = min(min_id - 1, -1)  # Always negative for proposed games
+
+        game = {
+            'id': new_id,
+            'game_type': game_data.get('game_type', 'regular'),
+            'game_date': game_data.get('game_date'),
+            'field_name': game_data.get('field_name'),
+            'league': game_data.get('league'),
+            'home_team_id': game_data.get('home_team_id'),
+            'home_team_name': game_data.get('home_team_name'),
+            'away_team_id': game_data.get('away_team_id'),
+            'away_team_name': game_data.get('away_team_name'),
+            'is_league_practice': game_data.get('game_type') == 'division_practice',
+            'location': game_data.get('field_name'),
+            'manually_added': True
+        }
+
+        self.data['games'].append(game)
+
+        # Mark the data as modified
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(self, 'data')
+
+        db.session.commit()
+        return new_id
+
+    def delete_game(self, game_id):
+        """Delete a game from the proposal.
+
+        Args:
+            game_id: ID of the game to delete
+
+        Returns:
+            True if game was found and deleted, False otherwise
+        """
+        if not self.data or 'games' not in self.data:
+            return False
+
+        original_count = len(self.data['games'])
+        self.data['games'] = [g for g in self.data['games'] if g.get('id') != game_id]
+
+        if len(self.data['games']) < original_count:
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(self, 'data')
+            db.session.commit()
+            return True
+
+        return False

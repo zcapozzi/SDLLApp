@@ -837,6 +837,186 @@ def api_team_schedule(year, is_spring, team_id):
     })
 
 
+@scheduler_bp.route('/api/<int:year>/<int:is_spring>/add-event', methods=['POST'])
+@login_required
+def api_add_event(year, is_spring):
+    """API endpoint to add a new game/practice/scrimmage to the proposal.
+
+    Expects JSON body:
+    {
+        "game_type": "regular"|"practice"|"scrimmage"|"division_practice",
+        "date": "YYYY-MM-DD",
+        "time": "HH:MM",
+        "field_name": str,
+        "league": str,
+        "home_team_id": int (optional for division_practice),
+        "away_team_id": int (optional for practices)
+    }
+    """
+    if not current_user.can_edit_schedule():
+        return jsonify({'success': False, 'message': 'Permission denied'}), 403
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+
+        # Validate required fields
+        game_type = data.get('game_type')
+        date_str = data.get('date')
+        time_str = data.get('time')
+        field_name = data.get('field_name')
+        league = data.get('league')
+
+        if not all([game_type, date_str, time_str, field_name, league]):
+            return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+
+        # Get team info
+        home_team_id = data.get('home_team_id')
+        away_team_id = data.get('away_team_id')
+
+        home_team_name = None
+        away_team_name = None
+
+        if home_team_id:
+            home_team = TeamSeason.query.filter_by(team_ID=home_team_id).first()
+            home_team_name = home_team.computed_display_name if home_team else f'Team {home_team_id}'
+
+        if away_team_id:
+            away_team = TeamSeason.query.filter_by(team_ID=away_team_id).first()
+            away_team_name = away_team.computed_display_name if away_team else f'Team {away_team_id}'
+
+        # For division practice, use league name as the "team"
+        if game_type == 'division_practice':
+            home_team_name = league
+
+        # Get or create proposal
+        proposal = ScheduleProposal.get_for_season(year, is_spring)
+        if not proposal:
+            return jsonify({'success': False, 'message': 'No proposal found for this season'}), 404
+
+        # Create game datetime
+        game_datetime = f'{date_str}T{time_str}:00'
+
+        # Add the game
+        new_id = proposal.add_game({
+            'game_type': game_type if game_type != 'division_practice' else 'practice',
+            'game_date': game_datetime,
+            'field_name': field_name,
+            'league': league,
+            'home_team_id': home_team_id,
+            'home_team_name': home_team_name,
+            'away_team_id': away_team_id,
+            'away_team_name': away_team_name
+        })
+
+        logger.info(f'API: Added {game_type} to proposal - {league} at {field_name} on {date_str} {time_str}')
+
+        return jsonify({
+            'success': True,
+            'message': f'{game_type.replace("_", " ").title()} added successfully',
+            'game_id': new_id
+        })
+
+    except Exception as e:
+        logger.error(f'API add-event error: {str(e)}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@scheduler_bp.route('/api/<int:year>/<int:is_spring>/event-options')
+@login_required
+def api_event_options(year, is_spring):
+    """API endpoint to get options for adding a new event.
+
+    Query params:
+        date: YYYY-MM-DD (optional, to filter available times)
+        field: Field name (optional, to filter)
+
+    Returns leagues, teams, fields, and available time slots.
+    """
+    from app.models.field import Field
+
+    date_str = request.args.get('date')
+
+    # Get active leagues for this season
+    league_configs = LeagueSeason.get_by_season(year, is_spring)
+    leagues = [{'name': c.league, 'has_scrimmages': c.has_scrimmages} for c in league_configs]
+
+    # Get all teams grouped by league
+    teams_by_league = {}
+    all_teams = TeamSeason.query.filter_by(
+        year=year,
+        is_spring=is_spring,
+        active=1,
+        is_placeholder=0
+    ).all()
+
+    for team in all_teams:
+        if team.league not in teams_by_league:
+            teams_by_league[team.league] = []
+        teams_by_league[team.league].append({
+            'id': team.team_ID,
+            'name': team.computed_display_name
+        })
+
+    # Get available fields
+    fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
+    field_list = [{'id': f.ID, 'name': f.location_title} for f in fields]
+
+    # Get common time slots (from field slots)
+    time_slots = set()
+    slots = FieldSlot.query.filter_by(
+        year=year,
+        is_spring=is_spring,
+        active=1
+    ).all()
+
+    for slot in slots:
+        if slot.start_time:
+            time_str = slot.start_time.strftime('%H:%M')
+            time_slots.add(time_str)
+
+    # Standard time slots if none found
+    if not time_slots:
+        time_slots = {'17:30', '19:00', '19:30', '09:00', '10:30', '12:00'}
+
+    return jsonify({
+        'leagues': sorted(leagues, key=lambda x: x['name']),
+        'teams_by_league': teams_by_league,
+        'fields': field_list,
+        'time_slots': sorted(list(time_slots))
+    })
+
+
+@scheduler_bp.route('/api/<int:year>/<int:is_spring>/delete-event', methods=['POST'])
+@login_required
+def api_delete_event(year, is_spring):
+    """API endpoint to delete a game from the proposal."""
+    if not current_user.can_edit_schedule():
+        return jsonify({'success': False, 'message': 'Permission denied'}), 403
+
+    try:
+        data = request.get_json()
+        game_id = data.get('game_id')
+
+        if game_id is None:
+            return jsonify({'success': False, 'message': 'game_id is required'}), 400
+
+        proposal = ScheduleProposal.get_for_season(year, is_spring)
+        if not proposal:
+            return jsonify({'success': False, 'message': 'No proposal found'}), 404
+
+        if proposal.delete_game(game_id):
+            logger.info(f'API: Deleted game {game_id} from proposal')
+            return jsonify({'success': True, 'message': 'Event deleted'})
+        else:
+            return jsonify({'success': False, 'message': 'Game not found'}), 404
+
+    except Exception as e:
+        logger.error(f'API delete-event error: {str(e)}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @scheduler_bp.route('/<int:year>/<int:is_spring>/unlock', methods=['POST'])
 @login_required
 def unlock(year, is_spring):
