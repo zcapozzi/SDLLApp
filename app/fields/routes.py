@@ -48,20 +48,23 @@ def index():
             field_id = int(request.form.get('field_id'))
             field = Field.query.get(field_id)
             if field:
+                field_name = field.location_title  # Save before commit
                 field.active = 0
                 db.session.commit()
-                logger.info(f'Deleted field: {field.location_title}')
-                flash(f'Deleted field: {field.location_title}', 'success')
+                logger.info(f'Deleted field: {field_name}')
+                flash(f'Deleted field: {field_name}', 'success')
                 # Can't scroll to deleted item, just go to top of list
 
         elif action == 'toggle_ownership':
             field_id = int(request.form.get('field_id'))
             field = Field.query.get(field_id)
             if field:
+                field_name = field.location_title  # Save before commit
                 field.is_owned = 0 if field.is_owned else 1
+                new_is_owned = field.is_owned  # Save before commit
                 db.session.commit()
-                status = 'SDLL' if field.is_owned else 'Away'
-                logger.info(f'Set {field.location_title} ownership to {status}')
+                status = 'SDLL' if new_is_owned else 'Away'
+                logger.info(f'Set {field_name} ownership to {status}')
                 anchor = f'field-{field_id}'
 
         redirect_url = url_for('fields.index')
@@ -210,12 +213,15 @@ def manage_allocations(year, is_spring):
                 is_owned=is_owned,
                 notes=notes
             )
+            # Get field name before any commits
+            field = Field.query.get(field_id)
+            field_name = field.location_title if field else f'Field {field_id}'
+
             db.session.add(slot)
             db.session.commit()
 
-            field = Field.query.get(field_id)
-            logger.info(f'Added slot: {field.location_title} {FieldSlot.DAY_NAMES[day_of_week]} {start_time_str}')
-            flash(f'Added slot: {field.location_title} {FieldSlot.DAY_NAMES[day_of_week]} {start_time_str}', 'success')
+            logger.info(f'Added slot: {field_name} {FieldSlot.DAY_NAMES[day_of_week]} {start_time_str}')
+            flash(f'Added slot: {field_name} {FieldSlot.DAY_NAMES[day_of_week]} {start_time_str}', 'success')
             anchor = f'field-{field_id}'
 
         elif action == 'delete_slot':
@@ -246,6 +252,11 @@ def manage_allocations(year, is_spring):
         elif action == 'set_field_ownership':
             field_id = int(request.form.get('field_id'))
             is_owned = int(request.form.get('is_owned'))
+
+            # Get field name before commit
+            field = Field.query.get(field_id)
+            field_name = field.location_title if field else f'Field {field_id}'
+
             slots = FieldSlot.query.filter_by(
                 field_ID=field_id,
                 year=year,
@@ -257,10 +268,10 @@ def manage_allocations(year, is_spring):
                 slot.is_owned = is_owned
                 count += 1
             db.session.commit()
-            field = Field.query.get(field_id)
+
             status = 'SDLL owned' if is_owned else 'Away'
-            logger.info(f'Set {count} slots at {field.location_title} to {status}')
-            flash(f'Set {count} slots at {field.location_title} to {status}', 'success')
+            logger.info(f'Set {count} slots at {field_name} to {status}')
+            flash(f'Set {count} slots at {field_name} to {status}', 'success')
             anchor = f'field-{field_id}'
 
         # Preserve filter/group settings on redirect, scroll to edited element
