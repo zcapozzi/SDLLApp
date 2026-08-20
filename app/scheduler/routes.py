@@ -840,7 +840,9 @@ def api_team_schedule(year, is_spring, team_id):
 @scheduler_bp.route('/api/<int:year>/<int:is_spring>/add-event', methods=['POST'])
 @login_required
 def api_add_event(year, is_spring):
-    """API endpoint to add a new game/practice/scrimmage to the proposal.
+    """API endpoint to add a new game/practice/scrimmage.
+
+    Works with both active proposals and saved (locked) schedules.
 
     Expects JSON body:
     {
@@ -875,6 +877,11 @@ def api_add_event(year, is_spring):
         home_team_id = data.get('home_team_id')
         away_team_id = data.get('away_team_id')
 
+        if home_team_id:
+            home_team_id = int(home_team_id)
+        if away_team_id:
+            away_team_id = int(away_team_id)
+
         home_team_name = None
         away_team_name = None
 
@@ -887,34 +894,60 @@ def api_add_event(year, is_spring):
             away_team_name = away_team.computed_display_name if away_team else f'Team {away_team_id}'
 
         # For division practice, use league name as the "team"
-        if game_type == 'division_practice':
+        is_division_practice = game_type == 'division_practice'
+        if is_division_practice:
             home_team_name = league
 
-        # Get or create proposal
+        # Parse game datetime
+        from datetime import datetime as dt
+        game_datetime = dt.strptime(f'{date_str} {time_str}', '%Y-%m-%d %H:%M')
+
+        # Check if there's an active proposal
         proposal = ScheduleProposal.get_for_season(year, is_spring)
-        if not proposal:
-            return jsonify({'success': False, 'message': 'No proposal found for this season'}), 404
 
-        # Create game datetime
-        game_datetime = f'{date_str}T{time_str}:00'
+        if proposal:
+            # Add to proposal
+            game_datetime_str = f'{date_str}T{time_str}:00'
+            new_id = proposal.add_game({
+                'game_type': 'practice' if is_division_practice else game_type,
+                'game_date': game_datetime_str,
+                'field_name': field_name,
+                'league': league,
+                'home_team_id': home_team_id,
+                'home_team_name': home_team_name,
+                'away_team_id': away_team_id,
+                'away_team_name': away_team_name
+            })
+            logger.info(f'API: Added {game_type} to proposal - {league} at {field_name} on {date_str} {time_str}')
+            target = 'proposal'
+        else:
+            # No proposal - add directly to Game table (saved/locked schedule)
+            actual_game_type = 'practice' if is_division_practice or game_type == 'practice' else game_type
+            is_scrimmage = 1 if game_type == 'scrimmage' else 0
 
-        # Add the game
-        new_id = proposal.add_game({
-            'game_type': game_type if game_type != 'division_practice' else 'practice',
-            'game_date': game_datetime,
-            'field_name': field_name,
-            'league': league,
-            'home_team_id': home_team_id,
-            'home_team_name': home_team_name,
-            'away_team_id': away_team_id,
-            'away_team_name': away_team_name
-        })
-
-        logger.info(f'API: Added {game_type} to proposal - {league} at {field_name} on {date_str} {time_str}')
+            new_game = Game(
+                year=year,
+                is_spring=is_spring,
+                game_date=game_datetime,
+                home_ID=home_team_id,
+                away_ID=away_team_id,
+                league=league,
+                location=field_name,
+                game_type=actual_game_type,
+                is_scrimmage=is_scrimmage,
+                is_league_practice=is_division_practice,
+                status='scheduled',
+                active=1
+            )
+            db.session.add(new_game)
+            db.session.commit()
+            new_id = new_game.ID
+            logger.info(f'API: Added {game_type} to saved schedule (ID {new_id}) - {league} at {field_name} on {date_str} {time_str}')
+            target = 'schedule'
 
         return jsonify({
             'success': True,
-            'message': f'{game_type.replace("_", " ").title()} added successfully',
+            'message': f'{game_type.replace("_", " ").title()} added to {target}',
             'game_id': new_id
         })
 
@@ -991,7 +1024,11 @@ def api_event_options(year, is_spring):
 @scheduler_bp.route('/api/<int:year>/<int:is_spring>/delete-event', methods=['POST'])
 @login_required
 def api_delete_event(year, is_spring):
-    """API endpoint to delete a game from the proposal."""
+    """API endpoint to delete a game.
+
+    Works with both active proposals and saved (locked) schedules.
+    For saved games, performs a soft delete (sets active=0).
+    """
     if not current_user.can_edit_schedule():
         return jsonify({'success': False, 'message': 'Permission denied'}), 403
 
@@ -1002,15 +1039,41 @@ def api_delete_event(year, is_spring):
         if game_id is None:
             return jsonify({'success': False, 'message': 'game_id is required'}), 400
 
-        proposal = ScheduleProposal.get_for_season(year, is_spring)
-        if not proposal:
-            return jsonify({'success': False, 'message': 'No proposal found'}), 404
+        game_id = int(game_id)
 
-        if proposal.delete_game(game_id):
-            logger.info(f'API: Deleted game {game_id} from proposal')
-            return jsonify({'success': True, 'message': 'Event deleted'})
-        else:
+        # Check if there's an active proposal
+        proposal = ScheduleProposal.get_for_season(year, is_spring)
+
+        if proposal:
+            # Try to delete from proposal first
+            if proposal.delete_game(game_id):
+                logger.info(f'API: Deleted game {game_id} from proposal')
+                return jsonify({'success': True, 'message': 'Event deleted from proposal'})
+
+            # If game_id is positive, it might be a saved game shown in the proposal view
+            if game_id > 0:
+                game = Game.query.get(game_id)
+                if game and game.year == year and game.is_spring == is_spring:
+                    game.active = 0
+                    db.session.commit()
+                    logger.info(f'API: Soft-deleted saved game {game_id}')
+                    return jsonify({'success': True, 'message': 'Event deleted from schedule'})
+
             return jsonify({'success': False, 'message': 'Game not found'}), 404
+        else:
+            # No proposal - delete from Game table (saved/locked schedule)
+            game = Game.query.get(game_id)
+            if not game:
+                return jsonify({'success': False, 'message': 'Game not found'}), 404
+
+            if game.year != year or game.is_spring != is_spring:
+                return jsonify({'success': False, 'message': 'Game not in this season'}), 400
+
+            # Soft delete
+            game.active = 0
+            db.session.commit()
+            logger.info(f'API: Soft-deleted saved game {game_id}')
+            return jsonify({'success': True, 'message': 'Event deleted from schedule'})
 
     except Exception as e:
         logger.error(f'API delete-event error: {str(e)}')
