@@ -4,10 +4,11 @@ CRITICAL: All tracking code must fail gracefully. Analytics should NEVER
 prevent users from seeing their content.
 
 ARCHITECTURE:
-1. Prepare ALL content first (team data, games, etc.)
-2. Build the complete response
-3. ONLY THEN attempt tracking (in isolated try/except)
-4. Return the response regardless of tracking success/failure
+1. Prepare ALL core content first (team data, games, etc.)
+2. Safely attempt to get ad data (optional, fail silently)
+3. Build the complete response
+4. Safely attempt to log tracking (optional, fail silently)
+5. Return the response regardless of any tracking success/failure
 """
 
 from flask import render_template, abort, request, make_response, jsonify, redirect
@@ -31,13 +32,6 @@ def _log_tracking_error(context, error):
     """Log a tracking error to stderr. Never crashes."""
     try:
         print(f"[TRACKING ERROR] {context}: {type(error).__name__}: {error}", file=sys.stderr, flush=True)
-    except Exception:
-        pass
-
-    # Also try to log to database (but don't crash if that fails too)
-    try:
-        from app.utils.errors import log_error
-        log_error(context, error, request)
     except Exception:
         pass
 
@@ -79,50 +73,51 @@ def _set_session_cookie(response, session_id):
         _log_tracking_error("set_session_cookie", e)
 
 
-def _attempt_tracking(page_type, page_context, session_id):
+def _safe_get_ad():
     """
-    Attempt to track a page view. Returns tracking data or None.
-
-    This function is completely isolated - ANY failure returns None
-    and the page still loads normally.
+    Safely attempt to get an active ad. Returns None on any failure.
+    This is called BEFORE rendering so ads can be included in the response.
     """
-    if not session_id:
-        return None, None, None
-
-    page_view = None
-    ad = None
-    impression = None
-
-    # Attempt page view tracking
-    try:
-        from app.models.analytics import PageView
-        page_view = PageView.log_view(page_type, page_context, request, session_id)
-    except Exception as e:
-        _log_tracking_error("track_page_view", e)
-        _safe_rollback()
-        # Continue - we can still try to get ad
-
-    # Attempt to get active ad
     try:
         from app.models.analytics import Ad
-        ad = Ad.get_active_ad()
+        return Ad.get_active_ad()
     except Exception as e:
         _log_tracking_error("get_active_ad", e)
         _safe_rollback()
+        return None
 
-    # Attempt to log impression (only if we have both page_view and ad)
-    if ad and page_view:
-        try:
-            from app.models.analytics import AdImpression, PageView as PV
-            impression = AdImpression.log_impression(
-                ad, page_view, session_id, page_context,
-                PV._detect_device_type(request.headers.get('User-Agent', ''))
-            )
-        except Exception as e:
-            _log_tracking_error("log_impression", e)
-            _safe_rollback()
 
-    return page_view, ad, impression
+def _safe_log_page_view(page_type, page_context, session_id):
+    """
+    Safely log a page view. Returns page_view or None on failure.
+    Called AFTER response is built - failure doesn't affect the page.
+    """
+    if not session_id:
+        return None
+    try:
+        from app.models.analytics import PageView
+        return PageView.log_view(page_type, page_context, request, session_id)
+    except Exception as e:
+        _log_tracking_error("log_page_view", e)
+        _safe_rollback()
+        return None
+
+
+def _safe_log_impression(ad, page_view, session_id, page_context):
+    """
+    Safely log an ad impression. Returns impression or None on failure.
+    Called AFTER response is built - failure doesn't affect the page.
+    """
+    if not ad or not page_view or not session_id:
+        return None
+    try:
+        from app.models.analytics import AdImpression, PageView as PV
+        device_type = PV._detect_device_type(request.headers.get('User-Agent', ''))
+        return AdImpression.log_impression(ad, page_view, session_id, page_context, device_type)
+    except Exception as e:
+        _log_tracking_error("log_impression", e)
+        _safe_rollback()
+        return None
 
 
 def _build_game_object_from_proposal(game_data, team, all_teams_by_id, fields_by_name):
@@ -169,17 +164,13 @@ class ProposalGameWrapper:
 def team_schedule(token):
     """Public team schedule view.
 
-    URL format: /s/<token>
-    Example: /s/abc123xyz
-
-    CRITICAL: This page MUST load even if tracking fails.
-    All tracking is done AFTER content is prepared.
+    CRITICAL: This page MUST load even if tracking/analytics fails.
     """
     # =========================================================================
-    # PHASE 1: PREPARE ALL CONTENT (no tracking imports here)
+    # PHASE 1: PREPARE ALL CORE CONTENT (required data, must succeed)
     # =========================================================================
 
-    # Look up team by token
+    # Look up team by token - this is required, 404 if not found
     team = TeamSeason.get_by_schedule_token(token)
     if not team:
         abort(404)
@@ -198,7 +189,10 @@ def team_schedule(token):
     except Exception:
         pass
 
-    # Default template variables
+    # Prepare session ID for tracking (but don't track yet)
+    session_id = _get_or_create_session_id()
+
+    # Initialize template variables
     template_vars = {
         'team': team,
         'season_name': season_name,
@@ -211,7 +205,7 @@ def team_schedule(token):
         'impression_token': None,
     }
 
-    # Determine what to show
+    # Determine what games/practices to show
     if not is_locked:
         proposal = ScheduleProposal.get_for_season(team.year, team.is_spring)
 
@@ -289,11 +283,10 @@ def team_schedule(token):
             template_vars['past_games'] = past_games
             template_vars['next_game'] = next_game
 
-        # If no proposal or not showing proposal, fall through to show saved games
         elif not proposal:
-            pass  # Will show empty or saved games below
+            pass  # Will show saved games below
 
-    # If locked or no proposal handling above, show saved games
+    # If locked or no proposal, show saved games
     if is_locked or ('schedule_not_released' not in template_vars and 'is_proposal' not in template_vars):
         games = Game.query.filter(
             Game.active == 1,
@@ -321,29 +314,45 @@ def team_schedule(token):
         template_vars['next_game'] = next_game
 
     # =========================================================================
-    # PHASE 2: BUILD RESPONSE (content is ready, response can be returned)
+    # PHASE 2: SAFELY GET AD (optional, fail silently)
+    # =========================================================================
+
+    ad = _safe_get_ad()
+    template_vars['ad'] = ad
+
+    # =========================================================================
+    # PHASE 3: BUILD RESPONSE (core content is ready)
     # =========================================================================
 
     response = make_response(render_template('public/team_schedule.html', **template_vars))
 
     # =========================================================================
-    # PHASE 3: ATTEMPT TRACKING (completely isolated, failure is invisible)
+    # PHASE 4: SAFELY LOG TRACKING (optional, fail silently, AFTER response built)
     # =========================================================================
 
     try:
-        session_id = _get_or_create_session_id()
-        page_view, ad, impression = _attempt_tracking('team_schedule', token, session_id)
+        # Log page view
+        page_view = _safe_log_page_view('team_schedule', token, session_id)
 
-        # If tracking succeeded, we could update the response, but since
-        # the response is already built, we just set the cookie
+        # Log ad impression if we have an ad
+        impression = None
+        if ad and page_view:
+            impression = _safe_log_impression(ad, page_view, session_id, token)
+
+        # Set session cookie
         _set_session_cookie(response, session_id)
 
-        # Note: page_view_id, ad, and impression_token in template will be None
-        # This is fine - the template handles None gracefully
+        # Note: page_view_id and impression_token are already None in the rendered template.
+        # The JavaScript tracking will still work for time-on-page via the beacon,
+        # it just won't have a page_view_id to send. That's fine - graceful degradation.
+
     except Exception as e:
-        # Even the tracking wrapper failed - just log and continue
-        _log_tracking_error("tracking_wrapper", e)
+        _log_tracking_error("tracking_phase", e)
         _safe_rollback()
+
+    # =========================================================================
+    # PHASE 5: RETURN RESPONSE (always succeeds)
+    # =========================================================================
 
     return response
 
