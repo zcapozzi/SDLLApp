@@ -37,10 +37,12 @@ def index():
                         restriction_type='anyone'
                     )
                     db.session.add(field)
+                    db.session.flush()  # Get the ID before commit
+                    field_id = field.ID  # Save ID before commit expires the object
                     db.session.commit()
                     logger.info(f'Added field: {field_name}')
                     flash(f'Added field: {field_name}', 'success')
-                    anchor = f'field-{field.ID}'
+                    anchor = f'field-{field_id}'
             else:
                 flash('Field name is required', 'error')
 
@@ -476,13 +478,16 @@ def properties():
             field = Field.query.get(field_id)
             if field:
                 from datetime import datetime
+                field_name = field.location_title  # Save before commit
                 if start_date_str:
                     field.start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                    start_date_display = field.start_date  # Save before commit
                 else:
                     field.start_date = None
+                    start_date_display = None
                 db.session.commit()
-                logger.info(f'Updated start date for {field.location_title}: {field.start_date}')
-                flash(f'Updated start date for {field.location_title}', 'success')
+                logger.info(f'Updated start date for {field_name}: {start_date_display}')
+                flash(f'Updated start date for {field_name}', 'success')
 
             return redirect(url_for('fields.properties', ownership=ownership_filter) + f'#field-{field_id}')
 
@@ -498,13 +503,15 @@ def properties():
 
             field = Field.query.get(field_id)
             if field:
+                field_name = field.location_title  # Save before commit
                 field.usage_type = usage_type
                 field.practice_capacity = practice_capacity
                 # Store None if "Same" selected, otherwise store the value (including 0 for "No Practices")
                 field.practice_capacity_late = practice_capacity_late
+                usage_display = field.usage_type_display  # Save before commit
                 db.session.commit()
-                logger.info(f'Updated properties for {field.location_title}: {field.usage_type_display}')
-                flash(f'Updated properties for {field.location_title}', 'success')
+                logger.info(f'Updated properties for {field_name}: {usage_display}')
+                flash(f'Updated properties for {field_name}', 'success')
 
             return redirect(url_for('fields.properties', ownership=ownership_filter) + f'#field-{field_id}')
 
@@ -546,13 +553,16 @@ def availability():
             field = Field.query.get(field_id)
             if field:
                 from datetime import datetime
+                field_name = field.location_title  # Save before commit
                 if start_date_str:
                     field.start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                    start_date_display = field.start_date  # Save before commit
                 else:
                     field.start_date = None
+                    start_date_display = None
                 db.session.commit()
-                logger.info(f'Updated start date for {field.location_title}: {field.start_date}')
-                flash(f'Updated start date for {field.location_title}', 'success')
+                logger.info(f'Updated start date for {field_name}: {start_date_display}')
+                flash(f'Updated start date for {field_name}', 'success')
 
             return redirect(url_for('fields.availability', ownership=ownership_filter) + f'#field-{field_id}')
 
@@ -589,6 +599,8 @@ def time_restrictions():
         field = Field.query.get(field_id)
 
         if field:
+            field_name = field.location_title  # Save before commit
+
             # Parse time inputs (empty string = None)
             def parse_time(val):
                 if not val:
@@ -601,8 +613,8 @@ def time_restrictions():
             field.game_latest_weekend = parse_time(request.form.get('latest_weekend'))
 
             db.session.commit()
-            logger.info(f'Updated time restrictions for {field.location_title}')
-            flash(f'Updated time restrictions for {field.location_title}', 'success')
+            logger.info(f'Updated time restrictions for {field_name}')
+            flash(f'Updated time restrictions for {field_name}', 'success')
 
         return redirect(url_for('fields.time_restrictions', ownership=ownership_filter) + f'#field-{field_id}')
 
@@ -633,6 +645,9 @@ def field_blackouts(field_id):
     field = Field.query.get_or_404(field_id)
     from app.models.field_blackout import FieldBlackout
 
+    # Save field name early - avoids ObjectDeletedError after commits
+    field_name = field.location_title
+
     if request.method == 'POST':
         action = request.form.get('action')
 
@@ -645,7 +660,7 @@ def field_blackouts(field_id):
                 blackout_date = datetime.strptime(date_str, '%Y-%m-%d').date()
                 blackout = FieldBlackout.add_blackout(field_id, blackout_date, reason or None)
                 if blackout:
-                    logger.info(f'Added blackout for {field.location_title}: {blackout_date}')
+                    logger.info(f'Added blackout for {field_name}: {blackout_date}')
                     flash(f'Added blackout date: {blackout_date.strftime("%B %d, %Y")}', 'success')
                 else:
                     flash(f'Blackout date already exists', 'warning')
@@ -657,8 +672,9 @@ def field_blackouts(field_id):
             if blackout_id:
                 blackout = FieldBlackout.query.get(int(blackout_id))
                 if blackout and blackout.field_ID == field_id:
+                    blackout_date = blackout.blackout_date  # Save before delete
                     blackout.delete()
-                    logger.info(f'Deleted blackout for {field.location_title}: {blackout.blackout_date}')
+                    logger.info(f'Deleted blackout for {field_name}: {blackout_date}')
                     flash('Blackout date removed.', 'success')
 
         return redirect(url_for('fields.field_blackouts', field_id=field_id))
