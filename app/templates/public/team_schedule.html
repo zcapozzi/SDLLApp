@@ -199,6 +199,20 @@
             color: #c33;
             margin-top: 3px;
         }
+        .game-score {
+            font-weight: 700;
+            font-size: 14px;
+            margin-left: 8px;
+        }
+        .game-score.win {
+            color: #2e7d32;
+        }
+        .game-score.loss {
+            color: #c62828;
+        }
+        .game-score.tie {
+            color: #666;
+        }
 
         /* Ad Block */
         .ad-container {
@@ -441,8 +455,32 @@
                     <div class="game-opponent">
                         {% if game.home_ID == team.team_ID %}
                             vs {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                            {# Show score for completed regular/playoff games #}
+                            {% if game.status == 'completed' and not game.is_scrimmage and game.game_type in ('regular', 'playoff') and game.home_score is not none and game.away_score is not none %}
+                                {% set team_score = game.home_score %}
+                                {% set opp_score = game.away_score %}
+                                {% if team_score > opp_score %}
+                                    <span class="game-score win">W {{ team_score }}-{{ opp_score }}</span>
+                                {% elif team_score < opp_score %}
+                                    <span class="game-score loss">L {{ team_score }}-{{ opp_score }}</span>
+                                {% else %}
+                                    <span class="game-score tie">T {{ team_score }}-{{ opp_score }}</span>
+                                {% endif %}
+                            {% endif %}
                         {% else %}
                             @ {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                            {# Show score for completed regular/playoff games (away perspective) #}
+                            {% if game.status == 'completed' and not game.is_scrimmage and game.game_type in ('regular', 'playoff') and game.home_score is not none and game.away_score is not none %}
+                                {% set team_score = game.away_score %}
+                                {% set opp_score = game.home_score %}
+                                {% if team_score > opp_score %}
+                                    <span class="game-score win">W {{ team_score }}-{{ opp_score }}</span>
+                                {% elif team_score < opp_score %}
+                                    <span class="game-score loss">L {{ team_score }}-{{ opp_score }}</span>
+                                {% else %}
+                                    <span class="game-score tie">T {{ team_score }}-{{ opp_score }}</span>
+                                {% endif %}
+                            {% endif %}
                         {% endif %}
                     </div>
                     {% endif %}

@@ -27,6 +27,8 @@ class Game(db.Model):
     is_league_practice = db.Column(db.Boolean, default=False)  # True = all teams practice together
     no_time_limit = db.Column(db.SmallInteger, default=0)  # 1 = 3-hour game (no time limit)
     umpire_override = db.Column(db.String(20))
+    home_score = db.Column(db.SmallInteger)  # Only for completed regular/playoff games
+    away_score = db.Column(db.SmallInteger)  # Only for completed regular/playoff games
 
     def __repr__(self):
         return f'<Game {self.ID}: {self.league} at {self.location} on {self.game_date}>'
@@ -89,6 +91,34 @@ class Game(db.Model):
     def needs_umpire(self):
         """Check if game needs an umpire assignment"""
         return not self.is_scrimmage and self.status == 'scheduled'
+
+    @property
+    def has_score(self):
+        """Check if game has a recorded score."""
+        return self.home_score is not None and self.away_score is not None
+
+    @property
+    def show_score(self):
+        """Check if score should be displayed.
+
+        Only show scores for:
+        - Completed games (status = 'completed')
+        - Regular or playoff games (not scrimmages or practices)
+        """
+        if self.status != 'completed':
+            return False
+        if self.is_scrimmage or self.game_type == 'practice':
+            return False
+        if self.game_type not in ('regular', 'playoff'):
+            return False
+        return self.has_score
+
+    @property
+    def score_display(self):
+        """Return formatted score string (e.g., '5-3')."""
+        if not self.has_score:
+            return None
+        return f"{self.home_score}-{self.away_score}"
 
     @classmethod
     def get_by_season(cls, year, is_spring):
