@@ -15,3 +15,4 @@ from .season_blackout import SeasonBlackout
 from .field_blackout import FieldBlackout
 from .practice_pairing import PracticePairing
 from .analytics import PageView, Ad, AdImpression, AdClick, generate_session_id
+from .app_error import AppError

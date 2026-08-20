@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Application Errors{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Application Errors</h1>
+    <a href="{{ url_for('main.error_digest') }}" class="btn btn-secondary">View Digest</a>
+</div>
+
+<!-- Summary Cards -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px;">
+    <div class="card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 2em; font-weight: bold; color: #dc3545;">{{ counts.tier1 }}</div>
+        <div style="color: #666;">Tier I (Critical) - 24h</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 2em; font-weight: bold; color: #ffc107;">{{ counts.tier2 }}</div>
+        <div style="color: #666;">Tier II (Digest) - 24h</div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card" style="margin-bottom: 20px; padding: 15px;">
+    <form method="get" style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+        <div>
+            <label for="tier">Tier:</label>
+            <select name="tier" id="tier" onchange="this.form.submit()">
+                <option value="">All</option>
+                <option value="1" {{ 'selected' if filter_tier == 1 }}>Tier I (Critical)</option>
+                <option value="2" {{ 'selected' if filter_tier == 2 }}>Tier II (Digest)</option>
+            </select>
+        </div>
+        <div>
+            <label>
+                <input type="checkbox" name="resolved" value="true"
+                       {{ 'checked' if show_resolved }}
+                       onchange="this.form.submit()">
+                Show Resolved
+            </label>
+        </div>
+    </form>
+</div>
+
+<!-- Error List -->
+<div class="card">
+    {% if errors %}
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Tier</th>
+                <th>Context</th>
+                <th>Error</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for error in errors %}
+            <tr>
+                <td style="white-space: nowrap;">
+                    {{ error.created_at.strftime('%Y-%m-%d %H:%M') }}
+                </td>
+                <td>
+                    {% if error.tier == 1 %}
+                    <span class="badge" style="background: #dc3545; color: white;">TIER I</span>
+                    {% else %}
+                    <span class="badge" style="background: #ffc107; color: #333;">TIER II</span>
+                    {% endif %}
+                </td>
+                <td>{{ error.context }}</td>
+                <td>
+                    <code>{{ error.error_type }}</code>:
+                    {{ error.error_message[:50] }}{{ '...' if error.error_message|length > 50 }}
+                </td>
+                <td>
+                    <a href="{{ url_for('main.error_detail', error_id=error.id) }}" class="btn btn-sm btn-secondary">View</a>
+                    {% if not error.resolved %}
+                    <form method="post" action="{{ url_for('main.resolve_error', error_id=error.id) }}" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-success">Resolve</button>
+                    </form>
+                    {% else %}
+                    <span style="color: #28a745;">Resolved</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="padding: 20px; text-align: center; color: #666;">
+        {% if show_resolved %}
+        No resolved errors found.
+        {% else %}
+        No unresolved errors found.
+        {% endif %}
+    </p>
+    {% endif %}
+</div>
+{% endblock %}

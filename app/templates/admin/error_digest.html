@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Error Digest{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Error Digest</h1>
+    <a href="{{ url_for('main.error_list') }}" class="btn btn-secondary">View All Errors</a>
+</div>
+
+<!-- Time Range Selector -->
+<div class="card" style="margin-bottom: 20px; padding: 15px;">
+    <form method="get" style="display: flex; gap: 15px; align-items: center;">
+        <label for="hours">Time Range:</label>
+        <select name="hours" id="hours" onchange="this.form.submit()">
+            <option value="6" {{ 'selected' if hours == 6 }}>Last 6 hours</option>
+            <option value="12" {{ 'selected' if hours == 12 }}>Last 12 hours</option>
+            <option value="24" {{ 'selected' if hours == 24 }}>Last 24 hours</option>
+            <option value="48" {{ 'selected' if hours == 48 }}>Last 48 hours</option>
+            <option value="168" {{ 'selected' if hours == 168 }}>Last 7 days</option>
+        </select>
+    </form>
+</div>
+
+<!-- Summary -->
+<div class="card" style="margin-bottom: 20px;">
+    <h2 style="margin-bottom: 15px;">Summary</h2>
+    <p style="font-size: 1.2em;">
+        <strong>{{ summary.total_count }}</strong> Tier II error{{ 's' if summary.total_count != 1 }} in the last {{ hours }} hour{{ 's' if hours != 1 }}
+    </p>
+</div>
+
+{% if summary.total_count > 0 %}
+<!-- By Context -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px;">
+    <div class="card">
+        <h2 style="margin-bottom: 15px;">By Context</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Context</th>
+                    <th style="text-align: right;">Count</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for context, count in summary.by_context|dictsort(by='value', reverse=true) %}
+                <tr>
+                    <td><code>{{ context }}</code></td>
+                    <td style="text-align: right;">{{ count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2 style="margin-bottom: 15px;">By Error Type</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th style="text-align: right;">Count</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for error_type, count in summary.by_type|dictsort(by='value', reverse=true) %}
+                <tr>
+                    <td><code style="color: #dc3545;">{{ error_type }}</code></td>
+                    <td style="text-align: right;">{{ count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Sample Errors -->
+{% if summary.sample_errors %}
+<div class="card">
+    <h2 style="margin-bottom: 15px;">Sample Errors</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Context</th>
+                <th>Error</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for error in summary.sample_errors %}
+            <tr>
+                <td style="white-space: nowrap;">
+                    {{ error.created_at.strftime('%Y-%m-%d %H:%M') }}
+                </td>
+                <td>{{ error.context }}</td>
+                <td>
+                    <code>{{ error.error_type }}</code>:
+                    {{ error.error_message[:50] }}{{ '...' if error.error_message|length > 50 }}
+                </td>
+                <td>
+                    <a href="{{ url_for('main.error_detail', error_id=error.id) }}" class="btn btn-sm btn-secondary">View</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% else %}
+<div class="card" style="text-align: center; padding: 40px;">
+    <p style="color: #28a745; font-size: 1.2em;">No errors in this time period.</p>
+</div>
+{% endif %}
+{% endblock %}

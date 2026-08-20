@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Error #{{ error.id }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <a href="{{ url_for('main.error_list') }}">&larr; Back to Errors</a>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>
+        Error #{{ error.id }}
+        {% if error.tier == 1 %}
+        <span class="badge" style="background: #dc3545; color: white; font-size: 0.5em;">TIER I</span>
+        {% else %}
+        <span class="badge" style="background: #ffc107; color: #333; font-size: 0.5em;">TIER II</span>
+        {% endif %}
+    </h1>
+    {% if not error.resolved %}
+    <form method="post" action="{{ url_for('main.resolve_error', error_id=error.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-success">Mark Resolved</button>
+    </form>
+    {% else %}
+    <span style="color: #28a745; font-weight: bold;">
+        Resolved {{ error.resolved_at.strftime('%Y-%m-%d %H:%M') if error.resolved_at }}
+    </span>
+    {% endif %}
+</div>
+
+<!-- Overview -->
+<div class="card" style="margin-bottom: 20px;">
+    <h2 style="margin-bottom: 15px;">Overview</h2>
+    <table style="width: auto;">
+        <tr>
+            <td style="font-weight: bold; padding-right: 20px;">Time:</td>
+            <td>{{ error.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</td>
+        </tr>
+        <tr>
+            <td style="font-weight: bold; padding-right: 20px;">Context:</td>
+            <td><code>{{ error.context }}</code></td>
+        </tr>
+        <tr>
+            <td style="font-weight: bold; padding-right: 20px;">Error Type:</td>
+            <td><code style="color: #dc3545;">{{ error.error_type }}</code></td>
+        </tr>
+        <tr>
+            <td style="font-weight: bold; padding-right: 20px;">Notified:</td>
+            <td>{{ 'Yes' if error.notified else 'No' }}</td>
+        </tr>
+    </table>
+</div>
+
+<!-- Error Message -->
+<div class="card" style="margin-bottom: 20px;">
+    <h2 style="margin-bottom: 15px;">Error Message</h2>
+    <pre style="background: #f8f9fa; padding: 15px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;">{{ error.error_message }}</pre>
+</div>
+
+<!-- Request Context -->
+{% if error.request_path %}
+<div class="card" style="margin-bottom: 20px;">
+    <h2 style="margin-bottom: 15px;">Request Context</h2>
+    <table style="width: auto;">
+        <tr>
+            <td style="font-weight: bold; padding-right: 20px;">Method:</td>
+            <td><code>{{ error.request_method }}</code></td>
+        </tr>
+        <tr>
+            <td style="font-weight: bold; padding-right: 20px;">Path:</td>
+            <td><code>{{ error.request_path }}</code></td>
+        </tr>
+        {% if error.user_id %}
+        <tr>
+            <td style="font-weight: bold; padding-right: 20px;">User ID:</td>
+            <td>{{ error.user_id }}</td>
+        </tr>
+        {% endif %}
+        {% if error.request_user_agent %}
+        <tr>
+            <td style="font-weight: bold; padding-right: 20px;">User Agent:</td>
+            <td style="font-size: 0.9em; word-break: break-all;">{{ error.request_user_agent }}</td>
+        </tr>
+        {% endif %}
+    </table>
+</div>
+{% endif %}
+
+<!-- Traceback -->
+{% if error.traceback %}
+<div class="card">
+    <h2 style="margin-bottom: 15px;">Traceback</h2>
+    <pre style="background: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 4px; overflow-x: auto; font-size: 0.9em;">{{ error.traceback }}</pre>
+</div>
+{% endif %}
+{% endblock %}

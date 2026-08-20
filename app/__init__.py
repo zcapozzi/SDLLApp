@@ -193,31 +193,38 @@ def create_app(config_name=None):
             return redirect(referrer)
         return redirect(url_for('main.dashboard'))
 
-    # Global error handler - logs full traceback to stdout for Railway
+    # Global error handler - uses Tier I/II error reporting
     @app.errorhandler(Exception)
     def handle_exception(e):
-        # Log the full traceback to stdout (Railway captures this)
-        print("=" * 60, file=sys.stderr, flush=True)
-        print(f"UNHANDLED EXCEPTION at {request.method} {request.path}", file=sys.stderr, flush=True)
-        print("=" * 60, file=sys.stderr, flush=True)
-        traceback.print_exc(file=sys.stderr)
-        print("=" * 60, file=sys.stderr, flush=True)
-        sys.stderr.flush()
+        from flask import render_template
+        from flask_login import current_user
+        from werkzeug.exceptions import HTTPException
+        from app.utils.errors import log_tier1
 
-        # Return JSON for API-like requests, otherwise a simple error page
+        # Don't log HTTP exceptions (404, 403, etc.) as Tier I
+        if isinstance(e, HTTPException):
+            return e
+
+        # Get user ID if logged in
+        user_id = None
+        try:
+            if current_user.is_authenticated:
+                user_id = current_user.id
+        except Exception:
+            pass
+
+        # Log as Tier I - unhandled exceptions are serious
+        log_tier1('unhandled_exception', e, request, user_id)
+
+        # Return JSON for API-like requests
         if request.path.startswith('/api/') or request.is_json:
-            return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
+            return jsonify({'error': 'Internal server error', 'message': 'An unexpected error occurred.'}), 500
 
-        return f"""
-        <html>
-        <head><title>500 Error</title></head>
-        <body style="font-family: sans-serif; padding: 2rem;">
-            <h1>500 - Internal Server Error</h1>
-            <p>Something went wrong. The error has been logged.</p>
-            <pre style="background: #f5f5f5; padding: 1rem; overflow: auto;">{str(e)}</pre>
-            <a href="/">Return to Home</a>
-        </body>
-        </html>
-        """, 500
+        # Return user-friendly error page
+        try:
+            return render_template('errors/500.html'), 500
+        except Exception:
+            # If even the error template fails, return plain text
+            return "An error occurred. We've been notified.", 500
 
     return app

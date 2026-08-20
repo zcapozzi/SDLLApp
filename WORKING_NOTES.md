@@ -4,7 +4,99 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Added privacy-respecting analytics and self-hosted ad system for public schedule pages.
+Last session: Implemented comprehensive Tier I/Tier II error reporting system.
+
+---
+
+## Session: August 20, 2026 - Tier I/Tier II Error Reporting System
+
+### Overview
+Implemented a comprehensive error handling system that ensures users are never blocked by errors while keeping admins informed of issues.
+
+### Tier System
+
+| Tier | Name | Behavior | Examples |
+|------|------|----------|----------|
+| **I** | Critical | Immediate Telegram alert | Database connection, auth failures, 500 errors |
+| **II** | Digest | Periodic email summary | Analytics tracking, minor validation |
+
+### Key Principles
+1. **Never crash user requests**: All error handling is wrapped in try/except with graceful fallbacks
+2. **Always log**: Errors go to stderr (Railway) AND database (for reporting)
+3. **Separate tracking from content**: Tracking failures never prevent page loads
+4. **Tiered alerting**: Critical issues get immediate attention; minor issues are batched
+
+### Implementation
+
+#### 1. Database Model (`app/models/app_error.py`)
+- Stores: tier, context, error_type, error_message, traceback
+- Request context: method, path, user_agent, user_id
+- Status tracking: notified, resolved, resolved_by
+- Error hash for grouping similar errors
+
+#### 2. Error Utilities (`app/utils/errors.py`)
+- `log_error(context, error, request, tier)`: Main logging function
+- `log_tier1()` / `log_tier2()`: Force-log at specific tier
+- `safe_tracking` decorator: Wraps tracking functions to fail silently
+- `safe_db_operation` context manager: Wraps DB operations with rollback
+- `register_global_handler(app)`: Flask error handler registration
+- `get_error_digest_html()`: Generates HTML for digest emails
+
+#### 3. Tier I Alerts
+- Uses existing `send_message.py` script for Telegram alerts
+- Runs asynchronously (subprocess) to not block requests
+- Includes: context, error type, message snippet, request info, timestamp
+
+#### 4. Admin Interface (`/admin/errors`)
+- Error list with tier/resolved filters
+- Error detail view with full traceback
+- Mark as resolved functionality
+- Digest view with summary statistics
+
+#### 5. Digest Email Service (`app/services/error_digest_service.py`)
+- `send_error_digest(hours=24)`: Sends summary email to admins
+- Uses existing GmailService for sending
+- Marks errors as notified after sending
+
+### Files Created
+
+| File | Description |
+|------|-------------|
+| `app/models/app_error.py` | AppError model |
+| `app/templates/errors/500.html` | User-friendly error page |
+| `app/templates/admin/errors.html` | Error list admin page |
+| `app/templates/admin/error_detail.html` | Error detail admin page |
+| `app/templates/admin/error_digest.html` | Digest summary page |
+| `app/services/error_digest_service.py` | Digest email service |
+| `scripts/add_app_errors_table.sql` | Database migration |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `app/utils/errors.py` | Complete rewrite with Tier I/II support |
+| `app/__init__.py` | Updated global error handler |
+| `app/main/routes.py` | Added admin error routes |
+
+### SQL Migration Required
+Run `scripts/add_app_errors_table.sql` on the database to create:
+- `sdll_app_errors` table
+
+### Tier I Contexts (Auto-Critical)
+- `database_connection`
+- `authentication_failure`
+- `payment_processing`
+- `schedule_corruption`
+- `data_integrity`
+- `security_violation`
+
+All other contexts default to Tier II (digest).
+
+### Integration with Existing Code
+The `app/public/routes.py` already uses `log_error()` for tracking failures. These will now:
+1. Be stored in the database
+2. Appear in the admin error digest
+3. Never crash the public page
 
 ---
 
