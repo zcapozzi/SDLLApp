@@ -126,6 +126,21 @@ class TeamSeason(db.Model):
             return f"{name} ({self.organization.display_name})"
         return name
 
+    @property
+    def display_name_with_league(self):
+        """
+        Get display name prefixed with league/division.
+
+        Returns: "AA Graves" instead of just "Graves"
+        For external teams: "AA Graves (Bull City)"
+        """
+        name = self.computed_display_name
+        league_prefix = self.league or ''
+
+        if self.is_external and self.organization:
+            return f"{league_prefix} {name} ({self.organization.short_name or self.organization.display_name})"
+        return f"{league_prefix} {name}".strip()
+
     def get_practice_days(self, league_season=None):
         """Get the effective practice days for this team.
 

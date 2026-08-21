@@ -260,7 +260,7 @@
                     <option value="">-- Select --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
-                        {{ team.computed_display_name }}{% if team.is_external %} ({{ team.organization.short_name }}){% endif %}
+                        {{ team.display_name_with_league }}
                     </option>
                     {% endfor %}
                 </select>
@@ -273,7 +273,7 @@
                     <option value="">-- None (Practice) --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
-                        {{ team.computed_display_name }}{% if team.is_external %} ({{ team.organization.short_name }}){% endif %}
+                        {{ team.display_name_with_league }}
                     </option>
                     {% endfor %}
                 </select>
@@ -378,7 +378,7 @@
                     <option value="">-- Select (optional) --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
-                        {{ team.computed_display_name }}{% if team.is_external %} ({{ team.organization.short_name }}){% endif %}
+                        {{ team.display_name_with_league }}
                     </option>
                     {% endfor %}
                 </select>
@@ -391,7 +391,7 @@
                     <option value="">-- None (Practice) --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
-                        {{ team.computed_display_name }}{% if team.is_external %} ({{ team.organization.short_name }}){% endif %}
+                        {{ team.display_name_with_league }}
                     </option>
                     {% endfor %}
                 </select>
