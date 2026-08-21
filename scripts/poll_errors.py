@@ -2,6 +2,12 @@
 """
 Poll production database for new errors and export for Claude Code diagnosis.
 
+SINGLE-THREADED DESIGN:
+  - Only ONE Claude Code diagnosis runs at a time
+  - Uses a lock file to prevent concurrent sessions
+  - Additional errors are queued and processed in subsequent polls
+  - Prevents git conflicts, resource contention, and competing edits
+
 Run via Windows Task Scheduler every 5 minutes:
   schtasks /create /tn "SDLL Error Poll" /tr "python scripts\\poll_errors.py" /sc minute /mo 5
 
@@ -12,6 +18,7 @@ Commands:
   python scripts/poll_errors.py           # Poll for new errors
   python scripts/poll_errors.py --status  # Show current state and limits
   python scripts/poll_errors.py --resume  # Clear PAUSED state
+  python scripts/poll_errors.py --unlock  # Release diagnosis lock (if stuck)
   python scripts/poll_errors.py --list    # List pending errors
 """
 
@@ -46,6 +53,7 @@ PAUSE_FILE = ERRORS_DIR / 'PAUSED'
 STATE_FILE = ERRORS_DIR / '.state.json'
 EXPORTED_FILE = ERRORS_DIR / '.exported_ids.json'
 DIAGNOSIS_ATTEMPTS_FILE = ERRORS_DIR / '.diagnosis_attempts.json'
+LOCK_FILE = ERRORS_DIR / '.diagnosis_in_progress.lock'
 
 # Rate limits
 MAX_ERRORS_PER_HOUR = 5       # Pause if > 5 errors in 1 hour
@@ -132,6 +140,51 @@ def save_diagnosis_attempts(attempts):
 def is_paused():
     """Check if system is paused."""
     return PAUSE_FILE.exists()
+
+
+def is_diagnosis_in_progress():
+    """
+    Check if a diagnosis is currently in progress.
+
+    Uses a lock file to prevent concurrent diagnoses.
+    Lock files older than 2 hours are considered stale (diagnosis crashed).
+    """
+    if not LOCK_FILE.exists():
+        return False
+
+    # Check if lock is stale (older than 2 hours = likely crashed)
+    try:
+        lock_data = json.loads(LOCK_FILE.read_text())
+        lock_time = datetime.fromisoformat(lock_data.get('started', ''))
+        age = datetime.now() - lock_time
+        if age > timedelta(hours=2):
+            print(f"[Warning] Stale lock detected (age: {age}). Removing.")
+            LOCK_FILE.unlink()
+            return False
+        return True
+    except Exception:
+        # Malformed lock file, remove it
+        LOCK_FILE.unlink()
+        return False
+
+
+def acquire_diagnosis_lock(error_id):
+    """Acquire lock for diagnosis. Returns True if acquired."""
+    if is_diagnosis_in_progress():
+        return False
+
+    LOCK_FILE.write_text(json.dumps({
+        'error_id': error_id,
+        'started': datetime.now().isoformat(),
+        'pid': os.getpid()
+    }))
+    return True
+
+
+def release_diagnosis_lock():
+    """Release the diagnosis lock."""
+    if LOCK_FILE.exists():
+        LOCK_FILE.unlink()
 
 
 def pause_system(reason):
@@ -498,10 +551,31 @@ def poll_and_export():
         message += f"\nRun: claude 'Diagnose pending errors'"
         send_notification(message)
 
-    # Auto-invoke Claude Code to diagnose each error
+    # Auto-invoke Claude Code to diagnose ONLY THE FIRST error
+    # IMPORTANT: Only one diagnosis at a time to prevent:
+    # - Multiple competing Claude sessions
+    # - Git conflicts from concurrent commits
+    # - Resource contention
+    # Remaining errors will be picked up in subsequent polling cycles
     if os.environ.get('AUTO_DIAGNOSE', '1') == '1':
-        for error in exportable:
+        # Check if a diagnosis is already running
+        if is_diagnosis_in_progress():
+            try:
+                lock_data = json.loads(LOCK_FILE.read_text())
+                print(f"[Queued] Diagnosis already in progress for error #{lock_data.get('error_id')}.")
+                print(f"         {len(exportable)} error(s) waiting in queue.")
+            except Exception:
+                print(f"[Queued] Diagnosis in progress. {len(exportable)} error(s) waiting.")
+            return
+
+        error = exportable[0]  # Process only the first/oldest error
+        print(f"[Single-thread] Diagnosing error #{error['id']} (remaining {len(exportable)-1} will be queued)")
+
+        # Acquire lock before starting
+        if acquire_diagnosis_lock(error['id']):
             invoke_claude_diagnosis(error['id'])
+        else:
+            print(f"[Error] Could not acquire diagnosis lock")
 
 
 def invoke_claude_diagnosis(error_id):
@@ -603,6 +677,24 @@ def show_status():
         print("🟢 System Active")
         print()
 
+    # Diagnosis in progress?
+    if LOCK_FILE.exists():
+        try:
+            lock_data = json.loads(LOCK_FILE.read_text())
+            started = lock_data.get('started', 'unknown')
+            error_id = lock_data.get('error_id', 'unknown')
+            print(f"🔒 Diagnosis in Progress:")
+            print(f"   Error: #{error_id}")
+            print(f"   Started: {started}")
+            print(f"   (Run --unlock to force release if stuck)")
+            print()
+        except Exception:
+            print("🔒 Lock file exists but unreadable")
+            print()
+    else:
+        print("🔓 No diagnosis in progress")
+        print()
+
     # State
     state = load_state()
     print("Rate Limits:")
@@ -661,6 +753,7 @@ def main():
     parser = argparse.ArgumentParser(description='Poll for production errors')
     parser.add_argument('--status', action='store_true', help='Show current state')
     parser.add_argument('--resume', action='store_true', help='Clear PAUSED state')
+    parser.add_argument('--unlock', action='store_true', help='Release diagnosis lock (if stuck)')
     parser.add_argument('--list', action='store_true', help='List pending errors')
     parser.add_argument('--no-diagnose', action='store_true',
                         help='Export errors but do not auto-invoke Claude Code')
@@ -670,6 +763,12 @@ def main():
         show_status()
     elif args.resume:
         resume_system()
+    elif args.unlock:
+        if LOCK_FILE.exists():
+            release_diagnosis_lock()
+            print("[Unlocked] Diagnosis lock released. Next poll will start a new diagnosis.")
+        else:
+            print("[Info] No lock to release.")
     elif args.list:
         list_pending()
     else:
