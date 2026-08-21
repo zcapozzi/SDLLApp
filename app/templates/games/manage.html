@@ -186,13 +186,13 @@
                 <div>
                     <strong>{{ game.league }}</strong>:
                     {% if game.home_team %}
-                        {{ game.home_team.computed_display_name }}
+                        {{ game.home_team.scheduler_display_name }}
                         {% if game.home_team.is_external %}<span class="external-badge">{{ game.home_team.organization.short_name }}</span>{% endif %}
                     {% else %}
                         <em class="text-muted">TBD</em>
                     {% endif %}
                     {% if game.away_team %}
-                        vs {{ game.away_team.computed_display_name }}
+                        vs {{ game.away_team.scheduler_display_name }}
                         {% if game.away_team.is_external %}<span class="external-badge">{{ game.away_team.organization.short_name }}</span>{% endif %}
                     {% elif game.game_type != 'practice' %}
                         vs <em class="text-muted">TBD</em>

@@ -39,7 +39,7 @@
                 {% for league_name, league_teams in teams_by_league.items() %}
                 <optgroup label="{{ league_name }}">
                     {% for team in league_teams %}
-                    <option value="{{ team.team_ID }}">{{ team.computed_display_name }}</option>
+                    <option value="{{ team.team_ID }}">{{ team.scheduler_display_name }}</option>
                     {% endfor %}
                 </optgroup>
                 {% endfor %}
@@ -53,7 +53,7 @@
                 {% for league_name, league_teams in teams_by_league.items() %}
                 <optgroup label="{{ league_name }}">
                     {% for team in league_teams %}
-                    <option value="{{ team.team_ID }}">{{ team.computed_display_name }}</option>
+                    <option value="{{ team.team_ID }}">{{ team.scheduler_display_name }}</option>
                     {% endfor %}
                 </optgroup>
                 {% endfor %}
@@ -102,7 +102,7 @@
             <tr id="pairing-{{ pairing.ID }}">
                 <td>
                     {% if pairing.team_one %}
-                        {{ pairing.team_one.computed_display_name }}
+                        {{ pairing.team_one.scheduler_display_name }}
                         <span class="text-muted text-small">({{ pairing.team_one.league }})</span>
                     {% else %}
                         <span class="text-muted">Team #{{ pairing.team_one_id }}</span>
@@ -110,7 +110,7 @@
                 </td>
                 <td>
                     {% if pairing.team_two %}
-                        {{ pairing.team_two.computed_display_name }}
+                        {{ pairing.team_two.scheduler_display_name }}
                         <span class="text-muted text-small">({{ pairing.team_two.league }})</span>
                     {% else %}
                         <span class="text-muted">Team #{{ pairing.team_two_id }}</span>

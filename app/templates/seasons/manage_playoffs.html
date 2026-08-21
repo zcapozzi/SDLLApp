@@ -74,7 +74,7 @@
                             {% for team in regular_teams %}
                             <option value="{{ team.team_ID }}"
                                     {% if placeholder.resolved_team_id == team.team_ID %}selected{% endif %}>
-                                {{ team.computed_display_name }}
+                                {{ team.scheduler_display_name }}
                             </option>
                             {% endfor %}
                         </select>
@@ -153,7 +153,7 @@
                             {% for team in regular_teams %}
                             <option value="{{ team.team_ID }}"
                                     {% if placeholder.resolved_team_id == team.team_ID %}selected{% endif %}>
-                                {{ team.computed_display_name }}
+                                {{ team.scheduler_display_name }}
                             </option>
                             {% endfor %}
                         </select>

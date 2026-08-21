@@ -435,7 +435,7 @@ def review(year, is_spring):
             'year': lp.year,
             'is_spring': lp.is_spring,
             'home_team_id': lp.home_ID,
-            'home_team_name': lp.home_team.computed_display_name if lp.home_team else 'Unknown',
+            'home_team_name': lp.home_team.scheduler_display_name if lp.home_team else 'Unknown',
             'away_team_id': None,
             'away_team_name': None,
             'field_id': lp.location,
@@ -759,7 +759,7 @@ def api_team_schedule(year, is_spring, team_id):
 
     # Get team name for display
     team = TeamSeason.query.filter_by(team_ID=team_id).first()
-    team_name = team.computed_display_name if team else f'Team {team_id}'
+    team_name = team.scheduler_display_name if team else f'Team {team_id}'
 
     # Check if there's a current proposal in database
     proposal_record = ScheduleProposal.get_for_season(year, is_spring)
@@ -809,8 +809,8 @@ def api_team_schedule(year, is_spring, team_id):
             away_id = game.away_ID
 
             if team_id in (home_id, away_id):
-                home_name = game.home_team.computed_display_name if game.home_team else 'TBD'
-                away_name = game.away_team.computed_display_name if game.away_team else '-'
+                home_name = game.home_team.scheduler_display_name if game.home_team else 'TBD'
+                away_name = game.away_team.scheduler_display_name if game.away_team else '-'
 
                 games_list.append({
                     'id': game.ID,
@@ -887,11 +887,11 @@ def api_add_event(year, is_spring):
 
         if home_team_id:
             home_team = TeamSeason.query.filter_by(team_ID=home_team_id).first()
-            home_team_name = home_team.computed_display_name if home_team else f'Team {home_team_id}'
+            home_team_name = home_team.scheduler_display_name if home_team else f'Team {home_team_id}'
 
         if away_team_id:
             away_team = TeamSeason.query.filter_by(team_ID=away_team_id).first()
-            away_team_name = away_team.computed_display_name if away_team else f'Team {away_team_id}'
+            away_team_name = away_team.scheduler_display_name if away_team else f'Team {away_team_id}'
 
         # For division practice, use league name as the "team"
         is_division_practice = game_type == 'division_practice'
@@ -989,7 +989,7 @@ def api_event_options(year, is_spring):
             teams_by_league[team.league] = []
         teams_by_league[team.league].append({
             'id': team.team_ID,
-            'name': team.computed_display_name
+            'name': team.scheduler_display_name
         })
 
     # Get available fields

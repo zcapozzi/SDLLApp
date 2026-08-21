@@ -395,8 +395,8 @@
                 <div class="game-location">{{ game.location or 'TBD' }}</div>
                 <div class="game-teams">
                     <strong>{{ game.league }}</strong>
-                    {% if game.home_team %} - {{ game.home_team.computed_display_name }}{% endif %}
-                    {% if game.away_team %} vs {{ game.away_team.computed_display_name }}{% endif %}
+                    {% if game.home_team %} - {{ game.home_team.scheduler_display_name }}{% endif %}
+                    {% if game.away_team %} vs {{ game.away_team.scheduler_display_name }}{% endif %}
                 </div>
             </div>
             {% else %}

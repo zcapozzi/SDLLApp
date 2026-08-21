@@ -243,9 +243,11 @@ def manage_teams(year, is_spring):
 
         elif action == 'set_team_settings':
             team_id = int(request.form.get('team_id'))
+            coach_name = request.form.get('coach_name', '').strip() or None
             team_name = request.form.get('team_name', '').strip() or None
             team = TeamSeason.query.get(team_id)
             if team and team.year == year and team.is_spring == is_spring:
+                team.coach_name = coach_name
                 team.team_name = team_name
 
                 # Collect selected practice days (checkboxes)
@@ -258,7 +260,7 @@ def manage_teams(year, is_spring):
                 team.practice_days = ','.join(practice_days) if practice_days else None
 
                 db.session.commit()
-                logger.info(f'Updated settings for {team.display_name}: name={team_name}, practice_days={team.practice_days}')
+                logger.info(f'Updated settings for {team.display_name}: coach={coach_name}, team_name={team_name}, practice_days={team.practice_days}')
                 flash(f'Team settings updated', 'success')
                 anchor = f'league-{team.league.replace(" ", "-")}'
 
@@ -412,7 +414,7 @@ def api_teams(year, is_spring):
         'team_ID': t.team_ID,
         'display_name': t.display_name,
         'team_name': t.team_name,
-        'computed_display_name': t.computed_display_name,
+        'scheduler_display_name': t.scheduler_display_name,
         'league': t.league,
         'is_placeholder': t.is_placeholder
     } for t in teams])
@@ -623,8 +625,8 @@ def manage_playoffs(year, is_spring, league_name):
                     placeholder.resolved_team_id = int(actual_team_id)
                     db.session.commit()
                     actual_team = TeamSeason.query.get(int(actual_team_id))
-                    logger.info(f'Resolved {placeholder.display_name} to {actual_team.computed_display_name}')
-                    flash(f'Resolved {placeholder.display_name} to {actual_team.computed_display_name}', 'success')
+                    logger.info(f'Resolved {placeholder.display_name} to {actual_team.scheduler_display_name}')
+                    flash(f'Resolved {placeholder.display_name} to {actual_team.scheduler_display_name}', 'success')
                 else:
                     placeholder.resolved_team_id = None
                     db.session.commit()

@@ -217,11 +217,11 @@ def api_get_game(game_id):
     if game.home_ID:
         home_team = TeamSeason.query.get(game.home_ID)
         if home_team:
-            home_team_name = home_team.computed_display_name
+            home_team_name = home_team.scheduler_display_name
     if game.away_ID:
         away_team = TeamSeason.query.get(game.away_ID)
         if away_team:
-            away_team_name = away_team.computed_display_name
+            away_team_name = away_team.scheduler_display_name
 
     return jsonify({
         'success': True,
@@ -294,11 +294,11 @@ def api_add_event(year, is_spring):
             if home_team_id:
                 home_team = TeamSeason.query.get(int(home_team_id))
                 if home_team:
-                    home_team_name = home_team.computed_display_name
+                    home_team_name = home_team.scheduler_display_name
             if away_team_id:
                 away_team = TeamSeason.query.get(int(away_team_id))
                 if away_team:
-                    away_team_name = away_team.computed_display_name
+                    away_team_name = away_team.scheduler_display_name
 
             game_data = {
                 'game_type': 'practice' if event_type in ['practice', 'division_practice'] else 'regular',
@@ -456,7 +456,7 @@ def api_event_options(year, is_spring):
             teams_by_league[team.league] = []
         teams_by_league[team.league].append({
             'id': team.team_ID,
-            'name': team.computed_display_name
+            'name': team.scheduler_display_name
         })
 
     # Get fields
@@ -624,7 +624,7 @@ def manage(year, is_spring):
                     if change:
                         GameChangeService.queue_notifications_for_change(change, game)
 
-                    logger.info(f'Updated game {game_id}: {game.home_team.computed_display_name if game.home_team else "TBD"} vs {game.away_team.computed_display_name if game.away_team else "N/A"}')
+                    logger.info(f'Updated game {game_id}: {game.home_team.scheduler_display_name if game.home_team else "TBD"} vs {game.away_team.scheduler_display_name if game.away_team else "N/A"}')
                     flash('Game updated successfully.', 'success')
 
                 elif action == 'delete_game':
@@ -933,7 +933,7 @@ def calendar(year, is_spring):
                     'game_type': 'practice',
                     'league': lp.league,
                     'home_team_id': lp.home_ID,
-                    'home_team_name': lp.home_team.computed_display_name if lp.home_team else 'Unknown',
+                    'home_team_name': lp.home_team.scheduler_display_name if lp.home_team else 'Unknown',
                     'away_team_id': None,
                     'away_team_name': None,
                     'field_name': field_name,
@@ -968,8 +968,8 @@ def calendar(year, is_spring):
                     'display_type': 'div-practice' if g.get('is_league_practice') else (g.get('game_type', 'regular') if not g.get('is_scrimmage') else 'scrimmage'),
                     'home_ID': g.get('home_team_id'),
                     'away_ID': g.get('away_team_id'),
-                    'home_team': type('Team', (), {'computed_display_name': g.get('home_team_name', 'TBD')})() if g.get('home_team_id') else None,
-                    'away_team': type('Team', (), {'computed_display_name': g.get('away_team_name', 'TBD')})() if g.get('away_team_id') else None,
+                    'home_team': type('Team', (), {'scheduler_display_name': g.get('home_team_name', 'TBD')})() if g.get('home_team_id') else None,
+                    'away_team': type('Team', (), {'scheduler_display_name': g.get('away_team_name', 'TBD')})() if g.get('away_team_id') else None,
                     'no_time_limit': g.get('no_time_limit', False),
                     'is_proposed': True
                 })()
@@ -1085,8 +1085,8 @@ def day_view(year, is_spring, target_date):
                             'display_type': 'div-practice' if g.get('is_league_practice') else (g.get('game_type', 'regular') if not g.get('is_scrimmage') else 'scrimmage'),
                             'home_ID': g.get('home_team_id'),
                             'away_ID': g.get('away_team_id'),
-                            'home_team': type('Team', (), {'computed_display_name': g.get('home_team_name', 'TBD')})() if g.get('home_team_id') else None,
-                            'away_team': type('Team', (), {'computed_display_name': g.get('away_team_name', 'TBD')})() if g.get('away_team_id') else None,
+                            'home_team': type('Team', (), {'scheduler_display_name': g.get('home_team_name', 'TBD')})() if g.get('home_team_id') else None,
+                            'away_team': type('Team', (), {'scheduler_display_name': g.get('away_team_name', 'TBD')})() if g.get('away_team_id') else None,
                             'no_time_limit': g.get('no_time_limit', False),
                             'is_proposed': True
                         })()

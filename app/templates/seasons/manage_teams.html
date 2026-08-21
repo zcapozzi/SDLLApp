@@ -92,6 +92,7 @@
                     <thead>
                         <tr>
                             <th>Placeholder</th>
+                            <th>Coach Name</th>
                             <th>Team Name</th>
                             <th style="width: 120px;">Practice Days</th>
                             <th style="width: 100px;">Status</th>
@@ -102,6 +103,13 @@
                         {% for team in teams %}
                         <tr>
                             <td style="color: #666;">{{ team.display_name }}</td>
+                            <td>
+                                {% if team.coach_name %}
+                                <strong>{{ team.coach_name }}</strong>
+                                {% else %}
+                                <span class="text-muted">Not set</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if team.team_name %}
                                 <strong style="color: rgb(34, 139, 34);">{{ team.team_name }}</strong>
@@ -119,7 +127,7 @@
                             <td>
                                 {% if team.is_placeholder %}
                                 <span class="badge" style="background: #eee; color: #666;">Playoff</span>
-                                {% elif team.team_name %}
+                                {% elif team.coach_name or team.team_name %}
                                 <span class="badge badge-spring">Named</span>
                                 {% else %}
                                 <span class="badge" style="background: #fff3cd; color: #856404;">Pending</span>
@@ -127,7 +135,7 @@
                             </td>
                             <td>
                                 <button type="button" class="btn btn-outline btn-sm"
-                                        onclick="setTeamSettings({{ team.team_ID }}, '{{ team.team_name or '' }}', '{{ team.display_name }}', '{{ team.practice_days or '' }}')">
+                                        onclick="setTeamSettings({{ team.team_ID }}, '{{ team.coach_name|e if team.coach_name else '' }}', '{{ team.team_name|e if team.team_name else '' }}', '{{ team.display_name }}', '{{ team.practice_days or '' }}')">
                                     Edit
                                 </button>
                                 {% if team.schedule_token and not team.is_placeholder %}
@@ -174,11 +182,20 @@
             <input type="hidden" name="team_id" id="name-team-id">
 
             <div class="form-group">
-                <label for="team_name">Team Name</label>
+                <label for="coach_name">Coach Name</label>
+                <input type="text" id="coach_name" name="coach_name" class="form-control"
+                       placeholder="e.g., Smith, Johnson">
+                <p class="text-muted text-small" style="margin-top: 5px;">
+                    Used in scheduler views and as fallback for public schedule.
+                </p>
+            </div>
+
+            <div class="form-group">
+                <label for="team_name">Team/Mascot Name</label>
                 <input type="text" id="team_name" name="team_name" class="form-control"
                        placeholder="e.g., Thunderbolts, Blue Jays">
                 <p class="text-muted text-small" style="margin-top: 5px;">
-                    Leave blank to show placeholder name.
+                    Public display name. If not set, coach name is shown.
                 </p>
             </div>
 
@@ -221,9 +238,10 @@
 </div>
 
 <script>
-function setTeamSettings(teamId, currentName, placeholder, practiceDays) {
+function setTeamSettings(teamId, coachName, teamName, placeholder, practiceDays) {
     document.getElementById('name-team-id').value = teamId;
-    document.getElementById('team_name').value = currentName;
+    document.getElementById('coach_name').value = coachName;
+    document.getElementById('team_name').value = teamName;
     document.getElementById('modal-placeholder').textContent = placeholder;
 
     // Clear all practice day checkboxes first

@@ -92,9 +92,9 @@ class ProposedGame:
             'year': self.year,
             'is_spring': self.is_spring,
             'home_team_id': self.home_team.team_ID if self.home_team else None,
-            'home_team_name': self.home_team.computed_display_name if self.home_team else None,
+            'home_team_name': self.home_team.scheduler_display_name if self.home_team else None,
             'away_team_id': self.away_team.team_ID if self.away_team else None,
-            'away_team_name': self.away_team.computed_display_name if self.away_team else None,
+            'away_team_name': self.away_team.scheduler_display_name if self.away_team else None,
             'field_id': self.field.ID if self.field else None,
             'field_name': self.field.location_title if self.field else None,
             'game_date': self.game_date.isoformat() if self.game_date else None,
@@ -129,7 +129,7 @@ class ScheduleValidator:
             from app.models.team import TeamSeason
             team = TeamSeason.query.filter_by(team_ID=team_id).first()
             if team:
-                self._team_names[team_id] = team.computed_display_name or team.display_name or str(team_id)
+                self._team_names[team_id] = team.scheduler_display_name or team.display_name or str(team_id)
             else:
                 self._team_names[team_id] = str(team_id)
         return self._team_names[team_id]
@@ -185,13 +185,13 @@ class ScheduleValidator:
                 team = g.home_team
                 team_id = team.team_ID if hasattr(team, 'team_ID') else None
                 if team_id:
-                    name = getattr(team, 'computed_display_name', None) or getattr(team, 'display_name', None) or str(team_id)
+                    name = getattr(team, 'scheduler_display_name', None) or getattr(team, 'display_name', None) or str(team_id)
                     self._team_names[team_id] = name
             if hasattr(g, 'away_team') and g.away_team:
                 team = g.away_team
                 team_id = team.team_ID if hasattr(team, 'team_ID') else None
                 if team_id:
-                    name = getattr(team, 'computed_display_name', None) or getattr(team, 'display_name', None) or str(team_id)
+                    name = getattr(team, 'scheduler_display_name', None) or getattr(team, 'display_name', None) or str(team_id)
                     self._team_names[team_id] = name
 
         # Group games by league

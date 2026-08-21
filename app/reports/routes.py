@@ -77,12 +77,12 @@ def game_history(game_id):
         from app.models.team import TeamSeason
         home_team = TeamSeason.query.get(game.home_ID)
         if home_team:
-            home_team_name = home_team.computed_display_name
+            home_team_name = home_team.scheduler_display_name
     if game.away_ID:
         from app.models.team import TeamSeason
         away_team = TeamSeason.query.get(game.away_ID)
         if away_team:
-            away_team_name = away_team.computed_display_name
+            away_team_name = away_team.scheduler_display_name
 
     return render_template(
         'reports/game_history.html',

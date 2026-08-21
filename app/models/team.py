@@ -19,7 +19,8 @@ class TeamSeason(db.Model):
     year = db.Column(db.Integer)
     league = db.Column(db.String(50))
     display_name = db.Column(db.String(50))  # Placeholder name (e.g., "BB Majors Team 1")
-    team_name = db.Column(db.String(50))  # Chosen team name (e.g., "Thunderbolts")
+    team_name = db.Column(db.String(50))  # Team/mascot name for public display (e.g., "Thunderbolts")
+    coach_name = db.Column(db.String(100))  # Coach name for scheduler (e.g., "Smith")
     is_placeholder = db.Column(db.SmallInteger, default=0)
     seed_number = db.Column(db.Integer)  # For "Seed 1", "Seed 2" placeholders
     bracket_position = db.Column(db.String(20))  # For "Winner Game 1" type placeholders
@@ -82,17 +83,23 @@ class TeamSeason(db.Model):
     @property
     def computed_display_name(self):
         """
-        Get the display name based on current state:
-        1. team_name if set
-        2. Look for matching team with team_name in same league/season (cached)
-        3. display_name (placeholder) otherwise
+        Get the display name for PUBLIC views:
+        1. team_name if set (e.g., "Thunderbolts")
+        2. coach_name if set (e.g., "Smith")
+        3. Look for matching team with name in same league/season (cached)
+        4. display_name (placeholder) otherwise
         """
+        # Prefer team/mascot name for public display
         if self.team_name:
             return self.team_name
 
-        # If this team doesn't have a team_name, look for a matching team that does
+        # Fall back to coach name
+        if self.coach_name:
+            return self.coach_name
+
+        # If this team doesn't have a name, look for a matching team that does
         # This handles the case where games are linked to placeholder teams
-        # but actual teams with coach names exist separately
+        # but actual teams with names exist separately
         if self.display_name and self.league and self.year is not None and self.is_spring is not None:
             cache_key = (self.display_name, self.league, self.year, self.is_spring)
 
@@ -102,10 +109,16 @@ class TeamSeason(db.Model):
                     TeamSeason.league == self.league,
                     TeamSeason.year == self.year,
                     TeamSeason.is_spring == self.is_spring,
-                    TeamSeason.team_name.isnot(None),
+                    db.or_(
+                        TeamSeason.team_name.isnot(None),
+                        TeamSeason.coach_name.isnot(None)
+                    ),
                     TeamSeason.team_ID != self.team_ID
                 ).first()
-                TeamSeason._team_name_cache[cache_key] = matching_team.team_name if matching_team else None
+                if matching_team:
+                    TeamSeason._team_name_cache[cache_key] = matching_team.team_name or matching_team.coach_name
+                else:
+                    TeamSeason._team_name_cache[cache_key] = None
 
             cached_name = TeamSeason._team_name_cache.get(cache_key)
             if cached_name:
@@ -117,6 +130,20 @@ class TeamSeason(db.Model):
     def clear_name_cache(cls):
         """Clear the team name lookup cache."""
         cls._team_name_cache = {}
+
+    @property
+    def scheduler_display_name(self):
+        """
+        Get the display name for SCHEDULER/ADMIN use (prefers coach name).
+        1. coach_name if set (e.g., "Smith")
+        2. team_name if set (e.g., "Thunderbolts")
+        3. display_name (placeholder)
+        """
+        if self.coach_name:
+            return self.coach_name
+        if self.team_name:
+            return self.team_name
+        return self.display_name
 
     @property
     def display_name_with_org(self):
