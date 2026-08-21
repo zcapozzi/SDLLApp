@@ -305,20 +305,30 @@ def edit_partner(id):
 @umpire_coordinator_required
 def delegation():
     """View delegation rules for all leagues."""
-    leagues = League.get_all_active()
+    all_leagues = League.get_all_active()
     rules = {}
 
-    for league in leagues:
+    # Separate leagues with umpires from those without
+    leagues_with_umpires = []
+    leagues_no_umpires = []
+
+    for league in all_leagues:
         rule = UmpireDelegationRule.get_for_league(league.ID)
         if rule:
             rules[league.ID] = rule
+
+        if league.needs_umpires:
+            leagues_with_umpires.append(league)
+        else:
+            leagues_no_umpires.append(league)
 
     # Get partners for reference
     partners = UmpirePartner.get_active()
 
     return render_template(
         'umpires/delegation.html',
-        leagues=leagues,
+        leagues=leagues_with_umpires,
+        leagues_no_umpires=leagues_no_umpires,
         rules=rules,
         partners=partners
     )

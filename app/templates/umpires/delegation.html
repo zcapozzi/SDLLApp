@@ -22,10 +22,11 @@
         <thead>
             <tr>
                 <th>League</th>
+                <th style="text-align: center; width: 12%;">Umpires</th>
                 <th style="text-align: center; width: 15%;">Academy (SDLL)</th>
                 <th style="text-align: center; width: 15%;">Diamond</th>
                 <th style="text-align: center; width: 15%;">Dynamic</th>
-                <th style="text-align: center; width: 15%;">Total</th>
+                <th style="text-align: center; width: 10%;">Total</th>
                 <th style="width: 80px;"></th>
             </tr>
         </thead>
@@ -34,6 +35,11 @@
             {% set rule = rules.get(league.ID) %}
             <tr id="league-{{ league.ID }}">
                 <td><strong>{{ league.display_name }}</strong></td>
+                <td style="text-align: center;">
+                    <span class="badge" style="background: #3498db; color: white;">
+                        {{ league.umpire_count_display }}
+                    </span>
+                </td>
                 <td style="text-align: center;">
                     {% if rule %}
                     {{ rule.academy_pct }}%
@@ -75,6 +81,36 @@
         </tbody>
     </table>
 </div>
+
+{% if leagues_no_umpires %}
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0; margin-bottom: 15px;">No Umpires Required</h3>
+    <p style="color: var(--text-muted); margin-bottom: 15px; font-size: 14px;">
+        These leagues do not use umpires and have no delegation rules.
+        To change this, update the <a href="{{ url_for('leagues.umpire_patterns') }}">Umpire Patterns</a> settings.
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>League</th>
+                <th>Pitch Type</th>
+                <th style="text-align: center;">Umpires</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for league in leagues_no_umpires %}
+            <tr id="league-{{ league.ID }}">
+                <td><strong>{{ league.display_name }}</strong></td>
+                <td>{{ league.pitch_type_display }}</td>
+                <td style="text-align: center;">
+                    <span class="badge" style="background: #95a5a6; color: white;">None</span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
 
 <div class="card" style="margin-top: 20px;">
     <h3 style="margin-top: 0;">Understanding Delegation</h3>
