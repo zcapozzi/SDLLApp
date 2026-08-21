@@ -12,6 +12,8 @@ class League(db.Model):
     active = db.Column(db.SmallInteger, default=1)
     display_name = db.Column(db.String(100))        # Spring/canonical name
     fall_display_name = db.Column(db.String(100))   # Fall name (NULL = use display_name)
+    sport = db.Column(db.String(20), default='baseball')  # 'baseball' or 'softball'
+    age_rank = db.Column(db.SmallInteger)  # Age ranking within sport (1=youngest, 2, 3... oldest)
     pitch_type = db.Column(db.String(20), default='kid_pitch')  # tee_ball, machine_pitch, kid_pitch
     sort_order = db.Column(db.Integer, default=100)  # Lower numbers sort first (youngest to oldest)
     only_assignr_groups = db.Column(db.String(1000))
@@ -36,6 +38,15 @@ class League(db.Model):
     requires_kid_pitch = db.Column(db.Boolean, default=False)  # True for AA+
     uses_large_field = db.Column(db.Boolean, default=False)  # True for AAA/Majors
 
+    # Sport constants
+    SPORT_BASEBALL = 'baseball'
+    SPORT_SOFTBALL = 'softball'
+
+    SPORTS = [
+        ('baseball', 'Baseball'),
+        ('softball', 'Softball'),
+    ]
+
     # Pitch type constants
     PITCH_TEE_BALL = 'tee_ball'
     PITCH_MACHINE = 'machine_pitch'
@@ -46,6 +57,47 @@ class League(db.Model):
         ('machine_pitch', 'Machine Pitch'),
         ('kid_pitch', 'Kid Pitch'),
     ]
+
+    @property
+    def is_baseball(self):
+        """Check if this is a baseball league."""
+        return self.sport == self.SPORT_BASEBALL or self.sport is None
+
+    @property
+    def is_softball(self):
+        """Check if this is a softball league."""
+        return self.sport == self.SPORT_SOFTBALL
+
+    @property
+    def sport_display(self):
+        """Human-readable sport name."""
+        if self.sport == self.SPORT_SOFTBALL:
+            return 'Softball'
+        return 'Baseball'
+
+    @classmethod
+    def get_by_sport(cls, sport):
+        """Get all active leagues for a sport, ordered by age_rank."""
+        return cls.query.filter_by(
+            active=1,
+            sport=sport
+        ).order_by(cls.age_rank, cls.sort_order, cls.display_name).all()
+
+    @classmethod
+    def get_baseball_leagues(cls):
+        """Get all active baseball leagues, ordered by age."""
+        return cls.query.filter(
+            cls.active == 1,
+            (cls.sport == cls.SPORT_BASEBALL) | (cls.sport.is_(None))
+        ).order_by(cls.age_rank, cls.sort_order, cls.display_name).all()
+
+    @classmethod
+    def get_softball_leagues(cls):
+        """Get all active softball leagues, ordered by age."""
+        return cls.query.filter_by(
+            active=1,
+            sport=cls.SPORT_SOFTBALL
+        ).order_by(cls.age_rank, cls.sort_order, cls.display_name).all()
 
     def __repr__(self):
         return f'<League {self.display_name}>'
