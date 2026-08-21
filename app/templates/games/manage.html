@@ -256,7 +256,7 @@
             <!-- Home Team -->
             <div class="form-group">
                 <label>Home Team</label>
-                <select name="home_id" id="edit-home-team" class="form-control">
+                <select name="home_id" id="edit-home-team" class="form-control" onchange="setEditLeagueFromTeam(this)">
                     <option value="">-- Select --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
@@ -269,7 +269,7 @@
             <!-- Away Team (hidden for practice) -->
             <div class="form-group" id="away-team-group">
                 <label>Away Team</label>
-                <select name="away_id" id="edit-away-team" class="form-control">
+                <select name="away_id" id="edit-away-team" class="form-control" onchange="setEditLeagueFromTeam(this)">
                     <option value="">-- None (Practice) --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
@@ -374,7 +374,7 @@
             <!-- Home Team -->
             <div class="form-group">
                 <label>Home Team</label>
-                <select name="home_id" id="create-home-team" class="form-control">
+                <select name="home_id" id="create-home-team" class="form-control" onchange="setCreateLeagueFromTeam(this)">
                     <option value="">-- Select (optional) --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
@@ -387,7 +387,7 @@
             <!-- Away Team -->
             <div class="form-group" id="create-away-team-group">
                 <label>Away Team</label>
-                <select name="away_id" id="create-away-team" class="form-control">
+                <select name="away_id" id="create-away-team" class="form-control" onchange="setCreateLeagueFromTeam(this)">
                     <option value="">-- None (Practice) --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
@@ -501,6 +501,32 @@ function toggleCreateAwayTeam() {
         document.getElementById('create-away-team').value = '';
     } else {
         awayGroup.style.display = 'block';
+    }
+}
+
+function setCreateLeagueFromTeam(selectElement) {
+    // Auto-set league dropdown in create modal based on selected team's league
+    var selectedOption = selectElement.options[selectElement.selectedIndex];
+    var teamLeague = selectedOption ? selectedOption.dataset.league : null;
+
+    if (teamLeague) {
+        var leagueSelect = document.getElementById('create-league');
+        if (leagueSelect && leagueSelect.value !== teamLeague) {
+            leagueSelect.value = teamLeague;
+        }
+    }
+}
+
+function setEditLeagueFromTeam(selectElement) {
+    // Auto-set league dropdown in edit modal based on selected team's league
+    var selectedOption = selectElement.options[selectElement.selectedIndex];
+    var teamLeague = selectedOption ? selectedOption.dataset.league : null;
+
+    if (teamLeague) {
+        var leagueSelect = document.getElementById('edit-league');
+        if (leagueSelect && leagueSelect.value !== teamLeague) {
+            leagueSelect.value = teamLeague;
+        }
     }
 }
 

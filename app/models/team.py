@@ -133,13 +133,21 @@ class TeamSeason(db.Model):
 
         Returns: "AA Graves" instead of just "Graves"
         For external teams: "AA Graves (Bull City)"
+
+        Avoids duplication if name already starts with league.
         """
         name = self.computed_display_name
         league_prefix = self.league or ''
 
+        # Avoid duplication if name already starts with the league
+        if league_prefix and name.startswith(league_prefix):
+            prefixed_name = name
+        else:
+            prefixed_name = f"{league_prefix} {name}".strip()
+
         if self.is_external and self.organization:
-            return f"{league_prefix} {name} ({self.organization.short_name or self.organization.display_name})"
-        return f"{league_prefix} {name}".strip()
+            return f"{prefixed_name} ({self.organization.short_name or self.organization.display_name})"
+        return prefixed_name
 
     def get_practice_days(self, league_season=None):
         """Get the effective practice days for this team.

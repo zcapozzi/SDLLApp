@@ -614,7 +614,7 @@
 
             <div class="form-group" id="add-event-home-group">
                 <label id="add-event-home-label">Home Team</label>
-                <select id="add-event-home-team" class="form-control">
+                <select id="add-event-home-team" class="form-control" onchange="setLeagueFromTeam(this)">
                     <option value="">-- Select --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
@@ -626,7 +626,7 @@
 
             <div class="form-group" id="add-event-away-group">
                 <label>Away Team</label>
-                <select id="add-event-away-team" class="form-control">
+                <select id="add-event-away-team" class="form-control" onchange="setLeagueFromTeam(this)">
                     <option value="">-- Select --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
@@ -847,6 +847,19 @@ function toggleCreateAwayTeam() {
     }
 }
 
+function setCreateLeagueFromTeam(selectElement) {
+    // Auto-set league dropdown in create modal based on selected team's league
+    var selectedOption = selectElement.options[selectElement.selectedIndex];
+    var teamLeague = selectedOption ? selectedOption.dataset.league : null;
+
+    if (teamLeague) {
+        var leagueSelect = document.getElementById('create-league');
+        if (leagueSelect && leagueSelect.value !== teamLeague) {
+            leagueSelect.value = teamLeague;
+        }
+    }
+}
+
 var createModal = document.getElementById('create-modal');
 if (createModal) {
     createModal.addEventListener('click', function(e) {
@@ -1026,6 +1039,20 @@ function updateTeamOptions() {
     });
 }
 
+function setLeagueFromTeam(selectElement) {
+    // Auto-set league dropdown based on selected team's league
+    var selectedOption = selectElement.options[selectElement.selectedIndex];
+    var teamLeague = selectedOption ? selectedOption.dataset.league : null;
+
+    if (teamLeague) {
+        var leagueSelect = document.getElementById('add-event-league');
+        if (leagueSelect && leagueSelect.value !== teamLeague) {
+            leagueSelect.value = teamLeague;
+            updateTeamOptions();  // Re-filter to show only teams from this league
+        }
+    }
+}
+
 function submitAddEvent(e) {
     e.preventDefault();
 
@@ -1162,7 +1189,7 @@ addEventModal.addEventListener('click', function(e) {
             <!-- Home Team -->
             <div class="form-group">
                 <label>Home Team</label>
-                <select name="home_id" id="create-home-team" class="form-control">
+                <select name="home_id" id="create-home-team" class="form-control" onchange="setCreateLeagueFromTeam(this)">
                     <option value="">-- Select (optional) --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
@@ -1175,7 +1202,7 @@ addEventModal.addEventListener('click', function(e) {
             <!-- Away Team -->
             <div class="form-group" id="create-away-team-group">
                 <label>Away Team</label>
-                <select name="away_id" id="create-away-team" class="form-control">
+                <select name="away_id" id="create-away-team" class="form-control" onchange="setCreateLeagueFromTeam(this)">
                     <option value="">-- None (Practice) --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
