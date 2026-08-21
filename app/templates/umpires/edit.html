@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Umpire - {{ profile.full_name }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.view', id=profile.id) }}">&larr; Back to Profile</a>
+</div>
+
+<h1>Edit Umpire: {{ profile.full_name }}</h1>
+
+<div class="card">
+    <form method="POST">
+        <h3 style="margin-top: 0;">Basic Information</h3>
+
+        <div class="form-group">
+            <label for="name">Full Name</label>
+            <input type="text" name="name" id="name" class="form-control"
+                   value="{{ profile.user.name }}" required>
+        </div>
+
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" class="form-control" disabled
+                   value="{{ profile.user.email }}">
+            <p style="font-size: 12px; color: var(--text-muted);">
+                Email cannot be changed (used for login)
+            </p>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="form-group">
+                <label for="phone">Phone</label>
+                <input type="tel" name="phone" id="phone" class="form-control"
+                       value="{{ profile.user.phone or '' }}">
+            </div>
+
+            <div class="form-group">
+                <label for="birth_date">Birth Date</label>
+                <input type="date" name="birth_date" id="birth_date" class="form-control"
+                       value="{{ profile.birth_date.isoformat() if profile.birth_date else '' }}">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="status">Status</label>
+            <select name="status" id="status" class="form-control" style="width: auto;">
+                <option value="active" {{ 'selected' if profile.status == 'active' }}>Active</option>
+                <option value="inactive" {{ 'selected' if profile.status == 'inactive' }}>Inactive</option>
+                <option value="retired" {{ 'selected' if profile.status == 'retired' }}>Retired</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="is_kid_pitch_eligible"
+                       {{ 'checked' if profile.is_kid_pitch_eligible }}>
+                Kid-Pitch Eligible
+            </label>
+            <p style="font-size: 12px; color: var(--text-muted);">
+                Can umpire kid-pitch leagues (AA, AAA, Minors, etc.)
+            </p>
+        </div>
+
+        <hr style="margin: 20px 0;">
+
+        <h3>Parent/Guardian Contacts</h3>
+        <p style="color: var(--text-muted); margin-bottom: 15px;">
+            Required for umpires under 18.
+            {% if profile.age %}(Current age: {{ profile.age }}){% endif %}
+        </p>
+
+        <div class="form-group">
+            <label for="parent_name">Parent Name</label>
+            <input type="text" name="parent_name" id="parent_name" class="form-control"
+                   value="{{ profile.parent_name or '' }}">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="form-group">
+                <label for="parent_email">Parent Email</label>
+                <input type="email" name="parent_email" id="parent_email" class="form-control"
+                       value="{{ profile.parent_email or '' }}">
+            </div>
+
+            <div class="form-group">
+                <label for="parent_phone">Parent Phone</label>
+                <input type="tel" name="parent_phone" id="parent_phone" class="form-control"
+                       value="{{ profile.parent_phone or '' }}">
+            </div>
+        </div>
+
+        <hr style="margin: 20px 0;">
+
+        <div style="display: flex; gap: 10px;">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <a href="{{ url_for('umpires.view', id=profile.id) }}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}My Profile{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpire_portal.dashboard') }}">&larr; Back to Dashboard</a>
+</div>
+
+<h1>My Profile</h1>
+
+<div class="card">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+        <div>
+            <h3 style="margin-top: 0;">Contact Information</h3>
+
+            <div style="margin-bottom: 15px;">
+                <label style="color: var(--text-muted); font-size: 12px;">Name</label>
+                <div style="font-size: 16px;">{{ profile.full_name }}</div>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="color: var(--text-muted); font-size: 12px;">Email</label>
+                <div style="font-size: 16px;">{{ profile.email }}</div>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="color: var(--text-muted); font-size: 12px;">Phone</label>
+                <div style="font-size: 16px;">{{ profile.phone or '-' }}</div>
+            </div>
+
+            {% if profile.is_minor %}
+            <hr style="margin: 20px 0;">
+            <h3>Parent/Guardian</h3>
+
+            <div style="margin-bottom: 15px;">
+                <label style="color: var(--text-muted); font-size: 12px;">Parent Name</label>
+                <div style="font-size: 16px;">{{ profile.parent_name or '-' }}</div>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="color: var(--text-muted); font-size: 12px;">Parent Email</label>
+                <div style="font-size: 16px;">{{ profile.parent_email or '-' }}</div>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="color: var(--text-muted); font-size: 12px;">Parent Phone</label>
+                <div style="font-size: 16px;">{{ profile.parent_phone or '-' }}</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div>
+            <h3 style="margin-top: 0;">Umpire Status</h3>
+
+            <div style="margin-bottom: 15px;">
+                <label style="color: var(--text-muted); font-size: 12px;">Status</label>
+                <div>
+                    {% if profile.status == 'active' %}
+                    <span class="badge badge-spring">Active</span>
+                    {% elif profile.status == 'inactive' %}
+                    <span class="badge" style="background: #ffc107; color: #000;">Inactive</span>
+                    {% else %}
+                    <span class="badge" style="background: #999;">{{ profile.status }}</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="color: var(--text-muted); font-size: 12px;">Age</label>
+                <div style="font-size: 16px;">{{ profile.age or 'Not specified' }}</div>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="color: var(--text-muted); font-size: 12px;">Kid-Pitch Eligible</label>
+                <div>
+                    {% if profile.is_kid_pitch_eligible %}
+                    <span style="color: var(--success-color);">Yes</span>
+                    {% else %}
+                    <span style="color: var(--text-muted);">No</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="color: var(--text-muted); font-size: 12px;">Member Since</label>
+                <div style="font-size: 16px;">{{ profile.created_at.strftime('%B %Y') }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">Need to Update Your Information?</h3>
+    <p style="color: var(--text-muted);">
+        Contact the umpire coordinator to update your profile information:
+    </p>
+    <ul style="color: var(--text-muted);">
+        <li>Phone number changes</li>
+        <li>Email changes (requires new login)</li>
+        <li>Kid-pitch certification</li>
+        <li>Availability preferences</li>
+    </ul>
+</div>
+{% endblock %}

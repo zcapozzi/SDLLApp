@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Umpire Partners{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.index') }}">&larr; Back to Umpires</a>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Umpire Partners</h1>
+    <a href="{{ url_for('umpires.add_partner') }}" class="btn btn-primary">Add Partner</a>
+</div>
+
+<p style="color: var(--text-muted); margin-bottom: 20px;">
+    External umpire organizations that provide umpires for games.
+</p>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Code</th>
+                <th>Contact</th>
+                <th>Notification</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for partner in partners %}
+            <tr>
+                <td><strong>{{ partner.name }}</strong></td>
+                <td><code>{{ partner.short_code }}</code></td>
+                <td>
+                    {% if partner.contact_name %}
+                    {{ partner.contact_name }}<br>
+                    <span style="font-size: 12px; color: var(--text-muted);">
+                        {{ partner.contact_email or '' }}
+                    </span>
+                    {% else %}
+                    <span style="color: var(--text-muted);">-</span>
+                    {% endif %}
+                </td>
+                <td>{{ partner.notification_preference }}</td>
+                <td>
+                    {% if partner.active %}
+                    <span class="badge badge-spring">Active</span>
+                    {% else %}
+                    <span class="badge" style="background: #999;">Inactive</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('umpires.edit_partner', id=partner.id) }}"
+                       class="btn btn-outline" style="padding: 3px 10px;">Edit</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" style="text-align: center; color: var(--text-muted);">
+                    No partners configured.
+                    <a href="{{ url_for('umpires.add_partner') }}">Add one</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">About Partners</h3>
+    <ul style="color: var(--text-muted); line-height: 1.8;">
+        <li>Partners are external organizations that provide umpires (e.g., Diamond Sports Officials)</li>
+        <li>When a game is delegated to a partner, they handle umpire assignment</li>
+        <li>Configure delegation percentages in <a href="{{ url_for('umpires.delegation') }}">Delegation Rules</a></li>
+    </ul>
+</div>
+{% endblock %}

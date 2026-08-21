@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Umpire Schedule{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.index') }}">&larr; Back to Umpires</a>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Umpire Schedule</h1>
+
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('umpires.schedule', view='upcoming') }}"
+           class="btn {{ 'btn-primary' if view_type == 'upcoming' else 'btn-outline' }}">
+            All Upcoming
+        </a>
+        <a href="{{ url_for('umpires.schedule', view='unassigned') }}"
+           class="btn {{ 'btn-primary' if view_type == 'unassigned' else 'btn-outline' }}">
+            Unassigned
+        </a>
+        <a href="{{ url_for('umpires.schedule', view='partner') }}"
+           class="btn {{ 'btn-primary' if view_type == 'partner' else 'btn-outline' }}">
+            Partner Games
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    {% if games %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date/Time</th>
+                <th>Game</th>
+                <th>Field</th>
+                <th>Assigned To</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in games %}
+            {% set assignments = game_assignments.get(game.ID, []) %}
+            <tr>
+                <td>
+                    <strong>{{ game.game_date.strftime('%a, %b %d') }}</strong><br>
+                    <span style="color: var(--text-muted);">{{ game.game_date.strftime('%I:%M %p') }}</span>
+                </td>
+                <td>
+                    {% if game.home_team and game.away_team %}
+                    {{ game.home_team.name }} vs {{ game.away_team.name }}
+                    {% else %}
+                    <span style="color: var(--text-muted);">TBD</span>
+                    {% endif %}
+                    <br>
+                    <span style="font-size: 12px; color: var(--text-muted);">
+                        {{ game.league.upper() if game.league else 'TBD' }} - {{ game.game_type }}
+                    </span>
+                </td>
+                <td>{{ game.field.name if game.field else 'TBD' }}</td>
+                <td>
+                    {% if assignments %}
+                    {% for a in assignments %}
+                    <div style="margin-bottom: 3px;">
+                        {% if a.umpire %}
+                        {{ a.umpire.full_name }}
+                        {% elif a.partner %}
+                        <span class="badge badge-fall">{{ a.partner.short_code }}</span>
+                        {% endif %}
+                        <span style="font-size: 11px; color: var(--text-muted);">({{ a.role }})</span>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <span style="color: #c33;">Unassigned</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if assignments %}
+                    {% for a in assignments %}
+                    <span class="badge {{ 'badge-spring' if a.status == 'confirmed' else '' }}"
+                          style="{{ 'background: #ffc107; color: #000;' if a.status == 'assigned' else '' }}">
+                        {{ a.status }}
+                    </span>
+                    {% endfor %}
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: var(--text-muted); text-align: center; padding: 40px;">
+        {% if view_type == 'unassigned' %}
+        All upcoming games have umpires assigned.
+        {% elif view_type == 'partner' %}
+        No games currently assigned to partners.
+        {% else %}
+        No upcoming games found.
+        {% endif %}
+    </p>
+    {% endif %}
+</div>
+{% endblock %}

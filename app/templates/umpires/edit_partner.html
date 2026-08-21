@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Partner - {{ partner.name }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.partners') }}">&larr; Back to Partners</a>
+</div>
+
+<h1>Edit Partner: {{ partner.name }}</h1>
+
+<div class="card">
+    <form method="POST">
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+            <div class="form-group">
+                <label for="name">Organization Name <span style="color: #c33;">*</span></label>
+                <input type="text" name="name" id="name" class="form-control"
+                       value="{{ partner.name }}" required>
+            </div>
+
+            <div class="form-group">
+                <label for="short_code">Short Code <span style="color: #c33;">*</span></label>
+                <input type="text" name="short_code" id="short_code" class="form-control"
+                       value="{{ partner.short_code }}" maxlength="20" required
+                       style="text-transform: uppercase;">
+            </div>
+        </div>
+
+        <hr style="margin: 20px 0;">
+        <h3>Contact Information</h3>
+
+        <div class="form-group">
+            <label for="contact_name">Contact Name</label>
+            <input type="text" name="contact_name" id="contact_name" class="form-control"
+                   value="{{ partner.contact_name or '' }}">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="form-group">
+                <label for="contact_email">Contact Email</label>
+                <input type="email" name="contact_email" id="contact_email" class="form-control"
+                       value="{{ partner.contact_email or '' }}">
+            </div>
+
+            <div class="form-group">
+                <label for="contact_phone">Contact Phone</label>
+                <input type="tel" name="contact_phone" id="contact_phone" class="form-control"
+                       value="{{ partner.contact_phone or '' }}">
+            </div>
+        </div>
+
+        <hr style="margin: 20px 0;">
+
+        <div class="form-group">
+            <label for="notification_preference">Notification Preference</label>
+            <select name="notification_preference" id="notification_preference" class="form-control" style="width: auto;">
+                <option value="weekly" {{ 'selected' if partner.notification_preference == 'weekly' }}>Weekly Summary</option>
+                <option value="daily" {{ 'selected' if partner.notification_preference == 'daily' }}>Daily Updates</option>
+                <option value="realtime" {{ 'selected' if partner.notification_preference == 'realtime' }}>Real-time (each assignment)</option>
+                <option value="none" {{ 'selected' if partner.notification_preference == 'none' }}>No notifications</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="active" {{ 'checked' if partner.active }}>
+                Active
+            </label>
+            <p style="font-size: 12px; color: var(--text-muted);">
+                Inactive partners won't receive new game assignments
+            </p>
+        </div>
+
+        <hr style="margin: 20px 0;">
+
+        <div style="display: flex; gap: 10px;">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <a href="{{ url_for('umpires.partners') }}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

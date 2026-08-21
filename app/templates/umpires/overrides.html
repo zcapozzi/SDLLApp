@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Delegation Overrides{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.delegation') }}">&larr; Back to Delegation Rules</a>
+</div>
+
+<h1>Override Keywords</h1>
+
+<p style="color: var(--text-muted); margin-bottom: 20px;">
+    Keywords that force specific routing regardless of percentage rules.
+    If a game description contains the keyword, it routes to the specified target.
+</p>
+
+<div class="card">
+    <h3 style="margin-top: 0;">Add Override</h3>
+    <form method="POST" action="{{ url_for('umpires.add_override') }}">
+        <div style="display: grid; grid-template-columns: 2fr 1fr 2fr auto; gap: 15px; align-items: end;">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="keyword">Keyword</label>
+                <input type="text" name="keyword" id="keyword" class="form-control"
+                       placeholder="e.g., Young Umpire" required>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="target_type">Route To</label>
+                <select name="target_type" id="target_type" class="form-control" onchange="togglePartnerSelect()">
+                    <option value="academy">Academy (SDLL)</option>
+                    <option value="partner">Specific Partner</option>
+                </select>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;" id="partner-select-group" style="display: none;">
+                <label for="partner_id">Partner</label>
+                <select name="partner_id" id="partner_id" class="form-control">
+                    <option value="">Select partner...</option>
+                    {% for partner in partners %}
+                    <option value="{{ partner.id }}">{{ partner.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;" id="description-group">
+                <label for="description">Description (optional)</label>
+                <input type="text" name="description" id="description" class="form-control"
+                       placeholder="Why this override exists">
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="height: 40px;">Add</button>
+        </div>
+    </form>
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">Active Overrides</h3>
+    {% if overrides %}
+    <table>
+        <thead>
+            <tr>
+                <th>Keyword</th>
+                <th>Routes To</th>
+                <th>Description</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for override in overrides %}
+            <tr>
+                <td><code style="background: #f5f5f5; padding: 3px 8px; border-radius: 3px;">{{ override.keyword }}</code></td>
+                <td>
+                    {% if override.target_type == 'academy' %}
+                    <span class="badge badge-spring">Academy</span>
+                    {% else %}
+                    <span class="badge badge-fall">{{ override.partner.name if override.partner else 'Partner' }}</span>
+                    {% endif %}
+                </td>
+                <td style="color: var(--text-muted);">{{ override.description or '-' }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('umpires.delete_override', id=override.id) }}"
+                          style="margin: 0;" onsubmit="return confirm('Delete this override?');">
+                        <button type="submit" class="btn btn-outline"
+                                style="padding: 3px 10px; color: #c33; border-color: #c33;">
+                            Remove
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: var(--text-muted); text-align: center; padding: 30px;">
+        No override keywords configured yet.
+    </p>
+    {% endif %}
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">Examples</h3>
+    <ul style="color: var(--text-muted); line-height: 1.8;">
+        <li><code>Young Umpire</code> → Academy: Games marked for youth umpires go to SDLL</li>
+        <li><code>Playoff</code> → Diamond: Important games go to more experienced partner</li>
+        <li><code>Machine Pitch</code> → Academy: Simple games good for training</li>
+    </ul>
+</div>
+
+<script>
+function togglePartnerSelect() {
+    const targetType = document.getElementById('target_type').value;
+    const partnerGroup = document.getElementById('partner-select-group');
+    const descGroup = document.getElementById('description-group');
+
+    if (targetType === 'partner') {
+        partnerGroup.style.display = 'block';
+        descGroup.style.display = 'none';
+    } else {
+        partnerGroup.style.display = 'none';
+        descGroup.style.display = 'block';
+    }
+}
+// Initialize on load
+togglePartnerSelect();
+</script>
+{% endblock %}

@@ -4,7 +4,73 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Implementing Umpire Scheduling & Notification System (Phase 1-2 MVP complete).
+Last session: Fixed missing umpire templates causing production 500 errors.
+
+---
+
+## Session: August 21, 2026 (Evening) - Missing Umpire Templates Fix
+
+### Problem Diagnosed
+Production errors #10, #11, #14 were caused by missing templates in the umpire system.
+
+### Error Analysis
+1. **Errors #10 & #11**: Table `sdll_umpire_profiles` error - User confirmed table exists, may have been transient or race condition
+2. **Error #14**: `umpires/edit_delegation.html` template not found - Routes referenced templates that were never created
+
+### Fix Applied
+Created 9 missing umpire templates:
+
+**Umpire Management (`app/templates/umpires/`)**:
+- `edit_delegation.html` - Edit delegation percentages for a league
+- `edit.html` - Edit umpire profile
+- `partners.html` - List umpire partner organizations
+- `add_partner.html` - Add new partner organization
+- `edit_partner.html` - Edit partner organization
+- `overrides.html` - Manage delegation override keywords
+- `schedule.html` - View upcoming games with umpire assignments
+
+**Umpire Portal (`app/templates/umpire_portal/`)**:
+- `history.html` - View past completed games
+- `pay.html` - View pay history and unpaid balance
+- `profile.html` - View own profile (read-only)
+
+### Templates Features
+- Consistent styling matching existing templates
+- Form validation (e.g., percentages sum to 100%)
+- Quick presets for common delegation configurations
+- Mobile-responsive design
+
+### Test Results
+Quick tests: 23 passed (database-independent tests)
+
+---
+
+## Session: August 21, 2026 (Continued) - Umpire System Navigation & Migration
+
+### Completed
+1. **Added Umpire Navigation Menu** (`app/templates/base.html`)
+   - Shows "Umpires ▾" dropdown for users with umpire role or umpire management permissions
+   - Umpire users see: My Dashboard, Available Games, My Games, Pay History
+   - Coordinators/admins see: Manage Umpires, Partners, Delegation Rules
+   - Conditional divider when user has both umpire and coordinator roles
+
+2. **Ran Database Migration Successfully**
+   - Fixed PRIMARY KEY issue on `sdll_leagues` table
+   - Added umpire configuration columns to leagues
+   - All 7 new tables created
+   - Seeded data: 2 partners (Diamond, Dynamic), delegation rules per league, override keywords
+
+3. **Fixed Test Fixture Cleanup**
+   - Added try/except around all factory fixture teardown code
+   - Prevents database lock timeout errors from causing test failures
+   - Affected fixtures: field_factory, team_factory, game_factory, field_slot_factory,
+     umpire_profile_factory, umpire_partner_factory, league_factory
+
+4. **Test Results**: 155 passed, 1 skipped
+
+### Commits Pushed
+- `be0839f`: Add Umpires nav menu for umpire role users
+- `e1b6278`: Fix test fixture teardown to handle lock timeouts gracefully
 
 ---
 

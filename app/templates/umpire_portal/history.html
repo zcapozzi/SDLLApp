@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Game History{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpire_portal.dashboard') }}">&larr; Back to Dashboard</a>
+</div>
+
+<h1>Game History</h1>
+
+<p style="color: var(--text-muted); margin-bottom: 20px;">
+    Your completed games from the past.
+</p>
+
+<div class="card">
+    {% if assignments %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Game</th>
+                <th>Field</th>
+                <th>Pay</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for assignment in assignments %}
+            <tr>
+                <td>
+                    <strong>{{ assignment.game.game_date.strftime('%a, %b %d') }}</strong><br>
+                    <span style="color: var(--text-muted);">{{ assignment.game.game_date.strftime('%I:%M %p') }}</span>
+                </td>
+                <td>
+                    {% if assignment.game.home_team and assignment.game.away_team %}
+                    {{ assignment.game.home_team.name }} vs {{ assignment.game.away_team.name }}
+                    {% else %}
+                    Game #{{ assignment.game.ID }}
+                    {% endif %}
+                    <br>
+                    <span style="font-size: 12px; color: var(--text-muted);">
+                        {{ assignment.game.league.upper() if assignment.game.league else 'TBD' }}
+                    </span>
+                </td>
+                <td>{{ assignment.game.field.name if assignment.game.field else 'TBD' }}</td>
+                <td>
+                    {% if assignment.base_pay %}
+                    ${{ "%.2f"|format(assignment.base_pay * (assignment.bonus_multiplier or 1)) }}
+                    {% if assignment.bonus_multiplier and assignment.bonus_multiplier > 1 %}
+                    <span style="font-size: 11px; color: var(--success-color);">({{ assignment.bonus_multiplier }}x)</span>
+                    {% endif %}
+                    {% else %}
+                    <span style="color: var(--text-muted);">-</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: var(--text-muted); text-align: center; padding: 40px;">
+        No completed games yet.
+    </p>
+    {% endif %}
+</div>
+{% endblock %}
