@@ -376,6 +376,40 @@ def send_notification(message):
         return False
 
 
+def _send_telegram_alert(error_id):
+    """Send Telegram alert that Claude Code is diagnosing an error."""
+    try:
+        import subprocess
+        script_path = r"C:\Users\zcapo\Documents\workspace\send_message.py"
+
+        if not os.path.exists(script_path):
+            return False
+
+        # Get error details for the message
+        error_file = PENDING_DIR / f"error_{error_id}.json"
+        error_info = ""
+        if error_file.exists():
+            try:
+                data = json.loads(error_file.read_text())
+                error_info = f"<BR>Type: {data.get('error_type', 'Unknown')}<BR>Path: {data.get('request_path', 'Unknown')}"
+            except:
+                pass
+
+        message = f"🔧 Claude Code Diagnosis Started<BR><BR>"
+        message += f"Error #{error_id} detected in production.{error_info}<BR><BR>"
+        message += f"A Claude Code window has been opened on your machine.<BR>"
+        message += f"Check your taskbar to interact with the diagnosis."
+
+        subprocess.Popen(
+            ['python', script_path, '-msg', message, '--telegram-alert'],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        return True
+    except Exception:
+        return False
+
+
 def poll_and_export():
     """Check for new errors and export them."""
     import pymysql
@@ -474,10 +508,11 @@ def invoke_claude_diagnosis(error_id):
     """
     Invoke Claude Code to diagnose and fix an error.
 
-    This runs the claude CLI with a prompt to diagnose the error,
-    create a regression test, implement a fix, and ask for approval.
+    Opens a NEW CMD window so the user can interact with Claude Code.
+    The scheduled task runs silently, but Claude needs user interaction.
     """
     import subprocess
+    import platform
 
     print(f"\n{'='*60}")
     print(f"Invoking Claude Code to diagnose error #{error_id}")
@@ -506,13 +541,45 @@ Follow the TDD workflow:
 Start by reading the error file."""
 
     try:
-        # Run claude CLI - this will be interactive
-        result = subprocess.run(
-            ['claude', prompt],
-            cwd=str(PROJECT_ROOT),
-            # Don't capture output - let it be interactive
-        )
-        return result.returncode == 0
+        if platform.system() == 'Windows':
+            # On Windows: Open a NEW visible CMD window with Claude
+            # The /K flag keeps the window open after Claude exits
+            # Title the window so user knows what it is
+            cmd = f'start "Claude Code - Error #{error_id}" cmd /K "cd /d {PROJECT_ROOT} && claude \\"{prompt}\\""'
+            subprocess.run(cmd, shell=True)
+
+            # Play a sound to alert the user (Windows system sound)
+            try:
+                import winsound
+                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+            except:
+                pass
+
+            # Send Telegram notification
+            _send_telegram_alert(error_id)
+
+            print(f"Opened Claude Code window for error #{error_id}")
+            print("Check your taskbar for the new CMD window!")
+        else:
+            # On Linux/Mac: Open a new terminal window
+            # This varies by system, try common terminal emulators
+            terminals = [
+                ['gnome-terminal', '--', 'claude', prompt],
+                ['xterm', '-e', 'claude', prompt],
+                ['open', '-a', 'Terminal', 'claude', prompt],  # macOS
+            ]
+            for term_cmd in terminals:
+                try:
+                    subprocess.Popen(term_cmd, cwd=str(PROJECT_ROOT))
+                    print(f"Opened terminal for error #{error_id}")
+                    break
+                except FileNotFoundError:
+                    continue
+            else:
+                # Fallback: run in current terminal
+                subprocess.run(['claude', prompt], cwd=str(PROJECT_ROOT))
+
+        return True
     except FileNotFoundError:
         print("ERROR: 'claude' CLI not found. Make sure Claude Code is installed.")
         print("Install with: npm install -g @anthropic-ai/claude-code")
