@@ -17,6 +17,7 @@
 <div class="card">
     <h3 style="margin-top: 0;">Add Override</h3>
     <form method="POST" action="{{ url_for('umpires.add_override') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div style="display: grid; grid-template-columns: 2fr 1fr 2fr auto; gap: 15px; align-items: end;">
             <div class="form-group" style="margin-bottom: 0;">
                 <label for="keyword">Keyword</label>
@@ -80,6 +81,7 @@
                 <td>
                     <form method="POST" action="{{ url_for('umpires.delete_override', id=override.id) }}"
                           style="margin: 0;" onsubmit="return confirm('Delete this override?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-outline"
                                 style="padding: 3px 10px; color: #c33; border-color: #c33;">
                             Remove

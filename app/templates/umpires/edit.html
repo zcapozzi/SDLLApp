@@ -11,6 +11,7 @@
 
 <div class="card">
     <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <h3 style="margin-top: 0;">Basic Information</h3>
 
         <div class="form-group">

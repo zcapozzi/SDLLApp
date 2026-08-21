@@ -11,6 +11,7 @@
 
 <div class="card">
     <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
             <div class="form-group">
                 <label for="name">Organization Name <span style="color: #c33;">*</span></label>
