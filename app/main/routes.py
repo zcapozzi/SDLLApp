@@ -42,9 +42,9 @@ def dashboard():
     # Get upcoming games
     upcoming_games = Game.get_upcoming(limit=10)
 
-    # Format game leagues for display (BUG: league could be None)
+    # Format game leagues for display
     for game in upcoming_games:
-        game.league_display = game.league.upper()
+        game.league_display = game.league.upper() if game.league else 'TBD'
 
     # Get season summary
     seasons = db.session.query(

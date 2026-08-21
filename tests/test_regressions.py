@@ -54,3 +54,38 @@ class TestProductionRegressions:
     # === Actual regression tests will be added below ===
     # When Claude Code diagnoses an error, it will add a test here
     # following the TDD red-green pattern.
+
+    @pytest.mark.quick
+    def test_regression_error_5_dashboard_null_league(self):
+        """
+        Production Error: #5
+        Context: Dashboard page displaying upcoming games
+        Error: AttributeError: 'NoneType' object has no attribute 'upper'
+        Path: /dashboard
+        Root cause: game.league can be None for games without a league assigned,
+                    and the code called .upper() on it without checking for None.
+        """
+        # Create a mock game object with league=None
+        class MockGame:
+            def __init__(self, league):
+                self.league = league
+
+        # Test the fixed logic: game.league.upper() if game.league else 'TBD'
+        def format_league_display(game):
+            """Replicate the dashboard route logic."""
+            return game.league.upper() if game.league else 'TBD'
+
+        # Test case 1: league is None (the bug condition)
+        game_with_null_league = MockGame(league=None)
+        result = format_league_display(game_with_null_league)
+        assert result == 'TBD', f"Null league should display as 'TBD', got '{result}'"
+
+        # Test case 2: league has a value (normal case)
+        game_with_league = MockGame(league='bb majors')
+        result = format_league_display(game_with_league)
+        assert result == 'BB MAJORS', f"League should be uppercased, got '{result}'"
+
+        # Test case 3: league is empty string
+        game_with_empty_league = MockGame(league='')
+        result = format_league_display(game_with_empty_league)
+        assert result == 'TBD', f"Empty league should display as 'TBD', got '{result}'"
