@@ -464,6 +464,63 @@ def poll_and_export():
         message += f"\nRun: claude 'Diagnose pending errors'"
         send_notification(message)
 
+    # Auto-invoke Claude Code to diagnose each error
+    if os.environ.get('AUTO_DIAGNOSE', '1') == '1':
+        for error in exportable:
+            invoke_claude_diagnosis(error['id'])
+
+
+def invoke_claude_diagnosis(error_id):
+    """
+    Invoke Claude Code to diagnose and fix an error.
+
+    This runs the claude CLI with a prompt to diagnose the error,
+    create a regression test, implement a fix, and ask for approval.
+    """
+    import subprocess
+
+    print(f"\n{'='*60}")
+    print(f"Invoking Claude Code to diagnose error #{error_id}")
+    print(f"{'='*60}\n")
+
+    # Update state to track diagnosis
+    state = load_state()
+    state['diagnoses_today'] = state.get('diagnoses_today', 0) + 1
+    state['last_diagnosis'] = datetime.now().isoformat()
+    save_state(state)
+
+    prompt = f"""Diagnose and fix production error #{error_id}.
+
+The error has been exported to errors/pending/error_{error_id}.md - read it first.
+
+Follow the TDD workflow:
+1. Read the error file and affected source code
+2. Create a regression test in tests/test_regressions.py that reproduces the bug
+3. Run the test to verify it FAILS (confirming the bug)
+4. Implement a minimal fix
+5. Run the test to verify it PASSES
+6. Run quick tests to check for regressions: python run_tests.py --quick
+7. Ask me for approval before committing
+8. After approval, commit both the fix AND the test, then push to production
+
+Start by reading the error file."""
+
+    try:
+        # Run claude CLI - this will be interactive
+        result = subprocess.run(
+            ['claude', prompt],
+            cwd=str(PROJECT_ROOT),
+            # Don't capture output - let it be interactive
+        )
+        return result.returncode == 0
+    except FileNotFoundError:
+        print("ERROR: 'claude' CLI not found. Make sure Claude Code is installed.")
+        print("Install with: npm install -g @anthropic-ai/claude-code")
+        return False
+    except Exception as e:
+        print(f"ERROR invoking Claude Code: {e}")
+        return False
+
 
 def show_status():
     """Show current state and limits."""
@@ -538,6 +595,8 @@ def main():
     parser.add_argument('--status', action='store_true', help='Show current state')
     parser.add_argument('--resume', action='store_true', help='Clear PAUSED state')
     parser.add_argument('--list', action='store_true', help='List pending errors')
+    parser.add_argument('--no-diagnose', action='store_true',
+                        help='Export errors but do not auto-invoke Claude Code')
     args = parser.parse_args()
 
     if args.status:
@@ -547,6 +606,9 @@ def main():
     elif args.list:
         list_pending()
     else:
+        # Set environment variable to control auto-diagnosis
+        if args.no_diagnose:
+            os.environ['AUTO_DIAGNOSE'] = '0'
         poll_and_export()
 
 
