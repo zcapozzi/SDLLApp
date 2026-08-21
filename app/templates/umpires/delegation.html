@@ -22,52 +22,62 @@
         <thead>
             <tr>
                 <th>League</th>
-                <th style="text-align: center; width: 12%;">Umpires</th>
+                <th style="text-align: center; width: 80px;" title="Number of umpires">Umps</th>
                 <th style="text-align: center; width: 15%;">Academy (SDLL)</th>
                 <th style="text-align: center; width: 15%;">Diamond</th>
                 <th style="text-align: center; width: 15%;">Dynamic</th>
-                <th style="text-align: center; width: 10%;">Total</th>
                 <th style="width: 80px;"></th>
             </tr>
         </thead>
         <tbody>
             {% for league in leagues %}
             {% set rule = rules.get(league.ID) %}
+            {% set ump_count = league.umpire_count or 0 %}
             <tr id="league-{{ league.ID }}">
-                <td><strong>{{ league.display_name }}</strong></td>
+                <td>
+                    <strong>{{ league.display_name }}</strong>
+                    {% if rule and rule.total_pct != 100 %}
+                    <span class="text-danger" title="Percentages don't sum to 100%"> !</span>
+                    {% endif %}
+                </td>
                 <td style="text-align: center;">
-                    <span class="badge" style="background: #3498db; color: white;">
-                        {{ league.umpire_count_display }}
+                    <span class="umpire-icons" title="{{ ump_count }} umpire{{ 's' if ump_count != 1 else '' }}">
+                        {% for i in range(ump_count) %}
+                        <span class="ump-icon">&#9679;</span>
+                        {% endfor %}
                     </span>
                 </td>
                 <td style="text-align: center;">
                     {% if rule %}
-                    {{ rule.academy_pct }}%
+                        {% if rule.academy_pct > 0 %}
+                        <strong>{{ rule.academy_pct }}%</strong>
+                        {% else %}
+                        <span class="pct-zero">-</span>
+                        {% endif %}
                     {% else %}
-                    <span style="color: var(--text-muted);">-</span>
+                    <span class="pct-zero">-</span>
                     {% endif %}
                 </td>
                 <td style="text-align: center;">
                     {% if rule %}
-                    {{ rule.diamond_pct }}%
+                        {% if rule.diamond_pct > 0 %}
+                        <strong>{{ rule.diamond_pct }}%</strong>
+                        {% else %}
+                        <span class="pct-zero">-</span>
+                        {% endif %}
                     {% else %}
-                    <span style="color: var(--text-muted);">-</span>
+                    <span class="pct-zero">-</span>
                     {% endif %}
                 </td>
                 <td style="text-align: center;">
                     {% if rule %}
-                    {{ rule.dynamic_pct }}%
+                        {% if rule.dynamic_pct > 0 %}
+                        <strong>{{ rule.dynamic_pct }}%</strong>
+                        {% else %}
+                        <span class="pct-zero">-</span>
+                        {% endif %}
                     {% else %}
-                    <span style="color: var(--text-muted);">-</span>
-                    {% endif %}
-                </td>
-                <td style="text-align: center;">
-                    {% if rule %}
-                    <span class="{{ 'text-success' if rule.total_pct == 100 else 'text-danger' }}">
-                        {{ rule.total_pct }}%
-                    </span>
-                    {% else %}
-                    <span style="color: var(--text-muted);">-</span>
+                    <span class="pct-zero">-</span>
                     {% endif %}
                 </td>
                 <td>
@@ -124,6 +134,15 @@
 
 <style>
 .text-success { color: var(--success-color); }
-.text-danger { color: var(--error-color); }
+.text-danger { color: var(--error-color); font-weight: bold; }
+.pct-zero { color: #ccc; }
+.umpire-icons {
+    display: inline-flex;
+    gap: 3px;
+}
+.ump-icon {
+    color: #3498db;
+    font-size: 14px;
+}
 </style>
 {% endblock %}
