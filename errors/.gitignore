@@ -1,0 +1,15 @@
+# Error diagnosis files - auto-generated, don't commit
+*.md
+*.json
+
+# State tracking files
+.exported_ids.json
+.state.json
+.diagnosis_attempts.json
+
+# Control files
+PAUSED
+SKIP_*
+
+# Keep the directory structure
+!.gitignore

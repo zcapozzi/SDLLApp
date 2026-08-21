@@ -155,3 +155,21 @@ def error_digest():
         summary=summary,
         hours=hours
     )
+
+
+@main_bp.route('/admin/test-error')
+@login_required
+@admin_required
+def test_error():
+    """
+    Intentionally raise an error for testing the error diagnosis system.
+
+    This creates a Tier I error that will be:
+    1. Logged to sdll_app_errors table
+    2. Sent as Telegram alert
+    3. Exported by poll_errors.py for diagnosis
+
+    Usage: Visit /admin/test-error while logged in as admin
+    """
+    # Raise a deliberate error with a recognizable message
+    raise ValueError("TEST ERROR: This is a deliberate test error for the error diagnosis system. Error ID: test-" + str(int(__import__('time').time())))

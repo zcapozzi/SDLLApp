@@ -4,7 +4,193 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Implemented comprehensive Tier I/Tier II error reporting system.
+Last session: Implemented automated error diagnosis system for production errors.
+
+---
+
+## Session: August 21, 2026 - Automated Error Diagnosis System
+
+### Overview
+Implemented an automated system that exports production errors for diagnosis by Claude Code locally. When a 500 error occurs, error info is exported to local files that Claude Code can analyze with full codebase context.
+
+### Why Local Claude Code vs API
+- **Full codebase context**: All source files, CLAUDE.md, project history
+- **No API costs**: Uses local Claude Code installation
+- **Can read actual source files** mentioned in tracebacks
+- **Understands project patterns** and conventions
+- **Can directly make edits** and run tests
+
+### Architecture
+
+```
+PRODUCTION (Railway)                    LOCAL (Windows Machine)
+────────────────────                    ─────────────────────────
+
+500 Error Occurs
+      ↓
+log_tier1() captures error
+      ↓
+Stored in sdll_app_errors ─────────────> Windows Scheduled Task
+      ↓                                  polls database every 5 min
+Telegram alert sent                            ↓
+                                        New undiagnosed error found?
+                                               ↓ YES
+                                        Export to errors/pending/
+                                               ↓
+                                        Admin runs Claude Code:
+                                        $ claude "Diagnose error 123"
+                                               ↓
+                                        Claude Code reads error + source
+                                        Creates reproducing test
+                                        Implements fix, runs tests
+                                        Asks for approval, commits
+```
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `errors/.gitignore` | Ignore error files and state files |
+| `app/services/error_diagnosis_service.py` | Export errors to markdown/JSON files |
+| `scripts/poll_errors.py` | Poll DB, check limits, export new errors |
+| `scripts/diagnose_error.py` | Helper to list/show pending errors |
+| `scripts/setup_error_poll_task.bat` | Setup Windows Scheduled Task |
+| `tests/test_regressions.py` | Template for TDD regression tests |
+
+### Safety Controls (Circuit Breaker)
+
+| Control | Default | Purpose |
+|---------|---------|---------|
+| Max errors per hour | 5 | Pause if > 5 errors in 1 hour |
+| Max diagnosis attempts per error | 2 | Don't keep retrying same error |
+| Cool-down between diagnoses | 10 min | Prevent rapid-fire diagnoses |
+| Daily diagnosis limit | 10 | Max 10 diagnoses per day |
+
+### Error Filtering
+Only diagnose errors that:
+- Are Tier I (500 errors)
+- Not from bots/crawlers
+- Not from skip contexts (tracking, analytics)
+- Not from skip paths (/health, /favicon, /static/)
+
+### Emergency Controls
+
+| Action | Command |
+|--------|---------|
+| PAUSE immediately | `echo "paused" > errors\PAUSED` |
+| Resume | `del errors\PAUSED` |
+| Check status | `python scripts\poll_errors.py --status` |
+| Skip specific error | `echo "skip" > errors\SKIP_123` |
+
+### TDD Workflow for Fixes
+1. Read error and source files from traceback
+2. Create reproducing test in `tests/test_regressions.py`
+3. Run test - MUST FAIL (confirms reproduction)
+4. Implement fix with minimal changes
+5. Run test - MUST PASS now
+6. Run full test suite - no regressions
+7. Ask for approval before committing
+8. Commit fix AND test together
+
+### Usage
+
+```bash
+# One-time setup
+scripts\setup_error_poll_task.bat
+
+# Manual poll
+python scripts/poll_errors.py
+
+# Check status
+python scripts/poll_errors.py --status
+
+# List pending errors
+python scripts/diagnose_error.py
+
+# Show specific error
+python scripts/diagnose_error.py 123
+
+# Diagnose with Claude Code
+claude "Diagnose and fix production error 123"
+```
+
+---
+
+## Session: August 21, 2026 - CI/CD Testing Pipeline
+
+### Overview
+Implemented a comprehensive three-layer testing pipeline for code quality validation.
+
+### Three-Layer Testing Strategy
+
+| Layer | Name | Speed | Purpose | Command |
+|-------|------|-------|---------|---------|
+| 1 | Quick | ~5s | TDD development | `python run_tests.py --quick` |
+| 2 | Integration | ~60s | Feature verification | `python run_tests.py` |
+| 3 | Smoke | 5-15min | Full site coverage | `python run_tests.py --full` |
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `CI_CD.md` | Comprehensive documentation for testing pipeline |
+| `tests/inventory.yaml` | Feature catalog with all testable features and expected behaviors |
+| `tests/test_fields.py` | Functional tests for field management |
+| `tests/test_games.py` | Functional tests for game management |
+| `tests/test_teams.py` | Functional tests for team management |
+| `tests/test_scheduler.py` | Functional tests for scheduler and general routing |
+| `scripts/smoke_test.py` | Smoke test runner that exercises inventory.yaml |
+| `scripts/pre_push_check.py` | Pre-push validation script |
+| `.githooks/pre-push` | Git hook to run validation before push |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `tests/conftest.py` | Added factory fixtures (field_factory, team_factory, game_factory, field_slot_factory, scheduler_client, admin_client) |
+| `run_tests.py` | Enhanced with --quick, --full, --cov, -v, -x, --last-failed options |
+
+### Key Features
+
+**Factory Fixtures** (in `conftest.py`):
+- `field_factory(name, **kwargs)` - Create test fields with auto-cleanup
+- `team_factory(name, **kwargs)` - Create test teams with auto-cleanup
+- `game_factory(home_team, away_team, field)` - Create test games
+- `scheduler_client` - Authenticated client with scheduler role
+- `admin_client` - Authenticated client with admin role
+
+**Test Markers**:
+- `@pytest.mark.quick` - Mark tests that don't need database (Layer 1)
+
+**Pre-Push Hook Setup**:
+```bash
+git config core.hooksPath .githooks
+chmod +x .githooks/pre-push
+```
+
+### Verification Results
+- Layer 1 (Quick tests): 23 passed in 0.28s
+- Layer 2 (Integration): Requires database connection (expected to fail without test DB)
+
+### Usage
+
+```bash
+# Quick TDD tests (no DB needed)
+python run_tests.py --quick
+
+# Integration tests (needs DB)
+python run_tests.py
+
+# Specific test file
+python run_tests.py auth
+python run_tests.py fields games
+
+# Full smoke tests
+python run_tests.py --full
+
+# Pre-push validation
+python scripts/pre_push_check.py
+```
 
 ---
 
