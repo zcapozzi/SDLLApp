@@ -225,10 +225,20 @@ function resetChanges() {
     updateSaveBar();
 }
 
-// Clear dirty state on successful submit
+// Save scroll position before form submit, restore on page load
 document.getElementById('addresses-form').addEventListener('submit', function(e) {
+    sessionStorage.setItem('addresses_scroll', window.scrollY);
     dirtyFields.clear();
 });
+
+// Restore scroll position on page load
+(function() {
+    var savedScroll = sessionStorage.getItem('addresses_scroll');
+    if (savedScroll) {
+        window.scrollTo(0, parseInt(savedScroll));
+        sessionStorage.removeItem('addresses_scroll');
+    }
+})();
 
 // Warn before leaving with unsaved changes
 window.addEventListener('beforeunload', function(e) {
