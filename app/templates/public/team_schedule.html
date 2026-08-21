@@ -167,6 +167,15 @@
             font-size: 13px;
             color: #666;
         }
+        .directions-link {
+            color: #2196f3;
+            text-decoration: none;
+            font-size: 12px;
+            margin-left: 6px;
+        }
+        .directions-link:hover {
+            text-decoration: underline;
+        }
         .game-opponent {
             font-size: 14px;
             margin-top: 5px;
@@ -331,6 +340,9 @@
             </div>
             <div class="next-game-details">
                 {{ next_game.location or 'Location TBD' }}
+                {% if next_game.directions_url %}
+                <a href="{{ next_game.directions_url }}" target="_blank" rel="noopener" class="directions-link" style="color: rgba(255,255,255,0.9);">Directions</a>
+                {% endif %}
             </div>
             {% if next_game.game_type != 'practice' %}
             <div class="next-game-opponent">
@@ -411,7 +423,12 @@
                             <span class="game-type-badge away">Away</span>
                         {% endif %}
                     </div>
-                    <div class="game-location">{{ game.location or 'Location TBD' }}</div>
+                    <div class="game-location">
+                        {{ game.location or 'Location TBD' }}
+                        {% if game.directions_url %}
+                        <a href="{{ game.directions_url }}" target="_blank" rel="noopener" class="directions-link">Directions</a>
+                        {% endif %}
+                    </div>
                     {% if game.game_type != 'practice' %}
                     <div class="game-opponent">
                         {% if game.home_ID == team.team_ID %}
@@ -455,7 +472,12 @@
                             <span class="game-type-badge away">Away</span>
                         {% endif %}
                     </div>
-                    <div class="game-location">{{ game.location or 'Location TBD' }}</div>
+                    <div class="game-location">
+                        {{ game.location or 'Location TBD' }}
+                        {% if game.directions_url %}
+                        <a href="{{ game.directions_url }}" target="_blank" rel="noopener" class="directions-link">Directions</a>
+                        {% endif %}
+                    </div>
                     {% if game.game_type != 'practice' %}
                     <div class="game-opponent">
                         {% if game.home_ID == team.team_ID %}

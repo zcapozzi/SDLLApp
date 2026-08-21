@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block title %}Field Addresses{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-toggle {
+        display: inline-flex;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .filter-toggle a {
+        padding: 8px 16px;
+        text-decoration: none;
+        color: #333;
+        background: #fff;
+        border-right: 1px solid #ddd;
+    }
+    .filter-toggle a:last-child {
+        border-right: none;
+    }
+    .filter-toggle a:hover {
+        background: #f5f5f5;
+    }
+    .filter-toggle a.active {
+        background: rgb(34, 139, 34);
+        color: white;
+    }
+    .dirty-indicator {
+        display: none;
+        width: 8px;
+        height: 8px;
+        background: #e67e22;
+        border-radius: 50%;
+        margin-left: 5px;
+    }
+    tr.dirty .dirty-indicator {
+        display: inline-block;
+    }
+    tr.dirty {
+        background: #fffbf0;
+    }
+    .save-bar {
+        position: sticky;
+        bottom: 0;
+        background: white;
+        padding: 15px 20px;
+        border-top: 2px solid rgb(34, 139, 34);
+        display: none;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        margin-top: 20px;
+    }
+    .save-bar.visible {
+        display: flex;
+    }
+    .save-bar .changes-count {
+        color: #666;
+    }
+    .test-link {
+        color: #2196f3;
+        text-decoration: none;
+        font-size: 12px;
+    }
+    .test-link:hover {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Field Addresses</h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('fields.properties') }}" class="btn btn-outline">Field Properties</a>
+        <a href="{{ url_for('fields.index') }}" class="btn btn-outline">All Fields</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+    <p class="text-muted" style="margin: 0;">
+        Add addresses to enable "Directions" links on public team schedules.
+        Changes are saved when you click <strong>Save All Changes</strong>.
+    </p>
+    <div class="filter-toggle">
+        <a href="{{ url_for('fields.addresses', ownership='sdll') }}" class="{{ 'active' if ownership_filter == 'sdll' else '' }}">SDLL</a>
+        <a href="{{ url_for('fields.addresses', ownership='away') }}" class="{{ 'active' if ownership_filter == 'away' else '' }}">Away</a>
+        <a href="{{ url_for('fields.addresses', ownership='all') }}" class="{{ 'active' if ownership_filter == 'all' else '' }}">All</a>
+    </div>
+</div>
+
+<form method="POST" id="addresses-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="bulk_update">
+
+    <div class="card">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 180px;">Field</th>
+                    <th>Street Address</th>
+                    <th style="width: 140px;">City</th>
+                    <th style="width: 80px;">State</th>
+                    <th style="width: 100px;">Zip</th>
+                    <th style="width: 80px;">Test</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for field in fields %}
+                {% if field %}
+                <tr id="field-{{ field.ID }}" data-field-id="{{ field.ID }}">
+                    <td>
+                        <strong>{{ field.location_title }}</strong>
+                        <span class="dirty-indicator" title="Unsaved changes"></span>
+                    </td>
+                    <td>
+                        <input type="text" name="field_{{ field.ID }}_address" class="form-control"
+                               style="width: 100%;"
+                               value="{{ field.address or '' }}"
+                               placeholder="123 Main St"
+                               data-original="{{ field.address or '' }}"
+                               onchange="markDirty({{ field.ID }})">
+                    </td>
+                    <td>
+                        <input type="text" name="field_{{ field.ID }}_city" class="form-control"
+                               style="width: 100%;"
+                               value="{{ field.city or '' }}"
+                               placeholder="Durham"
+                               data-original="{{ field.city or '' }}"
+                               onchange="markDirty({{ field.ID }})">
+                    </td>
+                    <td>
+                        <input type="text" name="field_{{ field.ID }}_state" class="form-control"
+                               style="width: 100%;"
+                               value="{{ field.state or 'NC' }}"
+                               placeholder="NC"
+                               data-original="{{ field.state or 'NC' }}"
+                               onchange="markDirty({{ field.ID }})">
+                    </td>
+                    <td>
+                        <input type="text" name="field_{{ field.ID }}_zip_code" class="form-control"
+                               style="width: 100%;"
+                               value="{{ field.zip_code or '' }}"
+                               placeholder="27713"
+                               data-original="{{ field.zip_code or '' }}"
+                               onchange="markDirty({{ field.ID }})">
+                    </td>
+                    <td style="text-align: center;">
+                        {% if field.google_maps_url %}
+                        <a href="{{ field.google_maps_url }}" target="_blank" rel="noopener" class="test-link">
+                            Directions
+                        </a>
+                        {% else %}
+                        <span class="text-muted" style="font-size: 12px;">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endif %}
+                {% else %}
+                <tr>
+                    <td colspan="6" style="text-align: center; color: #666;">No fields found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="save-bar" id="save-bar">
+        <span class="changes-count"><span id="changes-count">0</span> field(s) with unsaved changes</span>
+        <div style="display: flex; gap: 10px;">
+            <button type="button" class="btn btn-outline" onclick="resetChanges()">Reset</button>
+            <button type="submit" class="btn btn-primary">Save All Changes</button>
+        </div>
+    </div>
+</form>
+
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">About Directions Links</h3>
+    <ul style="margin-bottom: 0;">
+        <li>Fields with addresses will show a <strong>Directions</strong> link on the public team schedule</li>
+        <li>The link opens Google Maps with directions from the viewer's current location</li>
+        <li>If no address is entered, the field name + "Durham, NC" is used as a fallback</li>
+        <li>Test the link to make sure it goes to the right location</li>
+    </ul>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var dirtyFields = new Set();
+
+function markDirty(fieldId) {
+    var row = document.getElementById('field-' + fieldId);
+    row.classList.add('dirty');
+    dirtyFields.add(fieldId);
+    updateSaveBar();
+}
+
+function updateSaveBar() {
+    var saveBar = document.getElementById('save-bar');
+    var countSpan = document.getElementById('changes-count');
+
+    if (dirtyFields.size > 0) {
+        saveBar.classList.add('visible');
+        countSpan.textContent = dirtyFields.size;
+    } else {
+        saveBar.classList.remove('visible');
+    }
+}
+
+function resetChanges() {
+    // Reset all inputs to original values
+    document.querySelectorAll('input[data-original]').forEach(function(input) {
+        input.value = input.dataset.original;
+    });
+
+    // Clear dirty state
+    document.querySelectorAll('tr.dirty').forEach(function(row) {
+        row.classList.remove('dirty');
+    });
+
+    dirtyFields.clear();
+    updateSaveBar();
+}
+
+// Clear dirty state on successful submit
+document.getElementById('addresses-form').addEventListener('submit', function(e) {
+    dirtyFields.clear();
+});
+
+// Warn before leaving with unsaved changes
+window.addEventListener('beforeunload', function(e) {
+    if (dirtyFields.size > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
+</script>
+{% endblock %}

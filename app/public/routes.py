@@ -159,6 +159,17 @@ class ProposalGameWrapper:
     def __getattr__(self, name):
         return self._data.get(name)
 
+    @property
+    def directions_url(self):
+        """Get Google Maps directions URL for this game's location."""
+        location = self._data.get('location')
+        if not location:
+            return None
+        field = Field.get_by_name(location)
+        if field:
+            return field.google_maps_url
+        return None
+
 
 @public_bp.route('/<token>')
 def team_schedule(token):

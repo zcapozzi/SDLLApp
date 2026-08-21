@@ -35,6 +35,27 @@ This should be deployed to port 8084 locally
 
 I have dumped the current database that I'm using in a command-line project to Dump20260702.sql; if it makes sense, it would be good to be able to spin up a local DB for testing that incorporates this information and linkages.
 
+## CRITICAL: MySQL Compatibility
+
+**Production uses MySQL (Railway), NOT MariaDB.** When writing SQL migrations:
+
+### DO NOT USE (MariaDB-only syntax):
+- `ADD COLUMN IF NOT EXISTS` - MariaDB only
+- `DROP COLUMN IF EXISTS` - MariaDB only
+- `ALTER TABLE ... IF EXISTS` - MariaDB only
+
+### USE INSTEAD (MySQL-compatible):
+```sql
+-- Plain ALTER TABLE (will error if column exists, which is fine)
+ALTER TABLE table_name ADD COLUMN column_name VARCHAR(100) DEFAULT NULL;
+
+-- Or use separate statements and run with --force flag to continue on errors
+mysql --force database < migration.sql
+```
+
+### Why This Matters
+MariaDB syntax errors will fail silently in development (if using MariaDB locally) but crash in production (MySQL on Railway). Always test migrations against MySQL or use only standard MySQL syntax.
+
 # Sending Updates to admins
 
 Review `sendMessage.md` for instructions on keeping admins up to date on progress or otherwise sending out emails and text messages

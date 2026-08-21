@@ -6,6 +6,7 @@
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
     <h1>Leagues</h1>
     <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('leagues.rules') }}" class="btn btn-outline">League Rules</a>
         <a href="{{ url_for('leagues.pitch_types') }}" class="btn btn-outline">Pitch Types</a>
         <a href="{{ url_for('leagues.seasonal_names') }}" class="btn btn-outline">Seasonal Names</a>
         <a href="{{ url_for('leagues.time_restrictions') }}" class="btn btn-outline">Time Restrictions</a>

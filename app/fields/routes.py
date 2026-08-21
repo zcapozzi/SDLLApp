@@ -634,6 +634,84 @@ def time_restrictions():
     )
 
 
+@fields_bp.route('/addresses', methods=['GET', 'POST'])
+@login_required
+def addresses():
+    """Manage field addresses for Google Maps directions"""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to manage field addresses.', 'error')
+        return redirect(url_for('fields.index'))
+
+    ownership_filter = request.args.get('ownership', 'sdll')  # 'sdll', 'away', 'all'
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+
+        if action == 'update_address':
+            field_id = int(request.form.get('field_id'))
+            field = Field.query.get(field_id)
+
+            if field:
+                field_name = field.location_title  # Save before commit
+                field.address = request.form.get('address', '').strip() or None
+                field.city = request.form.get('city', '').strip() or None
+                field.state = request.form.get('state', '').strip() or None
+                field.zip_code = request.form.get('zip_code', '').strip() or None
+                db.session.commit()
+                logger.info(f'Updated address for {field_name}')
+                flash(f'Updated address for {field_name}', 'success')
+
+            return redirect(url_for('fields.addresses', ownership=ownership_filter) + f'#field-{field_id}')
+
+        elif action == 'bulk_update':
+            # Bulk update all fields
+            all_fields = Field.query.filter_by(active=1).all()
+            updated_count = 0
+
+            for field in all_fields:
+                field_id = field.ID
+                address = request.form.get(f'field_{field_id}_address', '').strip()
+                city = request.form.get(f'field_{field_id}_city', '').strip()
+                state = request.form.get(f'field_{field_id}_state', '').strip()
+                zip_code = request.form.get(f'field_{field_id}_zip_code', '').strip()
+
+                # Skip if this field wasn't in the form
+                if request.form.get(f'field_{field_id}_address') is None:
+                    continue
+
+                # Update if changed
+                if (field.address != (address or None) or
+                    field.city != (city or None) or
+                    field.state != (state or None) or
+                    field.zip_code != (zip_code or None)):
+                    field.address = address or None
+                    field.city = city or None
+                    field.state = state or None
+                    field.zip_code = zip_code or None
+                    updated_count += 1
+
+            db.session.commit()
+            logger.info(f'Bulk updated {updated_count} field addresses')
+            flash(f'Saved addresses for {updated_count} field(s)', 'success')
+
+            return redirect(url_for('fields.addresses', ownership=ownership_filter))
+
+    # GET - filter fields by ownership
+    query = Field.query.filter_by(active=1)
+    if ownership_filter == 'sdll':
+        query = query.filter_by(is_owned=1)
+    elif ownership_filter == 'away':
+        query = query.filter_by(is_owned=0)
+
+    fields = query.order_by(Field.location_title).all()
+
+    return render_template(
+        'fields/addresses.html',
+        fields=fields,
+        ownership_filter=ownership_filter
+    )
+
+
 @fields_bp.route('/blackouts/<int:field_id>', methods=['GET', 'POST'])
 @login_required
 def field_blackouts(field_id):

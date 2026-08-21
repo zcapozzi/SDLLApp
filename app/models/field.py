@@ -31,6 +31,12 @@ class Field(db.Model):
     # Field won't be scheduled for games/practices before this date
     start_date = db.Column(db.Date)
 
+    # Address information (for directions)
+    address = db.Column(db.String(200))
+    city = db.Column(db.String(100))
+    state = db.Column(db.String(50))
+    zip_code = db.Column(db.String(20))
+
     # Restriction type constants
     RESTRICTION_ANYONE = 'anyone'
     RESTRICTION_EXCLUDE = 'exclude'
@@ -216,6 +222,52 @@ class Field(db.Model):
             return False
 
         return True
+
+    @property
+    def full_address(self):
+        """Get full address as a single string."""
+        parts = []
+        if self.address:
+            parts.append(self.address)
+        if self.city:
+            parts.append(self.city)
+        if self.state:
+            if self.zip_code:
+                parts.append(f"{self.state} {self.zip_code}")
+            else:
+                parts.append(self.state)
+        elif self.zip_code:
+            parts.append(self.zip_code)
+
+        if not parts:
+            return None
+        return ', '.join(parts)
+
+    @property
+    def has_address(self):
+        """Check if this field has address information."""
+        return bool(self.address or self.city)
+
+    @property
+    def google_maps_url(self):
+        """Get Google Maps directions URL for this field.
+
+        Returns:
+            str: Google Maps URL or None if no address.
+        """
+        # First try full address
+        if self.full_address:
+            import urllib.parse
+            query = urllib.parse.quote(self.full_address)
+            return f"https://www.google.com/maps/dir/?api=1&destination={query}"
+
+        # Fallback to field name as search term
+        if self.location_title:
+            import urllib.parse
+            query = urllib.parse.quote(f"{self.location_title}, Durham, NC")
+            return f"https://www.google.com/maps/dir/?api=1&destination={query}"
+
+        return None
 
     @property
     def has_game_time_restrictions(self):

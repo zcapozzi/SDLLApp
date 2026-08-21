@@ -38,6 +38,9 @@ class League(db.Model):
     requires_kid_pitch = db.Column(db.Boolean, default=False)  # True for AA+
     uses_large_field = db.Column(db.Boolean, default=False)  # True for AAA/Majors
 
+    # League documentation
+    rules_doc_url = db.Column(db.String(500))  # URL to league-specific rules document
+
     # Sport constants
     SPORT_BASEBALL = 'baseball'
     SPORT_SOFTBALL = 'softball'

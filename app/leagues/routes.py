@@ -205,3 +205,53 @@ def umpire_patterns():
 
     leagues = League.get_all_active()
     return render_template('leagues/umpire_patterns.html', leagues=leagues)
+
+
+@leagues_bp.route('/rules', methods=['GET', 'POST'])
+@login_required
+def rules():
+    """Manage league rules document URLs"""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to manage league rules.', 'error')
+        return redirect(url_for('leagues.index'))
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+
+        if action == 'update_single':
+            league_id = int(request.form.get('league_id'))
+            rules_url = request.form.get('rules_doc_url', '').strip()
+
+            league = League.query.get(league_id)
+            if league:
+                league.rules_doc_url = rules_url if rules_url else None
+                db.session.commit()
+                if rules_url:
+                    logger.info(f'Set rules URL for {league.display_name}')
+                    flash(f'Updated rules URL for {league.display_name}', 'success')
+                else:
+                    logger.info(f'Cleared rules URL for {league.display_name}')
+                    flash(f'Cleared rules URL for {league.display_name}', 'success')
+
+            return redirect(url_for('leagues.rules') + f'#league-{league_id}')
+
+        elif action == 'save_all':
+            leagues = League.get_all_active()
+            updated_count = 0
+
+            for league in leagues:
+                rules_url = request.form.get(f'rules_url_{league.ID}', '').strip()
+                new_url = rules_url if rules_url else None
+
+                if league.rules_doc_url != new_url:
+                    league.rules_doc_url = new_url
+                    updated_count += 1
+
+            db.session.commit()
+            logger.info(f'Updated rules URLs for {updated_count} leagues')
+            flash(f'Saved rules URLs ({updated_count} updated)', 'success')
+
+            return redirect(url_for('leagues.rules'))
+
+    leagues = League.get_all_active()
+    return render_template('leagues/rules.html', leagues=leagues)

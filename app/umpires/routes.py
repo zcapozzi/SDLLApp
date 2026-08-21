@@ -197,6 +197,17 @@ def edit(id):
         profile.is_kid_pitch_eligible = request.form.get('is_kid_pitch_eligible') == 'on'
         profile.status = request.form.get('status', 'active')
 
+        # Eligibility by sport/age_rank
+        max_bb = request.form.get('max_baseball_age_rank', '').strip()
+        profile.max_baseball_age_rank = int(max_bb) if max_bb else None
+
+        max_sb = request.form.get('max_softball_age_rank', '').strip()
+        profile.max_softball_age_rank = int(max_sb) if max_sb else None
+
+        # Excluded leagues
+        excluded_ids = request.form.getlist('excluded_leagues')
+        profile.excluded_league_ids = [int(x) for x in excluded_ids if x]
+
         # Parent contacts
         profile.parent_name = request.form.get('parent_name', '').strip() or None
         profile.parent_email = request.form.get('parent_email', '').strip() or None
@@ -212,7 +223,18 @@ def edit(id):
             logger.error(f'Error updating umpire: {e}')
             flash(f'Error updating umpire: {str(e)}', 'error')
 
-    return render_template('umpires/edit.html', profile=profile)
+    # Get leagues for eligibility dropdowns
+    baseball_leagues = League.get_baseball_leagues()
+    softball_leagues = League.get_softball_leagues()
+    all_leagues = League.get_all_active()
+
+    return render_template(
+        'umpires/edit.html',
+        profile=profile,
+        baseball_leagues=baseball_leagues,
+        softball_leagues=softball_leagues,
+        all_leagues=all_leagues
+    )
 
 
 # =============================================================================

@@ -29,8 +29,17 @@ class UmpireProfile(db.Model):
 
     # Status and qualifications
     status = db.Column(db.String(20), default='active')  # active, inactive, retired
-    is_kid_pitch_eligible = db.Column(db.Boolean, default=False)
+    is_kid_pitch_eligible = db.Column(db.Boolean, default=False)  # Legacy - use age_rank fields
     pay_scale = db.Column(db.String(50))  # 'standard', 'machine_pitch_only', etc.
+
+    # Eligibility by sport and age_rank
+    # NULL = not eligible for that sport, value = max age_rank they can work
+    # Example: max_baseball_age_rank=5 means eligible for Tee Ball(1) through AAA(5)
+    max_baseball_age_rank = db.Column(db.SmallInteger)  # NULL = no baseball
+    max_softball_age_rank = db.Column(db.SmallInteger)  # NULL = no softball
+
+    # Excluded leagues - comma-separated league IDs they won't see as available
+    excluded_leagues = db.Column(db.String(200))  # e.g., "3,7" to exclude specific leagues
 
     # External reference for imports
     assignr_id = db.Column(db.String(50))
@@ -125,6 +134,51 @@ class UmpireProfile(db.Model):
         """Check if umpire is active."""
         return self.status == self.STATUS_ACTIVE
 
+    @property
+    def excluded_league_ids(self):
+        """Get list of excluded league IDs."""
+        if not self.excluded_leagues:
+            return []
+        return [int(x.strip()) for x in self.excluded_leagues.split(',') if x.strip().isdigit()]
+
+    @excluded_league_ids.setter
+    def excluded_league_ids(self, ids):
+        """Set excluded league IDs from a list."""
+        if not ids:
+            self.excluded_leagues = None
+        else:
+            self.excluded_leagues = ','.join(str(x) for x in ids)
+
+    def is_eligible_for_league(self, league):
+        """Check if this umpire is eligible for a specific league.
+
+        Args:
+            league: League object to check eligibility for.
+
+        Returns:
+            bool: True if eligible.
+        """
+        if not league:
+            return True
+
+        # Check if explicitly excluded
+        if league.ID in self.excluded_league_ids:
+            return False
+
+        # Check sport eligibility by age_rank
+        if league.is_baseball:
+            if self.max_baseball_age_rank is None:
+                return False  # Not eligible for any baseball
+            if league.age_rank and league.age_rank > self.max_baseball_age_rank:
+                return False  # League is above their max level
+        elif league.is_softball:
+            if self.max_softball_age_rank is None:
+                return False  # Not eligible for any softball
+            if league.age_rank and league.age_rank > self.max_softball_age_rank:
+                return False  # League is above their max level
+
+        return True
+
     def can_umpire_game(self, game):
         """Check if this umpire is eligible to umpire a specific game.
 
@@ -137,14 +191,46 @@ class UmpireProfile(db.Model):
         if not self.is_active:
             return False
 
-        # Check kid-pitch eligibility if game requires it
+        # Check league eligibility
         if hasattr(game, 'league') and game.league:
             from app.models.league import League
             league = League.get_by_name(game.league)
-            if league and league.requires_kid_pitch and not self.is_kid_pitch_eligible:
+            if league and not self.is_eligible_for_league(league):
                 return False
 
+            # Legacy fallback: check kid-pitch eligibility
+            if league and league.requires_kid_pitch and not self.is_kid_pitch_eligible:
+                # Only fail if new eligibility fields aren't set
+                if self.max_baseball_age_rank is None and self.max_softball_age_rank is None:
+                    return False
+
         return True
+
+    @property
+    def eligibility_display(self):
+        """Human-readable eligibility description."""
+        parts = []
+
+        if self.max_baseball_age_rank is not None:
+            from app.models.league import League
+            bb_leagues = League.get_baseball_leagues()
+            eligible = [l for l in bb_leagues if l.age_rank and l.age_rank <= self.max_baseball_age_rank]
+            if eligible:
+                max_league = max(eligible, key=lambda l: l.age_rank)
+                parts.append(f"BB up to {max_league.display_name.replace('BB ', '')}")
+
+        if self.max_softball_age_rank is not None:
+            from app.models.league import League
+            sb_leagues = League.get_softball_leagues()
+            eligible = [l for l in sb_leagues if l.age_rank and l.age_rank <= self.max_softball_age_rank]
+            if eligible:
+                max_league = max(eligible, key=lambda l: l.age_rank)
+                parts.append(f"SB up to {max_league.display_name.replace('SB ', '')}")
+
+        if not parts:
+            return "No eligibility set"
+
+        return ", ".join(parts)
 
     @classmethod
     def get_active(cls):

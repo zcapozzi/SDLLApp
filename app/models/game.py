@@ -120,6 +120,30 @@ class Game(db.Model):
             return None
         return f"{self.home_score}-{self.away_score}"
 
+    @property
+    def field(self):
+        """Get the Field object for this game's location.
+
+        Returns:
+            Field or None: The Field object if found.
+        """
+        if not self.location:
+            return None
+        from app.models.field import Field
+        return Field.get_by_name(self.location)
+
+    @property
+    def directions_url(self):
+        """Get Google Maps directions URL for this game's location.
+
+        Returns:
+            str or None: Google Maps URL if field has address info.
+        """
+        field = self.field
+        if field:
+            return field.google_maps_url
+        return None
+
     @classmethod
     def get_by_season(cls, year, is_spring):
         """Get all active games for a specific season"""

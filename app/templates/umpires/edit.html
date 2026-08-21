@@ -56,11 +56,63 @@
             <label>
                 <input type="checkbox" name="is_kid_pitch_eligible"
                        {{ 'checked' if profile.is_kid_pitch_eligible }}>
-                Kid-Pitch Eligible
+                Kid-Pitch Eligible (Legacy)
             </label>
             <p style="font-size: 12px; color: var(--text-muted);">
-                Can umpire kid-pitch leagues (AA, AAA, Minors, etc.)
+                Legacy flag - use the eligibility settings below instead
             </p>
+        </div>
+
+        <hr style="margin: 20px 0;">
+
+        <h3>Eligibility by Sport</h3>
+        <p style="color: var(--text-muted); margin-bottom: 15px; font-size: 14px;">
+            Set the maximum age rank this umpire can work for each sport.
+            Leave blank if not eligible for that sport.
+        </p>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="form-group">
+                <label for="max_baseball_age_rank">Baseball Max Level</label>
+                <select name="max_baseball_age_rank" id="max_baseball_age_rank" class="form-control">
+                    <option value="">Not eligible for baseball</option>
+                    {% for league in baseball_leagues %}
+                    <option value="{{ league.age_rank }}"
+                            {{ 'selected' if profile.max_baseball_age_rank == league.age_rank }}>
+                        Up to {{ league.display_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="max_softball_age_rank">Softball Max Level</label>
+                <select name="max_softball_age_rank" id="max_softball_age_rank" class="form-control">
+                    <option value="">Not eligible for softball</option>
+                    {% for league in softball_leagues %}
+                    <option value="{{ league.age_rank }}"
+                            {{ 'selected' if profile.max_softball_age_rank == league.age_rank }}>
+                        Up to {{ league.display_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="excluded_leagues">Excluded Leagues</label>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
+                Select specific leagues this umpire should NOT be assigned to, even if otherwise eligible.
+            </p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;">
+                {% for league in all_leagues %}
+                <label style="display: flex; align-items: center; gap: 8px; font-weight: normal;">
+                    <input type="checkbox" name="excluded_leagues" value="{{ league.ID }}"
+                           {{ 'checked' if league.ID in profile.excluded_league_ids }}>
+                    {{ league.display_name }}
+                </label>
+                {% endfor %}
+            </div>
         </div>
 
         <hr style="margin: 20px 0;">
