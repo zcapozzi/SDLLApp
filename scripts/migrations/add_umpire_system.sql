@@ -190,6 +190,7 @@ CREATE TABLE IF NOT EXISTS sdll_umpire_payments (
 -- -----------------------------------------------------------------------------
 -- Run these separately and ignore errors if columns exist
 -- ALTER TABLE sdll_leagues ADD COLUMN umpire_count SMALLINT DEFAULT 1;
+-- ALTER TABLE sdll_leagues ADD COLUMN umpire_count_playoffs SMALLINT;  -- NULL = same as regular
 -- ALTER TABLE sdll_leagues ADD COLUMN umpire_source VARCHAR(20) DEFAULT 'sdll';
 -- ALTER TABLE sdll_leagues ADD COLUMN default_partner_id INT;
 -- ALTER TABLE sdll_leagues ADD COLUMN requires_kid_pitch BOOLEAN DEFAULT FALSE;

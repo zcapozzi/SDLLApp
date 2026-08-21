@@ -170,3 +170,38 @@ def field_rules_save_all():
     flash(f'Updated field rules for all {updated_count} leagues', 'success')
 
     return redirect(url_for('leagues.field_rules'))
+
+
+@leagues_bp.route('/umpire-patterns', methods=['GET', 'POST'])
+@login_required
+def umpire_patterns():
+    """Manage umpire requirements per league"""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to manage umpire patterns.', 'error')
+        return redirect(url_for('leagues.index'))
+
+    if request.method == 'POST':
+        league_id = int(request.form.get('league_id'))
+        league = League.query.get(league_id)
+
+        if league:
+            # Parse umpire counts (empty = 0 for regular, NULL for playoffs)
+            umpire_count_str = request.form.get('umpire_count', '0')
+            umpire_count_playoffs_str = request.form.get('umpire_count_playoffs', '')
+
+            league.umpire_count = int(umpire_count_str) if umpire_count_str else 0
+
+            # Playoffs: empty means "same as regular season" (NULL)
+            if umpire_count_playoffs_str == '' or umpire_count_playoffs_str == 'same':
+                league.umpire_count_playoffs = None
+            else:
+                league.umpire_count_playoffs = int(umpire_count_playoffs_str)
+
+            db.session.commit()
+            logger.info(f'Updated umpire pattern for {league.display_name}: {league.umpire_count_display}')
+            flash(f'Updated umpire settings for {league.display_name}', 'success')
+
+        return redirect(url_for('leagues.umpire_patterns') + f'#league-{league_id}')
+
+    leagues = League.get_all_active()
+    return render_template('leagues/umpire_patterns.html', leagues=leagues)

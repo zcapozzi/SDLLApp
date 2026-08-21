@@ -8,7 +8,8 @@
     <div style="display: flex; gap: 10px;">
         <a href="{{ url_for('leagues.pitch_types') }}" class="btn btn-outline">Pitch Types</a>
         <a href="{{ url_for('leagues.seasonal_names') }}" class="btn btn-outline">Seasonal Names</a>
-        <a href="{{ url_for('leagues.time_restrictions') }}" class="btn btn-primary">Time Restrictions</a>
+        <a href="{{ url_for('leagues.time_restrictions') }}" class="btn btn-outline">Time Restrictions</a>
+        <a href="{{ url_for('leagues.umpire_patterns') }}" class="btn btn-primary">Umpire Patterns</a>
     </div>
 </div>
 
@@ -19,6 +20,7 @@
                 <th>Spring Name</th>
                 <th>Fall Name</th>
                 <th>Pitch Type</th>
+                <th>Umpires</th>
                 <th>Time Restrictions</th>
             </tr>
         </thead>
@@ -40,6 +42,14 @@
                     <span class="badge" style="background: #3498db; color: white;">Machine Pitch</span>
                     {% else %}
                     <span class="badge" style="background: rgb(34, 139, 34); color: white;">Kid Pitch</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% set count = league.umpire_count or 0 %}
+                    {% if count == 0 %}
+                    <span class="text-muted">None</span>
+                    {% else %}
+                    {{ league.umpire_count_display }}
                     {% endif %}
                 </td>
                 <td>

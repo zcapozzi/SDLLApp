@@ -29,7 +29,8 @@ class League(db.Model):
     practice_duration_minutes = db.Column(db.Integer) # NULL = 90
 
     # Umpire configuration
-    umpire_count = db.Column(db.SmallInteger, default=1)  # 0=none, 1=single, 2=crew
+    umpire_count = db.Column(db.SmallInteger, default=1)  # 0=none, 1=single, 2=crew (regular season)
+    umpire_count_playoffs = db.Column(db.SmallInteger)  # NULL = same as regular season
     umpire_source = db.Column(db.String(20), default='sdll')  # 'sdll', 'partner', 'either'
     default_partner_id = db.Column(db.Integer)  # FK to sdll_umpire_partners
     requires_kid_pitch = db.Column(db.Boolean, default=False)  # True for AA+
@@ -308,15 +309,35 @@ class League(db.Model):
         """Check if this league requires umpires."""
         return (self.umpire_count or 0) > 0
 
+    def get_umpire_count(self, is_playoff=False):
+        """Get umpire count for regular season or playoffs.
+
+        Args:
+            is_playoff: True for playoff games, False for regular season
+
+        Returns:
+            int: Number of umpires required
+        """
+        if is_playoff and self.umpire_count_playoffs is not None:
+            return self.umpire_count_playoffs
+        return self.umpire_count or 0
+
     @property
     def umpire_count_display(self):
         """Human-readable umpire count."""
-        count = self.umpire_count or 1
-        if count == 0:
-            return "No umpires"
-        if count == 1:
-            return "1 umpire"
-        return f"{count}-umpire crew"
+        count = self.umpire_count or 0
+        playoff_count = self.umpire_count_playoffs
+
+        def format_count(c):
+            if c == 0:
+                return "None"
+            if c == 1:
+                return "1"
+            return str(c)
+
+        if playoff_count is not None and playoff_count != count:
+            return f"{format_count(count)} / {format_count(playoff_count)} playoffs"
+        return format_count(count)
 
     @property
     def umpire_source_display(self):

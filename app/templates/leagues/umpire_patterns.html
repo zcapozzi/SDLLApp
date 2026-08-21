@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Umpire Patterns{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Umpire Patterns</h1>
+    <div>
+        <a href="{{ url_for('leagues.index') }}" class="btn btn-outline">All Leagues</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <p class="text-muted">
+        Configure the number of umpires required for each league. Set to 0 for leagues that don't use umpires (e.g., Tee Ball).
+        Playoffs can have a different umpire count than regular season games.
+    </p>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>League</th>
+                <th style="width: 120px; text-align: center;">Regular Season</th>
+                <th style="width: 120px; text-align: center;">Playoffs</th>
+                <th style="width: 100px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for league in leagues %}
+            <tr id="league-{{ league.ID }}">
+                <td>
+                    <strong>{{ league.display_name }}</strong>
+                    <div class="text-muted" style="font-size: 12px;">{{ league.pitch_type_display }}</div>
+                </td>
+                <td style="text-align: center;">
+                    {% set count = league.umpire_count or 0 %}
+                    {% if count == 0 %}
+                    <span class="badge" style="background: #95a5a6; color: white;">None</span>
+                    {% elif count == 1 %}
+                    <span class="badge" style="background: #3498db; color: white;">1 Umpire</span>
+                    {% else %}
+                    <span class="badge" style="background: rgb(34, 139, 34); color: white;">{{ count }}-Umpire Crew</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: center;">
+                    {% set playoff_count = league.umpire_count_playoffs %}
+                    {% if playoff_count is none %}
+                    <span class="text-muted" style="font-size: 12px;">Same</span>
+                    {% elif playoff_count == 0 %}
+                    <span class="badge" style="background: #95a5a6; color: white;">None</span>
+                    {% elif playoff_count == 1 %}
+                    <span class="badge" style="background: #3498db; color: white;">1 Umpire</span>
+                    {% else %}
+                    <span class="badge" style="background: rgb(34, 139, 34); color: white;">{{ playoff_count }}-Umpire Crew</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <button type="button" class="btn btn-outline btn-sm"
+                            onclick="editUmpirePattern({{ league.ID }}, '{{ league.display_name }}', {{ league.umpire_count or 0 }}, {{ league.umpire_count_playoffs if league.umpire_count_playoffs is not none else 'null' }})">
+                        Edit
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Edit Umpire Pattern Modal -->
+<div id="edit-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+     background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+    <div class="card" style="max-width: 450px; margin: auto;">
+        <h3 style="margin-bottom: 20px;">Edit Umpire Pattern</h3>
+        <p class="text-muted" style="margin-bottom: 15px;">
+            League: <strong id="modal-league-name"></strong>
+        </p>
+        <form method="POST" id="edit-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="league_id" id="edit-league-id">
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="form-group">
+                    <label for="umpire_count">Regular Season</label>
+                    <select id="umpire_count" name="umpire_count" class="form-control" required>
+                        <option value="0">No Umpires</option>
+                        <option value="1">1 Umpire</option>
+                        <option value="2">2-Umpire Crew</option>
+                        <option value="3">3-Umpire Crew</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="umpire_count_playoffs">Playoffs</label>
+                    <select id="umpire_count_playoffs" name="umpire_count_playoffs" class="form-control">
+                        <option value="same">Same as Regular</option>
+                        <option value="0">No Umpires</option>
+                        <option value="1">1 Umpire</option>
+                        <option value="2">2-Umpire Crew</option>
+                        <option value="3">3-Umpire Crew</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 15px;">
+                <p class="text-muted" style="font-size: 12px; margin: 0;">
+                    <strong>Tip:</strong> Leagues with 0 umpires will not appear in umpire assignment interfaces.
+                </p>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function editUmpirePattern(leagueId, leagueName, umpireCount, umpireCountPlayoffs) {
+    document.getElementById('edit-league-id').value = leagueId;
+    document.getElementById('modal-league-name').textContent = leagueName;
+    document.getElementById('umpire_count').value = umpireCount;
+
+    // Handle playoffs: null means "same as regular"
+    if (umpireCountPlayoffs === null) {
+        document.getElementById('umpire_count_playoffs').value = 'same';
+    } else {
+        document.getElementById('umpire_count_playoffs').value = umpireCountPlayoffs;
+    }
+
+    document.getElementById('edit-modal').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('edit-modal').style.display = 'none';
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeModal();
+});
+</script>
+{% endblock %}
