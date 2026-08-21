@@ -224,11 +224,14 @@ def field_factory(app):
 
     # Cleanup - soft delete all created fields
     with app.app_context():
-        for field_id in created:
-            field = Field.query.get(field_id)
-            if field:
-                field.active = 0
-        db.session.commit()
+        try:
+            for field_id in created:
+                field = Field.query.get(field_id)
+                if field:
+                    field.active = 0
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
 
 @pytest.fixture
@@ -277,11 +280,14 @@ def team_factory(app):
 
     # Cleanup - soft delete all created teams
     with app.app_context():
-        for team_id in created:
-            team = TeamSeason.query.get(team_id)
-            if team:
-                team.active = 0
-        db.session.commit()
+        try:
+            for team_id in created:
+                team = TeamSeason.query.get(team_id)
+                if team:
+                    team.active = 0
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
 
 @pytest.fixture
@@ -340,11 +346,15 @@ def game_factory(app, team_factory, field_factory):
 
     # Cleanup - soft delete all created games
     with app.app_context():
-        for game_id in created:
-            game = Game.query.get(game_id)
-            if game:
-                game.active = 0
-        db.session.commit()
+        try:
+            for game_id in created:
+                game = Game.query.get(game_id)
+                if game:
+                    game.active = 0
+            db.session.commit()
+        except Exception:
+            # Silently ignore cleanup errors (lock timeouts, etc.)
+            db.session.rollback()
 
 
 @pytest.fixture
@@ -391,11 +401,14 @@ def field_slot_factory(app, field_factory):
 
     # Cleanup
     with app.app_context():
-        for slot_id in created:
-            slot = FieldSlot.query.get(slot_id)
-            if slot:
-                slot.active = 0
-        db.session.commit()
+        try:
+            for slot_id in created:
+                slot = FieldSlot.query.get(slot_id)
+                if slot:
+                    slot.active = 0
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
 
 # =============================================================================
@@ -471,16 +484,19 @@ def umpire_profile_factory(app):
 
     # Cleanup
     with app.app_context():
-        from app.models.umpire_profile import UmpireProfile
-        for profile_id in created_profiles:
-            profile = UmpireProfile.query.get(profile_id)
-            if profile:
-                db.session.delete(profile)
-        for user_id in created_users:
-            user = User.query.get(user_id)
-            if user:
-                user.active = 0
-        db.session.commit()
+        try:
+            from app.models.umpire_profile import UmpireProfile
+            for profile_id in created_profiles:
+                profile = UmpireProfile.query.get(profile_id)
+                if profile:
+                    db.session.delete(profile)
+            for user_id in created_users:
+                user = User.query.get(user_id)
+                if user:
+                    user.active = 0
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
 
 @pytest.fixture
@@ -527,12 +543,15 @@ def umpire_partner_factory(app):
 
     # Cleanup
     with app.app_context():
-        from app.models.umpire_partner import UmpirePartner
-        for partner_id in created:
-            partner = UmpirePartner.query.get(partner_id)
-            if partner:
-                partner.active = False
-        db.session.commit()
+        try:
+            from app.models.umpire_partner import UmpirePartner
+            for partner_id in created:
+                partner = UmpirePartner.query.get(partner_id)
+                if partner:
+                    partner.active = False
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
 
 @pytest.fixture
@@ -602,9 +621,12 @@ def league_factory(app):
 
     # Cleanup
     with app.app_context():
-        from app.models.league import League
-        for league_id in created:
-            league = League.query.get(league_id)
-            if league:
-                league.active = 0
-        db.session.commit()
+        try:
+            from app.models.league import League
+            for league_id in created:
+                league = League.query.get(league_id)
+                if league:
+                    league.active = 0
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
