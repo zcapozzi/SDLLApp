@@ -23,11 +23,21 @@ from pathlib import Path
 from datetime import datetime, timedelta
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 # Load environment for database connection
+# Use .env.prod for production database access, fall back to .env
 from dotenv import load_dotenv
-load_dotenv()
+env_prod = PROJECT_ROOT / '.env.prod'
+env_local = PROJECT_ROOT / '.env'
+
+if env_prod.exists():
+    load_dotenv(env_prod)
+    print(f"[Config] Using production credentials from .env.prod")
+else:
+    load_dotenv(env_local)
+    print(f"[Config] Using local credentials from .env (create .env.prod for production)")
 
 # --- Configuration ---
 ERRORS_DIR = Path(__file__).parent.parent / 'errors'
@@ -149,7 +159,7 @@ def is_error_skipped(error_id):
 
 def should_diagnose(error):
     """
-    Check if an error should be diagnosed.
+    Check if an error (AppError object) should be diagnosed.
 
     Returns:
         (bool, str) - (should_diagnose, reason_if_not)
@@ -188,6 +198,128 @@ def should_diagnose(error):
             return False, "Already fixed"
 
     return True, ""
+
+
+def should_diagnose_dict(error):
+    """
+    Check if an error (dict from DB query) should be diagnosed.
+
+    Returns:
+        (bool, str) - (should_diagnose, reason_if_not)
+    """
+    # Tier I only (500 errors)
+    if error['tier'] != 1:
+        return False, "Not Tier I"
+
+    # Skip certain contexts (non-critical)
+    if error['context'] in SKIP_CONTEXTS:
+        return False, f"Skipped context: {error['context']}"
+
+    # Skip bot/crawler requests
+    ua = (error.get('request_user_agent') or '').lower()
+    for pattern in BOT_PATTERNS:
+        if pattern in ua:
+            return False, f"Bot request: {pattern}"
+
+    # Skip health check / favicon / static
+    path = error.get('request_path') or ''
+    for skip_path in SKIP_PATHS:
+        if path.startswith(skip_path):
+            return False, f"Skipped path: {path}"
+
+    # Skip if manually marked to skip
+    if is_error_skipped(error['id']):
+        return False, "Manually skipped"
+
+    # Check diagnosis attempts for this error hash
+    attempts = get_diagnosis_attempts()
+    error_hash = error.get('error_hash')
+    if error_hash and error_hash in attempts:
+        attempt_data = attempts[error_hash]
+        if attempt_data.get('attempts', 0) >= MAX_ATTEMPTS_PER_ERROR:
+            return False, f"Max attempts ({MAX_ATTEMPTS_PER_ERROR}) reached"
+        if attempt_data.get('outcome') == 'fixed':
+            return False, "Already fixed"
+
+    return True, ""
+
+
+def export_error_dict(error):
+    """
+    Export an error dict to markdown/JSON files for Claude Code analysis.
+
+    Args:
+        error: Dict with error fields from database
+
+    Returns:
+        Path to the exported markdown file
+    """
+    PENDING_DIR.mkdir(parents=True, exist_ok=True)
+
+    error_id = error['id']
+    created_at = error['created_at']
+    if hasattr(created_at, 'isoformat'):
+        created_at = created_at.isoformat()
+
+    # Create markdown file
+    md_file = PENDING_DIR / f"error_{error_id}.md"
+    content = f"""# Production Error #{error_id}
+
+## Error Details
+- **Type**: {error['error_type']}
+- **Message**: {error['error_message']}
+- **Context**: {error['context']}
+- **Time**: {created_at}
+
+## Request Info
+- **Method**: {error.get('request_method') or 'N/A'}
+- **Path**: {error.get('request_path') or 'N/A'}
+- **User ID**: {error.get('user_id') or 'Anonymous'}
+
+## Traceback
+```
+{error.get('traceback') or 'No traceback available'}
+```
+
+## Instructions for Claude Code
+
+Please analyze this production error and follow TDD principles:
+
+1. **Read the affected source files** mentioned in the traceback
+2. **Create a reproducing test** in `tests/test_regressions.py`:
+   - Test name: `test_regression_error_{error_id}_<brief_description>`
+   - The test MUST fail with the same error type before the fix
+3. **Run the test** to verify reproduction (should FAIL)
+4. **Implement the fix** with minimal code changes
+5. **Run the test** again (should PASS now)
+6. **Run full test suite**: `python run_tests.py` (no regressions)
+7. **Ask for approval** before committing
+8. **Commit** the fix AND the new test together
+
+To start diagnosis, run:
+```
+python scripts/diagnose_error.py {error_id}
+```
+"""
+    md_file.write_text(content)
+
+    # Create JSON file
+    json_file = PENDING_DIR / f"error_{error_id}.json"
+    json_data = {
+        'id': error['id'],
+        'error_type': error['error_type'],
+        'error_message': error['error_message'],
+        'context': error['context'],
+        'traceback': error.get('traceback'),
+        'request_method': error.get('request_method'),
+        'request_path': error.get('request_path'),
+        'user_id': error.get('user_id'),
+        'created_at': created_at,
+        'error_hash': error.get('error_hash'),
+    }
+    json_file.write_text(json.dumps(json_data, indent=2, default=str))
+
+    return md_file
 
 
 def check_circuit_breaker(new_error_count):
@@ -246,73 +378,91 @@ def send_notification(message):
 
 def poll_and_export():
     """Check for new errors and export them."""
+    import pymysql
+
     # Check if paused
     if is_paused():
         print(f"[{datetime.now()}] System is PAUSED. Run with --resume to clear.")
         return
 
-    from app import create_app
-    from app.models.app_error import AppError
     from app.services.error_diagnosis_service import ErrorDiagnosisService
 
-    app = create_app()
+    # Connect directly to production database using .env.prod credentials
+    try:
+        conn = pymysql.connect(
+            host=os.environ.get('MYSQL_HOST', 'localhost'),
+            port=int(os.environ.get('MYSQL_PORT', 3306)),
+            user=os.environ.get('MYSQL_USER', 'root'),
+            password=os.environ.get('MYSQL_PASSWORD', ''),
+            database=os.environ.get('MYSQL_DB', 'railway')
+        )
+    except Exception as e:
+        print(f"[{datetime.now()}] Failed to connect to database: {e}")
+        return
 
-    with app.app_context():
-        # Get errors from last 24 hours that aren't resolved
-        cutoff = datetime.utcnow() - timedelta(hours=24)
-        errors = AppError.query.filter(
-            AppError.created_at >= cutoff,
-            AppError.resolved == False,
-            AppError.tier == 1  # Only Tier I (500 errors)
-        ).all()
+    cursor = conn.cursor(pymysql.cursors.DictCursor)
 
-        if not errors:
-            print(f"[{datetime.now()}] No new Tier I errors.")
-            return
+    # Get errors from last 24 hours that aren't resolved
+    cutoff = (datetime.utcnow() - timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
+    cursor.execute('''
+        SELECT id, tier, context, error_type, error_message, traceback,
+               request_method, request_path, request_user_agent, user_id,
+               created_at, error_hash, resolved
+        FROM sdll_app_errors
+        WHERE created_at >= %s AND resolved = FALSE AND tier = 1
+        ORDER BY created_at DESC
+    ''', (cutoff,))
 
-        # Filter to only exportable errors
-        exported_ids = get_exported_ids()
-        exportable = []
-        for error in errors:
-            if error.id in exported_ids:
-                continue
-            should, reason = should_diagnose(error)
-            if should:
-                exportable.append(error)
-            else:
-                print(f"  Skipping error {error.id}: {reason}")
+    errors = cursor.fetchall()
+    conn.close()
 
-        if not exportable:
-            print(f"[{datetime.now()}] {len(errors)} errors found, none exportable.")
-            return
+    if not errors:
+        print(f"[{datetime.now()}] No new Tier I errors.")
+        return
 
-        # Check circuit breaker
-        can_proceed, reason = check_circuit_breaker(len(exportable))
-        if not can_proceed:
-            print(f"[{datetime.now()}] Cannot proceed: {reason}")
-            return
+    # Filter to only exportable errors
+    exported_ids = get_exported_ids()
+    exportable = []
+    for error in errors:
+        if error['id'] in exported_ids:
+            continue
+        should, reason = should_diagnose_dict(error)
+        if should:
+            exportable.append(error)
+        else:
+            print(f"  Skipping error {error['id']}: {reason}")
 
-        print(f"[{datetime.now()}] Found {len(exportable)} new errors to export.")
+    if not exportable:
+        print(f"[{datetime.now()}] {len(errors)} errors found, none exportable.")
+        return
 
-        # Update state
-        state = load_state()
-        state['errors_this_hour'] += len(exportable)
-        save_state(state)
+    # Check circuit breaker
+    can_proceed, reason = check_circuit_breaker(len(exportable))
+    if not can_proceed:
+        print(f"[{datetime.now()}] Cannot proceed: {reason}")
+        return
 
-        for error in exportable:
-            file_path = ErrorDiagnosisService.export_for_diagnosis(error)
-            print(f"  Exported error {error.id} to {file_path}")
-            exported_ids.add(error.id)
+    print(f"[{datetime.now()}] Found {len(exportable)} new errors to export.")
 
-        save_exported_ids(exported_ids)
+    # Update state
+    state = load_state()
+    state['errors_this_hour'] += len(exportable)
+    save_state(state)
 
-        # Send notification
-        if os.environ.get('NOTIFY_ON_NEW_ERRORS') == '1':
-            message = f"🔍 {len(exportable)} new error(s) ready for diagnosis\n\n"
-            for e in exportable[:5]:  # Show first 5
-                message += f"• [{e.id}] {e.error_type}: {e.error_message[:50]}...\n"
-            message += f"\nRun: claude 'Diagnose pending errors'"
-            send_notification(message)
+    for error in exportable:
+        file_path = export_error_dict(error)
+        print(f"  Exported error {error['id']} to {file_path}")
+        exported_ids.add(error['id'])
+
+    save_exported_ids(exported_ids)
+
+    # Send notification
+    if os.environ.get('NOTIFY_ON_NEW_ERRORS') == '1':
+        message = f"🔍 {len(exportable)} new error(s) ready for diagnosis\n\n"
+        for e in exportable[:5]:  # Show first 5
+            message += f"• [{e['id']}] {e['error_type']}: {e['error_message'][:50]}...\n"
+        message += f"\nRun: claude 'Diagnose pending errors'"
+        send_notification(message)
 
 
 def show_status():

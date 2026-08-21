@@ -36,7 +36,9 @@ env/
 # Environment variables
 .env
 .env.local
+.env.prod
 .env.*.local
+test_db.bat
 
 # Secrets
 client_secrets.json

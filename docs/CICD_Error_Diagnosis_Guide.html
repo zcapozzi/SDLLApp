@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="South Durham Little League" />
+  <title>CI/CD Pipeline &amp; Automated Error Diagnosis</title>
+  <style>
+    html {
+      line-height: 1.5;
+      font-family: Georgia, serif;
+      font-size: 20px;
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      word-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 1em;
+      }
+    }
+    @media print {
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, 'Lucida Console', Consolas, monospace;
+      font-size: 85%;
+      margin: 0;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    span.underline{text-decoration: underline;}
+    div.column{display: inline-block; vertical-align: top; width: 50%;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">CI/CD Pipeline &amp; Automated Error Diagnosis</h1>
+<p class="subtitle">A Flask/Python Implementation Guide</p>
+<p class="author">South Durham Little League</p>
+<p class="date">August 2026</p>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#overview">Overview</a>
+<ul>
+<li><a href="#key-benefits">Key Benefits</a></li>
+</ul></li>
+<li><a href="#part-1-three-layer-testing-pipeline">Part 1: Three-Layer Testing Pipeline</a>
+<ul>
+<li><a href="#layer-overview">Layer Overview</a></li>
+<li><a href="#layer-1-quick-tests">Layer 1: Quick Tests</a>
+<ul>
+<li><a href="#characteristics">Characteristics</a></li>
+<li><a href="#running-quick-tests">Running Quick Tests</a></li>
+<li><a href="#example-quick-test">Example Quick Test</a></li>
+</ul></li>
+<li><a href="#layer-2-integration-tests">Layer 2: Integration Tests</a>
+<ul>
+<li><a href="#characteristics-1">Characteristics</a></li>
+<li><a href="#running-integration-tests">Running Integration Tests</a></li>
+<li><a href="#factory-fixtures">Factory Fixtures</a></li>
+<li><a href="#using-factories-in-tests">Using Factories in Tests</a></li>
+</ul></li>
+<li><a href="#layer-3-smoke-tests">Layer 3: Smoke Tests</a>
+<ul>
+<li><a href="#feature-inventory-testsinventory.yaml">Feature Inventory (tests/inventory.yaml)</a></li>
+<li><a href="#running-smoke-tests">Running Smoke Tests</a></li>
+</ul></li>
+<li><a href="#pre-push-validation">Pre-Push Validation</a>
+<ul>
+<li><a href="#setup">Setup</a></li>
+<li><a href="#what-it-checks">What It Checks</a></li>
+</ul></li>
+</ul></li>
+<li><a href="#part-2-error-capture-system">Part 2: Error Capture System</a>
+<ul>
+<li><a href="#tier-system">Tier System</a></li>
+<li><a href="#database-schema">Database Schema</a></li>
+<li><a href="#error-logging-utilities">Error Logging Utilities</a>
+<ul>
+<li><a href="#basic-usage">Basic Usage</a></li>
+<li><a href="#safe-decorators">Safe Decorators</a></li>
+<li><a href="#global-error-handler">Global Error Handler</a></li>
+</ul></li>
+</ul></li>
+<li><a href="#part-3-automated-error-diagnosis">Part 3: Automated Error Diagnosis</a>
+<ul>
+<li><a href="#architecture">Architecture</a></li>
+<li><a href="#file-structure">File Structure</a></li>
+<li><a href="#environment-files">Environment Files</a>
+<ul>
+<li><a href="#env-local-development">.env (Local Development)</a></li>
+<li><a href="#env.prod-production-database-access">.env.prod (Production Database Access)</a></li>
+</ul></li>
+<li><a href="#safety-controls">Safety Controls</a>
+<ul>
+<li><a href="#rate-limiting">Rate Limiting</a></li>
+<li><a href="#circuit-breaker">Circuit Breaker</a></li>
+<li><a href="#error-filtering">Error Filtering</a></li>
+<li><a href="#emergency-controls">Emergency Controls</a></li>
+</ul></li>
+</ul></li>
+<li><a href="#part-4-tdd-fix-workflow">Part 4: TDD Fix Workflow</a>
+<ul>
+<li><a href="#the-process">The Process</a></li>
+<li><a href="#regression-test-template">Regression Test Template</a></li>
+<li><a href="#claude-code-diagnosis-commands">Claude Code Diagnosis Commands</a></li>
+</ul></li>
+<li><a href="#part-5-setup-guide">Part 5: Setup Guide</a>
+<ul>
+<li><a href="#initial-setup">Initial Setup</a>
+<ul>
+<li><a href="#create-error-table">1. Create Error Table</a></li>
+<li><a href="#register-global-error-handler">2. Register Global Error Handler</a></li>
+<li><a href="#create-production-credentials-file">3. Create Production Credentials File</a></li>
+<li><a href="#setup-polling-task-windows">4. Setup Polling Task (Windows)</a></li>
+<li><a href="#setup-polling-task-linuxmac">5. Setup Polling Task (Linux/Mac)</a></li>
+</ul></li>
+<li><a href="#daily-workflow">Daily Workflow</a></li>
+</ul></li>
+<li><a href="#appendix-a-file-reference">Appendix A: File Reference</a>
+<ul>
+<li><a href="#scripts">Scripts</a></li>
+<li><a href="#configuration">Configuration</a></li>
+<li><a href="#error-handling">Error Handling</a></li>
+</ul></li>
+<li><a href="#appendix-b-troubleshooting">Appendix B: Troubleshooting</a>
+<ul>
+<li><a href="#common-issues">Common Issues</a>
+<ul>
+<li><a href="#table-doesnt-exist">“Table doesn’t exist”</a></li>
+<li><a href="#poll-script-times-out">Poll script times out</a></li>
+<li><a href="#tests-fail-with-no-database">Tests fail with “No database”</a></li>
+<li><a href="#claude-code-cant-find-files">Claude Code can’t find files</a></li>
+</ul></li>
+<li><a href="#getting-help">Getting Help</a></li>
+</ul></li>
+</ul>
+</nav>
+<h1 id="overview">Overview</h1>
+<p>This document describes a comprehensive CI/CD testing pipeline and automated error diagnosis system for Flask/Python web applications. The system provides:</p>
+<ol type="1">
+<li><strong>Three-Layer Testing Pipeline</strong> - Fast TDD, integration tests, and full smoke tests</li>
+<li><strong>Automated Error Capture</strong> - Production errors logged with full context</li>
+<li><strong>Local AI Diagnosis</strong> - Claude Code analyzes errors with full codebase context</li>
+<li><strong>TDD Fix Workflow</strong> - Every fix includes a regression test</li>
+</ol>
+<h2 id="key-benefits">Key Benefits</h2>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Benefit</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Fast Feedback</td>
+<td>Quick tests run in &lt;5 seconds for TDD workflow</td>
+</tr>
+<tr class="even">
+<td>Full Coverage</td>
+<td>Smoke tests exercise every feature before deployment</td>
+</tr>
+<tr class="odd">
+<td>Automatic Capture</td>
+<td>Production errors captured with request context and traceback</td>
+</tr>
+<tr class="even">
+<td>AI-Assisted Fixes</td>
+<td>Claude Code diagnoses with full codebase understanding</td>
+</tr>
+<tr class="odd">
+<td>Regression Prevention</td>
+<td>Every bug fix creates a permanent test</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h1 id="part-1-three-layer-testing-pipeline">Part 1: Three-Layer Testing Pipeline</h1>
+<h2 id="layer-overview">Layer Overview</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Layer</th>
+<th>Name</th>
+<th>Speed</th>
+<th>Purpose</th>
+<th>When to Run</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td>Quick</td>
+<td>~5s</td>
+<td>TDD development</td>
+<td>Every code change</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td>Integration</td>
+<td>~60s</td>
+<td>Feature verification</td>
+<td>Before commits</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td>Smoke</td>
+<td>5-15min</td>
+<td>Full site coverage</td>
+<td>Before deployment</td>
+</tr>
+</tbody>
+</table>
+<h2 id="layer-1-quick-tests">Layer 1: Quick Tests</h2>
+<p>Quick tests run without database connections and verify core logic.</p>
+<h3 id="characteristics">Characteristics</h3>
+<ul>
+<li>No database required</li>
+<li>No external dependencies</li>
+<li>Tests pure functions and utilities</li>
+<li>Marked with <code>@pytest.mark.quick</code></li>
+</ul>
+<h3 id="running-quick-tests">Running Quick Tests</h3>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> run_tests.py <span class="at">--quick</span></span></code></pre></div>
+<h3 id="example-quick-test">Example Quick Test</h3>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pytest</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="at">@pytest.mark.quick</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> TestDateUtils:</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> test_format_game_date(<span class="va">self</span>):</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>        <span class="im">from</span> app.utils.dates <span class="im">import</span> format_game_date</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>        result <span class="op">=</span> format_game_date(datetime(<span class="dv">2026</span>, <span class="dv">9</span>, <span class="dv">15</span>, <span class="dv">18</span>, <span class="dv">30</span>))</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">assert</span> result <span class="op">==</span> <span class="st">&quot;Sep 15, 6:30 PM&quot;</span></span></code></pre></div>
+<h2 id="layer-2-integration-tests">Layer 2: Integration Tests</h2>
+<p>Integration tests verify features work correctly with the database.</p>
+<h3 id="characteristics-1">Characteristics</h3>
+<ul>
+<li>Requires database connection</li>
+<li>Uses factory fixtures for test data</li>
+<li>Tests routes and database operations</li>
+<li>Automatic cleanup after each test</li>
+</ul>
+<h3 id="running-integration-tests">Running Integration Tests</h3>
+<div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> run_tests.py              <span class="co"># All integration tests</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> run_tests.py auth         <span class="co"># Just auth tests</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> run_tests.py fields games <span class="co"># Multiple test files</span></span></code></pre></div>
+<h3 id="factory-fixtures">Factory Fixtures</h3>
+<p>Factory fixtures create test data with automatic cleanup:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># In conftest.py</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="at">@pytest.fixture</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> field_factory(app):</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Factory for creating test fields.&quot;&quot;&quot;</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    created <span class="op">=</span> []</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> _create(name<span class="op">=</span><span class="va">None</span>, <span class="op">**</span>kwargs):</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> app.app_context():</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>            field <span class="op">=</span> Field(</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>                location_title<span class="op">=</span>name <span class="kw">or</span> <span class="ss">f&#39;Test Field </span><span class="sc">{</span>uuid<span class="sc">.</span>uuid4()<span class="sc">.</span><span class="bu">hex</span>[:<span class="dv">8</span>]<span class="sc">}</span><span class="ss">&#39;</span>,</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>                active<span class="op">=</span><span class="dv">1</span>,</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>                <span class="op">**</span>kwargs</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>            db.session.add(field)</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>            db.session.commit()</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>            created.append(field.ID)</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> field</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">yield</span> _create</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Cleanup</span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">with</span> app.app_context():</span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> field_id <span class="kw">in</span> created:</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>            Field.query.get(field_id).active <span class="op">=</span> <span class="dv">0</span></span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>        db.session.commit()</span></code></pre></div>
+<h3 id="using-factories-in-tests">Using Factories in Tests</h3>
+<div class="sourceCode" id="cb5"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> test_field_creation(field_factory, scheduler_client):</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Test creating a new field.&quot;&quot;&quot;</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    field <span class="op">=</span> field_factory(<span class="st">&#39;Test Field&#39;</span>, is_owned<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    response <span class="op">=</span> scheduler_client.get(<span class="ss">f&#39;/fields/</span><span class="sc">{</span>field<span class="sc">.ID}</span><span class="ss">&#39;</span>)</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> response.status_code <span class="op">==</span> <span class="dv">200</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> b<span class="st">&#39;Test Field&#39;</span> <span class="kw">in</span> response.data</span></code></pre></div>
+<h2 id="layer-3-smoke-tests">Layer 3: Smoke Tests</h2>
+<p>Smoke tests exercise every feature from an inventory file.</p>
+<h3 id="feature-inventory-testsinventory.yaml">Feature Inventory (tests/inventory.yaml)</h3>
+<div class="sourceCode" id="cb6"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">features</span><span class="kw">:</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">name</span><span class="kw">:</span><span class="at"> Authentication</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">category</span><span class="kw">:</span><span class="at"> auth</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">routes</span><span class="kw">:</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="fu">path</span><span class="kw">:</span><span class="at"> /auth/login</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">method</span><span class="kw">:</span><span class="at"> GET</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">expect</span><span class="kw">:</span><span class="at"> </span><span class="dv">200</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="fu">path</span><span class="kw">:</span><span class="at"> /auth/login</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">method</span><span class="kw">:</span><span class="at"> POST</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">data</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">email</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;test@example.com&quot;</span><span class="kw">,</span><span class="at"> </span><span class="fu">password</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;test123&quot;</span><span class="kw">}</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">expect</span><span class="kw">:</span><span class="at"> </span><span class="dv">302</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">name</span><span class="kw">:</span><span class="at"> Field Management</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">category</span><span class="kw">:</span><span class="at"> fields</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">requires_auth</span><span class="kw">:</span><span class="at"> scheduler</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">routes</span><span class="kw">:</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="fu">path</span><span class="kw">:</span><span class="at"> /fields/</span></span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">method</span><span class="kw">:</span><span class="at"> GET</span></span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">expect</span><span class="kw">:</span><span class="at"> </span><span class="dv">200</span></span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">contains</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="st">&quot;Field Management&quot;</span><span class="kw">,</span><span class="at"> </span><span class="st">&quot;Add Field&quot;</span><span class="kw">]</span></span></code></pre></div>
+<h3 id="running-smoke-tests">Running Smoke Tests</h3>
+<div class="sourceCode" id="cb7"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> run_tests.py <span class="at">--full</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="co"># or</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/smoke_test.py</span></code></pre></div>
+<h2 id="pre-push-validation">Pre-Push Validation</h2>
+<p>A git hook runs validation before every push:</p>
+<h3 id="setup">Setup</h3>
+<div class="sourceCode" id="cb8"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> config core.hooksPath .githooks</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">chmod</span> +x .githooks/pre-push  <span class="co"># Linux/Mac</span></span></code></pre></div>
+<h3 id="what-it-checks">What It Checks</h3>
+<ol type="1">
+<li>Quick tests pass</li>
+<li>No syntax errors</li>
+<li>No obvious security issues</li>
+<li>Integration tests pass (optional)</li>
+</ol>
+<hr />
+<h1 id="part-2-error-capture-system">Part 2: Error Capture System</h1>
+<h2 id="tier-system">Tier System</h2>
+<p>Errors are classified into tiers for appropriate handling:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Tier</th>
+<th>Name</th>
+<th>Behavior</th>
+<th>Examples</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>I</td>
+<td>Critical</td>
+<td>Immediate alert</td>
+<td>Database failures, 500 errors, auth issues</td>
+</tr>
+<tr class="even">
+<td>II</td>
+<td>Digest</td>
+<td>Periodic summary</td>
+<td>Analytics failures, minor validation errors</td>
+</tr>
+</tbody>
+</table>
+<h2 id="database-schema">Database Schema</h2>
+<div class="sourceCode" id="cb9"><pre class="sourceCode sql"><code class="sourceCode sql"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">CREATE</span> <span class="kw">TABLE</span> sdll_app_errors (</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">id</span> <span class="dt">INT</span> AUTO_INCREMENT <span class="kw">PRIMARY</span> <span class="kw">KEY</span>,</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    created_at DATETIME <span class="kw">DEFAULT</span> <span class="fu">CURRENT_TIMESTAMP</span>,</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Classification</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>    tier <span class="dt">SMALLINT</span> <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="dv">2</span>,</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">context</span> <span class="dt">VARCHAR</span>(<span class="dv">100</span>) <span class="kw">NOT</span> <span class="kw">NULL</span>,</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>    error_type <span class="dt">VARCHAR</span>(<span class="dv">100</span>) <span class="kw">NOT</span> <span class="kw">NULL</span>,</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>    error_message TEXT <span class="kw">NOT</span> <span class="kw">NULL</span>,</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>    traceback TEXT,</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Request context</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>    request_method <span class="dt">VARCHAR</span>(<span class="dv">10</span>),</span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>    request_path <span class="dt">VARCHAR</span>(<span class="dv">500</span>),</span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>    request_user_agent <span class="dt">VARCHAR</span>(<span class="dv">500</span>),</span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>    user_id <span class="dt">INT</span>,</span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Status</span></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>    notified <span class="dt">BOOLEAN</span> <span class="kw">DEFAULT</span> <span class="kw">FALSE</span>,</span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>    resolved <span class="dt">BOOLEAN</span> <span class="kw">DEFAULT</span> <span class="kw">FALSE</span>,</span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>    resolved_at DATETIME,</span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a>    resolved_by <span class="dt">INT</span>,</span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a>    error_hash <span class="dt">VARCHAR</span>(<span class="dv">64</span>)</span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a>);</span></code></pre></div>
+<h2 id="error-logging-utilities">Error Logging Utilities</h2>
+<h3 id="basic-usage">Basic Usage</h3>
+<div class="sourceCode" id="cb10"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> app.utils.errors <span class="im">import</span> log_error, log_tier1, log_tier2</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Auto-classify based on context</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>log_error(<span class="st">&#39;page_view_tracking&#39;</span>, exception, request)</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Force Tier I (critical)</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>log_tier1(<span class="st">&#39;database_connection&#39;</span>, exception, request)</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Force Tier II (digest)</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>log_tier2(<span class="st">&#39;analytics&#39;</span>, exception, request)</span></code></pre></div>
+<h3 id="safe-decorators">Safe Decorators</h3>
+<div class="sourceCode" id="cb11"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> app.utils.errors <span class="im">import</span> safe_tracking</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="at">@safe_tracking</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> log_page_view(request, user_id):</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;This will never crash - errors are logged silently.&quot;&quot;&quot;</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    page_view <span class="op">=</span> PageView(...)</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    db.session.add(page_view)</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    db.session.commit()</span></code></pre></div>
+<h3 id="global-error-handler">Global Error Handler</h3>
+<div class="sourceCode" id="cb12"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># In app/__init__.py</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> app.utils.errors <span class="im">import</span> register_global_handler</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> create_app(config_name<span class="op">=</span><span class="va">None</span>):</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    app <span class="op">=</span> Flask(<span class="va">__name__</span>)</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ... setup ...</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    register_global_handler(app)</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> app</span></code></pre></div>
+<p>This catches all unhandled exceptions and logs them as Tier I errors.</p>
+<hr />
+<h1 id="part-3-automated-error-diagnosis">Part 3: Automated Error Diagnosis</h1>
+<h2 id="architecture">Architecture</h2>
+<pre><code>PRODUCTION (Railway)                    LOCAL (Developer Machine)
+────────────────────                    ──────────────────────────
+
+500 Error Occurs
+      ↓
+Global handler catches it
+      ↓
+Stored in sdll_app_errors ─────────────&gt; Scheduled task polls DB
+      ↓                                  every 5 minutes
+Alert sent (optional)                          ↓
+                                        Error exported to
+                                        errors/pending/error_N.md
+                                               ↓
+                                        Developer runs Claude Code:
+                                        $ claude &quot;Diagnose error N&quot;
+                                               ↓
+                                        Claude reads error + source
+                                        Creates reproducing test
+                                        Implements fix
+                                        Runs all tests
+                                        Asks for approval
+                                        Commits fix + test</code></pre>
+<h2 id="file-structure">File Structure</h2>
+<pre><code>project/
+├── errors/
+│   ├── .gitignore          # Ignore error files
+│   ├── pending/            # Errors awaiting diagnosis
+│   │   ├── error_1.md
+│   │   └── error_1.json
+│   ├── diagnosed/          # Completed diagnoses
+│   └── .state.json         # Rate limiting state
+├── scripts/
+│   ├── poll_errors.py      # Polls DB, exports errors
+│   ├── diagnose_error.py   # Helper to view/manage errors
+│   └── setup_error_poll_task.bat  # Windows task setup
+└── tests/
+    └── test_regressions.py # Regression tests from fixes</code></pre>
+<h2 id="environment-files">Environment Files</h2>
+<h3 id="env-local-development">.env (Local Development)</h3>
+<div class="sourceCode" id="cb15"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="va">FLASK_CONFIG</span><span class="op">=</span>development</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="va">MYSQL_HOST</span><span class="op">=</span>localhost</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="va">MYSQL_USER</span><span class="op">=</span>root</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="va">MYSQL_PASSWORD</span><span class="op">=</span>localpass</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="va">MYSQL_DB</span><span class="op">=</span>sdll</span></code></pre></div>
+<h3 id="env.prod-production-database-access">.env.prod (Production Database Access)</h3>
+<div class="sourceCode" id="cb16"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># For polling production errors locally</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="va">MYSQL_HOST</span><span class="op">=</span>your-prod-host.railway.app</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="va">MYSQL_PORT</span><span class="op">=</span>12345</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="va">MYSQL_USER</span><span class="op">=</span>root</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="va">MYSQL_PASSWORD</span><span class="op">=</span>prodpassword</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="va">MYSQL_DB</span><span class="op">=</span>railway</span></code></pre></div>
+<h2 id="safety-controls">Safety Controls</h2>
+<h3 id="rate-limiting">Rate Limiting</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Control</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Max errors per hour</td>
+<td>5</td>
+<td>Pause if too many errors</td>
+</tr>
+<tr class="even">
+<td>Max diagnoses per day</td>
+<td>10</td>
+<td>Prevent runaway fixes</td>
+</tr>
+<tr class="odd">
+<td>Cool-down between diagnoses</td>
+<td>10 min</td>
+<td>Time to review each fix</td>
+</tr>
+<tr class="even">
+<td>Max attempts per error</td>
+<td>2</td>
+<td>Don’t retry failing fixes</td>
+</tr>
+</tbody>
+</table>
+<h3 id="circuit-breaker">Circuit Breaker</h3>
+<p>When limits are exceeded: 1. System creates <code>errors/PAUSED</code> lock file 2. Sends alert (if configured) 3. No more errors are exported until manually resumed</p>
+<h3 id="error-filtering">Error Filtering</h3>
+<p>Only diagnose errors that match ALL criteria:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Tier I only (500 errors)</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> error.tier <span class="op">!=</span> <span class="dv">1</span>:</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">False</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Skip non-critical contexts</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>SKIP_CONTEXTS <span class="op">=</span> {<span class="st">&#39;tracking&#39;</span>, <span class="st">&#39;analytics&#39;</span>, <span class="st">&#39;page_view&#39;</span>}</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> error.context <span class="kw">in</span> SKIP_CONTEXTS:</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">False</span></span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Skip bot requests</span></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>BOT_PATTERNS <span class="op">=</span> [<span class="st">&#39;bot&#39;</span>, <span class="st">&#39;crawler&#39;</span>, <span class="st">&#39;spider&#39;</span>, <span class="st">&#39;curl&#39;</span>]</span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="bu">any</span>(p <span class="kw">in</span> user_agent.lower() <span class="cf">for</span> p <span class="kw">in</span> BOT_PATTERNS):</span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">False</span></span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Skip static paths</span></span>
+<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>SKIP_PATHS <span class="op">=</span> [<span class="st">&#39;/health&#39;</span>, <span class="st">&#39;/favicon&#39;</span>, <span class="st">&#39;/static/&#39;</span>]</span>
+<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="bu">any</span>(path.startswith(p) <span class="cf">for</span> p <span class="kw">in</span> SKIP_PATHS):</span>
+<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">False</span></span></code></pre></div>
+<h3 id="emergency-controls">Emergency Controls</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Action</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>PAUSE immediately</td>
+<td><code>echo "paused" &gt; errors\PAUSED</code></td>
+</tr>
+<tr class="even">
+<td>Resume</td>
+<td><code>del errors\PAUSED</code> (Windows) or <code>rm errors/PAUSED</code></td>
+</tr>
+<tr class="odd">
+<td>Check status</td>
+<td><code>python scripts/poll_errors.py --status</code></td>
+</tr>
+<tr class="even">
+<td>Skip specific error</td>
+<td><code>echo "skip" &gt; errors\SKIP_123</code></td>
+</tr>
+<tr class="odd">
+<td>Stop scheduled task</td>
+<td><code>schtasks /end /tn "SDLL Error Poll"</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h1 id="part-4-tdd-fix-workflow">Part 4: TDD Fix Workflow</h1>
+<h2 id="the-process">The Process</h2>
+<p>Every bug fix follows Test-Driven Development:</p>
+<ol type="1">
+<li><strong>Read Error</strong> - Understand what happened</li>
+<li><strong>Write Test</strong> - Create test that reproduces the bug</li>
+<li><strong>Verify Failure</strong> - Run test, confirm it fails</li>
+<li><strong>Implement Fix</strong> - Make minimal code changes</li>
+<li><strong>Verify Success</strong> - Run test, confirm it passes</li>
+<li><strong>Run Full Suite</strong> - Ensure no regressions</li>
+<li><strong>Get Approval</strong> - Human reviews before commit</li>
+<li><strong>Commit Together</strong> - Fix AND test in same commit</li>
+</ol>
+<h2 id="regression-test-template">Regression Test Template</h2>
+<div class="sourceCode" id="cb18"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># tests/test_regressions.py</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> TestProductionRegressions:</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Tests that reproduce and verify fixes for production errors.&quot;&quot;&quot;</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> test_regression_error_42_null_field_name(<span class="va">self</span>, app, field_factory):</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>        <span class="co">&quot;&quot;&quot;</span></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a><span class="co">        Production Error: #42</span></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a><span class="co">        Context: Field display on schedule page</span></span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a><span class="co">        Error: AttributeError: &#39;NoneType&#39; object has no attribute &#39;name&#39;</span></span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a><span class="co">        Path: /schedule/2026/fall</span></span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a><span class="co">        Root cause: Field was deleted but game still referenced it</span></span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a><span class="co">        &quot;&quot;&quot;</span></span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> app.app_context():</span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a>            <span class="co"># 1. Create the conditions that caused the error</span></span>
+<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a>            field <span class="op">=</span> field_factory(<span class="st">&#39;Test Field&#39;</span>)</span>
+<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a>            game <span class="op">=</span> Game(location_id<span class="op">=</span>field.ID, ...)</span>
+<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a>            db.session.add(game)</span>
+<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a>            db.session.commit()</span>
+<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>            <span class="co"># Delete field (simulating the bug condition)</span></span>
+<span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a>            field.active <span class="op">=</span> <span class="dv">0</span></span>
+<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a>            db.session.commit()</span>
+<span id="cb18-24"><a href="#cb18-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-25"><a href="#cb18-25" aria-hidden="true" tabindex="-1"></a>            <span class="co"># 2. Call the code that failed</span></span>
+<span id="cb18-26"><a href="#cb18-26" aria-hidden="true" tabindex="-1"></a>            <span class="co"># Before fix: This would raise AttributeError</span></span>
+<span id="cb18-27"><a href="#cb18-27" aria-hidden="true" tabindex="-1"></a>            <span class="co"># After fix: This should handle None gracefully</span></span>
+<span id="cb18-28"><a href="#cb18-28" aria-hidden="true" tabindex="-1"></a>            result <span class="op">=</span> get_game_location_name(game)</span>
+<span id="cb18-29"><a href="#cb18-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-30"><a href="#cb18-30" aria-hidden="true" tabindex="-1"></a>            <span class="co"># 3. Assert expected behavior</span></span>
+<span id="cb18-31"><a href="#cb18-31" aria-hidden="true" tabindex="-1"></a>            <span class="cf">assert</span> result <span class="op">==</span> <span class="st">&quot;Unknown Field&quot;</span>  <span class="co"># Graceful fallback</span></span></code></pre></div>
+<h2 id="claude-code-diagnosis-commands">Claude Code Diagnosis Commands</h2>
+<div class="sourceCode" id="cb19"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># List pending errors</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/diagnose_error.py</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="co"># View specific error</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/diagnose_error.py 42</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Full diagnosis with Claude Code</span></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="ex">claude</span> <span class="st">&quot;Diagnose and fix production error 42&quot;</span></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Mark error as fixed</span></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/diagnose_error.py <span class="at">--mark-fixed</span> 42</span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Mark error as skipped (won&#39;t retry)</span></span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/diagnose_error.py <span class="at">--mark-skipped</span> 42 <span class="at">--reason</span> <span class="st">&quot;Expected behavior&quot;</span></span></code></pre></div>
+<hr />
+<h1 id="part-5-setup-guide">Part 5: Setup Guide</h1>
+<h2 id="initial-setup">Initial Setup</h2>
+<h3 id="create-error-table">1. Create Error Table</h3>
+<div class="sourceCode" id="cb20"><pre class="sourceCode sql"><code class="sourceCode sql"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Run on production database</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="kw">CREATE</span> <span class="kw">TABLE</span> <span class="cf">IF</span> <span class="kw">NOT</span> <span class="kw">EXISTS</span> sdll_app_errors (</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">id</span> <span class="dt">INT</span> AUTO_INCREMENT <span class="kw">PRIMARY</span> <span class="kw">KEY</span>,</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>    created_at DATETIME <span class="kw">DEFAULT</span> <span class="fu">CURRENT_TIMESTAMP</span>,</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>    tier <span class="dt">SMALLINT</span> <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="dv">2</span>,</span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">context</span> <span class="dt">VARCHAR</span>(<span class="dv">100</span>) <span class="kw">NOT</span> <span class="kw">NULL</span>,</span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>    error_type <span class="dt">VARCHAR</span>(<span class="dv">100</span>) <span class="kw">NOT</span> <span class="kw">NULL</span>,</span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>    error_message TEXT <span class="kw">NOT</span> <span class="kw">NULL</span>,</span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>    traceback TEXT,</span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>    request_method <span class="dt">VARCHAR</span>(<span class="dv">10</span>),</span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a>    request_path <span class="dt">VARCHAR</span>(<span class="dv">500</span>),</span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>    request_user_agent <span class="dt">VARCHAR</span>(<span class="dv">500</span>),</span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a>    user_id <span class="dt">INT</span>,</span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a>    notified <span class="dt">BOOLEAN</span> <span class="kw">DEFAULT</span> <span class="kw">FALSE</span>,</span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a>    resolved <span class="dt">BOOLEAN</span> <span class="kw">DEFAULT</span> <span class="kw">FALSE</span>,</span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a>    resolved_at DATETIME,</span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a>    resolved_by <span class="dt">INT</span>,</span>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a>    error_hash <span class="dt">VARCHAR</span>(<span class="dv">64</span>),</span>
+<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a>    <span class="kw">INDEX</span> idx_tier (tier),</span>
+<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a>    <span class="kw">INDEX</span> idx_created_at (created_at),</span>
+<span id="cb20-21"><a href="#cb20-21" aria-hidden="true" tabindex="-1"></a>    <span class="kw">INDEX</span> idx_resolved (resolved)</span>
+<span id="cb20-22"><a href="#cb20-22" aria-hidden="true" tabindex="-1"></a>);</span></code></pre></div>
+<h3 id="register-global-error-handler">2. Register Global Error Handler</h3>
+<div class="sourceCode" id="cb21"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># app/__init__.py</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> app.utils.errors <span class="im">import</span> register_global_handler</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> create_app(config_name<span class="op">=</span><span class="va">None</span>):</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>    app <span class="op">=</span> Flask(<span class="va">__name__</span>)</span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ... other setup ...</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>    register_global_handler(app)</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> app</span></code></pre></div>
+<h3 id="create-production-credentials-file">3. Create Production Credentials File</h3>
+<div class="sourceCode" id="cb22"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># .env.prod (add to .gitignore!)</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="va">MYSQL_HOST</span><span class="op">=</span>your-prod-host</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="va">MYSQL_PORT</span><span class="op">=</span>12345</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="va">MYSQL_USER</span><span class="op">=</span>root</span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="va">MYSQL_PASSWORD</span><span class="op">=</span>yourpassword</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="va">MYSQL_DB</span><span class="op">=</span>railway</span></code></pre></div>
+<h3 id="setup-polling-task-windows">4. Setup Polling Task (Windows)</h3>
+<pre class="batch"><code>scripts\setup_error_poll_task.bat</code></pre>
+<h3 id="setup-polling-task-linuxmac">5. Setup Polling Task (Linux/Mac)</h3>
+<div class="sourceCode" id="cb24"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Add to crontab</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="ex">*/5</span> <span class="pp">*</span> <span class="pp">*</span> <span class="pp">*</span> <span class="pp">*</span> cd /path/to/project <span class="kw">&amp;&amp;</span> <span class="ex">python</span> scripts/poll_errors.py</span></code></pre></div>
+<h2 id="daily-workflow">Daily Workflow</h2>
+<ol type="1">
+<li><strong>Morning</strong>: Check <code>python scripts/poll_errors.py --status</code></li>
+<li><strong>If errors pending</strong>: Run <code>claude "Diagnose pending errors"</code></li>
+<li><strong>Review fixes</strong>: Approve or reject Claude’s proposed changes</li>
+<li><strong>Deploy</strong>: Push to production after tests pass</li>
+</ol>
+<hr />
+<h1 id="appendix-a-file-reference">Appendix A: File Reference</h1>
+<h2 id="scripts">Scripts</h2>
+<table>
+<thead>
+<tr class="header">
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>run_tests.py</code></td>
+<td>Main test runner with layer support</td>
+</tr>
+<tr class="even">
+<td><code>scripts/poll_errors.py</code></td>
+<td>Poll production DB for errors</td>
+</tr>
+<tr class="odd">
+<td><code>scripts/diagnose_error.py</code></td>
+<td>View and manage error queue</td>
+</tr>
+<tr class="even">
+<td><code>scripts/smoke_test.py</code></td>
+<td>Run full smoke test suite</td>
+</tr>
+<tr class="odd">
+<td><code>scripts/pre_push_check.py</code></td>
+<td>Pre-push validation</td>
+</tr>
+</tbody>
+</table>
+<h2 id="configuration">Configuration</h2>
+<table>
+<thead>
+<tr class="header">
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>.env</code></td>
+<td>Local development config</td>
+</tr>
+<tr class="even">
+<td><code>.env.prod</code></td>
+<td>Production database access</td>
+</tr>
+<tr class="odd">
+<td><code>tests/inventory.yaml</code></td>
+<td>Feature inventory for smoke tests</td>
+</tr>
+<tr class="even">
+<td><code>tests/conftest.py</code></td>
+<td>Pytest fixtures and factories</td>
+</tr>
+</tbody>
+</table>
+<h2 id="error-handling">Error Handling</h2>
+<table>
+<thead>
+<tr class="header">
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>app/utils/errors.py</code></td>
+<td>Error logging utilities</td>
+</tr>
+<tr class="even">
+<td><code>app/models/app_error.py</code></td>
+<td>AppError database model</td>
+</tr>
+<tr class="odd">
+<td><code>app/services/error_diagnosis_service.py</code></td>
+<td>Error export service</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h1 id="appendix-b-troubleshooting">Appendix B: Troubleshooting</h1>
+<h2 id="common-issues">Common Issues</h2>
+<h3 id="table-doesnt-exist">“Table doesn’t exist”</h3>
+<p>Run the migration SQL on your production database.</p>
+<h3 id="poll-script-times-out">Poll script times out</h3>
+<p>Check <code>.env.prod</code> has correct host, port, and credentials.</p>
+<h3 id="tests-fail-with-no-database">Tests fail with “No database”</h3>
+<p>Ensure MySQL is running and <code>.env</code> has correct local credentials.</p>
+<h3 id="claude-code-cant-find-files">Claude Code can’t find files</h3>
+<p>Run from project root directory.</p>
+<h2 id="getting-help">Getting Help</h2>
+<ul>
+<li>Check <code>python scripts/poll_errors.py --status</code></li>
+<li>View recent errors: <code>python scripts/diagnose_error.py</code></li>
+<li>Check logs in <code>errors/</code> directory</li>
+</ul>
+</body>
+</html>
