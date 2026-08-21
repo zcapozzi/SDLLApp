@@ -2,6 +2,12 @@
 """
 Poll production database for new errors and export for Claude Code diagnosis.
 
+DEDUPLICATION BY ERROR HASH:
+  - Same bug triggering 100 times = 1 unique error to diagnose
+  - Errors are grouped by error_hash (based on traceback/line number)
+  - Circuit breaker counts UNIQUE errors, not raw occurrences
+  - If one broken endpoint is hit 50 times, we diagnose it once
+
 SINGLE-THREADED DESIGN:
   - Only ONE Claude Code diagnosis runs at a time
   - Uses a lock file to prevent concurrent sessions
@@ -80,7 +86,7 @@ def load_state():
             last_hour = data.get('last_hour_reset', '')
             current_hour = datetime.now().strftime('%Y-%m-%d-%H')
             if last_hour != current_hour:
-                data['errors_this_hour'] = 0
+                data['unique_errors_this_hour'] = 0
                 data['last_hour_reset'] = current_hour
             # Reset daily counter if day changed
             last_day = data.get('last_day_reset', '')
@@ -88,11 +94,14 @@ def load_state():
             if last_day != current_day:
                 data['diagnoses_today'] = 0
                 data['last_day_reset'] = current_day
+            # Migration: rename old key if present
+            if 'errors_this_hour' in data and 'unique_errors_this_hour' not in data:
+                data['unique_errors_this_hour'] = data.pop('errors_this_hour')
             return data
         except Exception:
             pass
     return {
-        'errors_this_hour': 0,
+        'unique_errors_this_hour': 0,
         'diagnoses_today': 0,
         'last_diagnosis': None,
         'last_hour_reset': datetime.now().strftime('%Y-%m-%d-%H'),
@@ -120,6 +129,24 @@ def save_exported_ids(ids):
     """Save list of exported error IDs."""
     ERRORS_DIR.mkdir(parents=True, exist_ok=True)
     EXPORTED_FILE.write_text(json.dumps(list(ids)))
+
+
+def get_exported_hashes():
+    """Load set of already-exported error hashes (unique errors)."""
+    exported_hashes_file = ERRORS_DIR / '.exported_hashes.json'
+    if exported_hashes_file.exists():
+        try:
+            return set(json.loads(exported_hashes_file.read_text()))
+        except Exception:
+            pass
+    return set()
+
+
+def save_exported_hashes(hashes):
+    """Save set of exported error hashes."""
+    exported_hashes_file = ERRORS_DIR / '.exported_hashes.json'
+    ERRORS_DIR.mkdir(parents=True, exist_ok=True)
+    exported_hashes_file.write_text(json.dumps(list(hashes)))
 
 
 def get_diagnosis_attempts():
@@ -375,19 +402,23 @@ python scripts/diagnose_error.py {error_id}
     return md_file
 
 
-def check_circuit_breaker(new_error_count):
+def check_circuit_breaker(unique_error_count):
     """
-    Check if we should pause due to high volume.
+    Check if we should pause due to high volume of UNIQUE errors.
+
+    IMPORTANT: This counts unique error hashes, not raw error occurrences.
+    The same bug triggering 100 times = 1 unique error.
+    10 different bugs = 10 unique errors (potential systemic issue).
 
     Returns:
         (bool, str) - (can_proceed, reason_if_not)
     """
     state = load_state()
 
-    # Too many errors?
-    if state['errors_this_hour'] + new_error_count > MAX_ERRORS_PER_HOUR:
-        pause_system(f"High error volume: {state['errors_this_hour'] + new_error_count} errors in 1 hour")
-        return False, "High error volume"
+    # Too many UNIQUE errors? (indicates systemic issues, not just one bug)
+    if state['unique_errors_this_hour'] + unique_error_count > MAX_ERRORS_PER_HOUR:
+        pause_system(f"High unique error volume: {state['unique_errors_this_hour'] + unique_error_count} different errors in 1 hour")
+        return False, "High unique error volume"
 
     # Too many diagnoses today?
     if state['diagnoses_today'] >= MAX_DIAGNOSES_PER_DAY:
@@ -507,41 +538,76 @@ def poll_and_export():
         print(f"[{datetime.now()}] No new Tier I errors.")
         return
 
-    # Filter to only exportable errors
+    # Filter and DEDUPLICATE by error_hash
+    # The same bug triggering 100 times = 1 unique error to diagnose
     exported_ids = get_exported_ids()
-    exportable = []
+    exported_hashes = get_exported_hashes()
+
+    # Group errors by hash, keeping only the first (oldest) occurrence of each
+    errors_by_hash = {}
+    skipped_duplicates = 0
+
     for error in errors:
+        error_hash = error.get('error_hash')
+
+        # Skip if already exported (by ID)
         if error['id'] in exported_ids:
             continue
+
+        # Skip if this error_hash was already exported (duplicate of same bug)
+        if error_hash and error_hash in exported_hashes:
+            skipped_duplicates += 1
+            continue
+
+        # Check if should diagnose
         should, reason = should_diagnose_dict(error)
-        if should:
-            exportable.append(error)
-        else:
+        if not should:
             print(f"  Skipping error {error['id']}: {reason}")
+            continue
+
+        # Deduplicate: only keep first occurrence of each hash
+        if error_hash:
+            if error_hash not in errors_by_hash:
+                errors_by_hash[error_hash] = error
+            else:
+                skipped_duplicates += 1
+        else:
+            # No hash = treat as unique (shouldn't happen, but handle it)
+            errors_by_hash[f"no_hash_{error['id']}"] = error
+
+    # Get unique errors to export
+    exportable = list(errors_by_hash.values())
+
+    if skipped_duplicates > 0:
+        print(f"  Skipped {skipped_duplicates} duplicate occurrences of same errors")
 
     if not exportable:
-        print(f"[{datetime.now()}] {len(errors)} errors found, none exportable.")
+        print(f"[{datetime.now()}] {len(errors)} error occurrences found, but no NEW unique errors to diagnose.")
         return
 
-    # Check circuit breaker
+    # Check circuit breaker (using UNIQUE error count, not raw count)
     can_proceed, reason = check_circuit_breaker(len(exportable))
     if not can_proceed:
         print(f"[{datetime.now()}] Cannot proceed: {reason}")
         return
 
-    print(f"[{datetime.now()}] Found {len(exportable)} new errors to export.")
+    print(f"[{datetime.now()}] Found {len(exportable)} unique new error(s) to diagnose.")
 
-    # Update state
+    # Update state with unique error count
     state = load_state()
-    state['errors_this_hour'] += len(exportable)
+    state['unique_errors_this_hour'] += len(exportable)
     save_state(state)
 
     for error in exportable:
         file_path = export_error_dict(error)
-        print(f"  Exported error {error['id']} to {file_path}")
+        print(f"  Exported error {error['id']} (hash: {error.get('error_hash', 'none')[:8]}...) to {file_path}")
         exported_ids.add(error['id'])
+        # Track the hash so future occurrences of same bug are skipped
+        if error.get('error_hash'):
+            exported_hashes.add(error['error_hash'])
 
     save_exported_ids(exported_ids)
+    save_exported_hashes(exported_hashes)
 
     # Send notification
     if os.environ.get('NOTIFY_ON_NEW_ERRORS') == '1':
@@ -670,11 +736,11 @@ def show_status():
     # Paused?
     if is_paused():
         content = PAUSE_FILE.read_text()
-        print(f"🔴 SYSTEM PAUSED")
+        print("[X] SYSTEM PAUSED")
         print(f"   {content}")
         print()
     else:
-        print("🟢 System Active")
+        print("[OK] System Active")
         print()
 
     # Diagnosis in progress?
@@ -683,22 +749,22 @@ def show_status():
             lock_data = json.loads(LOCK_FILE.read_text())
             started = lock_data.get('started', 'unknown')
             error_id = lock_data.get('error_id', 'unknown')
-            print(f"🔒 Diagnosis in Progress:")
+            print("[LOCK] Diagnosis in Progress:")
             print(f"   Error: #{error_id}")
             print(f"   Started: {started}")
             print(f"   (Run --unlock to force release if stuck)")
             print()
         except Exception:
-            print("🔒 Lock file exists but unreadable")
+            print("[LOCK] Lock file exists but unreadable")
             print()
     else:
-        print("🔓 No diagnosis in progress")
+        print("[UNLOCKED] No diagnosis in progress")
         print()
 
     # State
     state = load_state()
     print("Rate Limits:")
-    print(f"  Errors this hour: {state['errors_this_hour']} / {MAX_ERRORS_PER_HOUR}")
+    print(f"  Unique errors this hour: {state.get('unique_errors_this_hour', 0)} / {MAX_ERRORS_PER_HOUR}")
     print(f"  Diagnoses today: {state['diagnoses_today']} / {MAX_DIAGNOSES_PER_DAY}")
     if state['last_diagnosis']:
         print(f"  Last diagnosis: {state['last_diagnosis']}")
@@ -718,9 +784,11 @@ def show_status():
         print(f"  ... and {len(pending) - 5} more")
     print()
 
-    # Exported IDs
+    # Exported IDs and Hashes
     exported = get_exported_ids()
-    print(f"Total Exported: {len(exported)} errors")
+    exported_hashes = get_exported_hashes()
+    print(f"Total Exported: {len(exported)} error instances")
+    print(f"Unique Error Hashes: {len(exported_hashes)} (duplicates are auto-skipped)")
     print()
 
     # Diagnosis attempts
