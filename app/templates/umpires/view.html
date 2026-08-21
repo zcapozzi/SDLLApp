@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}{{ profile.full_name }} - Umpire{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.index') }}">&larr; Back to Umpires</a>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>{{ profile.full_name }}</h1>
+    <a href="{{ url_for('umpires.edit', id=profile.id) }}" class="btn btn-primary">Edit</a>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    <div class="card">
+        <h3 style="margin-top: 0;">Profile</h3>
+        <table style="width: 100%;">
+            <tr>
+                <td style="color: var(--text-muted); width: 40%;">Email</td>
+                <td>{{ profile.email or '-' }}</td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">Phone</td>
+                <td>{{ profile.phone or '-' }}</td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">Age</td>
+                <td>{{ profile.age or '-' }}</td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">Status</td>
+                <td>
+                    <span class="status-badge status-{{ profile.status }}">
+                        {{ profile.status|title }}
+                    </span>
+                </td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">Kid Pitch Eligible</td>
+                <td>
+                    {% if profile.is_kid_pitch_eligible %}
+                    <span style="color: var(--success-color);">Yes</span>
+                    {% else %}
+                    <span style="color: var(--text-muted);">No</span>
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    {% if profile.is_minor %}
+    <div class="card">
+        <h3 style="margin-top: 0;">Parent/Guardian</h3>
+        <table style="width: 100%;">
+            <tr>
+                <td style="color: var(--text-muted); width: 40%;">Name</td>
+                <td>{{ profile.parent_name or '-' }}</td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">Email</td>
+                <td>{{ profile.parent_email or '-' }}</td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">Phone</td>
+                <td>{{ profile.parent_phone or '-' }}</td>
+            </tr>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+{% if upcoming_assignments %}
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">Upcoming Games</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Location</th>
+                <th>League</th>
+                <th>Role</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for assignment in upcoming_assignments %}
+            <tr>
+                <td>{{ assignment.game.game_date.strftime('%a, %b %d') }}</td>
+                <td>{{ assignment.game.game_date.strftime('%I:%M %p') }}</td>
+                <td>{{ assignment.game.location }}</td>
+                <td>{{ assignment.game.league }}</td>
+                <td>{{ assignment.role|title }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if past_assignments %}
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">Recent Games</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Location</th>
+                <th>League</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for assignment in past_assignments %}
+            <tr>
+                <td>{{ assignment.game.game_date.strftime('%b %d, %Y') }}</td>
+                <td>{{ assignment.game.location }}</td>
+                <td>{{ assignment.game.league }}</td>
+                <td>{{ assignment.status|title }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<style>
+.status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.status-active { background: var(--success-color); color: white; }
+.status-inactive { background: var(--warning-color); color: white; }
+.status-retired { background: var(--text-muted); color: white; }
+</style>
+{% endblock %}

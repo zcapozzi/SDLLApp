@@ -16,3 +16,11 @@ from .field_blackout import FieldBlackout
 from .practice_pairing import PracticePairing
 from .analytics import PageView, Ad, AdImpression, AdClick, generate_session_id
 from .app_error import AppError
+
+# Umpire system models
+from .umpire_profile import UmpireProfile
+from .umpire_partner import UmpirePartner
+from .game_umpire import GameUmpire
+from .umpire_delegation import UmpireDelegationRule, UmpireDelegationOverride
+from .umpire_payment import UmpirePayment
+from .coach import CoachSeason

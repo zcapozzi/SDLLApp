@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}Umpires{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Umpires</h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('umpires.partners') }}" class="btn btn-outline">Partners</a>
+        <a href="{{ url_for('umpires.delegation') }}" class="btn btn-outline">Delegation Rules</a>
+        <a href="{{ url_for('umpires.schedule') }}" class="btn btn-outline">Schedule</a>
+        <a href="{{ url_for('umpires.add') }}" class="btn btn-primary">Add Umpire</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <div style="display: flex; gap: 10px; align-items: center;">
+        <span>Filter:</span>
+        <a href="{{ url_for('umpires.index', status='active') }}"
+           class="btn {{ 'btn-primary' if status_filter == 'active' else 'btn-outline' }}" style="padding: 5px 15px;">
+            Active
+        </a>
+        <a href="{{ url_for('umpires.index', status='inactive') }}"
+           class="btn {{ 'btn-primary' if status_filter == 'inactive' else 'btn-outline' }}" style="padding: 5px 15px;">
+            Inactive
+        </a>
+        <a href="{{ url_for('umpires.index', status='all') }}"
+           class="btn {{ 'btn-primary' if status_filter == 'all' else 'btn-outline' }}" style="padding: 5px 15px;">
+            All
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    {% if profiles %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Age</th>
+                <th>Kid Pitch</th>
+                <th>Status</th>
+                <th style="width: 100px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for profile in profiles %}
+            <tr id="umpire-{{ profile.id }}">
+                <td><strong>{{ profile.full_name or 'Unknown' }}</strong></td>
+                <td>{{ profile.email or '-' }}</td>
+                <td>{{ profile.age or '-' }}</td>
+                <td>
+                    {% if profile.is_kid_pitch_eligible %}
+                    <span style="color: var(--success-color);">Yes</span>
+                    {% else %}
+                    <span style="color: var(--text-muted);">No</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="status-badge status-{{ profile.status }}">
+                        {{ profile.status|title }}
+                    </span>
+                </td>
+                <td>
+                    <a href="{{ url_for('umpires.view', id=profile.id) }}" class="btn btn-outline" style="padding: 3px 10px;">
+                        View
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; padding: 40px; color: var(--text-muted);">
+        No umpires found.
+        <a href="{{ url_for('umpires.add') }}">Add the first umpire</a>
+    </p>
+    {% endif %}
+</div>
+
+{% if partners %}
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">Partner Organizations</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Partner</th>
+                <th>Code</th>
+                <th>Contact</th>
+                <th>Notification</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for partner in partners %}
+            <tr>
+                <td><strong>{{ partner.name }}</strong></td>
+                <td>{{ partner.short_code }}</td>
+                <td>{{ partner.contact_name or '-' }}</td>
+                <td>{{ partner.notification_preference|title }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<style>
+.status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.status-active {
+    background: var(--success-color);
+    color: white;
+}
+.status-inactive {
+    background: var(--warning-color);
+    color: white;
+}
+.status-retired {
+    background: var(--text-muted);
+    color: white;
+}
+</style>
+{% endblock %}

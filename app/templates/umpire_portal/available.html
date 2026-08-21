@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Available Games{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpire_portal.dashboard') }}">&larr; Back to Dashboard</a>
+</div>
+
+<h1 style="margin-bottom: 20px;">Available Games</h1>
+
+<div class="card" style="margin-bottom: 20px;">
+    <form method="GET" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="date">Date</label>
+            <input type="date" id="date" name="date" class="form-control" value="{{ date_filter }}">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="league">League</label>
+            <select id="league" name="league" class="form-control">
+                <option value="">All Leagues</option>
+                {% for league in leagues %}
+                <option value="{{ league.display_name }}" {{ 'selected' if league_filter == league.display_name }}>
+                    {{ league.display_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Filter</button>
+        {% if date_filter or league_filter %}
+        <a href="{{ url_for('umpire_portal.available') }}" class="btn btn-outline">Clear</a>
+        {% endif %}
+    </form>
+</div>
+
+<div class="card">
+    {% if games %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Location</th>
+                <th>League</th>
+                <th>Teams</th>
+                <th style="width: 100px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in games %}
+            <tr>
+                <td>
+                    <strong>{{ game.game_date.strftime('%a, %b %d') }}</strong>
+                </td>
+                <td>{{ game.game_date.strftime('%I:%M %p') }}</td>
+                <td>{{ game.location }}</td>
+                <td>
+                    <span class="league-badge">{{ game.league }}</span>
+                </td>
+                <td style="font-size: 13px; color: var(--text-muted);">
+                    {% if game.home_ID %}
+                    Game
+                    {% else %}
+                    TBD
+                    {% endif %}
+                </td>
+                <td>
+                    <form method="POST" action="{{ url_for('umpire_portal.claim', game_id=game.ID) }}"
+                          style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-primary" style="padding: 5px 15px;">
+                            Claim
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; padding: 40px; color: var(--text-muted);">
+        No available games found.
+        {% if date_filter or league_filter %}
+        Try adjusting your filters.
+        {% else %}
+        Check back later for new games.
+        {% endif %}
+    </p>
+    {% endif %}
+</div>
+
+<style>
+.league-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    background: var(--primary-color);
+    color: white;
+    border-radius: 4px;
+    font-size: 12px;
+}
+</style>
+{% endblock %}

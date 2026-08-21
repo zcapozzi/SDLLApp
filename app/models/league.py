@@ -28,6 +28,13 @@ class League(db.Model):
     game_duration_minutes = db.Column(db.Integer)     # NULL = 120 (or 180 for no-time-limit)
     practice_duration_minutes = db.Column(db.Integer) # NULL = 90
 
+    # Umpire configuration
+    umpire_count = db.Column(db.SmallInteger, default=1)  # 0=none, 1=single, 2=crew
+    umpire_source = db.Column(db.String(20), default='sdll')  # 'sdll', 'partner', 'either'
+    default_partner_id = db.Column(db.Integer)  # FK to sdll_umpire_partners
+    requires_kid_pitch = db.Column(db.Boolean, default=False)  # True for AA+
+    uses_large_field = db.Column(db.Boolean, default=False)  # True for AAA/Majors
+
     # Pitch type constants
     PITCH_TEE_BALL = 'tee_ball'
     PITCH_MACHINE = 'machine_pitch'
@@ -289,3 +296,51 @@ class League(db.Model):
         if game == self.DEFAULT_GAME_DURATION and practice == self.DEFAULT_PRACTICE_DURATION:
             return "Standard (2hr games, 90min practices)"
         return f"{game} min games, {practice} min practices"
+
+    # Umpire source constants
+    UMPIRE_SOURCE_SDLL = 'sdll'
+    UMPIRE_SOURCE_PARTNER = 'partner'
+    UMPIRE_SOURCE_EITHER = 'either'
+    UMPIRE_SOURCES = [UMPIRE_SOURCE_SDLL, UMPIRE_SOURCE_PARTNER, UMPIRE_SOURCE_EITHER]
+
+    @property
+    def needs_umpires(self):
+        """Check if this league requires umpires."""
+        return (self.umpire_count or 0) > 0
+
+    @property
+    def umpire_count_display(self):
+        """Human-readable umpire count."""
+        count = self.umpire_count or 1
+        if count == 0:
+            return "No umpires"
+        if count == 1:
+            return "1 umpire"
+        return f"{count}-umpire crew"
+
+    @property
+    def umpire_source_display(self):
+        """Human-readable umpire source."""
+        source = self.umpire_source or self.UMPIRE_SOURCE_SDLL
+        if source == self.UMPIRE_SOURCE_SDLL:
+            return "Academy (SDLL)"
+        if source == self.UMPIRE_SOURCE_PARTNER:
+            return "Partner only"
+        return "Academy or Partner"
+
+    def can_use_sdll_umpires(self):
+        """Check if this league can use SDLL umpires."""
+        source = self.umpire_source or self.UMPIRE_SOURCE_SDLL
+        return source in [self.UMPIRE_SOURCE_SDLL, self.UMPIRE_SOURCE_EITHER]
+
+    def can_use_partner_umpires(self):
+        """Check if this league can use partner umpires."""
+        source = self.umpire_source or self.UMPIRE_SOURCE_SDLL
+        return source in [self.UMPIRE_SOURCE_PARTNER, self.UMPIRE_SOURCE_EITHER]
+
+    def get_default_partner(self):
+        """Get the default umpire partner for this league."""
+        if self.default_partner_id:
+            from app.models.umpire_partner import UmpirePartner
+            return UmpirePartner.query.get(self.default_partner_id)
+        return None

@@ -4,7 +4,146 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Implemented automated error diagnosis system for production errors.
+Last session: Implementing Umpire Scheduling & Notification System (Phase 1-2 MVP complete).
+
+---
+
+## Session: August 21, 2026 - Umpire Scheduling System (MVP Foundation)
+
+### Overview
+Implemented Phase 1-2 (MVP Data Foundation) of the comprehensive Umpire Scheduling System. The system will manage SDLL umpires, partner organizations (Dynamic, Diamond), allow umpire self-signup, handle replacements, and provide emergency contact views.
+
+### Architecture
+```
+sdll_users (login/auth)
+    ↓ user_id FK
+sdll_umpire_profiles (umpire-specific: parent contacts, eligibility)
+    ↓ umpire_profile_id FK
+sdll_game_umpires (game assignments)
+    ↑ partner_id FK
+sdll_umpire_partners (Diamond, Dynamic external providers)
+    ↓
+sdll_umpire_delegation_rules (% allocation by league)
+sdll_umpire_delegation_overrides (keyword routing)
+```
+
+### Key Features Implemented
+
+1. **User Roles Extended**
+   - New roles: `umpire`, `treasurer`, `coach`, `parent`, `partner_contact`, `umpire_coordinator`
+   - Role helper methods: `is_umpire()`, `is_treasurer()`, `can_process_payments()`, `can_manage_umpires()`
+
+2. **UmpireProfile Model**
+   - Linked to User account for unified login
+   - Age calculation from birth_date
+   - Parent contact info for minors (encrypted)
+   - Kid-pitch eligibility flag
+
+3. **UmpirePartner Model**
+   - External umpire providers (Dynamic, Diamond)
+   - Contact info, notification preferences
+   - Not individuals - just the organization
+
+4. **GameUmpire Assignment Model**
+   - Links games to SDLL umpires (via profile) OR partner organizations
+   - Status tracking: assigned, confirmed, cancelled
+   - Pay tracking with bonus multipliers
+   - Cancellation tracking for replacement workflow
+
+5. **Delegation Rules System**
+   - Percentage-based allocation per league (e.g., AAA: 33% Academy, 33% Diamond, 34% Dynamic)
+   - Season-specific rules with fallback to defaults
+   - Keyword overrides (e.g., "Young Umpire" → force Academy assignment)
+
+6. **TIER I Constraint: Back-to-Back Field Continuity**
+   - CRITICAL: When partner games are back-to-back at same field, MUST use same partner
+   - Allows one umpire to cover multiple games
+   - Enforced before percentage balancing
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `scripts/migrations/add_umpire_system.sql` | Database migration (7 tables) |
+| `app/models/umpire_profile.py` | UmpireProfile model |
+| `app/models/umpire_partner.py` | UmpirePartner model |
+| `app/models/game_umpire.py` | GameUmpire assignment model |
+| `app/models/umpire_delegation.py` | Delegation rules and overrides |
+| `app/models/umpire_payment.py` | Payment tracking |
+| `app/models/coach.py` | Coach contact model |
+| `app/services/umpire_delegation_service.py` | Auto-delegation logic |
+| `app/umpires/__init__.py` | Umpire management blueprint |
+| `app/umpires/routes.py` | Coordinator management routes |
+| `app/umpire_portal/__init__.py` | Umpire portal blueprint |
+| `app/umpire_portal/routes.py` | Umpire self-service routes |
+| `app/templates/umpires/*.html` | Coordinator UI templates |
+| `app/templates/umpire_portal/*.html` | Umpire portal templates |
+| `tests/test_umpire_profile.py` | Profile and role tests (19 tests) |
+| `tests/test_umpire_delegation.py` | Delegation rule tests (15 tests) |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `app/models/user.py` | Extended ROLES, added role helpers |
+| `app/models/league.py` | Added umpire config fields |
+| `app/models/__init__.py` | Added new model imports |
+| `app/__init__.py` | Registered new blueprints |
+| `tests/conftest.py` | Added league_factory, umpire fixtures |
+
+### Test Results
+```
+tests/test_umpire_profile.py: 19 passed
+tests/test_umpire_delegation.py: 15 passed
+Total: 34 tests passing
+
+Critical Tier I tests:
+✓ test_back_to_back_same_field_same_partner
+✓ test_batch_groups_field_sequences
+✓ test_non_adjacent_games_can_differ
+✓ test_different_fields_can_differ
+```
+
+### Database Tables Created
+1. `sdll_umpire_partners` - External umpire companies
+2. `sdll_umpire_profiles` - SDLL umpire data
+3. `sdll_game_umpires` - Game assignments
+4. `sdll_umpire_delegation_rules` - % allocation rules
+5. `sdll_umpire_delegation_overrides` - Keyword routing
+6. `sdll_coach_seasons` - Coach contacts per season
+7. `sdll_umpire_payments` - Payment tracking
+
+### Next Steps (Remaining Phases)
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1-2 | ✅ DONE | Models, migration, core tests |
+| Phase 3 | 🔲 TODO | Umpire Portal UI (claim/release games) |
+| Phase 4 | 🔲 TODO | Coordinator tools (assignments, replacements) |
+| Phase 4.5 | 🔲 TODO | Delegation admin UI, batch delegation |
+| Phase 5 | 🔲 TODO | Notifications (email, Telegram) |
+| Phase 6 | 🔲 TODO | Payment management |
+
+### Usage
+
+```python
+# Create umpire profile
+from app.models.user import User
+from app.models.umpire_profile import UmpireProfile
+
+user = User.create_user(email='umpire@test.com', password='xxx', role='umpire')
+profile = UmpireProfile(user_id=user.ID, is_kid_pitch_eligible=True)
+db.session.add(profile)
+db.session.commit()
+
+# Auto-delegate a game
+from app.services.umpire_delegation_service import apply_single_game_delegation
+apply_single_game_delegation(game)
+
+# Check Tier I constraint
+from app.services.umpire_delegation_service import get_adjacent_partner_same_field
+partner = get_adjacent_partner_same_field(game)  # Returns partner if back-to-back
+```
 
 ---
 

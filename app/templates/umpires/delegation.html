@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Delegation Rules{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.index') }}">&larr; Back to Umpires</a>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Delegation Rules</h1>
+    <a href="{{ url_for('umpires.overrides') }}" class="btn btn-outline">Override Keywords</a>
+</div>
+
+<p style="color: var(--text-muted); margin-bottom: 20px;">
+    Configure what percentage of games should be assigned to each umpire source.
+    Percentages must sum to 100%.
+</p>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>League</th>
+                <th style="text-align: center; width: 15%;">Academy (SDLL)</th>
+                <th style="text-align: center; width: 15%;">Diamond</th>
+                <th style="text-align: center; width: 15%;">Dynamic</th>
+                <th style="text-align: center; width: 15%;">Total</th>
+                <th style="width: 80px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for league in leagues %}
+            {% set rule = rules.get(league.ID) %}
+            <tr id="league-{{ league.ID }}">
+                <td><strong>{{ league.display_name }}</strong></td>
+                <td style="text-align: center;">
+                    {% if rule %}
+                    {{ rule.academy_pct }}%
+                    {% else %}
+                    <span style="color: var(--text-muted);">-</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: center;">
+                    {% if rule %}
+                    {{ rule.diamond_pct }}%
+                    {% else %}
+                    <span style="color: var(--text-muted);">-</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: center;">
+                    {% if rule %}
+                    {{ rule.dynamic_pct }}%
+                    {% else %}
+                    <span style="color: var(--text-muted);">-</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: center;">
+                    {% if rule %}
+                    <span class="{{ 'text-success' if rule.total_pct == 100 else 'text-danger' }}">
+                        {{ rule.total_pct }}%
+                    </span>
+                    {% else %}
+                    <span style="color: var(--text-muted);">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('umpires.edit_delegation', league_id=league.ID) }}"
+                       class="btn btn-outline" style="padding: 3px 10px;">
+                        Edit
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">Understanding Delegation</h3>
+    <ul style="color: var(--text-muted); line-height: 1.8;">
+        <li><strong>Academy (SDLL)</strong>: SDLL youth umpires - games appear in Umpire Portal for self-signup</li>
+        <li><strong>Diamond / Dynamic</strong>: Partner organizations - games assigned directly to partner</li>
+        <li><strong>Tier I Rule</strong>: Back-to-back games at the same field are always assigned to the same partner</li>
+        <li>Use <a href="{{ url_for('umpires.overrides') }}">override keywords</a> to force specific routing (e.g., "Young Umpire" forces Academy)</li>
+    </ul>
+</div>
+
+<style>
+.text-success { color: var(--success-color); }
+.text-danger { color: var(--error-color); }
+</style>
+{% endblock %}

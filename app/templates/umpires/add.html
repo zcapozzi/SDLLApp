@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Add Umpire{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.index') }}">&larr; Back to Umpires</a>
+</div>
+
+<h1>Add Umpire</h1>
+
+<div class="card" style="max-width: 600px;">
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="form-group">
+            <label for="name">Name *</label>
+            <input type="text" id="name" name="name" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+            <label for="email">Email *</label>
+            <input type="email" id="email" name="email" class="form-control" required>
+            <small style="color: var(--text-muted);">Used for login and notifications</small>
+        </div>
+
+        <div class="form-group">
+            <label for="phone">Phone</label>
+            <input type="tel" id="phone" name="phone" class="form-control">
+        </div>
+
+        <div class="form-group">
+            <label for="birth_date">Birth Date</label>
+            <input type="date" id="birth_date" name="birth_date" class="form-control">
+            <small style="color: var(--text-muted);">Required for youth umpires</small>
+        </div>
+
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="is_kid_pitch_eligible">
+                Kid Pitch Eligible
+            </label>
+            <small style="color: var(--text-muted); display: block;">
+                Can umpire AA and above games
+            </small>
+        </div>
+
+        <hr style="margin: 20px 0;">
+        <h4 style="margin-bottom: 15px;">Parent/Guardian (for minors)</h4>
+
+        <div class="form-group">
+            <label for="parent_name">Parent Name</label>
+            <input type="text" id="parent_name" name="parent_name" class="form-control">
+        </div>
+
+        <div class="form-group">
+            <label for="parent_email">Parent Email</label>
+            <input type="email" id="parent_email" name="parent_email" class="form-control">
+        </div>
+
+        <div class="form-group">
+            <label for="parent_phone">Parent Phone</label>
+            <input type="tel" id="parent_phone" name="parent_phone" class="form-control">
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button type="submit" class="btn btn-primary">Add Umpire</button>
+            <a href="{{ url_for('umpires.index') }}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

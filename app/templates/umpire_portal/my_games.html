@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}My Games{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpire_portal.dashboard') }}">&larr; Back to Dashboard</a>
+</div>
+
+<h1 style="margin-bottom: 20px;">My Games</h1>
+
+{% if today_games %}
+<div class="card" style="margin-bottom: 20px; border-left: 4px solid var(--warning-color);">
+    <h3 style="margin-top: 0; color: var(--warning-color);">Today's Games</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Location</th>
+                <th>League</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for assignment in today_games %}
+            <tr>
+                <td><strong>{{ assignment.game.game_date.strftime('%I:%M %p') }}</strong></td>
+                <td>{{ assignment.game.location }}</td>
+                <td>{{ assignment.game.league }}</td>
+                <td>
+                    <span class="status-badge status-{{ assignment.status }}">
+                        {{ assignment.status|title }}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if future_games %}
+<div class="card">
+    <h3 style="margin-top: 0;">Upcoming Games</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Location</th>
+                <th>League</th>
+                <th>Status</th>
+                <th style="width: 100px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for assignment in future_games %}
+            <tr>
+                <td>
+                    <strong>{{ assignment.game.game_date.strftime('%a, %b %d') }}</strong>
+                </td>
+                <td>{{ assignment.game.game_date.strftime('%I:%M %p') }}</td>
+                <td>{{ assignment.game.location }}</td>
+                <td>{{ assignment.game.league }}</td>
+                <td>
+                    <span class="status-badge status-{{ assignment.status }}">
+                        {{ assignment.status|title }}
+                    </span>
+                </td>
+                <td>
+                    <form method="POST" action="{{ url_for('umpire_portal.release', game_id=assignment.game.ID) }}"
+                          style="display: inline;"
+                          onsubmit="return confirm('Are you sure you want to release this game?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-outline" style="padding: 3px 10px; font-size: 12px;">
+                            Release
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if not today_games and not future_games %}
+<div class="card" style="text-align: center; padding: 40px;">
+    <p style="color: var(--text-muted); margin-bottom: 20px;">
+        You don't have any upcoming games.
+    </p>
+    <a href="{{ url_for('umpire_portal.available') }}" class="btn btn-primary">
+        Browse Available Games
+    </a>
+</div>
+{% endif %}
+
+<style>
+.status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.status-assigned { background: var(--warning-color); color: white; }
+.status-confirmed { background: var(--success-color); color: white; }
+.status-completed { background: var(--text-muted); color: white; }
+</style>
+{% endblock %}

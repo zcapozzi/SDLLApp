@@ -17,15 +17,17 @@ class User(UserMixin, db.Model):
     active = db.Column(db.SmallInteger, default=1)
 
     # Email - stored encrypted with hash for lookup
-    _email = db.Column('email', db.String(200), nullable=False)
+    # Using String(500) to accommodate encrypted data
+    _email = db.Column('email', db.String(500), nullable=False)
     email_hash = db.Column(db.String(64), unique=True, nullable=False)
 
     # Password
     password_hash = db.Column(db.String(256), nullable=False)
 
     # PII - stored encrypted
-    _name = db.Column('name', db.String(200))
-    _phone = db.Column('phone', db.String(50))
+    # Using String(500) to accommodate encrypted data
+    _name = db.Column('name', db.String(500))
+    _phone = db.Column('phone', db.String(500))
 
     # Role-based access
     role = db.Column(db.String(50), default='viewer')
@@ -41,8 +43,9 @@ class User(UserMixin, db.Model):
     password_reset_token = db.Column(db.String(100))
     password_reset_expiry = db.Column(db.DateTime)
 
-    # Valid roles
-    ROLES = ['admin', 'scheduler', 'umpire_coordinator', 'viewer']
+    # Valid roles - ordered by typical privilege level
+    ROLES = ['admin', 'scheduler', 'umpire_coordinator', 'treasurer',
+             'umpire', 'coach', 'parent', 'partner_contact', 'viewer']
 
     def __repr__(self):
         return f'<User {self.ID} ({self.role})>'
@@ -130,6 +133,53 @@ class User(UserMixin, db.Model):
 
     def can_manage_umpires(self):
         return self.role in ['admin', 'umpire_coordinator']
+
+    def is_umpire(self):
+        """Check if user has umpire role or has an umpire profile."""
+        return self.role == 'umpire' or self.has_umpire_profile()
+
+    def has_umpire_profile(self):
+        """Check if user has an associated umpire profile."""
+        return hasattr(self, 'umpire_profile') and self.umpire_profile is not None
+
+    def is_treasurer(self):
+        """Check if user is treasurer or admin (who can also act as treasurer)."""
+        return self.role in ['admin', 'treasurer']
+
+    def can_process_payments(self):
+        """Only treasurer and admin can mark payments as complete."""
+        return self.role in ['admin', 'treasurer']
+
+    def is_coach(self):
+        """Check if user has coach role."""
+        return self.role == 'coach'
+
+    def is_partner_contact(self):
+        """Check if user is a partner organization contact."""
+        return self.role == 'partner_contact'
+
+    def get_highest_role(self):
+        """Return highest privilege role for dashboard routing.
+
+        Returns:
+            str: The highest privilege role this user has.
+        """
+        priority = ['admin', 'scheduler', 'umpire_coordinator', 'treasurer',
+                    'umpire', 'coach', 'parent', 'partner_contact', 'viewer']
+        if self.role in priority:
+            return self.role
+        return 'viewer'
+
+    def get_dashboard_route(self):
+        """Get the appropriate dashboard route for this user's role.
+
+        Returns:
+            str: Flask route name for the user's dashboard.
+        """
+        role = self.get_highest_role()
+        if role == 'umpire' and not self.is_scheduler():
+            return 'umpire_portal.dashboard'
+        return 'main.dashboard'
 
     @classmethod
     def get_by_email(cls, email):
