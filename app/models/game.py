@@ -135,9 +135,13 @@ class Game(db.Model):
         Returns:
             Field or None: The Field object if found.
         """
-        # Prefer the FK relationship
-        if self.field_id and self.field_rel:
-            return self.field_rel
+        # Prefer the FK relationship if field_id is set
+        try:
+            if self.field_id and self.field_rel:
+                return self.field_rel
+        except Exception:
+            # field_id column might not exist yet in DB
+            pass
         # Fall back to string-based lookup for legacy data
         if not self.location:
             return None
@@ -151,9 +155,11 @@ class Game(db.Model):
         Returns:
             str: Field name or empty string.
         """
+        # First try to get field via FK or string lookup
         field = self.field
         if field:
             return field.location_title
+        # Fall back to location string directly (even if Field lookup failed)
         return self.location or ''
 
     @property
