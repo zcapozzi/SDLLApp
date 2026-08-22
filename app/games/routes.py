@@ -1611,12 +1611,12 @@ def league_practice(year, is_spring):
     # Group by date/time/league
     practice_groups = {}
     for p in existing_practices:
-        key = (p.game_date.date() if p.game_date else None, p.league, p.location)
+        key = (p.game_date.date() if p.game_date else None, p.league, p.field_name)
         if key not in practice_groups:
             practice_groups[key] = {
                 'date': p.game_date,
                 'league': p.league,
-                'location': p.location,
+                'location': p.field_name,  # Use field_name property (FK preferred)
                 'teams': []
             }
         practice_groups[key]['teams'].append(p)

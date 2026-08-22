@@ -198,7 +198,7 @@
                 <td>
                     <a href="{{ url_for('games.index', league=game.league, game_mode=current_filters.game_mode) }}" class="subtle-link">{{ game.league }}</a>
                 </td>
-                <td>{{ game.location }}</td>
+                <td>{{ game.field_name }}</td>
                 <td>
                     {% if game.home_team %}
                         <a href="{{ url_for('seasons.view', year=game.year, is_spring=game.is_spring) }}" class="subtle-link">{{ game.home_team.display_name }}</a>

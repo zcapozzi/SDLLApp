@@ -531,11 +531,6 @@ def save(year, is_spring):
         saved_count = 0
         updated_count = 0
 
-        # Build field lookup for resolving field_id to field_name
-        from app.models.field import Field
-        all_fields = Field.query.filter_by(active=1).all()
-        field_id_to_name = {f.ID: f.location_title for f in all_fields}
-
         # First, apply assignments to existing game records
         assignments = proposal.get('assignments', {})
         for game_id, assignment in assignments.items():
@@ -545,14 +540,8 @@ def save(year, is_spring):
                 game.away_ID = assignment['away_id']
                 if assignment['game_date']:
                     game.game_date = datetime.fromisoformat(assignment['game_date'])
-                # Use both field_id (FK) and field_name (for backwards compat)
-                field_id = assignment.get('field_id')
-                field_name = assignment.get('field_name')
-                # Fallback: look up field name from field_id if not provided
-                if not field_name and field_id:
-                    field_name = field_id_to_name.get(field_id, '')
-                game.field_id = field_id
-                game.location = field_name or ''
+                # Use field_id FK - location can stay blank, Game.field_name property handles display
+                game.field_id = assignment.get('field_id')
                 updated_count += 1
 
         # Then, create new games for any proposed that don't have existing records
@@ -579,13 +568,7 @@ def save(year, is_spring):
                 is_league_practice = True
 
             # Create the game record
-            # Use both field_id (FK) and field_name (for backwards compat)
-            field_id = proposed_game.get('field_id')
-            field_name = proposed_game.get('field_name') or proposed_game.get('location')
-            # Fallback: look up field name from field_id if not provided
-            if not field_name and field_id:
-                field_name = field_id_to_name.get(field_id, '')
-
+            # Use field_id FK - location can stay blank, Game.field_name property handles display
             game = Game(
                 active=1,
                 year=year,
@@ -593,8 +576,7 @@ def save(year, is_spring):
                 league=proposed_game['league'],
                 home_ID=proposed_game['home_team_id'],
                 away_ID=proposed_game['away_team_id'],  # None for practices
-                field_id=field_id,
-                location=field_name,
+                field_id=proposed_game.get('field_id'),
                 game_date=game_date,
                 game_type=game_type,
                 is_scrimmage=is_scrimmage,

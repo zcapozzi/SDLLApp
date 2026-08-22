@@ -23,7 +23,7 @@
                     <tr>
                         <td>{{ game.game_date.strftime('%a, %b %d, %I:%M %p').replace(' 0', ' ') if game.game_date else 'TBD' }}</td>
                         <td>{{ game.league }}</td>
-                        <td>{{ game.location }}</td>
+                        <td>{{ game.field_name }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

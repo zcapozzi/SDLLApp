@@ -345,7 +345,7 @@
                 {{ next_game.game_date.strftime('%I:%M %p') if next_game.game_date else '' }}
             </div>
             <div class="next-game-details">
-                {{ next_game.location or 'Location TBD' }}
+                {{ next_game.field_name or 'Location TBD' }}
                 {% if next_game.directions_url %}
                 <a href="{{ next_game.directions_url }}" target="_blank" rel="noopener" class="directions-icon" title="Get directions">
                     <svg viewBox="0 0 24 24" style="fill: rgba(255,255,255,0.9);"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
@@ -432,7 +432,7 @@
                         {% endif %}
                     </div>
                     <div class="game-location">
-                        {{ game.location or 'Location TBD' }}
+                        {{ game.field_name or 'Location TBD' }}
                         {% if game.directions_url %}
                         <a href="{{ game.directions_url }}" target="_blank" rel="noopener" class="directions-icon" title="Get directions">
                             <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
@@ -483,7 +483,7 @@
                         {% endif %}
                     </div>
                     <div class="game-location">
-                        {{ game.location or 'Location TBD' }}
+                        {{ game.field_name or 'Location TBD' }}
                         {% if game.directions_url %}
                         <a href="{{ game.directions_url }}" target="_blank" rel="noopener" class="directions-icon" title="Get directions">
                             <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>

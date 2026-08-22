@@ -88,7 +88,7 @@
             <tr>
                 <td>{{ assignment.game.game_date.strftime('%a, %b %d') }}</td>
                 <td>{{ assignment.game.game_date.strftime('%I:%M %p') }}</td>
-                <td>{{ assignment.game.location }}</td>
+                <td>{{ assignment.game.field_name }}</td>
                 <td>{{ assignment.game.league }}</td>
                 <td>{{ assignment.role|title }}</td>
             </tr>
@@ -114,7 +114,7 @@
             {% for assignment in past_assignments %}
             <tr>
                 <td>{{ assignment.game.game_date.strftime('%b %d, %Y') }}</td>
-                <td>{{ assignment.game.location }}</td>
+                <td>{{ assignment.game.field_name }}</td>
                 <td>{{ assignment.game.league }}</td>
                 <td>{{ assignment.status|title }}</td>
             </tr>

@@ -248,7 +248,7 @@
             <div class="game-info">
                 <div style="margin-bottom: 5px;">
                     <strong>{{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}</strong>
-                    at {{ game.location or 'TBD' }}
+                    at {{ game.field_name or 'TBD' }}
                     <span class="status-badge status-{{ game.status }}">{{ game.status }}</span>
                 </div>
                 <div>
@@ -284,7 +284,7 @@
                     <select name="new_field" class="form-control" style="width: auto; font-size: 13px;">
                         <option value="">Keep field</option>
                         {% for field in fields %}
-                        <option value="{{ field.location_title }}" {{ 'selected' if game.location == field.location_title else '' }}>
+                        <option value="{{ field.location_title }}" {{ 'selected' if game.field_name == field.location_title else '' }}>
                             {{ field.location_title }}
                         </option>
                         {% endfor %}

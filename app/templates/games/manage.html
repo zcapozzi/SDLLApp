@@ -181,7 +181,7 @@
                     <span style="background: #7b1fa2; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 5px;">NO LIMIT</span>
                     {% endif %}
                     <strong style="margin-left: 10px;">{{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}</strong>
-                    <span class="text-muted">at {{ game.location or 'TBD' }}</span>
+                    <span class="text-muted">at {{ game.field_name or 'TBD' }}</span>
                 </div>
                 <div>
                     <strong>{{ game.league }}</strong>:
@@ -201,7 +201,7 @@
             </div>
             <div>
                 <button type="button" class="btn btn-outline btn-sm"
-                        onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.location or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage }}, {{ game.no_time_limit or 0 }}, '{{ game.league }}')">
+                        onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.field_name or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage }}, {{ game.no_time_limit or 0 }}, '{{ game.league }}')">
                     Edit
                 </button>
             </div>

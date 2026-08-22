@@ -388,11 +388,11 @@
                  data-game-id="{{ game.ID }}"
                  data-league="{{ game.league }}"
                  data-type="{{ game.display_type }}"
-                 onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.location or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage|int }}, {{ game.no_time_limit|int if game.no_time_limit else 0 }}, '{{ game.league }}')">
+                 onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.field_name or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage|int }}, {{ game.no_time_limit|int if game.no_time_limit else 0 }}, '{{ game.league }}')">
                 <div class="game-time">
                     {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
                 </div>
-                <div class="game-location">{{ game.location or 'TBD' }}</div>
+                <div class="game-location">{{ game.field_name or 'TBD' }}</div>
                 <div class="game-teams">
                     <strong>{{ game.league }}</strong>
                     {% if game.home_team %} - {{ game.home_team.scheduler_display_name }}{% endif %}

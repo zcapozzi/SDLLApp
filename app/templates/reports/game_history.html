@@ -98,7 +98,7 @@
     <p><strong>League:</strong> {{ game.league or 'N/A' }}</p>
     <p><strong>Teams:</strong> {{ home_team_name }} vs {{ away_team_name }}</p>
     <p><strong>Date:</strong> {{ game.game_date.strftime('%A, %B %d, %Y at %I:%M %p') if game.game_date else 'TBD' }}</p>
-    <p><strong>Field:</strong> {{ game.location or 'TBD' }}</p>
+    <p><strong>Field:</strong> {{ game.field_name or 'TBD' }}</p>
     <p><strong>Status:</strong> {{ game.status }}</p>
 </div>
 
