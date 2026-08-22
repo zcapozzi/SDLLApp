@@ -925,9 +925,7 @@ def calendar(year, is_spring):
                 lp_date = lp.game_date.date() if hasattr(lp.game_date, 'date') else lp.game_date
                 if lp_date not in proposed_games_by_date:
                     proposed_games_by_date[lp_date] = []
-                # Resolve field name from location
-                field_name = field_lookup.get(str(lp.location), lp.location) if lp.location else None
-                # Convert to proposal-style dict
+                # Convert to proposal-style dict - use field_name property from Game model
                 lp_dict = {
                     'id': f'lp_{lp.ID}',
                     'game_type': 'practice',
@@ -936,7 +934,7 @@ def calendar(year, is_spring):
                     'home_team_name': lp.home_team.scheduler_display_name if lp.home_team else 'Unknown',
                     'away_team_id': None,
                     'away_team_name': None,
-                    'field_name': field_name,
+                    'field_name': lp.field_name,  # Use Game.field_name property
                     'game_date': lp.game_date.isoformat() if lp.game_date else None,
                     'is_scrimmage': False,
                     'is_league_practice': True,
@@ -956,10 +954,12 @@ def calendar(year, is_spring):
             # Convert to objects with needed properties for template
             day_games = []
             for g in sorted(day_games_raw, key=lambda x: x.get('game_date', '')):
+                field_name = g.get('field_name') or g.get('location') or ''
                 game_obj = type('ProposedGame', (), {
                     'ID': g.get('id'),
                     'game_date': datetime.fromisoformat(g['game_date']) if g.get('game_date') else None,
-                    'location': g.get('field_name'),  # Proposed games use field_name
+                    'location': field_name,
+                    'field_name': field_name,  # Add field_name for template compatibility
                     'league': g.get('league'),
                     'status': 'scheduled',
                     'game_type': g.get('game_type', 'regular'),
@@ -1073,10 +1073,12 @@ def day_view(year, is_spring, target_date):
                     pg_date = dt.fromisoformat(g['game_date']).date()
                     if pg_date == view_date:
                         # Convert to object with needed properties
+                        field_name = g.get('field_name') or g.get('location') or ''
                         game_obj = type('ProposedGame', (), {
                             'ID': g.get('id'),
                             'game_date': dt.fromisoformat(g['game_date']) if g.get('game_date') else None,
-                            'location': g.get('field_name'),  # Proposed games use field_name
+                            'location': field_name,
+                            'field_name': field_name,  # Add field_name for template compatibility
                             'league': g.get('league'),
                             'status': 'scheduled',
                             'game_type': g.get('game_type', 'regular'),
@@ -1111,12 +1113,13 @@ def day_view(year, is_spring, target_date):
         field_lookup_dv.update({f.location_title: f.location_title for f in all_fields_dv})
 
         for lp in league_practices:
-            # Resolve field name from location
-            field_name = field_lookup_dv.get(str(lp.location), lp.location) if lp.location else None
+            # Use field_name property from Game model (handles FK and fallback)
+            field_name = lp.field_name or ''
             game_obj = type('ProposedGame', (), {
                 'ID': f'lp_{lp.ID}',
                 'game_date': lp.game_date,
                 'location': field_name,
+                'field_name': field_name,  # Add field_name for template compatibility
                 'league': lp.league,
                 'status': 'scheduled',
                 'game_type': 'practice',
