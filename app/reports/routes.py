@@ -13,6 +13,7 @@ from app.models.user import User
 from app.models.umpire_assignment import UmpireAssignment
 from app.models.schedule_proposal import ScheduleProposal
 from app.models.league_season import LeagueSeason
+from app.models.league import League
 from app.models.field import Field
 from app.extensions import db
 
@@ -199,17 +200,18 @@ def schedule_downloads():
         # Check for proposal
         proposal = ScheduleProposal.get_for_season(year, is_spring)
 
-        # Get leagues from saved games (games only, no practices/scrimmages)
+        # Get leagues from saved games (games only, with dates)
         saved_leagues = db.session.query(Game.league).filter(
             Game.year == year,
             Game.is_spring == is_spring,
             Game.active == 1,
             Game.game_type.in_(['regular', 'playoff']),
-            Game.is_scrimmage == 0
+            Game.is_scrimmage == 0,
+            Game.game_date.isnot(None)
         ).distinct().all()
         saved_leagues = set(l[0] for l in saved_leagues if l[0])
 
-        # Get leagues from proposal (games only)
+        # Get leagues from proposal (games only, with dates)
         proposal_leagues = set()
         if proposal:
             for game in proposal.games:
@@ -218,43 +220,54 @@ def schedule_downloads():
                     continue
                 if game.get('is_league_practice'):
                     continue
+                if not game.get('game_date'):
+                    continue
                 if game.get('league'):
                     proposal_leagues.add(game['league'])
 
         # Combine and add info
         all_leagues = sorted(saved_leagues | proposal_leagues)
-        for league in all_leagues:
-            # Count games from saved (games only)
+        for league_name in all_leagues:
+            # Count games from saved (games only, with dates)
             saved_count = Game.query.filter(
                 Game.year == year,
                 Game.is_spring == is_spring,
-                Game.league == league,
+                Game.league == league_name,
                 Game.active == 1,
                 Game.game_type.in_(['regular', 'playoff']),
-                Game.is_scrimmage == 0
+                Game.is_scrimmage == 0,
+                Game.game_date.isnot(None)
             ).count()
 
-            # Count games from proposal (games only)
+            # Count games from proposal (games only, with dates)
             proposal_count = 0
             if proposal:
                 for g in proposal.games:
-                    if g.get('league') != league:
+                    if g.get('league') != league_name:
                         continue
                     game_type = g.get('game_type', 'regular')
                     if game_type in ('practice', 'division_practice', 'scrimmage'):
                         continue
                     if g.get('is_league_practice'):
                         continue
+                    if not g.get('game_date'):
+                        continue
                     proposal_count += 1
 
             # Use saved if available, otherwise proposal
             game_count = saved_count if saved_count > 0 else proposal_count
-            source = 'saved' if saved_count > 0 else 'proposal'
+
+            # Get seasonal display name
+            league_obj = League.get_by_name(league_name)
+            if league_obj:
+                display_name = league_obj.get_seasonal_name(is_spring)
+            else:
+                display_name = league_name
 
             leagues_data.append({
-                'name': league,
-                'game_count': game_count,
-                'source': source
+                'name': league_name,  # Internal name for URL
+                'display_name': display_name,  # Seasonal display name
+                'game_count': game_count
             })
 
     # Pass active season info for highlighting
@@ -278,30 +291,27 @@ def download_league_schedule(year, is_spring, league):
     """Download game schedule for a specific league as CSV.
 
     Games only (no practices). Uses saved games if available, otherwise proposal.
+    Only includes games with dates set.
     """
     events = []
 
-    # Check for saved games first
+    # Check for saved games first (only those with dates)
     saved_games = Game.query.filter(
         Game.year == year,
         Game.is_spring == is_spring,
         Game.league == league,
         Game.active == 1,
         Game.game_type.in_(['regular', 'playoff']),
-        Game.is_scrimmage == 0
+        Game.is_scrimmage == 0,
+        Game.game_date.isnot(None)
     ).order_by(Game.game_date).all()
 
     if saved_games:
         # Use saved games
         for game in saved_games:
-            if game.game_date:
-                date_str = game.game_date.strftime('%Y-%m-%d')
-                time_str = game.game_date.strftime('%I:%M %p')
-                day_str = game.game_date.strftime('%A')
-            else:
-                date_str = ''
-                time_str = ''
-                day_str = ''
+            date_str = game.game_date.strftime('%Y-%m-%d')
+            time_str = game.game_date.strftime('%I:%M %p')
+            day_str = game.game_date.strftime('%A')
 
             field_name = game.location or ''
 
@@ -341,22 +351,19 @@ def download_league_schedule(year, is_spring, league):
                 if game.get('is_league_practice'):
                     continue
 
-                # Parse date/time
+                # Skip games without dates
                 game_date_str = game.get('game_date', '')
-                if game_date_str:
-                    try:
-                        dt = datetime.fromisoformat(game_date_str.replace('Z', '+00:00'))
-                        date_str = dt.strftime('%Y-%m-%d')
-                        time_str = dt.strftime('%I:%M %p')
-                        day_str = dt.strftime('%A')
-                    except (ValueError, AttributeError):
-                        date_str = game_date_str[:10] if len(game_date_str) >= 10 else ''
-                        time_str = ''
-                        day_str = ''
-                else:
-                    date_str = ''
-                    time_str = ''
-                    day_str = ''
+                if not game_date_str:
+                    continue
+
+                # Parse date/time
+                try:
+                    dt = datetime.fromisoformat(game_date_str.replace('Z', '+00:00'))
+                    date_str = dt.strftime('%Y-%m-%d')
+                    time_str = dt.strftime('%I:%M %p')
+                    day_str = dt.strftime('%A')
+                except (ValueError, AttributeError):
+                    continue  # Skip if we can't parse the date
 
                 field_name = game.get('field_name') or game.get('location') or ''
                 home_team = game.get('home_team_name', '')
