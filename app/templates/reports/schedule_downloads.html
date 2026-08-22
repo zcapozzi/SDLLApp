@@ -5,7 +5,7 @@
 {% block content %}
 <h1>Download League Schedules</h1>
 
-<p class="text-muted">Download schedules for individual leagues as CSV files. Each file includes games and practices, sorted by date.</p>
+<p class="text-muted">Download game schedules for individual leagues as CSV files.</p>
 
 <!-- Season Selector -->
 <div class="card" style="margin-bottom: 20px;">
@@ -31,47 +31,31 @@
         <thead>
             <tr>
                 <th>League</th>
-                <th>Saved Events</th>
-                <th>Proposal Events</th>
-                <th>Download</th>
+                <th>Games</th>
+                <th>Source</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
             {% for league in leagues %}
             <tr>
                 <td><strong>{{ league.name }}</strong></td>
+                <td>{{ league.game_count }} games</td>
                 <td>
-                    {% if league.saved_count > 0 %}
-                    <span class="badge badge-success">{{ league.saved_count }} events</span>
+                    {% if league.source == 'saved' %}
+                    <span class="badge badge-success">Accepted</span>
                     {% else %}
-                    <span class="text-muted">None</span>
+                    <span class="badge badge-warning">Proposed</span>
                     {% endif %}
                 </td>
                 <td>
-                    {% if league.proposal_count > 0 %}
-                    <span class="badge badge-warning">{{ league.proposal_count }} events</span>
+                    {% if league.game_count > 0 %}
+                    <a href="{{ url_for('reports.download_league_schedule', year=current_year, is_spring=current_is_spring, league=league.name) }}"
+                       class="btn btn-sm btn-primary">
+                        Download
+                    </a>
                     {% else %}
-                    <span class="text-muted">None</span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if league.saved_count > 0 or league.proposal_count > 0 %}
-                    <div class="btn-group">
-                        {% if league.saved_count > 0 %}
-                        <a href="{{ url_for('reports.download_league_schedule', year=current_year, is_spring=current_is_spring, league=league.name, source='saved') }}"
-                           class="btn btn-sm btn-primary" title="Download saved schedule">
-                            CSV (Saved)
-                        </a>
-                        {% endif %}
-                        {% if league.proposal_count > 0 %}
-                        <a href="{{ url_for('reports.download_league_schedule', year=current_year, is_spring=current_is_spring, league=league.name, source='proposal') }}"
-                           class="btn btn-sm btn-outline" title="Download proposed schedule">
-                            CSV (Proposal)
-                        </a>
-                        {% endif %}
-                    </div>
-                    {% else %}
-                    <span class="text-muted">No events</span>
+                    <span class="text-muted">No games</span>
                     {% endif %}
                 </td>
             </tr>
@@ -96,7 +80,6 @@ function updateAndSubmit() {
     var parts = value.split('-');
     document.getElementById('year_hidden').value = parts[0];
     document.getElementById('is_spring_hidden').value = parts[1];
-    // Remove the combined season field before submitting
     select.removeAttribute('name');
     document.getElementById('season-form').submit();
 }

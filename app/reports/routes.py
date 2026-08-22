@@ -199,43 +199,62 @@ def schedule_downloads():
         # Check for proposal
         proposal = ScheduleProposal.get_for_season(year, is_spring)
 
-        # Get leagues from saved games
+        # Get leagues from saved games (games only, no practices/scrimmages)
         saved_leagues = db.session.query(Game.league).filter(
             Game.year == year,
             Game.is_spring == is_spring,
-            Game.active == 1
+            Game.active == 1,
+            Game.game_type.in_(['regular', 'playoff']),
+            Game.is_scrimmage == 0
         ).distinct().all()
         saved_leagues = set(l[0] for l in saved_leagues if l[0])
 
-        # Get leagues from proposal
+        # Get leagues from proposal (games only)
         proposal_leagues = set()
         if proposal:
             for game in proposal.games:
+                game_type = game.get('game_type', 'regular')
+                if game_type in ('practice', 'division_practice', 'scrimmage'):
+                    continue
+                if game.get('is_league_practice'):
+                    continue
                 if game.get('league'):
                     proposal_leagues.add(game['league'])
 
         # Combine and add info
         all_leagues = sorted(saved_leagues | proposal_leagues)
         for league in all_leagues:
-            # Count events from saved games
+            # Count games from saved (games only)
             saved_count = Game.query.filter(
                 Game.year == year,
                 Game.is_spring == is_spring,
                 Game.league == league,
-                Game.active == 1
+                Game.active == 1,
+                Game.game_type.in_(['regular', 'playoff']),
+                Game.is_scrimmage == 0
             ).count()
 
-            # Count events from proposal
+            # Count games from proposal (games only)
             proposal_count = 0
             if proposal:
-                proposal_count = sum(1 for g in proposal.games if g.get('league') == league)
+                for g in proposal.games:
+                    if g.get('league') != league:
+                        continue
+                    game_type = g.get('game_type', 'regular')
+                    if game_type in ('practice', 'division_practice', 'scrimmage'):
+                        continue
+                    if g.get('is_league_practice'):
+                        continue
+                    proposal_count += 1
+
+            # Use saved if available, otherwise proposal
+            game_count = saved_count if saved_count > 0 else proposal_count
+            source = 'saved' if saved_count > 0 else 'proposal'
 
             leagues_data.append({
                 'name': league,
-                'saved_count': saved_count,
-                'proposal_count': proposal_count,
-                'has_proposal': proposal is not None and proposal_count > 0,
-                'has_saved': saved_count > 0
+                'game_count': game_count,
+                'source': source
             })
 
     # Pass active season info for highlighting
@@ -256,109 +275,24 @@ def schedule_downloads():
 @reports_bp.route('/schedule-download/<int:year>/<int:is_spring>/<league>')
 @login_required
 def download_league_schedule(year, is_spring, league):
-    """Download schedule for a specific league as CSV.
+    """Download game schedule for a specific league as CSV.
 
-    Query params:
-        source: 'proposal', 'saved', or 'both' (default: both)
+    Games only (no practices). Uses saved games if available, otherwise proposal.
     """
-    source = request.args.get('source', 'both')
-
-    # Collect events
     events = []
 
-    # Get proposal events
-    if source in ('proposal', 'both'):
-        proposal = ScheduleProposal.get_for_season(year, is_spring)
-        if proposal:
-            for game in proposal.games:
-                if game.get('league') != league:
-                    continue
+    # Check for saved games first
+    saved_games = Game.query.filter(
+        Game.year == year,
+        Game.is_spring == is_spring,
+        Game.league == league,
+        Game.active == 1,
+        Game.game_type.in_(['regular', 'playoff']),
+        Game.is_scrimmage == 0
+    ).order_by(Game.game_date).all()
 
-                game_type = game.get('game_type', 'regular')
-                is_league_practice = game.get('is_league_practice', False)
-
-                # Parse date/time
-                game_date_str = game.get('game_date', '')
-                if game_date_str:
-                    try:
-                        dt = datetime.fromisoformat(game_date_str.replace('Z', '+00:00'))
-                        date_str = dt.strftime('%Y-%m-%d')
-                        time_str = dt.strftime('%I:%M %p')
-                        day_str = dt.strftime('%A')
-                    except (ValueError, AttributeError):
-                        date_str = game_date_str[:10] if len(game_date_str) >= 10 else ''
-                        time_str = ''
-                        day_str = ''
-                else:
-                    date_str = ''
-                    time_str = ''
-                    day_str = ''
-
-                field_name = game.get('field_name') or game.get('location') or ''
-                home_team = game.get('home_team_name', '')
-                away_team = game.get('away_team_name', '')
-
-                # For division/league practices, expand to one row per team
-                if is_league_practice or game_type == 'division_practice':
-                    # Get all teams in the league for this season
-                    teams = TeamSeason.query.filter_by(
-                        year=year, is_spring=is_spring, league=league, active=1
-                    ).filter(TeamSeason.is_placeholder == 0).all()
-
-                    for team in teams:
-                        events.append({
-                            'date': date_str,
-                            'day': day_str,
-                            'time': time_str,
-                            'type': 'Division Practice',
-                            'field': field_name,
-                            'team': team.scheduler_display_name,
-                            'opponent': '',
-                            'source': 'proposal'
-                        })
-                elif game_type == 'practice':
-                    events.append({
-                        'date': date_str,
-                        'day': day_str,
-                        'time': time_str,
-                        'type': 'Practice',
-                        'field': field_name,
-                        'team': home_team,
-                        'opponent': '',
-                        'source': 'proposal'
-                    })
-                elif game_type == 'scrimmage':
-                    events.append({
-                        'date': date_str,
-                        'day': day_str,
-                        'time': time_str,
-                        'type': 'Scrimmage',
-                        'field': field_name,
-                        'team': home_team,
-                        'opponent': away_team,
-                        'source': 'proposal'
-                    })
-                else:
-                    events.append({
-                        'date': date_str,
-                        'day': day_str,
-                        'time': time_str,
-                        'type': 'Game',
-                        'field': field_name,
-                        'team': home_team,
-                        'opponent': away_team,
-                        'source': 'proposal'
-                    })
-
-    # Get saved game events
-    if source in ('saved', 'both'):
-        saved_games = Game.query.filter(
-            Game.year == year,
-            Game.is_spring == is_spring,
-            Game.league == league,
-            Game.active == 1
-        ).order_by(Game.game_date).all()
-
+    if saved_games:
+        # Use saved games
         for game in saved_games:
             if game.game_date:
                 date_str = game.game_date.strftime('%Y-%m-%d')
@@ -383,55 +317,58 @@ def download_league_schedule(year, is_spring, league):
                 if away_team_obj:
                     away_team = away_team_obj.scheduler_display_name
 
-            # For division/league practices, expand to one row per team
-            if game.is_league_practice:
-                teams = TeamSeason.query.filter_by(
-                    year=year, is_spring=is_spring, league=league, active=1
-                ).filter(TeamSeason.is_placeholder == 0).all()
+            events.append({
+                'date': date_str,
+                'day': day_str,
+                'time': time_str,
+                'field': field_name,
+                'home_team': home_team,
+                'away_team': away_team
+            })
+    else:
+        # Fall back to proposal
+        proposal = ScheduleProposal.get_for_season(year, is_spring)
+        if proposal:
+            for game in proposal.games:
+                if game.get('league') != league:
+                    continue
 
-                for team in teams:
-                    events.append({
-                        'date': date_str,
-                        'day': day_str,
-                        'time': time_str,
-                        'type': 'Division Practice',
-                        'field': field_name,
-                        'team': team.scheduler_display_name,
-                        'opponent': '',
-                        'source': 'saved'
-                    })
-            elif game.game_type == 'practice' or (game.home_ID and not game.away_ID):
+                game_type = game.get('game_type', 'regular')
+
+                # Skip practices and scrimmages
+                if game_type in ('practice', 'division_practice', 'scrimmage'):
+                    continue
+                if game.get('is_league_practice'):
+                    continue
+
+                # Parse date/time
+                game_date_str = game.get('game_date', '')
+                if game_date_str:
+                    try:
+                        dt = datetime.fromisoformat(game_date_str.replace('Z', '+00:00'))
+                        date_str = dt.strftime('%Y-%m-%d')
+                        time_str = dt.strftime('%I:%M %p')
+                        day_str = dt.strftime('%A')
+                    except (ValueError, AttributeError):
+                        date_str = game_date_str[:10] if len(game_date_str) >= 10 else ''
+                        time_str = ''
+                        day_str = ''
+                else:
+                    date_str = ''
+                    time_str = ''
+                    day_str = ''
+
+                field_name = game.get('field_name') or game.get('location') or ''
+                home_team = game.get('home_team_name', '')
+                away_team = game.get('away_team_name', '')
+
                 events.append({
                     'date': date_str,
                     'day': day_str,
                     'time': time_str,
-                    'type': 'Practice',
                     'field': field_name,
-                    'team': home_team,
-                    'opponent': '',
-                    'source': 'saved'
-                })
-            elif game.is_scrimmage:
-                events.append({
-                    'date': date_str,
-                    'day': day_str,
-                    'time': time_str,
-                    'type': 'Scrimmage',
-                    'field': field_name,
-                    'team': home_team,
-                    'opponent': away_team,
-                    'source': 'saved'
-                })
-            else:
-                events.append({
-                    'date': date_str,
-                    'day': day_str,
-                    'time': time_str,
-                    'type': 'Game',
-                    'field': field_name,
-                    'team': home_team,
-                    'opponent': away_team,
-                    'source': 'saved'
+                    'home_team': home_team,
+                    'away_team': away_team
                 })
 
     # Sort events by date and time
@@ -442,7 +379,7 @@ def download_league_schedule(year, is_spring, league):
     writer = csv.writer(output)
 
     # Header row
-    writer.writerow(['Date', 'Day', 'Time', 'Type', 'Field', 'Team', 'Opponent'])
+    writer.writerow(['Date', 'Day', 'Time', 'Field', 'Home Team', 'Away Team'])
 
     # Data rows
     for event in events:
@@ -450,10 +387,9 @@ def download_league_schedule(year, is_spring, league):
             event['date'],
             event['day'],
             event['time'],
-            event['type'],
             event['field'],
-            event['team'],
-            event['opponent']
+            event['home_team'],
+            event['away_team']
         ])
 
     # Create response
