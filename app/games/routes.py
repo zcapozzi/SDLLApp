@@ -1104,7 +1104,8 @@ def day_view(year, is_spring, target_date):
         ).all()
 
         # Build field lookup for resolving location IDs to names
-        from app.models.field import Field
+        # Field is already imported at module level - do not re-import locally
+        # as this causes UnboundLocalError when has_proposal is False (see error #18)
         all_fields_dv = Field.query.filter_by(active=1).all()
         field_lookup_dv = {str(f.ID): f.location_title for f in all_fields_dv}
         field_lookup_dv.update({f.location_title: f.location_title for f in all_fields_dv})

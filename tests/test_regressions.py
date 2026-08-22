@@ -89,3 +89,55 @@ class TestProductionRegressions:
         game_with_empty_league = MockGame(league='')
         result = format_league_display(game_with_empty_league)
         assert result == 'TBD', f"Empty league should display as 'TBD', got '{result}'"
+
+    @pytest.mark.quick
+    def test_regression_error_18_day_view_field_import(self):
+        """
+        Production Error: #18
+        Context: Day view page when no schedule proposal exists
+        Error: UnboundLocalError: cannot access local variable 'Field'
+               where it is not associated with a value
+        Path: /games/2026/0/day/2026-08-22
+        Root cause: A local 'from app.models.field import Field' import inside
+                    the 'if has_proposal:' block (line 1107) creates a local
+                    binding that shadows the module-level import. When has_proposal
+                    is False, the import never executes but Python still treats
+                    Field as a local variable, causing UnboundLocalError at line 1155.
+
+        Fix: Remove the redundant local import at line 1107 since Field is
+             already imported at the module level.
+        """
+        import ast
+        import inspect
+        from pathlib import Path
+
+        # Read the routes.py file
+        routes_path = Path(__file__).parent.parent / 'app' / 'games' / 'routes.py'
+        source = routes_path.read_text(encoding='utf-8')
+        tree = ast.parse(source)
+
+        # Find the day_view function
+        day_view_func = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == 'day_view':
+                day_view_func = node
+                break
+
+        assert day_view_func is not None, "day_view function not found in routes.py"
+
+        # Check for local imports of Field within the function
+        local_field_imports = []
+        for node in ast.walk(day_view_func):
+            if isinstance(node, ast.ImportFrom):
+                if node.module and 'field' in node.module.lower():
+                    for alias in node.names:
+                        if alias.name == 'Field':
+                            local_field_imports.append(node.lineno)
+
+        # The bug was caused by a local import of Field inside day_view
+        # After the fix, there should be NO local imports of Field in day_view
+        # (Field should only be imported at module level)
+        assert len(local_field_imports) == 0, \
+            f"Found local import of 'Field' at line(s) {local_field_imports} in day_view(). " \
+            "This causes UnboundLocalError when has_proposal is False. " \
+            "Remove the local import and use the module-level import instead."
