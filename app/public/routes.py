@@ -134,10 +134,13 @@ def _build_game_object_from_proposal(game_data, team, all_teams_by_id, fields_by
     home_team = all_teams_by_id.get(home_team_id)
     away_team = all_teams_by_id.get(away_team_id)
 
+    field_name = game_data.get('field_name') or game_data.get('location') or ''
+
     return {
         'ID': game_data.get('id'),
         'game_date': game_date,
-        'location': game_data.get('field_name'),
+        'location': field_name,
+        'field_name': field_name,  # Add field_name for template compatibility
         'game_type': game_data.get('game_type', 'regular'),
         'status': 'scheduled',
         'home_ID': home_team_id,
@@ -258,10 +261,12 @@ def team_schedule(token):
             ).all()
 
             for lp in league_practices:
+                field_name = lp.field_name or ''  # Use Game.field_name property
                 lp_obj = {
                     'ID': f'lp_{lp.ID}',
                     'game_date': lp.game_date,
-                    'location': lp.location,
+                    'location': field_name,
+                    'field_name': field_name,  # Add field_name for template compatibility
                     'game_type': 'practice',
                     'status': 'scheduled',
                     'home_ID': lp.home_ID,
