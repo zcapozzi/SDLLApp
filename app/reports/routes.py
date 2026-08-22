@@ -200,23 +200,22 @@ def schedule_downloads():
         # Check for proposal
         proposal = ScheduleProposal.get_for_season(year, is_spring)
 
-        # Get leagues from saved games (games only, with dates)
+        # Get leagues from saved games (games and scrimmages, with dates)
         saved_leagues = db.session.query(Game.league).filter(
             Game.year == year,
             Game.is_spring == is_spring,
             Game.active == 1,
             Game.game_type.in_(['regular', 'playoff']),
-            Game.is_scrimmage == 0,
             Game.game_date.isnot(None)
         ).distinct().all()
         saved_leagues = set(l[0] for l in saved_leagues if l[0])
 
-        # Get leagues from proposal (games only, with dates)
+        # Get leagues from proposal (games and scrimmages, with dates)
         proposal_leagues = set()
         if proposal:
             for game in proposal.games:
                 game_type = game.get('game_type', 'regular')
-                if game_type in ('practice', 'division_practice', 'scrimmage'):
+                if game_type in ('practice', 'division_practice'):
                     continue
                 if game.get('is_league_practice'):
                     continue
@@ -228,25 +227,24 @@ def schedule_downloads():
         # Combine and add info
         all_leagues = sorted(saved_leagues | proposal_leagues)
         for league_name in all_leagues:
-            # Count games from saved (games only, with dates)
+            # Count games from saved (games and scrimmages, with dates)
             saved_count = Game.query.filter(
                 Game.year == year,
                 Game.is_spring == is_spring,
                 Game.league == league_name,
                 Game.active == 1,
                 Game.game_type.in_(['regular', 'playoff']),
-                Game.is_scrimmage == 0,
                 Game.game_date.isnot(None)
             ).count()
 
-            # Count games from proposal (games only, with dates)
+            # Count games from proposal (games and scrimmages, with dates)
             proposal_count = 0
             if proposal:
                 for g in proposal.games:
                     if g.get('league') != league_name:
                         continue
                     game_type = g.get('game_type', 'regular')
-                    if game_type in ('practice', 'division_practice', 'scrimmage'):
+                    if game_type in ('practice', 'division_practice'):
                         continue
                     if g.get('is_league_practice'):
                         continue
@@ -290,7 +288,7 @@ def schedule_downloads():
 def download_league_schedule(year, is_spring, league):
     """Download game schedule for a specific league as CSV.
 
-    Games only (no practices). Uses saved games if available, otherwise proposal.
+    Games and scrimmages (no practices). Uses saved games if available, otherwise proposal.
     Only includes games with dates set.
     """
     events = []
@@ -302,7 +300,6 @@ def download_league_schedule(year, is_spring, league):
         Game.league == league,
         Game.active == 1,
         Game.game_type.in_(['regular', 'playoff']),
-        Game.is_scrimmage == 0,
         Game.game_date.isnot(None)
     ).order_by(Game.game_date).all()
 
@@ -314,6 +311,14 @@ def download_league_schedule(year, is_spring, league):
             day_str = game.game_date.strftime('%A')
 
             field_name = game.location or ''
+
+            # Determine game type for display
+            if game.is_scrimmage:
+                game_type_display = 'Scrimmage'
+            elif game.game_type == 'playoff':
+                game_type_display = 'Playoff'
+            else:
+                game_type_display = 'Regular'
 
             # Get team names
             home_team = ''
@@ -331,6 +336,7 @@ def download_league_schedule(year, is_spring, league):
                 'date': date_str,
                 'day': day_str,
                 'time': time_str,
+                'type': game_type_display,
                 'field': field_name,
                 'home_team': home_team,
                 'away_team': away_team
@@ -345,8 +351,8 @@ def download_league_schedule(year, is_spring, league):
 
                 game_type = game.get('game_type', 'regular')
 
-                # Skip practices and scrimmages
-                if game_type in ('practice', 'division_practice', 'scrimmage'):
+                # Skip practices only (include scrimmages)
+                if game_type in ('practice', 'division_practice'):
                     continue
                 if game.get('is_league_practice'):
                     continue
@@ -365,6 +371,14 @@ def download_league_schedule(year, is_spring, league):
                 except (ValueError, AttributeError):
                     continue  # Skip if we can't parse the date
 
+                # Determine game type for display
+                if game_type == 'scrimmage':
+                    game_type_display = 'Scrimmage'
+                elif game_type == 'playoff':
+                    game_type_display = 'Playoff'
+                else:
+                    game_type_display = 'Regular'
+
                 field_name = game.get('field_name') or game.get('location') or ''
                 home_team = game.get('home_team_name', '')
                 away_team = game.get('away_team_name', '')
@@ -373,6 +387,7 @@ def download_league_schedule(year, is_spring, league):
                     'date': date_str,
                     'day': day_str,
                     'time': time_str,
+                    'type': game_type_display,
                     'field': field_name,
                     'home_team': home_team,
                     'away_team': away_team
@@ -386,7 +401,7 @@ def download_league_schedule(year, is_spring, league):
     writer = csv.writer(output)
 
     # Header row
-    writer.writerow(['Date', 'Day', 'Time', 'Field', 'Home Team', 'Away Team'])
+    writer.writerow(['Date', 'Day', 'Time', 'Type', 'Field', 'Home Team', 'Away Team'])
 
     # Data rows
     for event in events:
@@ -394,6 +409,7 @@ def download_league_schedule(year, is_spring, league):
             event['date'],
             event['day'],
             event['time'],
+            event['type'],
             event['field'],
             event['home_team'],
             event['away_team']
