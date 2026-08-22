@@ -567,6 +567,9 @@ def save(year, is_spring):
                 is_league_practice = True
 
             # Create the game record
+            # Use field_name for location (not field_id which is an integer)
+            field_name = proposed_game.get('field_name') or proposed_game.get('location') or ''
+
             game = Game(
                 active=1,
                 year=year,
@@ -574,7 +577,7 @@ def save(year, is_spring):
                 league=proposed_game['league'],
                 home_ID=proposed_game['home_team_id'],
                 away_ID=proposed_game['away_team_id'],  # None for practices
-                location=proposed_game['field_id'],
+                location=field_name,
                 game_date=game_date,
                 game_type=game_type,
                 is_scrimmage=is_scrimmage,
