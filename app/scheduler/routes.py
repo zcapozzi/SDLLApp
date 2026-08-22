@@ -554,11 +554,17 @@ def save(year, is_spring):
             if proposed_game['game_date']:
                 game_date = datetime.fromisoformat(proposed_game['game_date'])
 
-            # Determine game type and is_scrimmage flag
+            # Determine game type and flags
             game_type = proposed_game['game_type']
             is_scrimmage = 1 if game_type == 'scrimmage' else 0
+            is_league_practice = proposed_game.get('is_league_practice', False)
+
+            # Normalize game_type for storage
             if game_type == 'scrimmage':
-                game_type = 'regular'  # Scrimmages are stored as regular with flag
+                game_type = 'regular'  # Scrimmages are stored as regular with is_scrimmage flag
+            elif game_type == 'division_practice':
+                game_type = 'practice'
+                is_league_practice = True
 
             # Create the game record
             game = Game(
@@ -570,8 +576,9 @@ def save(year, is_spring):
                 away_ID=proposed_game['away_team_id'],  # None for practices
                 location=proposed_game['field_id'],
                 game_date=game_date,
-                game_type=game_type if game_type != 'practice' else 'regular',
+                game_type=game_type,
                 is_scrimmage=is_scrimmage,
+                is_league_practice=is_league_practice,
                 status='scheduled'
             )
             db.session.add(game)

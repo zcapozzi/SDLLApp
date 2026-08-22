@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}Download Schedules{% endblock %}
+
+{% block content %}
+<h1>Download League Schedules</h1>
+
+<p class="text-muted">Download schedules for individual leagues as CSV files. Each file includes games and practices, sorted by date.</p>
+
+<!-- Season Selector -->
+<div class="card" style="margin-bottom: 20px;">
+    <h3>Select Season</h3>
+    <form method="GET" action="{{ url_for('reports.schedule_downloads') }}" id="season-form" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <select name="season" id="season-select" onchange="updateAndSubmit()" class="form-control" style="width: auto; min-width: 200px;">
+            {% for year, is_spring in seasons %}
+            <option value="{{ year }}-{{ is_spring }}"
+                {% if year == current_year and is_spring == current_is_spring %}selected{% endif %}>
+                {{ 'Spring' if is_spring else 'Fall' }} {{ year }}{% if year == active_year and is_spring == active_is_spring %} (Current){% endif %}
+            </option>
+            {% endfor %}
+        </select>
+        <input type="hidden" name="year" id="year_hidden" value="{{ current_year }}">
+        <input type="hidden" name="is_spring" id="is_spring_hidden" value="{{ current_is_spring }}">
+    </form>
+</div>
+
+{% if leagues %}
+<div class="card">
+    <h3>Available Leagues</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>League</th>
+                <th>Saved Events</th>
+                <th>Proposal Events</th>
+                <th>Download</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for league in leagues %}
+            <tr>
+                <td><strong>{{ league.name }}</strong></td>
+                <td>
+                    {% if league.saved_count > 0 %}
+                    <span class="badge badge-success">{{ league.saved_count }} events</span>
+                    {% else %}
+                    <span class="text-muted">None</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if league.proposal_count > 0 %}
+                    <span class="badge badge-warning">{{ league.proposal_count }} events</span>
+                    {% else %}
+                    <span class="text-muted">None</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if league.saved_count > 0 or league.proposal_count > 0 %}
+                    <div class="btn-group">
+                        {% if league.saved_count > 0 %}
+                        <a href="{{ url_for('reports.download_league_schedule', year=current_year, is_spring=current_is_spring, league=league.name, source='saved') }}"
+                           class="btn btn-sm btn-primary" title="Download saved schedule">
+                            CSV (Saved)
+                        </a>
+                        {% endif %}
+                        {% if league.proposal_count > 0 %}
+                        <a href="{{ url_for('reports.download_league_schedule', year=current_year, is_spring=current_is_spring, league=league.name, source='proposal') }}"
+                           class="btn btn-sm btn-outline" title="Download proposed schedule">
+                            CSV (Proposal)
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <span class="text-muted">No events</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card">
+    <p class="text-muted">No leagues found for this season. Select a different season above.</p>
+</div>
+{% endif %}
+
+<div style="margin-top: 20px;">
+    <a href="{{ url_for('reports.index') }}" class="btn btn-outline">Back to Reports</a>
+</div>
+
+<script>
+function updateAndSubmit() {
+    var select = document.getElementById('season-select');
+    var value = select.value;
+    var parts = value.split('-');
+    document.getElementById('year_hidden').value = parts[0];
+    document.getElementById('is_spring_hidden').value = parts[1];
+    // Remove the combined season field before submitting
+    select.removeAttribute('name');
+    document.getElementById('season-form').submit();
+}
+</script>
+{% endblock %}
