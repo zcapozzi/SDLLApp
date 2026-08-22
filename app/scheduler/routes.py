@@ -540,7 +540,9 @@ def save(year, is_spring):
                 game.away_ID = assignment['away_id']
                 if assignment['game_date']:
                     game.game_date = datetime.fromisoformat(assignment['game_date'])
-                game.location = assignment['field_id']
+                # Use both field_id (FK) and field_name (for backwards compat)
+                game.field_id = assignment.get('field_id')
+                game.location = assignment.get('field_name', '')
                 updated_count += 1
 
         # Then, create new games for any proposed that don't have existing records
@@ -567,7 +569,8 @@ def save(year, is_spring):
                 is_league_practice = True
 
             # Create the game record
-            # Use field_name for location (not field_id which is an integer)
+            # Use both field_id (FK) and field_name (for backwards compat)
+            field_id = proposed_game.get('field_id')
             field_name = proposed_game.get('field_name') or proposed_game.get('location') or ''
 
             game = Game(
@@ -577,6 +580,7 @@ def save(year, is_spring):
                 league=proposed_game['league'],
                 home_ID=proposed_game['home_team_id'],
                 away_ID=proposed_game['away_team_id'],  # None for practices
+                field_id=field_id,
                 location=field_name,
                 game_date=game_date,
                 game_type=game_type,

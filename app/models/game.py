@@ -14,7 +14,8 @@ class Game(db.Model):
     home_ID = db.Column(db.BigInteger, db.ForeignKey('sdll_team_seasons.team_ID'))
     away_ID = db.Column(db.BigInteger, db.ForeignKey('sdll_team_seasons.team_ID'))
     league = db.Column(db.String(30))
-    location = db.Column(db.String(100))
+    field_id = db.Column(db.BigInteger, db.ForeignKey('sdll_fields.ID'))  # FK to fields table
+    location = db.Column(db.String(100))  # Legacy field name string (for backwards compat)
     status = db.Column(db.String(20), default='scheduled')  # scheduled, completed, postponed, cancelled
     assignr_id = db.Column(db.String(15))
     year = db.Column(db.Integer)
@@ -29,6 +30,10 @@ class Game(db.Model):
     umpire_override = db.Column(db.String(20))
     home_score = db.Column(db.SmallInteger)  # Only for completed regular/playoff games
     away_score = db.Column(db.SmallInteger)  # Only for completed regular/playoff games
+
+    # Relationships
+    # Note: home_team and away_team are created via backref from TeamSeason.home_games/away_games
+    field_rel = db.relationship('Field', foreign_keys=[field_id], lazy='joined')
 
     def __repr__(self):
         return f'<Game {self.ID}: {self.league} at {self.location} on {self.game_date}>'
@@ -124,13 +129,32 @@ class Game(db.Model):
     def field(self):
         """Get the Field object for this game's location.
 
+        Uses field_id relationship if set, otherwise falls back to
+        location string lookup for backwards compatibility.
+
         Returns:
             Field or None: The Field object if found.
         """
+        # Prefer the FK relationship
+        if self.field_id and self.field_rel:
+            return self.field_rel
+        # Fall back to string-based lookup for legacy data
         if not self.location:
             return None
         from app.models.field import Field
         return Field.get_by_name(self.location)
+
+    @property
+    def field_name(self):
+        """Get the field name for display.
+
+        Returns:
+            str: Field name or empty string.
+        """
+        field = self.field
+        if field:
+            return field.location_title
+        return self.location or ''
 
     @property
     def directions_url(self):
@@ -201,7 +225,8 @@ class Game(db.Model):
                 home_ID=new_home_ID,
                 away_ID=new_away_ID,
                 league=game.league,
-                location=game.location,
+                field_id=game.field_id,  # Copy FK reference
+                location=game.location,   # Also copy legacy string
                 status='scheduled',
                 year=target_year,
                 date_added=datetime.utcnow(),
@@ -347,7 +372,8 @@ class Game(db.Model):
             game.home_ID = None
             game.away_ID = None
             game.game_date = None
-            game.location = None
+            game.field_id = None    # Clear FK reference
+            game.location = None    # Clear legacy string
 
         db.session.commit()
         return len(games)
