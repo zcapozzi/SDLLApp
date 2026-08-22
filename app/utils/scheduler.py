@@ -4097,7 +4097,8 @@ class ScheduleGenerator:
                         'home_id': actual_home.team_ID,
                         'away_id': actual_away.team_ID,
                         'game_date': game_datetime.isoformat() if game_datetime else None,
-                        'field_id': field_id
+                        'field_id': field_id,
+                        'field_name': slot.field.location_title if slot and slot.field else None
                     }
                     existing_idx += 1
                 else:
@@ -4293,7 +4294,8 @@ class ScheduleGenerator:
                         'home_id': actual_home.team_ID,
                         'away_id': actual_away.team_ID,
                         'game_date': game_datetime.isoformat() if game_datetime else None,
-                        'field_id': field_id
+                        'field_id': field_id,
+                        'field_name': slot.field.location_title if slot and slot.field else None
                     }
                     existing_idx += 1
                 else:

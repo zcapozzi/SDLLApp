@@ -531,6 +531,11 @@ def save(year, is_spring):
         saved_count = 0
         updated_count = 0
 
+        # Build field lookup for resolving field_id to field_name
+        from app.models.field import Field
+        all_fields = Field.query.filter_by(active=1).all()
+        field_id_to_name = {f.ID: f.location_title for f in all_fields}
+
         # First, apply assignments to existing game records
         assignments = proposal.get('assignments', {})
         for game_id, assignment in assignments.items():
@@ -541,8 +546,13 @@ def save(year, is_spring):
                 if assignment['game_date']:
                     game.game_date = datetime.fromisoformat(assignment['game_date'])
                 # Use both field_id (FK) and field_name (for backwards compat)
-                game.field_id = assignment.get('field_id')
-                game.location = assignment.get('field_name', '')
+                field_id = assignment.get('field_id')
+                field_name = assignment.get('field_name')
+                # Fallback: look up field name from field_id if not provided
+                if not field_name and field_id:
+                    field_name = field_id_to_name.get(field_id, '')
+                game.field_id = field_id
+                game.location = field_name or ''
                 updated_count += 1
 
         # Then, create new games for any proposed that don't have existing records
@@ -571,7 +581,10 @@ def save(year, is_spring):
             # Create the game record
             # Use both field_id (FK) and field_name (for backwards compat)
             field_id = proposed_game.get('field_id')
-            field_name = proposed_game.get('field_name') or proposed_game.get('location') or ''
+            field_name = proposed_game.get('field_name') or proposed_game.get('location')
+            # Fallback: look up field name from field_id if not provided
+            if not field_name and field_id:
+                field_name = field_id_to_name.get(field_id, '')
 
             game = Game(
                 active=1,
