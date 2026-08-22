@@ -188,17 +188,20 @@ class GameChangeService:
         notifications_queued = 0
 
         # Queue for coaches of both teams
+        # Note: coach_email/coach_name will be available when coach management is implemented
         for team_id in [game.home_ID, game.away_ID]:
             if team_id:
                 team = TeamSeason.query.get(team_id)
-                if team and team.coach_email:
+                # Check for coach attributes (not yet implemented on TeamSeason)
+                coach_email = getattr(team, 'coach_email', None) if team else None
+                if coach_email:
                     try:
                         NotificationQueue.create_for_change(
                             change=change,
                             game=game,
                             recipient_type='coach',
-                            recipient_email=team.coach_email,
-                            recipient_name=team.coach_name,
+                            recipient_email=coach_email,
+                            recipient_name=getattr(team, 'coach_name', None),
                             recipient_id=None  # Coaches aren't necessarily users
                         )
                         notifications_queued += 1
