@@ -1150,8 +1150,10 @@ def day_view(year, is_spring, target_date):
     fields_with_games = set()
     game_hours = set()
     for game in games:
-        if game.location:
-            fields_with_games.add(game.location)
+        # Use field_name property which resolves field_id FK to name
+        field_name = getattr(game, 'field_name', None) or game.location
+        if field_name:
+            fields_with_games.add(field_name)
         if game.game_date:
             game_hours.add(game.game_date.hour)
 
@@ -1244,15 +1246,17 @@ def day_view(year, is_spring, target_date):
 
     # Place games in grid
     for game in games:
-        if game.game_date and game.location:
+        # Use field_name property which resolves field_id FK to name
+        field_name = getattr(game, 'field_name', None) or game.location
+        if game.game_date and field_name:
             time_key = game.game_date.strftime('%H:%M')
             # Round to nearest 30-minute slot
             hour = game.game_date.hour
             minute = 0 if game.game_date.minute < 30 else 30
             time_key = f'{hour:02d}:{minute:02d}'
 
-            if time_key in grid and game.location in grid[time_key]:
-                grid[time_key][game.location].append(game)
+            if time_key in grid and field_name in grid[time_key]:
+                grid[time_key][field_name].append(game)
 
     # Calculate prev/next day links
     prev_date = view_date - timedelta(days=1)
