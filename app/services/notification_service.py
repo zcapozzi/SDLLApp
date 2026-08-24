@@ -17,8 +17,6 @@ class GmailService:
 
     def __init__(self):
         self.sender_email = os.environ.get('GMAIL_SENDER', 'sdll.umpires@gmail.com')
-        self._smtp_configured = None
-        self._api_configured = None
 
     @property
     def is_configured(self):
@@ -27,19 +25,17 @@ class GmailService:
 
     def _check_smtp(self):
         """Check if SMTP is configured"""
-        if self._smtp_configured is None:
-            self._smtp_configured = all([
-                os.environ.get('SMTP_HOST'),
-                os.environ.get('SMTP_USER'),
-                os.environ.get('SMTP_PASSWORD')
-            ])
-        return self._smtp_configured
+        host = os.environ.get('SMTP_HOST')
+        user = os.environ.get('SMTP_USER')
+        password = os.environ.get('SMTP_PASSWORD')
+        configured = all([host, user, password])
+        if not configured:
+            print(f"SMTP check: host={bool(host)}, user={bool(user)}, password={bool(password)}")
+        return configured
 
     def _check_api(self):
         """Check if Gmail API is configured"""
-        if self._api_configured is None:
-            self._api_configured = bool(os.environ.get('GOOGLE_SERVICE_JSON'))
-        return self._api_configured
+        return bool(os.environ.get('GOOGLE_SERVICE_JSON'))
 
     def send_email(self, to, subject, body_text, body_html=None):
         """
