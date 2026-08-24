@@ -16,7 +16,7 @@ class NotificationQueue(db.Model):
     game_id = db.Column(db.BigInteger, db.ForeignKey('sdll_games.ID', ondelete='CASCADE'), nullable=False)
 
     # Recipient info
-    recipient_type = db.Column(db.Enum('admin', 'coach', 'umpire', 'parent'), nullable=False)
+    recipient_type = db.Column(db.Enum('admin', 'coach', 'umpire', 'parent', 'partner'), nullable=False)
     recipient_id = db.Column(db.Integer)  # user_id if applicable
     recipient_email = db.Column(db.String(255), nullable=False)
     recipient_name = db.Column(db.String(100))
