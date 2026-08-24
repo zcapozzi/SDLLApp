@@ -198,6 +198,19 @@ class Game(db.Model):
 
         return 1  # Default fallback
 
+    @property
+    def rules_url(self):
+        """Get the rules document URL for this game's league.
+
+        Returns:
+            str or None: URL to rules document if configured.
+        """
+        from app.models.league import League
+        league_obj = League.get_by_name(self.league)
+        if league_obj:
+            return league_obj.rules_doc_url
+        return None
+
     @classmethod
     def get_by_season(cls, year, is_spring):
         """Get all active games for a specific season"""

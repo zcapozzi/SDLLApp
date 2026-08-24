@@ -701,12 +701,17 @@ def manage(year, is_spring):
     # Get filter parameters
     league = request.args.get('league')
     game_mode = request.args.get('game_mode', 'all')
+    field_filter = request.args.get('field')
+    date_filter = request.args.get('date')
+    team_filter = request.args.get('team', type=int)
+    view_mode = request.args.get('view', 'cards')  # 'cards' or 'table'
 
-    # Build query
+    # Build query - always exclude games without game_date
     query = Game.query.filter(
         Game.active == 1,
         Game.year == year,
-        Game.is_spring == is_spring
+        Game.is_spring == is_spring,
+        Game.game_date.isnot(None)
     )
 
     if league:
@@ -716,6 +721,37 @@ def manage(year, is_spring):
         query = query.filter(Game.away_ID.isnot(None))
     elif game_mode == 'practices':
         query = query.filter(Game.away_ID.is_(None))
+
+    # Filter by field (using field_name property lookup)
+    if field_filter:
+        # Check both field_id FK and location string
+        field_obj = Field.query.filter_by(location_title=field_filter, active=1).first()
+        if field_obj:
+            query = query.filter(
+                db.or_(
+                    Game.field_id == field_obj.ID,
+                    Game.location == field_filter
+                )
+            )
+        else:
+            query = query.filter(Game.location == field_filter)
+
+    # Filter by date
+    if date_filter:
+        try:
+            filter_date = datetime.strptime(date_filter, '%Y-%m-%d').date()
+            query = query.filter(db.func.date(Game.game_date) == filter_date)
+        except ValueError:
+            pass
+
+    # Filter by team (home or away)
+    if team_filter:
+        query = query.filter(
+            db.or_(
+                Game.home_ID == team_filter,
+                Game.away_ID == team_filter
+            )
+        )
 
     games = query.order_by(Game.game_date, Game.location).all()
 
@@ -737,6 +773,16 @@ def manage(year, is_spring):
     # Get all fields for location dropdown
     fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
 
+    # Get unique field names from games for the filter dropdown
+    field_names = db.session.query(Game.location).filter(
+        Game.year == year,
+        Game.is_spring == is_spring,
+        Game.active == 1,
+        Game.location.isnot(None),
+        Game.game_date.isnot(None)
+    ).distinct().all()
+    field_names = sorted([f[0] for f in field_names if f[0]])
+
     return render_template(
         'games/manage.html',
         year=year,
@@ -746,9 +792,14 @@ def manage(year, is_spring):
         teams=teams,
         fields=fields,
         leagues=leagues,
+        field_names=field_names,
         current_filters={
             'league': league,
-            'game_mode': game_mode
+            'game_mode': game_mode,
+            'field': field_filter,
+            'date': date_filter,
+            'team': team_filter,
+            'view': view_mode
         }
     )
 

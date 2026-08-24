@@ -1,6 +1,7 @@
 """UmpirePartner model - external umpire service providers (Dynamic, Diamond, etc.)."""
 
 from datetime import datetime
+import secrets
 from app.extensions import db
 
 
@@ -30,6 +31,9 @@ class UmpirePartner(db.Model):
 
     # Status
     active = db.Column(db.Boolean, default=True)
+
+    # Schedule token for public schedule URL
+    schedule_token = db.Column(db.String(32), unique=True, nullable=True, index=True)
 
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -106,5 +110,27 @@ class UmpirePartner(db.Model):
         return cls.query.filter_by(
             name=name,
             org_id=org_id,
+            active=True
+        ).first()
+
+    def generate_schedule_token(self):
+        """Generate a unique schedule token for public URL access."""
+        self.schedule_token = secrets.token_urlsafe(16)
+        return self.schedule_token
+
+    @classmethod
+    def get_by_schedule_token(cls, token):
+        """Get partner by schedule token.
+
+        Args:
+            token: The schedule token from the URL
+
+        Returns:
+            UmpirePartner or None
+        """
+        if not token:
+            return None
+        return cls.query.filter_by(
+            schedule_token=token,
             active=True
         ).first()

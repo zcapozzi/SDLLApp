@@ -4,7 +4,106 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Fixed missing umpire templates causing production 500 errors.
+Last session: Added partner schedule URLs, improved manage games view, fixed umpire calendar short codes.
+
+---
+
+## Session: August 24, 2026 - Partner Schedule URLs & Manage Games Improvements
+
+### Overview
+Added public schedule URLs for umpire partners (Diamond, Dynamic) and improved the manage games view with client-side filtering and table view option.
+
+### 1. Partner Schedule URLs
+
+External umpire partners can now access their assigned games via a unique token-based URL without logging in.
+
+**Features:**
+- Token-based authentication (secure random URL per partner)
+- Google Sheets-style table view with columns: Date, Day, Time, League, Matchup, Field, Type, Umps, Rules, Notes
+- CSV download option (e.g., `SDLL_Fall2026_Diamond.csv`)
+- Season selector and filters (field, league, date)
+- Google Maps directions icon for fields with addresses
+- NTL (No Time Limit) indicator for 3-hour games
+- Rules column linking to division rules documents
+- "NEW" badge for games added in the past week
+
+**Files Created:**
+- `app/templates/public/partner_schedule.html` - Public schedule view template
+
+**Files Modified:**
+- `app/models/umpire_partner.py` - Added `schedule_token` field and generation method
+- `app/public/routes.py` - Added `/partner/<token>` and `/partner/<token>/csv` routes
+- `app/umpires/routes.py` - Added token generation route
+- `app/templates/umpires/partners.html` - Added Copy URL, View, Generate URL buttons
+
+**Database Migration Required:**
+```sql
+ALTER TABLE sdll_umpire_partners ADD COLUMN schedule_token VARCHAR(32) DEFAULT NULL;
+ALTER TABLE sdll_umpire_partners ADD UNIQUE INDEX idx_schedule_token (schedule_token);
+```
+
+### 2. Manage Games View Improvements
+
+Enhanced `/games/<year>/<is_spring>/manage` with filtering and view options.
+
+**Features:**
+- Games without `game_date` are now hidden
+- Toggle between Card view and Table view (Google Sheets style)
+- Client-side filtering (no page reload) for:
+  - League
+  - Game type (all/games/practices)
+  - Field
+  - Date
+  - Team (home or away)
+- "Clear Filters" button
+- Table view has compact rows with green header
+
+**Files Modified:**
+- `app/games/routes.py` - Added filter parameters, field_names context
+- `app/templates/games/manage.html` - Added table view, client-side JS filtering, view toggle
+
+### 3. Umpire Calendar Short Code Fix
+
+Fixed umpire source assignment to use consistent short codes.
+
+**Problem:** The umpire calendar was sending lowercase values like 'academy' but the database was using short codes like 'SDLL', 'DIA', 'DYN'.
+
+**Solution:**
+- Backend API now dynamically accepts valid short codes from active partners
+- Frontend updated to use 'SDLL' instead of 'academy'
+- CSS classes updated to match (`.umpire-SDLL`, `.umpire-DIA`, `.umpire-DYN`)
+
+**Files Modified:**
+- `app/umpires/routes.py` - Updated `api_set_umpire_source()` to accept partner short codes
+- `app/templates/umpires/calendar.html` - Changed all 'academy' references to 'SDLL'
+
+### 4. Umpire Count Override
+
+Added ability to override umpire count per game via right-click menu on umpire calendar.
+
+**Features:**
+- Set 0, 1, or 2 umpires per game
+- Reset to league default option
+- Visual indicator (purple dots) for overridden games
+
+**Database Migration Required:**
+```sql
+ALTER TABLE sdll_games ADD COLUMN umpire_count_override TINYINT DEFAULT NULL;
+```
+
+### Production SQL Summary
+
+Run these on production:
+```sql
+-- Partner schedule tokens
+ALTER TABLE sdll_umpire_partners ADD COLUMN schedule_token VARCHAR(32) DEFAULT NULL;
+ALTER TABLE sdll_umpire_partners ADD UNIQUE INDEX idx_schedule_token (schedule_token);
+
+-- Umpire count override per game
+ALTER TABLE sdll_games ADD COLUMN umpire_count_override TINYINT DEFAULT NULL;
+```
+
+---
 
 ---
 

@@ -320,6 +320,20 @@ def edit_partner(id):
     return render_template('umpires/edit_partner.html', partner=partner)
 
 
+@umpires_bp.route('/partners/<int:id>/generate-token', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def generate_partner_token(id):
+    """Generate a new schedule token for a partner."""
+    partner = UmpirePartner.query.get_or_404(id)
+    partner.generate_schedule_token()
+    db.session.commit()
+
+    logger.info(f'Generated schedule token for partner: {partner.name}')
+    flash(f'Generated new schedule token for {partner.name}', 'success')
+    return redirect(url_for('umpires.partners'))
+
+
 # =============================================================================
 # Delegation Rules
 # =============================================================================
@@ -603,10 +617,19 @@ def api_set_umpire_source():
     """Set the umpire source for a game via right-click menu."""
     data = request.get_json()
     game_id = data.get('game_id')
-    source = data.get('source')  # 'academy', 'diamond', 'dynamic'
+    source = data.get('source')  # Short codes: 'SDLL', 'DIA', 'DYN' or None to clear
 
-    if source not in ['academy', 'diamond', 'dynamic']:
-        return jsonify({'error': 'Invalid source'}), 400
+    # Valid short codes (stored in DB) - get from active partners plus SDLL
+    valid_sources = ['SDLL']  # SDLL Academy is always valid
+    partners = UmpirePartner.get_active()
+    for p in partners:
+        valid_sources.append(p.short_code)
+
+    # Allow None/empty to clear the override
+    if source == '' or source is None:
+        source = None
+    elif source not in valid_sources:
+        return jsonify({'error': f'Invalid source. Valid: {", ".join(valid_sources)}'}), 400
 
     game = Game.query.get(game_id)
     if not game:

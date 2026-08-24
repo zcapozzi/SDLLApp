@@ -23,7 +23,7 @@
                 <th>Name</th>
                 <th>Code</th>
                 <th>Contact</th>
-                <th>Notification</th>
+                <th>Schedule URL</th>
                 <th>Status</th>
                 <th></th>
             </tr>
@@ -43,7 +43,27 @@
                     <span style="color: var(--text-muted);">-</span>
                     {% endif %}
                 </td>
-                <td>{{ partner.notification_preference }}</td>
+                <td>
+                    {% if partner.schedule_token %}
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <code id="url-{{ partner.id }}" style="font-size: 11px; max-width: 200px; overflow: hidden; text-overflow: ellipsis;">
+                            {{ url_for('public.partner_schedule', token=partner.schedule_token, _external=True) }}
+                        </code>
+                        <button type="button" class="btn btn-outline" style="padding: 2px 8px; font-size: 11px;"
+                                onclick="copyUrl('url-{{ partner.id }}')" title="Copy URL">Copy</button>
+                        <a href="{{ url_for('public.partner_schedule', token=partner.schedule_token) }}"
+                           target="_blank" class="btn btn-outline" style="padding: 2px 8px; font-size: 11px;"
+                           title="Open Schedule">View</a>
+                    </div>
+                    {% else %}
+                    <form method="POST" action="{{ url_for('umpires.generate_partner_token', id=partner.id) }}" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-secondary" style="padding: 3px 10px; font-size: 12px;">
+                            Generate URL
+                        </button>
+                    </form>
+                    {% endif %}
+                </td>
                 <td>
                     {% if partner.active %}
                     <span class="badge badge-spring">Active</span>
@@ -74,6 +94,28 @@
         <li>Partners are external organizations that provide umpires (e.g., Diamond Sports Officials)</li>
         <li>When a game is delegated to a partner, they handle umpire assignment</li>
         <li>Configure delegation percentages in <a href="{{ url_for('umpires.delegation') }}">Delegation Rules</a></li>
+        <li><strong>Schedule URLs</strong> allow partners to view their assigned games without logging in. They can also download as CSV.</li>
     </ul>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function copyUrl(elementId) {
+    var codeEl = document.getElementById(elementId);
+    var url = codeEl.textContent.trim();
+    navigator.clipboard.writeText(url).then(function() {
+        alert('URL copied to clipboard!');
+    }).catch(function(err) {
+        // Fallback for older browsers
+        var textarea = document.createElement('textarea');
+        textarea.value = url;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        alert('URL copied to clipboard!');
+    });
+}
+</script>
 {% endblock %}

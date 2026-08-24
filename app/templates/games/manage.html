@@ -45,11 +45,18 @@
         display: flex;
         gap: 15px;
         align-items: center;
-        margin-bottom: 20px;
+        margin-bottom: 15px;
         flex-wrap: wrap;
     }
-    .filter-bar select {
+    .filter-bar select,
+    .filter-bar input {
         padding: 6px 10px;
+    }
+    .filter-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
     }
     .date-separator {
         background: rgb(34, 139, 34);
@@ -60,6 +67,73 @@
     }
     .date-separator:first-child {
         margin-top: 0;
+    }
+    /* View toggle */
+    .view-toggle {
+        display: flex;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .view-toggle button {
+        padding: 6px 12px;
+        border: none;
+        background: white;
+        cursor: pointer;
+        font-size: 13px;
+    }
+    .view-toggle button.active {
+        background: rgb(34, 139, 34);
+        color: white;
+    }
+    .view-toggle button:hover:not(.active) {
+        background: #f5f5f5;
+    }
+    /* Table view styles */
+    .table-view {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+    .table-view th {
+        background: rgb(34, 139, 34);
+        color: white;
+        border: 1px solid rgb(28, 112, 28);
+        padding: 8px 10px;
+        text-align: left;
+        font-weight: 600;
+        white-space: nowrap;
+        position: sticky;
+        top: 0;
+    }
+    .table-view td {
+        border: 1px solid #e0e0e0;
+        padding: 6px 10px;
+        vertical-align: middle;
+    }
+    .table-view tr:hover td {
+        background: #f8f9fa;
+    }
+    .table-view tr.practice td {
+        background: #faf5ff;
+    }
+    .table-view tr.scrimmage td {
+        background: #f0f7ff;
+    }
+    .table-view tr.playoff td {
+        background: #fff8f0;
+    }
+    .table-view tr.filtered-out {
+        display: none;
+    }
+    .table-view .btn-sm {
+        padding: 2px 8px;
+        font-size: 11px;
+    }
+    /* Card view filtering */
+    .game-row.filtered-out,
+    .date-separator.filtered-out {
+        display: none;
     }
     .edit-modal {
         display: none;
@@ -139,37 +213,132 @@
 <!-- Filters -->
 <div class="card" style="margin-bottom: 20px;">
     <div class="filter-bar">
-        <label>League:
-            <select onchange="applyFilter('league', this.value)" class="form-control">
-                <option value="">All Leagues</option>
-                {% for l in leagues %}
-                <option value="{{ l }}" {{ 'selected' if current_filters.league == l else '' }}>{{ l }}</option>
-                {% endfor %}
-            </select>
-        </label>
-        <label>Type:
-            <select onchange="applyFilter('game_mode', this.value)" class="form-control">
-                <option value="all" {{ 'selected' if current_filters.game_mode == 'all' else '' }}>All</option>
-                <option value="games" {{ 'selected' if current_filters.game_mode == 'games' else '' }}>Games Only</option>
-                <option value="practices" {{ 'selected' if current_filters.game_mode == 'practices' else '' }}>Practices Only</option>
-            </select>
-        </label>
-        <span class="text-muted">{{ games|length }} items</span>
+        <div class="filter-row">
+            <label>League:
+                <select id="filter-league" onchange="applyFilters()" class="form-control">
+                    <option value="">All Leagues</option>
+                    {% for l in leagues %}
+                    <option value="{{ l }}">{{ l }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>Type:
+                <select id="filter-type" onchange="applyFilters()" class="form-control">
+                    <option value="all">All</option>
+                    <option value="games">Games Only</option>
+                    <option value="practices">Practices Only</option>
+                </select>
+            </label>
+            <label>Field:
+                <select id="filter-field" onchange="applyFilters()" class="form-control">
+                    <option value="">All Fields</option>
+                    {% for f in field_names %}
+                    <option value="{{ f }}">{{ f }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>Date:
+                <input type="date" id="filter-date" onchange="applyFilters()" class="form-control">
+            </label>
+            <label>Team:
+                <select id="filter-team" onchange="applyFilters()" class="form-control">
+                    <option value="">All Teams</option>
+                    {% for team in teams %}
+                    <option value="{{ team.team_ID }}">
+                        {{ team.display_name_with_league }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px; margin-left: auto;">
+            <span class="text-muted" id="item-count">{{ games|length }} items</span>
+            <div class="view-toggle">
+                <button type="button" id="btn-cards" onclick="setView('cards')" class="{{ 'active' if current_filters.view != 'table' else '' }}">Cards</button>
+                <button type="button" id="btn-table" onclick="setView('table')" class="{{ 'active' if current_filters.view == 'table' else '' }}">Table</button>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" id="clear-filters-btn" onclick="clearFilters()" style="display: none;">Clear Filters</button>
+        </div>
     </div>
 </div>
 
-<!-- Games Table -->
-<div class="card">
+<!-- Table View -->
+<div class="card" id="table-view" style="overflow-x: auto; {{ 'display: none;' if current_filters.view != 'table' else '' }}">
+    {% if games %}
+    <table class="table-view">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Day</th>
+                <th>Time</th>
+                <th>League</th>
+                <th>Type</th>
+                <th>Matchup</th>
+                <th>Field</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in games %}
+            <tr class="game-item {{ 'practice' if game.game_type == 'practice' else ('scrimmage' if game.is_scrimmage else ('playoff' if game.game_type == 'playoff' else '')) }}"
+                data-game-id="{{ game.ID }}"
+                data-league="{{ game.league }}"
+                data-field="{{ game.field_name or '' }}"
+                data-date="{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}"
+                data-home-id="{{ game.home_ID or '' }}"
+                data-away-id="{{ game.away_ID or '' }}"
+                data-type="{{ 'practice' if game.game_type == 'practice' else 'game' }}">
+                <td style="white-space: nowrap;">{{ game.game_date.strftime('%m/%d/%Y') if game.game_date else 'TBD' }}</td>
+                <td>{{ game.game_date.strftime('%a') if game.game_date else '' }}</td>
+                <td style="white-space: nowrap;">
+                    {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
+                    {% if game.no_time_limit %}<span style="background: #7b1fa2; color: white; padding: 1px 4px; border-radius: 3px; font-size: 9px; margin-left: 3px;">NTL</span>{% endif %}
+                </td>
+                <td>{{ game.league }}</td>
+                <td>
+                    <span class="type-badge type-{{ game.game_type }}">
+                        {% if game.is_scrimmage %}Scrim{% else %}{{ game.game_type[:3]|title }}{% endif %}
+                    </span>
+                </td>
+                <td>
+                    {% if game.home_team %}{{ game.home_team.scheduler_display_name }}{% else %}<em>TBD</em>{% endif %}
+                    {% if game.away_team %} vs {{ game.away_team.scheduler_display_name }}{% elif game.game_type != 'practice' %} vs <em>TBD</em>{% endif %}
+                </td>
+                <td>{{ game.field_name or 'TBD' }}</td>
+                <td>
+                    <button type="button" class="btn btn-outline btn-sm"
+                            onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.field_name or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage }}, {{ game.no_time_limit or 0 }}, '{{ game.league }}')">
+                        Edit
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted" style="padding: 20px; text-align: center;">No games found for this season.</p>
+    {% endif %}
+</div>
+
+<!-- Card View -->
+<div class="card" id="card-view" style="{{ 'display: none;' if current_filters.view == 'table' else '' }}">
     {% set current_date = None %}
     {% for game in games %}
         {% set game_date_str = game.game_date.strftime('%A, %B %d, %Y') if game.game_date else 'No Date' %}
+        {% set game_date_ymd = game.game_date.strftime('%Y-%m-%d') if game.game_date else '' %}
         {% if game_date_str != current_date %}
             {% set current_date = game_date_str %}
-            <div class="date-separator">{{ game_date_str }}</div>
+            <div class="date-separator" data-date="{{ game_date_ymd }}">{{ game_date_str }}</div>
         {% endif %}
 
-        <div class="game-row {{ 'practice' if game.game_type == 'practice' else ('scrimmage' if game.is_scrimmage else ('playoff' if game.game_type == 'playoff' else '')) }}"
-             id="game-{{ game.ID }}"
+        <div class="game-row game-item {{ 'practice' if game.game_type == 'practice' else ('scrimmage' if game.is_scrimmage else ('playoff' if game.game_type == 'playoff' else '')) }}"
+             data-game-id="{{ game.ID }}"
+             data-league="{{ game.league }}"
+             data-field="{{ game.field_name or '' }}"
+             data-date="{{ game_date_ymd }}"
+             data-home-id="{{ game.home_ID or '' }}"
+             data-away-id="{{ game.away_ID or '' }}"
+             data-type="{{ 'practice' if game.game_type == 'practice' else 'game' }}"
              style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px;">
             <div style="flex: 1;">
                 <div style="margin-bottom: 5px;">
@@ -420,14 +589,111 @@
 </div>
 
 <script>
-function applyFilter(name, value) {
-    const url = new URL(window.location);
-    if (value) {
-        url.searchParams.set(name, value);
+// Client-side filtering
+function applyFilters() {
+    var league = document.getElementById('filter-league').value;
+    var type = document.getElementById('filter-type').value;
+    var field = document.getElementById('filter-field').value;
+    var date = document.getElementById('filter-date').value;
+    var team = document.getElementById('filter-team').value;
+
+    var items = document.querySelectorAll('.game-item');
+    var visibleCount = 0;
+    var visibleDates = new Set();
+
+    items.forEach(function(item) {
+        var show = true;
+
+        // League filter
+        if (league && item.dataset.league !== league) {
+            show = false;
+        }
+
+        // Type filter
+        if (type === 'games' && item.dataset.type === 'practice') {
+            show = false;
+        } else if (type === 'practices' && item.dataset.type !== 'practice') {
+            show = false;
+        }
+
+        // Field filter
+        if (field && item.dataset.field !== field) {
+            show = false;
+        }
+
+        // Date filter
+        if (date && item.dataset.date !== date) {
+            show = false;
+        }
+
+        // Team filter
+        if (team) {
+            var homeId = item.dataset.homeId;
+            var awayId = item.dataset.awayId;
+            if (homeId !== team && awayId !== team) {
+                show = false;
+            }
+        }
+
+        if (show) {
+            item.classList.remove('filtered-out');
+            visibleCount++;
+            if (item.dataset.date) {
+                visibleDates.add(item.dataset.date);
+            }
+        } else {
+            item.classList.add('filtered-out');
+        }
+    });
+
+    // Update date separators in card view
+    document.querySelectorAll('.date-separator').forEach(function(sep) {
+        if (visibleDates.has(sep.dataset.date)) {
+            sep.classList.remove('filtered-out');
+        } else {
+            sep.classList.add('filtered-out');
+        }
+    });
+
+    // Update count
+    document.getElementById('item-count').textContent = visibleCount + ' items';
+
+    // Show/hide clear button
+    var hasFilters = league || type !== 'all' || field || date || team;
+    document.getElementById('clear-filters-btn').style.display = hasFilters ? 'inline-block' : 'none';
+}
+
+function clearFilters() {
+    document.getElementById('filter-league').value = '';
+    document.getElementById('filter-type').value = 'all';
+    document.getElementById('filter-field').value = '';
+    document.getElementById('filter-date').value = '';
+    document.getElementById('filter-team').value = '';
+    applyFilters();
+}
+
+function setView(view) {
+    var cardView = document.getElementById('card-view');
+    var tableView = document.getElementById('table-view');
+    var btnCards = document.getElementById('btn-cards');
+    var btnTable = document.getElementById('btn-table');
+
+    if (view === 'table') {
+        cardView.style.display = 'none';
+        tableView.style.display = 'block';
+        btnCards.classList.remove('active');
+        btnTable.classList.add('active');
     } else {
-        url.searchParams.delete(name);
+        cardView.style.display = 'block';
+        tableView.style.display = 'none';
+        btnCards.classList.add('active');
+        btnTable.classList.remove('active');
     }
-    window.location = url;
+
+    // Update URL without reload (for bookmarking)
+    var url = new URL(window.location);
+    url.searchParams.set('view', view);
+    history.replaceState(null, '', url);
 }
 
 function openEditModal(gameId, gameDate, gameTime, location, homeId, awayId, status, gameType, isScrimmage, noTimeLimit, league) {

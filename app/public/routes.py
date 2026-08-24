@@ -11,17 +11,20 @@ ARCHITECTURE:
 5. Return the response regardless of any tracking success/failure
 """
 
-from flask import render_template, abort, request, make_response, jsonify, redirect
+from flask import render_template, abort, request, make_response, jsonify, redirect, Response
 from flask_login import current_user
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from app.public import public_bp
 from app.models.team import TeamSeason
 from app.models.game import Game
 from app.models.league_season import LeagueSeason
 from app.models.schedule_proposal import ScheduleProposal
 from app.models.field import Field
+from app.models.umpire_partner import UmpirePartner
 from app.extensions import db
 import sys
+import csv
+from io import StringIO
 
 # Cookie name for anonymous session tracking
 SESSION_COOKIE_NAME = 'sdll_session'
@@ -465,3 +468,200 @@ def ad_click(token):
         _safe_rollback()
 
     return redirect(redirect_url)
+
+
+@public_bp.route('/partner/<token>')
+def partner_schedule(token):
+    """Public partner schedule view.
+
+    Shows games assigned to a partner (Diamond, Dynamic, etc.) in a table format.
+    """
+    partner = UmpirePartner.get_by_schedule_token(token)
+    if not partner:
+        abort(404)
+
+    # Get query parameters
+    year = request.args.get('year', type=int)
+    is_spring = request.args.get('is_spring', type=int)
+    field_filter = request.args.get('field', '')
+    league_filter = request.args.get('league', '')
+    date_filter = request.args.get('date', '')
+
+    # Default to current/upcoming season
+    if year is None:
+        current = LeagueSeason.query.filter_by(active=1).order_by(
+            LeagueSeason.year.desc(), LeagueSeason.is_spring.desc()
+        ).first()
+        if current:
+            year = current.year
+            is_spring = 1 if current.is_spring else 0
+        else:
+            year = date.today().year
+            is_spring = 1 if date.today().month < 7 else 0
+
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    # Get games where umpire_override matches this partner's short_code
+    # umpire_override values are: 'DIA', 'DYN', 'academy'
+    partner_code = partner.short_code
+
+    games = Game.query.filter(
+        Game.active == 1,
+        Game.year == year,
+        Game.is_spring == (is_spring == 1),
+        Game.umpire_override == partner_code
+    ).order_by(Game.game_date).all()
+
+    # Apply filters
+    if field_filter:
+        games = [g for g in games if g.field_name and field_filter.lower() in g.field_name.lower()]
+    if league_filter:
+        games = [g for g in games if g.league and league_filter.lower() in g.league.lower()]
+    if date_filter:
+        try:
+            filter_date = datetime.strptime(date_filter, '%Y-%m-%d').date()
+            games = [g for g in games if g.game_date and g.game_date.date() == filter_date]
+        except ValueError:
+            pass
+
+    # Get unique fields and leagues for filter dropdowns
+    all_games = Game.query.filter(
+        Game.active == 1,
+        Game.year == year,
+        Game.is_spring == (is_spring == 1),
+        Game.umpire_override == partner_code
+    ).all()
+
+    fields = sorted(set(g.field_name for g in all_games if g.field_name))
+    leagues = sorted(set(g.league for g in all_games if g.league))
+
+    # Get available seasons for the season picker (unique year/is_spring combinations)
+    seasons = db.session.query(
+        LeagueSeason.year, LeagueSeason.is_spring
+    ).filter_by(active=1).distinct().order_by(
+        LeagueSeason.year.desc(), LeagueSeason.is_spring.desc()
+    ).all()
+
+    # Calculate "new this week" - games added in the past 7 days
+    one_week_ago = datetime.utcnow() - timedelta(days=7)
+    new_game_ids = set()
+    has_ntl_games = False
+    for g in games:
+        # If game has created_at and it's within the last week
+        if hasattr(g, 'created_at') and g.created_at and g.created_at > one_week_ago:
+            new_game_ids.add(g.ID)
+        # Check for no-time-limit games
+        if g.no_time_limit:
+            has_ntl_games = True
+
+    return render_template(
+        'public/partner_schedule.html',
+        partner=partner,
+        games=games,
+        season_name=season_name,
+        year=year,
+        is_spring=is_spring,
+        seasons=seasons,
+        fields=fields,
+        leagues=leagues,
+        field_filter=field_filter,
+        league_filter=league_filter,
+        date_filter=date_filter,
+        token=token,
+        new_game_ids=new_game_ids,
+        has_ntl_games=has_ntl_games,
+        today=date.today()
+    )
+
+
+@public_bp.route('/partner/<token>/csv')
+def partner_schedule_csv(token):
+    """Download partner schedule as CSV."""
+    partner = UmpirePartner.get_by_schedule_token(token)
+    if not partner:
+        abort(404)
+
+    # Get query parameters
+    year = request.args.get('year', type=int)
+    is_spring = request.args.get('is_spring', type=int)
+
+    # Default to current/upcoming season
+    if year is None:
+        current = LeagueSeason.query.filter_by(active=1).order_by(
+            LeagueSeason.year.desc(), LeagueSeason.is_spring.desc()
+        ).first()
+        if current:
+            year = current.year
+            is_spring = 1 if current.is_spring else 0
+        else:
+            year = date.today().year
+            is_spring = 1 if date.today().month < 7 else 0
+
+    season_name = f'{"Spring" if is_spring else "Fall"}{year}'
+    # Match using partner's short_code (DIA, DYN, etc.)
+    partner_code = partner.short_code
+
+    games = Game.query.filter(
+        Game.active == 1,
+        Game.year == year,
+        Game.is_spring == (is_spring == 1),
+        Game.umpire_override == partner_code
+    ).order_by(Game.game_date).all()
+
+    # Build CSV
+    output = StringIO()
+    writer = csv.writer(output)
+
+    # Header row
+    writer.writerow([
+        'Date', 'Day', 'Time', 'League', 'Home Team', 'Away Team',
+        'Field', 'Game Type', 'Umpires Needed', 'Assigned Umpire'
+    ])
+
+    for game in games:
+        game_date = game.game_date
+        if game_date:
+            date_str = game_date.strftime('%m/%d/%Y')
+            day_str = game_date.strftime('%a')
+            time_str = game_date.strftime('%I:%M %p')
+        else:
+            date_str = 'TBD'
+            day_str = ''
+            time_str = 'TBD'
+
+        home_name = game.home_team.computed_display_name if game.home_team else 'TBD'
+        away_name = game.away_team.computed_display_name if game.away_team else 'TBD'
+
+        # Get assigned umpire name if any
+        from app.models.game_umpire import GameUmpire
+        assignments = GameUmpire.query.filter_by(
+            game_id=game.ID,
+            partner_id=partner.id
+        ).filter(GameUmpire.status != 'cancelled').all()
+
+        umpire_names = []
+        for a in assignments:
+            if a.notes:  # Notes field used for umpire name
+                umpire_names.append(a.notes)
+
+        writer.writerow([
+            date_str,
+            day_str,
+            time_str,
+            game.league or '',
+            home_name,
+            away_name,
+            game.field_name or '',
+            game.game_type or 'regular',
+            game.umpire_count,
+            ', '.join(umpire_names)
+        ])
+
+    output.seek(0)
+    filename = f'SDLL_{season_name}_{partner.name.replace(" ", "_")}.csv'
+
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
+    )

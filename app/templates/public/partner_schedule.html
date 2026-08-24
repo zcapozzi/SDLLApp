@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ partner.name }} Schedule - SDLL</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8f9fa;
+            color: #333;
+            line-height: 1.4;
+            font-size: 14px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        .header {
+            background: rgb(34, 139, 34);
+            color: white;
+            padding: 20px;
+            margin: -20px -20px 20px -20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .header-left h1 {
+            font-size: 22px;
+            margin-bottom: 4px;
+        }
+        .header-left .subtitle {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+        .header-right {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        /* Controls */
+        .controls {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .control-group label {
+            font-weight: 500;
+            color: #666;
+            font-size: 13px;
+        }
+        .control-group select,
+        .control-group input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            background: white;
+        }
+        .control-group select:focus,
+        .control-group input:focus {
+            border-color: rgb(34, 139, 34);
+            outline: none;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 4px;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        .btn-primary {
+            background: rgb(34, 139, 34);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: rgb(28, 112, 28);
+        }
+        .btn-secondary {
+            background: rgb(255, 140, 0);
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: rgb(220, 120, 0);
+        }
+        .btn-outline {
+            background: white;
+            border: 1px solid #ddd;
+            color: #333;
+        }
+        .btn-outline:hover {
+            background: #f5f5f5;
+        }
+
+        /* Table Container */
+        .table-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        /* Google Sheets Style Table */
+        .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .schedule-table th {
+            background: #f1f3f4;
+            border: 1px solid #e0e0e0;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            position: sticky;
+            top: 0;
+            white-space: nowrap;
+        }
+        .schedule-table td {
+            border: 1px solid #e0e0e0;
+            padding: 10px 12px;
+            vertical-align: middle;
+        }
+        .schedule-table tr:hover td {
+            background: #f8f9fa;
+        }
+        .schedule-table tr.new-game td {
+            background: rgba(255, 140, 0, 0.1);
+        }
+        .schedule-table tr.new-game:hover td {
+            background: rgba(255, 140, 0, 0.15);
+        }
+        .schedule-table tr.past-game td {
+            opacity: 0.6;
+        }
+
+        /* Cell styling */
+        .cell-date {
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .cell-time {
+            white-space: nowrap;
+        }
+        .cell-teams {
+            min-width: 200px;
+        }
+        .team-vs {
+            color: #999;
+            font-size: 11px;
+            margin: 0 4px;
+        }
+        .cell-field {
+            max-width: 150px;
+        }
+        .directions-icon {
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 4px;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        .directions-icon:hover {
+            opacity: 1;
+        }
+        .directions-icon svg {
+            width: 14px;
+            height: 14px;
+            fill: #4285f4;
+        }
+        .cell-league {
+            white-space: nowrap;
+        }
+        .cell-umpires {
+            text-align: center;
+            font-weight: 600;
+        }
+        .cell-assigned {
+            min-width: 150px;
+        }
+        .cell-changes {
+            font-size: 11px;
+            color: #666;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .badge-ntl {
+            background: #9c27b0;
+            color: white;
+            font-size: 9px;
+            padding: 1px 4px;
+            margin-left: 4px;
+            vertical-align: middle;
+        }
+        .badge-new {
+            background: rgb(255, 140, 0);
+            color: white;
+        }
+        .badge-playoff {
+            background: #7b1fa2;
+            color: white;
+        }
+        .badge-scrimmage {
+            background: #1976d2;
+            color: white;
+        }
+
+        /* Game count */
+        .game-count {
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+        .footer a {
+            color: rgb(34, 139, 34);
+            text-decoration: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                text-align: center;
+            }
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .control-group {
+                justify-content: space-between;
+            }
+            .table-container {
+                overflow-x: auto;
+            }
+        }
+
+        /* Print styles */
+        @media print {
+            .header {
+                background: none;
+                color: black;
+                margin: 0;
+                padding: 10px 0;
+                border-bottom: 2px solid black;
+            }
+            .controls, .footer {
+                display: none;
+            }
+            .schedule-table th {
+                background: #eee;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-left">
+                <h1>{{ partner.name }} - Umpire Schedule</h1>
+                <div class="subtitle">South Durham Little League | {{ season_name }}</div>
+            </div>
+            <div class="header-right">
+                <a href="{{ url_for('public.partner_schedule_csv', token=token, year=year, is_spring=is_spring) }}" class="btn btn-secondary">
+                    Download CSV
+                </a>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="season">Season:</label>
+                <select id="season" onchange="changeSeason()">
+                    {% for s_year, s_is_spring in seasons %}
+                    <option value="{{ s_year }}_{{ 1 if s_is_spring else 0 }}"
+                            {{ 'selected' if s_year == year and (s_is_spring == (is_spring == 1)) else '' }}>
+                        {{ 'Spring' if s_is_spring else 'Fall' }} {{ s_year }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="field">Field:</label>
+                <select id="field" onchange="applyFilters()">
+                    <option value="">All Fields</option>
+                    {% for f in fields %}
+                    <option value="{{ f }}" {{ 'selected' if f == field_filter else '' }}>{{ f }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="league">League:</label>
+                <select id="league" onchange="applyFilters()">
+                    <option value="">All Leagues</option>
+                    {% for l in leagues %}
+                    <option value="{{ l }}" {{ 'selected' if l == league_filter else '' }}>{{ l }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="date">Date:</label>
+                <input type="date" id="date" value="{{ date_filter }}" onchange="applyFilters()">
+            </div>
+            {% if field_filter or league_filter or date_filter %}
+            <button class="btn btn-outline" onclick="clearFilters()">Clear Filters</button>
+            {% endif %}
+        </div>
+
+        <div class="game-count">
+            {{ games|length }} game{{ 's' if games|length != 1 else '' }} assigned
+            {% if new_game_ids %}<span style="color: rgb(255, 140, 0);">({{ new_game_ids|length }} new this week)</span>{% endif %}
+        </div>
+
+        <div class="table-container">
+            {% if games %}
+            <table class="schedule-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Day</th>
+                        <th>Time</th>
+                        <th>League</th>
+                        <th>Matchup</th>
+                        <th>Field</th>
+                        <th>Type</th>
+                        <th>Umps</th>
+                        <th>Rules</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for game in games %}
+                    <tr class="{{ 'new-game' if game.ID in new_game_ids else '' }}{{ ' past-game' if game.game_date and game.game_date.date() < today else '' }}">
+                        <td class="cell-date">
+                            {% if game.game_date %}
+                            {{ game.game_date.strftime('%m/%d/%Y') }}
+                            {% else %}
+                            TBD
+                            {% endif %}
+                            {% if game.ID in new_game_ids %}
+                            <span class="badge badge-new">NEW</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ game.game_date.strftime('%a') if game.game_date else '' }}</td>
+                        <td class="cell-time">
+                            {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
+                            {% if game.no_time_limit %}<span class="badge badge-ntl" title="No Time Limit - 3 hour game">NTL</span>{% endif %}
+                        </td>
+                        <td class="cell-league">{{ game.league or '' }}</td>
+                        <td class="cell-teams">
+                            {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                            <span class="team-vs">vs</span>
+                            {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                        </td>
+                        <td class="cell-field">
+                            {{ game.field_name or 'TBD' }}
+                            {% if game.directions_url %}
+                            <a href="{{ game.directions_url }}" target="_blank" rel="noopener" class="directions-icon" title="Get directions">
+                                <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                            </a>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if game.game_type == 'playoff' %}
+                            <span class="badge badge-playoff">Playoff</span>
+                            {% elif game.is_scrimmage %}
+                            <span class="badge badge-scrimmage">Scrimmage</span>
+                            {% else %}
+                            Regular
+                            {% endif %}
+                        </td>
+                        <td class="cell-umpires">{{ game.umpire_count }}</td>
+                        <td>
+                            {% if game.rules_url %}
+                            <a href="{{ game.rules_url }}" target="_blank" rel="noopener" style="color: #1976d2; text-decoration: none; font-size: 12px;">View Rules</a>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td class="cell-assigned"></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <h3>No Games Assigned</h3>
+                <p>There are no games assigned to {{ partner.name }} for {{ season_name }}.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if has_ntl_games %}
+        <div style="margin-top: 15px; padding: 10px 15px; background: #f3e5f5; border-radius: 6px; font-size: 13px;">
+            <span class="badge badge-ntl">NTL</span> = <strong>No Time Limit</strong> - These games are scheduled for 3 hours instead of the standard 2 hours.
+        </div>
+        {% endif %}
+
+        <div class="footer">
+            <p>South Durham Little League</p>
+            <p><a href="https://southdurhamlittleleague.org">southdurhamlittleleague.org</a></p>
+        </div>
+    </div>
+
+    <script>
+        function changeSeason() {
+            var select = document.getElementById('season');
+            var parts = select.value.split('_');
+            var year = parts[0];
+            var isSpring = parts[1];
+            var url = new URL(window.location.href);
+            url.searchParams.set('year', year);
+            url.searchParams.set('is_spring', isSpring);
+            // Clear other filters when changing season
+            url.searchParams.delete('field');
+            url.searchParams.delete('league');
+            url.searchParams.delete('date');
+            window.location.href = url.toString();
+        }
+
+        function applyFilters() {
+            var url = new URL(window.location.href);
+            var field = document.getElementById('field').value;
+            var league = document.getElementById('league').value;
+            var dateVal = document.getElementById('date').value;
+
+            if (field) url.searchParams.set('field', field);
+            else url.searchParams.delete('field');
+
+            if (league) url.searchParams.set('league', league);
+            else url.searchParams.delete('league');
+
+            if (dateVal) url.searchParams.set('date', dateVal);
+            else url.searchParams.delete('date');
+
+            window.location.href = url.toString();
+        }
+
+        function clearFilters() {
+            var url = new URL(window.location.href);
+            url.searchParams.delete('field');
+            url.searchParams.delete('league');
+            url.searchParams.delete('date');
+            window.location.href = url.toString();
+        }
+    </script>
+</body>
+</html>
