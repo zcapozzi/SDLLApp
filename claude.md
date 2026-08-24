@@ -106,3 +106,65 @@ When a page has forms that submit and redirect back to the same page (common pat
 
 ### When Adding New Forms
 Any new page with inline editing that redirects to itself MUST implement scroll-back following this pattern.
+
+## Client-Side Filtering (No Page Reloads)
+
+When a page has filter controls (dropdowns, date pickers, search boxes), filtering MUST be done client-side using JavaScript/CSS rather than triggering page reloads. This provides instant feedback and better UX.
+
+### When to Use Client-Side Filtering
+- Filtering data that's already loaded on the page
+- Filter dropdowns (league, field, status, etc.)
+- Date filters within a pre-loaded date range
+- Search/text filters
+
+### When Page Reload is Acceptable
+- Changing seasons (different data set entirely)
+- Pagination to load more data
+- Initial page load with URL parameters
+
+### Implementation Pattern
+
+1. **Template**: Add data attributes to filterable rows
+   ```html
+   {% for game in games %}
+   <tr data-league="{{ game.league }}"
+       data-field="{{ game.field_name }}"
+       data-date="{{ game.game_date.strftime('%Y-%m-%d') }}">
+       <!-- row content -->
+   </tr>
+   {% endfor %}
+   ```
+
+2. **JavaScript**: Filter by hiding/showing rows
+   ```javascript
+   function applyFilters() {
+       var leagueFilter = document.getElementById('league').value.toLowerCase();
+       var rows = document.querySelectorAll('tbody tr');
+
+       rows.forEach(function(row) {
+           var rowLeague = (row.dataset.league || '').toLowerCase();
+           var show = !leagueFilter || rowLeague === leagueFilter;
+           row.style.display = show ? '' : 'none';
+       });
+
+       // Update URL for bookmarking (without reload)
+       var url = new URL(window.location.href);
+       if (leagueFilter) url.searchParams.set('league', leagueFilter);
+       else url.searchParams.delete('league');
+       history.replaceState(null, '', url.toString());
+   }
+
+   // Restore filters from URL on page load
+   document.addEventListener('DOMContentLoaded', function() {
+       var url = new URL(window.location.href);
+       var league = url.searchParams.get('league');
+       if (league) {
+           document.getElementById('league').value = league;
+           applyFilters();
+       }
+   });
+   ```
+
+### Pages with Client-Side Filtering
+- Umpire Calendar (`/umpires/<year>/<is_spring>/calendar`) - League filter
+- Partner Schedule (`/schedule/<token>`) - Field, league, date filters
