@@ -161,22 +161,88 @@ class GameChange(db.Model):
         return original if original else None
 
     @classmethod
-    def get_original_display(cls, game_id, current_game=None):
+    def get_change_display(cls, game_id, current_game=None):
         """
-        Get a human-readable string describing the original game schedule.
+        Get a human-readable string describing relevant game changes.
 
-        Only returns a message if the original values differ from the current
-        game values. If the game was changed and then changed back, this will
-        return None (no message needed).
+        Logic:
+        - If changes are more than 24 hours apart, each is considered "communicated"
+        - If the most recent change was > 24 hours after the previous one, show
+          "Changed from [previous value]" even if current == original
+        - If changes are within 24 hours, collapse them and only compare to original
 
         Args:
             game_id: ID of the game
-            current_game: Optional Game object to compare against. If provided,
-                         only shows message if original differs from current.
+            current_game: Game object to compare against
 
         Returns:
-            String like "Originally Sep 15 at 5:30 PM at Herndon 1" or None
+            String like "Originally Sep 15 at 5:30 PM" or "Changed from 6:00 PM" or None
         """
+        from datetime import timedelta
+
+        # Get all changes ordered newest first
+        changes = cls.query.filter_by(game_id=game_id).filter(
+            cls.change_type.in_(['update', 'reschedule'])
+        ).order_by(cls.changed_at.desc()).all()
+
+        if not changes:
+            return None
+
+        # Check if most recent change was > 24 hours after previous change
+        if len(changes) >= 2:
+            most_recent = changes[0]
+            previous = changes[1]
+            time_gap = most_recent.changed_at - previous.changed_at
+
+            if time_gap > timedelta(hours=24):
+                # The previous value was "communicated" - show what changed from
+                prev_values = most_recent.changes_dict or {}
+                return cls._format_changed_from(prev_values)
+
+        # Fall back to comparing current to original
+        return cls._get_original_display_internal(game_id, current_game)
+
+    @classmethod
+    def _format_changed_from(cls, changes_dict):
+        """Format a 'Changed from...' message based on the old values in a change."""
+        from datetime import datetime as dt
+
+        parts = []
+
+        # Get the 'old' values from the most recent change
+        if 'date' in changes_dict:
+            old_date = changes_dict['date'].get('old')
+            if old_date:
+                try:
+                    d = dt.strptime(old_date, '%Y-%m-%d')
+                    parts.append(d.strftime('%b %d'))
+                except (ValueError, TypeError):
+                    pass
+
+        if 'time' in changes_dict:
+            old_time = changes_dict['time'].get('old')
+            if old_time:
+                try:
+                    t = dt.strptime(old_time, '%H:%M')
+                    parts.append(f"at {t.strftime('%I:%M %p').lstrip('0')}")
+                except (ValueError, TypeError):
+                    pass
+
+        for field_key in ['field', 'location']:
+            if field_key in changes_dict:
+                old_field = changes_dict[field_key].get('old')
+                if old_field:
+                    parts.append(f"at {old_field}")
+                    break
+
+        if not parts:
+            return None
+
+        return "Changed from " + " ".join(parts)
+
+    @classmethod
+    def _get_original_display_internal(cls, game_id, current_game=None):
+        """Internal method to get original display, comparing to current game."""
         original = cls.get_original_values(game_id)
         if not original:
             return None
@@ -227,3 +293,21 @@ class GameChange(db.Model):
             return None
 
         return "Originally " + " ".join(parts)
+
+    @classmethod
+    def get_original_display(cls, game_id, current_game=None):
+        """
+        Get a human-readable string describing game schedule changes.
+
+        This is the main entry point. It handles:
+        - Changes within 24 hours: collapsed, only shows if current != original
+        - Changes > 24 hours apart: shows "Changed from..." for communicated values
+
+        Args:
+            game_id: ID of the game
+            current_game: Optional Game object to compare against
+
+        Returns:
+            String like "Originally Sep 15 at 5:30 PM" or "Changed from 6:00 PM" or None
+        """
+        return cls.get_change_display(game_id, current_game)
