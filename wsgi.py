@@ -7,6 +7,10 @@ print("WSGI: Starting...", flush=True)
 print(f"WSGI: Python version: {sys.version}", flush=True)
 print(f"WSGI: MYSQL_URL present: {'MYSQL_URL' in os.environ}", flush=True)
 print(f"WSGI: SECRET_KEY present: {'SECRET_KEY' in os.environ}", flush=True)
+print(f"WSGI: SMTP_HOST present: {'SMTP_HOST' in os.environ}", flush=True)
+print(f"WSGI: SMTP_USER present: {'SMTP_USER' in os.environ}", flush=True)
+print(f"WSGI: SMTP_PASSWORD present: {'SMTP_PASSWORD' in os.environ}", flush=True)
+print(f"WSGI: CRON_SECRET present: {'CRON_SECRET' in os.environ}", flush=True)
 
 from dotenv import load_dotenv
 
