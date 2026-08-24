@@ -628,6 +628,10 @@ def delegation_report(year=None, is_spring=None):
         else:
             umpire_count = 1
 
+        # Skip games that don't need umpires
+        if umpire_count == 0:
+            continue
+
         # Tally
         if game.no_time_limit:
             summary[partner_code][league_name]['ntl_games'] += 1
