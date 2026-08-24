@@ -64,9 +64,9 @@ class GmailService:
         raise Exception("Email not configured. Set SMTP_* or GOOGLE_SERVICE_JSON environment variables.")
 
     def _send_via_smtp(self, to, subject, body_text, body_html=None):
-        """Send email via SMTP"""
+        """Send email via SMTP (supports both TLS on 587 and SSL on 465)"""
         smtp_host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
-        smtp_port = int(os.environ.get('SMTP_PORT', 587))
+        smtp_port = int(os.environ.get('SMTP_PORT', 465))
         smtp_user = os.environ.get('SMTP_USER')
         smtp_password = os.environ.get('SMTP_PASSWORD')
 
@@ -82,10 +82,16 @@ class GmailService:
         if body_html:
             message.attach(MIMEText(body_html, 'html'))
 
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_password)
-            server.sendmail(self.sender_email, to, message.as_string())
+        # Use SSL for port 465, STARTTLS for port 587
+        if smtp_port == 465:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
+                server.login(smtp_user, smtp_password)
+                server.sendmail(self.sender_email, to, message.as_string())
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_password)
+                server.sendmail(self.sender_email, to, message.as_string())
 
         return True
 
