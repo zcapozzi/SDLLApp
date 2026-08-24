@@ -32,6 +32,10 @@ class UmpirePartner(db.Model):
     # Status
     active = db.Column(db.Boolean, default=True)
 
+    # Per-game rates (cost per umpire)
+    rate_normal = db.Column(db.Numeric(6, 2))  # Rate for normal games (per umpire)
+    rate_ntl = db.Column(db.Numeric(6, 2))     # Rate for no-time-limit games (per umpire)
+
     # Schedule token for public schedule URL
     schedule_token = db.Column(db.String(32), unique=True, nullable=True, index=True)
 

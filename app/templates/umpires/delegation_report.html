@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block title %}Delegation Report - {{ season_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+    .season-picker {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .season-picker select {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    .partner-section {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+        overflow: hidden;
+    }
+    .partner-header {
+        background: rgb(34, 139, 34);
+        color: white;
+        padding: 15px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .partner-header h3 {
+        margin: 0;
+        font-size: 18px;
+    }
+    .partner-rates {
+        font-size: 13px;
+        opacity: 0.9;
+    }
+    .partner-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .partner-table th {
+        background: #f5f5f5;
+        padding: 10px 15px;
+        text-align: left;
+        font-weight: 600;
+        font-size: 13px;
+        border-bottom: 1px solid #ddd;
+    }
+    .partner-table td {
+        padding: 10px 15px;
+        border-bottom: 1px solid #eee;
+        font-size: 14px;
+    }
+    .partner-table tr:last-child td {
+        border-bottom: none;
+    }
+    .partner-table .number {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+    .partner-table .currency {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+    .partner-table .totals-row {
+        background: #f9f9f9;
+        font-weight: 600;
+    }
+    .partner-table .totals-row td {
+        border-top: 2px solid #ddd;
+    }
+    .blended-rate {
+        background: #e8f5e9;
+        padding: 10px 20px;
+        font-size: 14px;
+        border-top: 1px solid #c8e6c9;
+    }
+    .blended-rate strong {
+        color: rgb(34, 139, 34);
+    }
+    .grand-totals {
+        background: rgb(34, 139, 34);
+        color: white;
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+    .grand-totals h3 {
+        margin: 0 0 15px 0;
+        font-size: 18px;
+    }
+    .grand-totals-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+    }
+    .grand-total-item {
+        text-align: center;
+    }
+    .grand-total-item .value {
+        font-size: 24px;
+        font-weight: bold;
+    }
+    .grand-total-item .label {
+        font-size: 12px;
+        opacity: 0.9;
+        margin-top: 4px;
+    }
+    .btn-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: #666;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="report-header">
+    <h1>Delegation Report</h1>
+    <div class="season-picker">
+        <label>Season:</label>
+        <select onchange="changeSeason(this.value)">
+            {% for s in seasons %}
+            <option value="{{ s.year }}/{{ 1 if s.is_spring else 0 }}"
+                    {% if s.year == year and s.is_spring == is_spring %}selected{% endif %}>
+                {{ 'Spring' if s.is_spring else 'Fall' }} {{ s.year }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+
+<div class="btn-row">
+    <a href="{{ url_for('umpires.delegation_rates') }}" class="btn btn-outline">Set Rates</a>
+    <a href="{{ url_for('umpires.delegation') }}" class="btn btn-outline">Delegation Rules</a>
+</div>
+
+{% if report_data %}
+    {% for partner in report_data %}
+    <div class="partner-section">
+        <div class="partner-header">
+            <h3>{{ partner.name }}</h3>
+            <div class="partner-rates">
+                Normal: ${{ "%.2f"|format(partner.rate_normal) }}/ump |
+                NTL: ${{ "%.2f"|format(partner.rate_ntl) }}/ump
+            </div>
+        </div>
+
+        {% if partner.leagues %}
+        <table class="partner-table">
+            <thead>
+                <tr>
+                    <th>League</th>
+                    <th class="number">Games</th>
+                    <th class="number">Umpires</th>
+                    <th class="number">NTL Games</th>
+                    <th class="number">NTL Umpires</th>
+                    <th class="currency">Normal Cost</th>
+                    <th class="currency">NTL Cost</th>
+                    <th class="currency">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in partner.leagues %}
+                <tr>
+                    <td>{{ row.league }}</td>
+                    <td class="number">{{ row.games }}</td>
+                    <td class="number">{{ row.umpires }}</td>
+                    <td class="number">{{ row.ntl_games }}</td>
+                    <td class="number">{{ row.ntl_umpires }}</td>
+                    <td class="currency">${{ "%.2f"|format(row.cost_normal) }}</td>
+                    <td class="currency">${{ "%.2f"|format(row.cost_ntl) }}</td>
+                    <td class="currency">${{ "%.2f"|format(row.cost_total) }}</td>
+                </tr>
+                {% endfor %}
+                <tr class="totals-row">
+                    <td><strong>Total</strong></td>
+                    <td class="number"><strong>{{ partner.totals.games }}</strong></td>
+                    <td class="number"><strong>{{ partner.totals.umpires }}</strong></td>
+                    <td class="number"><strong>{{ partner.totals.ntl_games }}</strong></td>
+                    <td class="number"><strong>{{ partner.totals.ntl_umpires }}</strong></td>
+                    <td class="currency"><strong>${{ "%.2f"|format(partner.totals.cost_normal) }}</strong></td>
+                    <td class="currency"><strong>${{ "%.2f"|format(partner.totals.cost_ntl) }}</strong></td>
+                    <td class="currency"><strong>${{ "%.2f"|format(partner.totals.cost_total) }}</strong></td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="blended-rate">
+            Blended Rate: <strong>${{ "%.2f"|format(partner.blended_rate) }}</strong> per umpire
+            ({{ partner.totals.umpires + partner.totals.ntl_umpires }} total umpire assignments)
+        </div>
+        {% else %}
+        <div class="empty-state">No games assigned to {{ partner.name }} this season.</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="grand-totals">
+        <h3>Season Totals</h3>
+        <div class="grand-totals-grid">
+            <div class="grand-total-item">
+                <div class="value">{{ grand_totals.games + grand_totals.ntl_games }}</div>
+                <div class="label">Total Games</div>
+            </div>
+            <div class="grand-total-item">
+                <div class="value">{{ grand_totals.umpires + grand_totals.ntl_umpires }}</div>
+                <div class="label">Umpire Assignments</div>
+            </div>
+            <div class="grand-total-item">
+                <div class="value">${{ "%.2f"|format(grand_totals.cost_normal) }}</div>
+                <div class="label">Normal Game Costs</div>
+            </div>
+            <div class="grand-total-item">
+                <div class="value">${{ "%.2f"|format(grand_totals.cost_ntl) }}</div>
+                <div class="label">NTL Game Costs</div>
+            </div>
+            <div class="grand-total-item">
+                <div class="value">${{ "%.2f"|format(grand_totals.cost_total) }}</div>
+                <div class="label">Total Cost</div>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <div class="empty-state">
+        <h3>No Games Found</h3>
+        <p>There are no games for {{ season_name }}.</p>
+    </div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function changeSeason(value) {
+    window.location.href = '{{ url_for("umpires.delegation_report") }}/' + value;
+}
+</script>
+{% endblock %}

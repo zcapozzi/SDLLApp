@@ -544,6 +544,232 @@ def schedule():
 
 
 # =============================================================================
+# Delegation Report - Costs by Partner and League
+# =============================================================================
+
+@umpires_bp.route('/delegation/report')
+@umpires_bp.route('/delegation/report/<int:year>/<int:is_spring>')
+@login_required
+@umpire_coordinator_required
+def delegation_report(year=None, is_spring=None):
+    """
+    Report showing game counts and costs by umpire partner and league.
+
+    Shows:
+    - Game counts by league and partner (SDL, DIA, DYN, etc.)
+    - Cost calculations based on per-game rates
+    - Blended rates per league
+    - Accounts for 1-umpire vs 2-umpire games
+    """
+    from sqlalchemy import func, case
+    from app.models.league_season import LeagueSeason
+
+    # Default to current season
+    if year is None:
+        current = LeagueSeason.query.filter_by(active=1).order_by(
+            LeagueSeason.year.desc(), LeagueSeason.is_spring.desc()
+        ).first()
+        if current:
+            year = current.year
+            is_spring = 1 if current.is_spring else 0
+        else:
+            year = date.today().year
+            is_spring = 1 if date.today().month < 7 else 0
+
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    # Get all partners including SDL
+    partners = UmpirePartner.query.filter_by(active=True).all()
+    partner_lookup = {p.short_code: p for p in partners}
+
+    # Get all leagues with umpire counts
+    leagues = League.get_all_active()
+    league_lookup = {l.display_name: l for l in leagues}
+
+    # Get games for this season
+    games = Game.query.filter(
+        Game.year == year,
+        Game.is_spring == (is_spring == 1),
+        Game.active == 1,
+        Game.game_type.in_(['regular', 'playoff'])
+    ).all()
+
+    # Build summary data structure
+    # {partner_code: {league: {games: N, ntl_games: N, umpires: N, ntl_umpires: N}}}
+    summary = {}
+
+    # Initialize with all partners + SDL
+    partner_codes = ['SDL'] + [p.short_code for p in partners if p.short_code != 'SDL']
+    for code in partner_codes:
+        summary[code] = {}
+
+    for game in games:
+        # Determine partner code (NULL or empty = SDL)
+        partner_code = game.umpire_override or 'SDL'
+        if partner_code not in summary:
+            summary[partner_code] = {}
+
+        league_name = game.league or 'Unknown'
+        if league_name not in summary[partner_code]:
+            summary[partner_code][league_name] = {
+                'games': 0,
+                'ntl_games': 0,
+                'umpires': 0,
+                'ntl_umpires': 0
+            }
+
+        # Get umpire count for this game
+        league_obj = league_lookup.get(league_name)
+        if game.umpire_count_override is not None:
+            umpire_count = game.umpire_count_override
+        elif league_obj:
+            is_playoff = game.game_type == 'playoff'
+            umpire_count = league_obj.get_umpire_count(is_playoff=is_playoff)
+        else:
+            umpire_count = 1
+
+        # Tally
+        if game.no_time_limit:
+            summary[partner_code][league_name]['ntl_games'] += 1
+            summary[partner_code][league_name]['ntl_umpires'] += umpire_count
+        else:
+            summary[partner_code][league_name]['games'] += 1
+            summary[partner_code][league_name]['umpires'] += umpire_count
+
+    # Calculate costs
+    # Default rates if not set (you can change these defaults)
+    default_rate_normal = 35.00
+    default_rate_ntl = 50.00
+
+    # Get rates from partners
+    rates = {'SDL': {'normal': default_rate_normal, 'ntl': default_rate_ntl}}
+    for p in partners:
+        rates[p.short_code] = {
+            'normal': float(p.rate_normal) if p.rate_normal else default_rate_normal,
+            'ntl': float(p.rate_ntl) if p.rate_ntl else default_rate_ntl
+        }
+
+    # Calculate totals and costs
+    report_data = []
+    grand_totals = {
+        'games': 0, 'ntl_games': 0, 'umpires': 0, 'ntl_umpires': 0,
+        'cost_normal': 0, 'cost_ntl': 0, 'cost_total': 0
+    }
+
+    for partner_code in partner_codes:
+        if partner_code not in summary:
+            continue
+
+        partner_rates = rates.get(partner_code, {'normal': default_rate_normal, 'ntl': default_rate_ntl})
+        partner_name = partner_lookup.get(partner_code)
+        partner_name = partner_name.name if partner_name else ('SDLL Academy' if partner_code == 'SDL' else partner_code)
+
+        partner_totals = {
+            'games': 0, 'ntl_games': 0, 'umpires': 0, 'ntl_umpires': 0,
+            'cost_normal': 0, 'cost_ntl': 0, 'cost_total': 0
+        }
+
+        league_rows = []
+        for league_name, data in sorted(summary[partner_code].items()):
+            cost_normal = data['umpires'] * partner_rates['normal']
+            cost_ntl = data['ntl_umpires'] * partner_rates['ntl']
+            cost_total = cost_normal + cost_ntl
+
+            league_rows.append({
+                'league': league_name,
+                'games': data['games'],
+                'ntl_games': data['ntl_games'],
+                'umpires': data['umpires'],
+                'ntl_umpires': data['ntl_umpires'],
+                'cost_normal': cost_normal,
+                'cost_ntl': cost_ntl,
+                'cost_total': cost_total
+            })
+
+            partner_totals['games'] += data['games']
+            partner_totals['ntl_games'] += data['ntl_games']
+            partner_totals['umpires'] += data['umpires']
+            partner_totals['ntl_umpires'] += data['ntl_umpires']
+            partner_totals['cost_normal'] += cost_normal
+            partner_totals['cost_ntl'] += cost_ntl
+            partner_totals['cost_total'] += cost_total
+
+        # Calculate blended rate (total cost / total umpires)
+        total_umpires = partner_totals['umpires'] + partner_totals['ntl_umpires']
+        blended_rate = partner_totals['cost_total'] / total_umpires if total_umpires > 0 else 0
+
+        report_data.append({
+            'code': partner_code,
+            'name': partner_name,
+            'rate_normal': partner_rates['normal'],
+            'rate_ntl': partner_rates['ntl'],
+            'leagues': league_rows,
+            'totals': partner_totals,
+            'blended_rate': blended_rate
+        })
+
+        grand_totals['games'] += partner_totals['games']
+        grand_totals['ntl_games'] += partner_totals['ntl_games']
+        grand_totals['umpires'] += partner_totals['umpires']
+        grand_totals['ntl_umpires'] += partner_totals['ntl_umpires']
+        grand_totals['cost_normal'] += partner_totals['cost_normal']
+        grand_totals['cost_ntl'] += partner_totals['cost_ntl']
+        grand_totals['cost_total'] += partner_totals['cost_total']
+
+    # Get available seasons for picker
+    seasons = db.session.query(
+        LeagueSeason.year, LeagueSeason.is_spring
+    ).filter_by(active=1).distinct().order_by(
+        LeagueSeason.year.desc(), LeagueSeason.is_spring.desc()
+    ).all()
+
+    return render_template(
+        'umpires/delegation_report.html',
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name,
+        seasons=seasons,
+        report_data=report_data,
+        grand_totals=grand_totals,
+        partners=partners
+    )
+
+
+@umpires_bp.route('/delegation/rates', methods=['GET', 'POST'])
+@login_required
+@umpire_coordinator_required
+def delegation_rates():
+    """Manage per-game rates for each umpire partner."""
+    partners = UmpirePartner.query.filter_by(active=True).order_by(UmpirePartner.name).all()
+
+    if request.method == 'POST':
+        for partner in partners:
+            rate_normal = request.form.get(f'rate_normal_{partner.id}')
+            rate_ntl = request.form.get(f'rate_ntl_{partner.id}')
+
+            if rate_normal:
+                try:
+                    partner.rate_normal = float(rate_normal)
+                except ValueError:
+                    pass
+
+            if rate_ntl:
+                try:
+                    partner.rate_ntl = float(rate_ntl)
+                except ValueError:
+                    pass
+
+        db.session.commit()
+        flash('Rates updated successfully.', 'success')
+        return redirect(url_for('umpires.delegation_rates'))
+
+    return render_template(
+        'umpires/delegation_rates.html',
+        partners=partners
+    )
+
+
+# =============================================================================
 # API Endpoints for AJAX
 # =============================================================================
 
