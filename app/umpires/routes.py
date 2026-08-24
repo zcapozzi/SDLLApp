@@ -609,19 +609,7 @@ def delegation_report(year=None, is_spring=None):
         summary[code] = {}
 
     for game in games:
-        # Determine partner code (NULL or empty = SDL)
-        partner_code = game.umpire_override or 'SDL'
-        if partner_code not in summary:
-            summary[partner_code] = {}
-
         league_name = game.league or 'Unknown'
-        if league_name not in summary[partner_code]:
-            summary[partner_code][league_name] = {
-                'games': 0,
-                'ntl_games': 0,
-                'umpires': 0,
-                'ntl_umpires': 0
-            }
 
         # Get umpire count for this game (case-insensitive lookup)
         league_obj = league_lookup.get(league_name.lower().strip())
@@ -636,6 +624,19 @@ def delegation_report(year=None, is_spring=None):
         # Skip games that don't need umpires
         if umpire_count == 0:
             continue
+
+        # Determine partner code (NULL or empty = SDL)
+        partner_code = game.umpire_override or 'SDL'
+        if partner_code not in summary:
+            summary[partner_code] = {}
+
+        if league_name not in summary[partner_code]:
+            summary[partner_code][league_name] = {
+                'games': 0,
+                'ntl_games': 0,
+                'umpires': 0,
+                'ntl_umpires': 0
+            }
 
         # Tally
         if game.no_time_limit:
