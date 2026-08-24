@@ -119,7 +119,8 @@ class GameChangeService:
             'away_team': game.away_ID,
             'game_type': game.game_type,
             'is_scrimmage': game.is_scrimmage,
-            'no_time_limit': game.no_time_limit
+            'no_time_limit': game.no_time_limit,
+            'umpire_override': game.umpire_override
         }
 
     @staticmethod
@@ -145,7 +146,8 @@ class GameChangeService:
             'away_team': game.away_ID,
             'game_type': game.game_type,
             'is_scrimmage': game.is_scrimmage,
-            'no_time_limit': game.no_time_limit
+            'no_time_limit': game.no_time_limit,
+            'umpire_override': game.umpire_override
         }
 
         changes = {}

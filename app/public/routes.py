@@ -220,6 +220,7 @@ def team_schedule(token):
         'page_view_id': None,
         'ad': None,
         'impression_token': None,
+        'game_originals': {},  # "Originally scheduled for..." text per game
     }
 
     # Determine what games/practices to show
@@ -331,6 +332,19 @@ def team_schedule(token):
         template_vars['upcoming_games'] = upcoming_games
         template_vars['past_games'] = past_games
         template_vars['next_game'] = next_game
+
+        # Get "originally" display text for games that have been changed
+        from app.models.game_change import GameChange
+        game_originals = {}
+        all_games = upcoming_games + past_games
+        for game in all_games:
+            try:
+                original_text = GameChange.get_original_display(game.ID)
+                if original_text:
+                    game_originals[game.ID] = original_text
+            except Exception:
+                pass  # Don't fail if change lookup fails
+        template_vars['game_originals'] = game_originals
 
     # =========================================================================
     # PHASE 2: SAFELY GET AD (optional, fail silently)
@@ -560,8 +574,8 @@ def partner_schedule(token):
         if g.league:
             leagues_set.add(g.league)
 
-        # Check for new games
-        if hasattr(g, 'created_at') and g.created_at and g.created_at > one_week_ago:
+        # Check for new games (use date_added column)
+        if g.date_added and g.date_added > one_week_ago:
             new_game_ids.add(g.ID)
 
         # Check for NTL games

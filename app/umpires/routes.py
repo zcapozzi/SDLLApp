@@ -627,6 +627,8 @@ def api_unassign():
 @umpire_coordinator_required
 def api_set_umpire_source():
     """Set the umpire source for a game via right-click menu."""
+    from app.services.game_changes import GameChangeService
+
     data = request.get_json()
     game_id = data.get('game_id')
     source = data.get('source')  # Short codes: 'SDL', 'DIA', 'DYN' or None to clear
@@ -647,8 +649,25 @@ def api_set_umpire_source():
     if not game:
         return jsonify({'error': 'Game not found'}), 404
 
+    # Track if this is a change (not initial assignment)
+    old_source = game.umpire_override
+    is_change = old_source is not None and old_source != source
+
     game.umpire_override = source
     db.session.commit()
+
+    # Log change if this is a subsequent assignment (not initial)
+    if is_change:
+        try:
+            GameChangeService.log_change(
+                game_id=game_id,
+                user_id=current_user.ID,
+                change_type='update',
+                changes_dict={'umpire_source': {'old': old_source, 'new': source}},
+                reason=f'Umpire source changed from {old_source or "none"} to {source or "none"}'
+            )
+        except Exception as e:
+            logger.warning(f'Failed to log umpire source change: {e}')
 
     logger.info(f'Set umpire source for game {game_id} to {source}')
     return jsonify({'success': True, 'source': source})

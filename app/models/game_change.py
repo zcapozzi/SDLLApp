@@ -118,3 +118,88 @@ class GameChange(db.Model):
     def get_by_user(cls, user_id, limit=100):
         """Get changes made by a specific user"""
         return cls.query.filter_by(changed_by=user_id).order_by(cls.changed_at.desc()).limit(limit).all()
+
+    @classmethod
+    def get_original_values(cls, game_id):
+        """
+        Get the original values for a game before any changes.
+
+        Looks at the oldest change record and extracts the 'old' values
+        to reconstruct what the game was originally scheduled as.
+
+        Args:
+            game_id: ID of the game
+
+        Returns:
+            Dictionary with original values (date, time, field) or None if no changes
+        """
+        # Get the oldest change that has relevant info
+        changes = cls.query.filter_by(game_id=game_id).filter(
+            cls.change_type.in_(['update', 'reschedule'])
+        ).order_by(cls.changed_at.asc()).all()
+
+        if not changes:
+            return None
+
+        # Build original values from the oldest changes
+        original = {}
+
+        for change in changes:
+            changes_dict = change.changes_dict
+            if not changes_dict:
+                continue
+
+            # For each field, take the oldest 'old' value we find
+            for field in ['date', 'time', 'field', 'location']:
+                if field in changes_dict and field not in original:
+                    old_val = changes_dict[field].get('old')
+                    if old_val:
+                        # Normalize 'location' to 'field'
+                        key = 'field' if field == 'location' else field
+                        original[key] = old_val
+
+        return original if original else None
+
+    @classmethod
+    def get_original_display(cls, game_id):
+        """
+        Get a human-readable string describing the original game schedule.
+
+        Args:
+            game_id: ID of the game
+
+        Returns:
+            String like "Originally scheduled for Sep 15 at 5:30 PM at Herndon 1" or None
+        """
+        original = cls.get_original_values(game_id)
+        if not original:
+            return None
+
+        parts = []
+
+        # Format date
+        if 'date' in original:
+            try:
+                from datetime import datetime
+                d = datetime.strptime(original['date'], '%Y-%m-%d')
+                parts.append(d.strftime('%b %d'))
+            except (ValueError, TypeError):
+                pass
+
+        # Format time
+        if 'time' in original:
+            try:
+                from datetime import datetime
+                t = datetime.strptime(original['time'], '%H:%M')
+                parts.append(f"at {t.strftime('%I:%M %p').lstrip('0')}")
+            except (ValueError, TypeError):
+                pass
+
+        # Add field
+        if 'field' in original:
+            parts.append(f"at {original['field']}")
+
+        if not parts:
+            return None
+
+        return "Originally " + " ".join(parts)

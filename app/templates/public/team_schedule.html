@@ -214,6 +214,12 @@
             color: #c33;
             margin-top: 3px;
         }
+        .game-originally {
+            font-size: 11px;
+            color: #888;
+            font-style: italic;
+            margin-top: 3px;
+        }
         .game-score {
             font-weight: 700;
             font-size: 14px;
@@ -450,6 +456,9 @@
                     {% endif %}
                     {% if game.status != 'scheduled' %}
                     <div class="game-status">{{ game.status|title }}</div>
+                    {% endif %}
+                    {% if game_originals and game.ID in game_originals %}
+                    <div class="game-originally">{{ game_originals[game.ID] }}</div>
                     {% endif %}
                 </div>
             </div>
