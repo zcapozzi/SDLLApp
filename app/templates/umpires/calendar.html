@@ -135,6 +135,42 @@
         color: #666;
     }
 
+    /* Umpire count inline icons */
+    .umpire-count-icons {
+        margin-left: 2px;
+        color: #888;
+        cursor: help;
+        letter-spacing: -7px;
+    }
+    .umpire-count-icons .ump-icon {
+        font-size: 14px;
+    }
+    .umpire-count-icons .no-ump {
+        font-size: 10px;
+        color: #bbb;
+        letter-spacing: normal;
+    }
+    .umpire-count-icons.override {
+        color: #9C27B0;
+    }
+    .umpire-count-icons.override .ump-icon {
+        color: #9C27B0;
+    }
+
+    /* Context menu divider */
+    .context-menu-divider {
+        height: 1px;
+        background: #e0e0e0;
+        margin: 4px 0;
+    }
+    .context-menu-header {
+        padding: 6px 16px;
+        font-size: 11px;
+        color: #888;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+
     /* Context Menu */
     .context-menu {
         position: fixed;
@@ -254,12 +290,20 @@
             <div class="game-card {{ game.display_type }}"
                  data-game-id="{{ game.ID }}"
                  data-league="{{ game.league }}"
-                 data-umpire-source="{{ game.umpire_override or '' }}">
+                 data-umpire-source="{{ game.umpire_override or '' }}"
+                 data-umpire-count="{{ game.umpire_count }}"
+                 data-umpire-count-override="{{ game.umpire_count_override if game.umpire_count_override is not none else '' }}">
                 <span class="umpire-badge umpire-{{ game.umpire_override or 'unassigned' }}">
                     {{ (game.umpire_override or '?')[:3] }}
                 </span>
                 <div class="game-time">
                     {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
+                    <span class="umpire-count-icons{% if game.umpire_count_override is not none %} override{% endif %}"
+                          title="{% if game.umpire_count == 0 %}No umpires{% elif game.umpire_count == 1 %}Single umpire{% else %}{{ game.umpire_count }}-person crew{% endif %}{% if game.umpire_count_override is not none %} (override){% else %} (league default){% endif %}">
+                        {%- if game.umpire_count >= 1 -%}<span class="ump-icon">&#9679;</span>{%- endif -%}
+                        {%- if game.umpire_count >= 2 -%}<span class="ump-icon">&#9679;</span>{%- endif -%}
+                        {%- if game.umpire_count == 0 -%}<span class="no-ump">-</span>{%- endif -%}
+                    </span>
                 </div>
                 <div class="game-location">{{ game.field_name or 'TBD' }}</div>
                 <div class="game-teams">
@@ -279,10 +323,15 @@
 <!-- Legend -->
 <div class="card" style="padding: 15px;">
     <strong>Umpire Sources:</strong>
-    <span style="margin-left: 15px;"><span class="umpire-dot academy"></span> SDLL Academy</span>
+    <span style="margin-left: 15px;"><span class="umpire-dot academy"></span> SDLL</span>
     <span style="margin-left: 15px;"><span class="umpire-dot diamond"></span> Diamond</span>
     <span style="margin-left: 15px;"><span class="umpire-dot dynamic"></span> Dynamic</span>
     <span style="margin-left: 15px; color: #999;">? = Unassigned</span>
+    <span style="margin-left: 30px;">|</span>
+    <strong style="margin-left: 15px;">Crew:</strong>
+    <span style="margin-left: 10px; color: #888;">&#9679; = 1 ump</span>
+    <span style="margin-left: 10px; color: #888;">&#9679;&#9679; = 2 umps</span>
+    <span style="margin-left: 10px; color: #9C27B0;">purple = override</span>
     <span style="margin-left: 30px;">|</span>
     <span style="margin-left: 15px; padding: 2px 8px; background: #e8f5e9; border-radius: 4px;">Regular</span>
     <span style="margin-left: 10px; padding: 2px 8px; background: #fff3e0; border-radius: 4px;">Playoff</span>
@@ -290,6 +339,7 @@
 
 <!-- Context Menu for Umpire Assignment -->
 <div id="umpire-context-menu" class="context-menu">
+    <div class="context-menu-header">Umpire Source</div>
     <div class="context-menu-item" data-source="academy" onclick="setUmpireSource('academy')">
         <span class="umpire-dot academy"></span> Assign SDLL
     </div>
@@ -298,6 +348,20 @@
     </div>
     <div class="context-menu-item" data-source="dynamic" onclick="setUmpireSource('dynamic')">
         <span class="umpire-dot dynamic"></span> Assign Dynamic
+    </div>
+    <div class="context-menu-divider"></div>
+    <div class="context-menu-header">Umpire Count</div>
+    <div class="context-menu-item" data-count="0" onclick="setUmpireCount(0)">
+        0 - No umpires
+    </div>
+    <div class="context-menu-item" data-count="1" onclick="setUmpireCount(1)">
+        1 - Single umpire
+    </div>
+    <div class="context-menu-item" data-count="2" onclick="setUmpireCount(2)">
+        2 - Two-person crew
+    </div>
+    <div class="context-menu-item" data-count="default" onclick="setUmpireCount(null)">
+        Reset to league default
     </div>
 </div>
 
@@ -360,11 +424,24 @@ document.querySelectorAll('.game-card').forEach(function(card) {
         e.preventDefault();
         contextGameId = card.dataset.gameId;
         var currentSource = card.dataset.umpireSource;
+        var currentCount = card.dataset.umpireCount;
+        var countOverride = card.dataset.umpireCountOverride;
 
-        // Highlight current selection
-        document.querySelectorAll('.context-menu-item').forEach(function(item) {
+        // Highlight current source selection
+        document.querySelectorAll('.context-menu-item[data-source]').forEach(function(item) {
             item.classList.remove('active');
             if (item.dataset.source === currentSource) {
+                item.classList.add('active');
+            }
+        });
+
+        // Highlight current count selection
+        document.querySelectorAll('.context-menu-item[data-count]').forEach(function(item) {
+            item.classList.remove('active');
+            if (countOverride === '' && item.dataset.count === 'default') {
+                // League default is active
+                item.classList.add('active');
+            } else if (item.dataset.count === countOverride) {
                 item.classList.add('active');
             }
         });
@@ -450,6 +527,69 @@ function updateBadge(gameId, source) {
         badge.classList.add('umpire-' + source);
         // Update text
         badge.textContent = source.substring(0, 3).toUpperCase();
+    }
+}
+
+function setUmpireCount(count) {
+    if (!contextGameId) return;
+
+    fetch('/umpires/api/set-umpire-count', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            game_id: contextGameId,
+            count: count
+        })
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(result) {
+        if (result.success) {
+            updateCountBadge(contextGameId, result.effective_count, result.count_override);
+        } else {
+            alert('Error: ' + result.error);
+        }
+        hideContextMenu();
+    })
+    .catch(function(err) {
+        alert('Error setting umpire count: ' + err);
+        hideContextMenu();
+    });
+}
+
+function updateCountBadge(gameId, effectiveCount, countOverride) {
+    var card = document.querySelector('.game-card[data-game-id="' + gameId + '"]');
+    if (!card) return;
+
+    // Update data attributes
+    card.dataset.umpireCount = effectiveCount;
+    card.dataset.umpireCountOverride = countOverride !== null ? countOverride : '';
+
+    // Update inline icons
+    var icons = card.querySelector('.umpire-count-icons');
+    if (icons) {
+        // Build icon HTML
+        var iconHtml = '';
+        if (effectiveCount >= 1) iconHtml += '<span class="ump-icon">&#9679;</span>';
+        if (effectiveCount >= 2) iconHtml += '<span class="ump-icon">&#9679;</span>';
+        if (effectiveCount === 0) iconHtml = '<span class="no-ump">-</span>';
+        icons.innerHTML = iconHtml;
+
+        // Update title
+        var title = effectiveCount === 0 ? 'No umpires' :
+                    effectiveCount === 1 ? 'Single umpire' :
+                    effectiveCount + '-person crew';
+        title += countOverride !== null ? ' (override)' : ' (league default)';
+        icons.title = title;
+
+        // Add/remove override class
+        if (countOverride !== null) {
+            icons.classList.add('override');
+        } else {
+            icons.classList.remove('override');
+        }
     }
 }
 </script>

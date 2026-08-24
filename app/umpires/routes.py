@@ -619,6 +619,42 @@ def api_set_umpire_source():
     return jsonify({'success': True, 'source': source})
 
 
+@umpires_bp.route('/api/set-umpire-count', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def api_set_umpire_count():
+    """Set the umpire count override for a game via right-click menu."""
+    data = request.get_json()
+    game_id = data.get('game_id')
+    count = data.get('count')  # Integer or None to reset to league default
+
+    game = Game.query.get(game_id)
+    if not game:
+        return jsonify({'error': 'Game not found'}), 404
+
+    # Allow None to reset to league default, or 0-3 for specific count
+    if count is not None:
+        try:
+            count = int(count)
+            if count < 0 or count > 3:
+                return jsonify({'error': 'Count must be 0-3'}), 400
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid count value'}), 400
+
+    game.umpire_count_override = count
+    db.session.commit()
+
+    # Return the effective count (for display)
+    effective_count = game.umpire_count
+
+    logger.info(f'Set umpire count for game {game_id} to {count} (effective: {effective_count})')
+    return jsonify({
+        'success': True,
+        'count_override': count,
+        'effective_count': effective_count
+    })
+
+
 # =============================================================================
 # Umpire Calendar View
 # =============================================================================

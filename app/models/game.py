@@ -27,7 +27,8 @@ class Game(db.Model):
     is_scrimmage = db.Column(db.SmallInteger, default=0)
     is_league_practice = db.Column(db.Boolean, default=False)  # True = all teams practice together
     no_time_limit = db.Column(db.SmallInteger, default=0)  # 1 = 3-hour game (no time limit)
-    umpire_override = db.Column(db.String(20))
+    umpire_override = db.Column(db.String(20))  # Override umpire source (academy/diamond/dynamic)
+    umpire_count_override = db.Column(db.SmallInteger)  # Override league default umpire count
     home_score = db.Column(db.SmallInteger)  # Only for completed regular/playoff games
     away_score = db.Column(db.SmallInteger)  # Only for completed regular/playoff games
 
@@ -173,6 +174,29 @@ class Game(db.Model):
         if field:
             return field.google_maps_url
         return None
+
+    @property
+    def umpire_count(self):
+        """Get the effective umpire count for this game.
+
+        Returns the game-specific override if set, otherwise falls back
+        to the league default (which may differ for playoffs).
+
+        Returns:
+            int: Number of umpires required for this game.
+        """
+        # Use game-specific override if set
+        if self.umpire_count_override is not None:
+            return self.umpire_count_override
+
+        # Fall back to league default
+        from app.models.league import League
+        league_obj = League.get_by_name(self.league)
+        if league_obj:
+            is_playoff = self.game_type == 'playoff'
+            return league_obj.get_umpire_count(is_playoff=is_playoff)
+
+        return 1  # Default fallback
 
     @classmethod
     def get_by_season(cls, year, is_spring):
