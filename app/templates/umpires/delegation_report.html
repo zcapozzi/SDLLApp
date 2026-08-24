@@ -58,6 +58,81 @@
         opacity: 0.9;
         margin-top: 4px;
     }
+    .help-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        background: rgba(255,255,255,0.3);
+        border-radius: 50%;
+        font-size: 11px;
+        font-weight: bold;
+        cursor: pointer;
+        margin-left: 6px;
+        vertical-align: middle;
+    }
+    .help-icon:hover {
+        background: rgba(255,255,255,0.5);
+    }
+
+    /* Help Modal */
+    .help-modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+    .help-modal-overlay.active {
+        display: flex;
+    }
+    .help-modal {
+        background: white;
+        border-radius: 8px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .help-modal-header {
+        background: rgb(34, 139, 34);
+        color: white;
+        padding: 15px 20px;
+        font-weight: 600;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .help-modal-close {
+        background: none;
+        border: none;
+        color: white;
+        font-size: 24px;
+        cursor: pointer;
+        line-height: 1;
+    }
+    .help-modal-body {
+        padding: 20px;
+        color: #333;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+    .help-modal-body p {
+        margin: 0 0 12px 0;
+    }
+    .help-modal-body p:last-child {
+        margin-bottom: 0;
+    }
+    .help-modal-body strong {
+        color: rgb(34, 139, 34);
+    }
 
     /* Summary Grid */
     .summary-section {
@@ -222,11 +297,23 @@
         <div class="grand-totals-grid">
             <div class="grand-total-item">
                 <div class="value">{{ "{:,}".format(grand_totals.games + grand_totals.ntl_games) }}</div>
-                <div class="label">Total Games</div>
+                <div class="label">Total Games <span class="help-icon" onclick="showHelp('games')">?</span></div>
             </div>
             <div class="grand-total-item">
                 <div class="value">${{ "{:,.0f}".format(grand_totals.cost_total) }}</div>
-                <div class="label">Total Cost</div>
+                <div class="label">Total Cost <span class="help-icon" onclick="showHelp('cost')">?</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="help-modal-overlay" onclick="hideHelp(event)">
+        <div class="help-modal" onclick="event.stopPropagation()">
+            <div class="help-modal-header">
+                <span id="helpModalTitle">Help</span>
+                <button class="help-modal-close" onclick="hideHelp()">&times;</button>
+            </div>
+            <div class="help-modal-body" id="helpModalBody">
             </div>
         </div>
     </div>
@@ -356,5 +443,45 @@
 function changeSeason(value) {
     window.location.href = '{{ url_for("umpires.delegation_report") }}/' + value;
 }
+
+var helpContent = {
+    games: {
+        title: 'Total Games',
+        body: '<p><strong>What it shows:</strong> The total number of regular season and playoff games that require umpires.</p>' +
+              '<p><strong>Excludes:</strong> Practices and games from leagues that don\'t use umpires (e.g., Tee Ball).</p>' +
+              '<p><strong>Includes:</strong> Both normal games and No Time Limit (NTL) games.</p>'
+    },
+    cost: {
+        title: 'Total Cost',
+        body: '<p><strong>What it shows:</strong> The estimated total cost to provide umpires for all games this season.</p>' +
+              '<p><strong>How it\'s calculated:</strong></p>' +
+              '<p>For each game: <em>(Number of Umpires) &times; (Rate per Umpire)</em></p>' +
+              '<p>Rates differ by partner organization and game type:</p>' +
+              '<p>&bull; <strong>Normal games:</strong> Use the standard per-umpire rate</p>' +
+              '<p>&bull; <strong>NTL games:</strong> Use the NTL rate (typically higher)</p>' +
+              '<p>Set rates on the <a href="{{ url_for(\'umpires.delegation_rates\') }}">Set Rates</a> page.</p>'
+    }
+};
+
+function showHelp(topic) {
+    var content = helpContent[topic];
+    if (content) {
+        document.getElementById('helpModalTitle').textContent = content.title;
+        document.getElementById('helpModalBody').innerHTML = content.body;
+        document.getElementById('helpModal').classList.add('active');
+    }
+}
+
+function hideHelp(event) {
+    if (!event || event.target.id === 'helpModal') {
+        document.getElementById('helpModal').classList.remove('active');
+    }
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        hideHelp();
+    }
+});
 </script>
 {% endblock %}
