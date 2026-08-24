@@ -366,9 +366,7 @@
                 <label for="date">Date:</label>
                 <input type="date" id="date" value="{{ date_filter }}" onchange="applyFilters()">
             </div>
-            {% if field_filter or league_filter or date_filter %}
-            <button class="btn btn-outline" onclick="clearFilters()">Clear Filters</button>
-            {% endif %}
+            <button id="clear-filters-btn" class="btn btn-outline" onclick="clearFilters()" style="display: {% if field_filter or league_filter or date_filter %}inline-block{% else %}none{% endif %};">Clear Filters</button>
         </div>
 
         <div class="game-count">
@@ -395,7 +393,10 @@
                 </thead>
                 <tbody>
                     {% for game in games %}
-                    <tr class="{{ 'new-game' if game.ID in new_game_ids else '' }}{{ ' past-game' if game.game_date and game.game_date.date() < today else '' }}">
+                    <tr class="{{ 'new-game' if game.ID in new_game_ids else '' }}{{ ' past-game' if game.game_date and game.game_date.date() < today else '' }}"
+                        data-field="{{ game._cached_field_name or game.field_name or '' }}"
+                        data-league="{{ game.league or '' }}"
+                        data-date="{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}">
                         <td class="cell-date">
                             {% if game.game_date %}
                             {{ game.game_date.strftime('%m/%d/%Y') }}
@@ -474,6 +475,7 @@
     </div>
 
     <script>
+        // Season change requires page reload (different data set)
         function changeSeason() {
             var select = document.getElementById('season');
             var parts = select.value.split('_');
@@ -489,31 +491,86 @@
             window.location.href = url.toString();
         }
 
+        // CSS-based filtering (no page reload)
         function applyFilters() {
+            var fieldFilter = document.getElementById('field').value.toLowerCase();
+            var leagueFilter = document.getElementById('league').value.toLowerCase();
+            var dateFilter = document.getElementById('date').value;
+
+            var rows = document.querySelectorAll('.schedule-table tbody tr');
+            var visibleCount = 0;
+
+            rows.forEach(function(row) {
+                var rowField = (row.dataset.field || '').toLowerCase();
+                var rowLeague = (row.dataset.league || '').toLowerCase();
+                var rowDate = row.dataset.date || '';
+
+                var showField = !fieldFilter || rowField === fieldFilter;
+                var showLeague = !leagueFilter || rowLeague === leagueFilter;
+                var showDate = !dateFilter || rowDate === dateFilter;
+
+                if (showField && showLeague && showDate) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Update game count display
+            updateGameCount(visibleCount);
+
+            // Update URL for bookmarking (without page reload)
             var url = new URL(window.location.href);
-            var field = document.getElementById('field').value;
-            var league = document.getElementById('league').value;
-            var dateVal = document.getElementById('date').value;
-
-            if (field) url.searchParams.set('field', field);
+            if (fieldFilter) url.searchParams.set('field', document.getElementById('field').value);
             else url.searchParams.delete('field');
-
-            if (league) url.searchParams.set('league', league);
+            if (leagueFilter) url.searchParams.set('league', document.getElementById('league').value);
             else url.searchParams.delete('league');
-
-            if (dateVal) url.searchParams.set('date', dateVal);
+            if (dateFilter) url.searchParams.set('date', dateFilter);
             else url.searchParams.delete('date');
+            history.replaceState(null, '', url.toString());
 
-            window.location.href = url.toString();
+            // Show/hide clear filters button
+            var clearBtn = document.getElementById('clear-filters-btn');
+            if (clearBtn) {
+                clearBtn.style.display = (fieldFilter || leagueFilter || dateFilter) ? 'inline-block' : 'none';
+            }
+        }
+
+        function updateGameCount(count) {
+            var countEl = document.querySelector('.game-count');
+            if (countEl) {
+                var totalGames = document.querySelectorAll('.schedule-table tbody tr').length;
+                if (count === totalGames) {
+                    countEl.innerHTML = totalGames + ' game' + (totalGames !== 1 ? 's' : '') + ' assigned';
+                } else {
+                    countEl.innerHTML = 'Showing ' + count + ' of ' + totalGames + ' games';
+                }
+            }
         }
 
         function clearFilters() {
-            var url = new URL(window.location.href);
-            url.searchParams.delete('field');
-            url.searchParams.delete('league');
-            url.searchParams.delete('date');
-            window.location.href = url.toString();
+            document.getElementById('field').value = '';
+            document.getElementById('league').value = '';
+            document.getElementById('date').value = '';
+            applyFilters();
         }
+
+        // Restore filters from URL on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            var url = new URL(window.location.href);
+            var field = url.searchParams.get('field');
+            var league = url.searchParams.get('league');
+            var date = url.searchParams.get('date');
+
+            if (field) document.getElementById('field').value = field;
+            if (league) document.getElementById('league').value = league;
+            if (date) document.getElementById('date').value = date;
+
+            if (field || league || date) {
+                applyFilters();
+            }
+        });
     </script>
 </body>
 </html>
