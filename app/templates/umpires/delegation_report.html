@@ -440,6 +440,8 @@
 
 {% block extra_js %}
 <script>
+var ratesUrl = "{{ url_for('umpires.delegation_rates') }}";
+
 function changeSeason(value) {
     window.location.href = '{{ url_for("umpires.delegation_report") }}/' + value;
 }
@@ -448,18 +450,18 @@ var helpContent = {
     games: {
         title: 'Total Games',
         body: '<p><strong>What it shows:</strong> The total number of regular season and playoff games that require umpires.</p>' +
-              '<p><strong>Excludes:</strong> Practices and games from leagues that don\'t use umpires (e.g., Tee Ball).</p>' +
+              '<p><strong>Excludes:</strong> Practices and games from leagues that do not use umpires (e.g., Tee Ball).</p>' +
               '<p><strong>Includes:</strong> Both normal games and No Time Limit (NTL) games.</p>'
     },
     cost: {
         title: 'Total Cost',
         body: '<p><strong>What it shows:</strong> The estimated total cost to provide umpires for all games this season.</p>' +
-              '<p><strong>How it\'s calculated:</strong></p>' +
+              '<p><strong>How it is calculated:</strong></p>' +
               '<p>For each game: <em>(Number of Umpires) &times; (Rate per Umpire)</em></p>' +
               '<p>Rates differ by partner organization and game type:</p>' +
               '<p>&bull; <strong>Normal games:</strong> Use the standard per-umpire rate</p>' +
               '<p>&bull; <strong>NTL games:</strong> Use the NTL rate (typically higher)</p>' +
-              '<p>Set rates on the <a href="{{ url_for(\'umpires.delegation_rates\') }}">Set Rates</a> page.</p>'
+              '<p>Set rates on the <a href="' + ratesUrl + '">Set Rates</a> page.</p>'
     }
 };
 
