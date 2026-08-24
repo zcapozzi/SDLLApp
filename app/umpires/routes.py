@@ -583,8 +583,13 @@ def delegation_report(year=None, is_spring=None):
     partner_lookup = {p.short_code: p for p in partners}
 
     # Get all leagues with umpire counts
+    # Build lookup by both display_name and fall_display_name
     leagues = League.get_all_active()
-    league_lookup = {l.display_name: l for l in leagues}
+    league_lookup = {}
+    for l in leagues:
+        league_lookup[l.display_name] = l
+        if l.fall_display_name:
+            league_lookup[l.fall_display_name] = l
 
     # Get games for this season
     games = Game.query.filter(
