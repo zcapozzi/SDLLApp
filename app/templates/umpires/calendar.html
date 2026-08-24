@@ -291,7 +291,7 @@
                  data-game-id="{{ game.ID }}"
                  data-league="{{ game.league }}"
                  data-umpire-source="{{ game.umpire_override or '' }}"
-                 data-umpire-count="{{ game.umpire_count }}"
+                 data-umpire-count="{{ game._cached_umpire_count }}"
                  data-umpire-count-override="{{ game.umpire_count_override if game.umpire_count_override is not none else '' }}">
                 <span class="umpire-badge umpire-{{ game.umpire_override or 'unassigned' }}">
                     {{ (game.umpire_override or '?')[:3] }}
@@ -299,13 +299,13 @@
                 <div class="game-time">
                     {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
                     <span class="umpire-count-icons{% if game.umpire_count_override is not none %} override{% endif %}"
-                          title="{% if game.umpire_count == 0 %}No umpires{% elif game.umpire_count == 1 %}Single umpire{% else %}{{ game.umpire_count }}-person crew{% endif %}{% if game.umpire_count_override is not none %} (override){% else %} (league default){% endif %}">
-                        {%- if game.umpire_count >= 1 -%}<span class="ump-icon">&#9679;</span>{%- endif -%}
-                        {%- if game.umpire_count >= 2 -%}<span class="ump-icon">&#9679;</span>{%- endif -%}
-                        {%- if game.umpire_count == 0 -%}<span class="no-ump">-</span>{%- endif -%}
+                          title="{% if game._cached_umpire_count == 0 %}No umpires{% elif game._cached_umpire_count == 1 %}Single umpire{% else %}{{ game._cached_umpire_count }}-person crew{% endif %}{% if game.umpire_count_override is not none %} (override){% else %} (league default){% endif %}">
+                        {%- if game._cached_umpire_count >= 1 -%}<span class="ump-icon">&#9679;</span>{%- endif -%}
+                        {%- if game._cached_umpire_count >= 2 -%}<span class="ump-icon">&#9679;</span>{%- endif -%}
+                        {%- if game._cached_umpire_count == 0 -%}<span class="no-ump">-</span>{%- endif -%}
                     </span>
                 </div>
-                <div class="game-location">{{ game.field_name or 'TBD' }}</div>
+                <div class="game-location">{{ game._cached_field_name or 'TBD' }}</div>
                 <div class="game-teams">
                     <strong>{{ game.league }}</strong>
                     {% if game.home_team %} - {{ game.home_team.scheduler_display_name }}{% endif %}

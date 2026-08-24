@@ -996,11 +996,12 @@ def umpire_calendar(year, is_spring):
 
     week_end = week_start + timedelta(days=6)
 
-    # Query all games for the week in ONE query (not 7 separate queries)
+    # Query all games for the week in ONE query with eager loading
     from sqlalchemy.orm import joinedload
     week_query = Game.query.options(
         joinedload(Game.home_team),
-        joinedload(Game.away_team)
+        joinedload(Game.away_team),
+        joinedload(Game.field_rel)
     ).filter(
         Game.active == 1,
         Game.year == year,
@@ -1013,6 +1014,33 @@ def umpire_calendar(year, is_spring):
         week_query = week_query.filter(Game.league == league)
 
     all_week_games = week_query.order_by(Game.game_date, Game.location).all()
+
+    # Pre-load all leagues to avoid N+1 queries for umpire_count
+    from app.models.league import League
+    all_leagues = {lg.display_name: lg for lg in League.get_all_active()}
+    # Also add fall names
+    for lg in League.get_all_active():
+        if lg.fall_display_name:
+            all_leagues[lg.fall_display_name] = lg
+
+    # Pre-compute umpire counts and field names to avoid N+1 queries in template
+    for game in all_week_games:
+        # Cache umpire count
+        if game.umpire_count_override is not None:
+            game._cached_umpire_count = game.umpire_count_override
+        else:
+            league_obj = all_leagues.get(game.league)
+            if league_obj:
+                is_playoff = game.game_type == 'playoff'
+                game._cached_umpire_count = league_obj.get_umpire_count(is_playoff=is_playoff)
+            else:
+                game._cached_umpire_count = 1
+
+        # Cache field name
+        if game.field_rel:
+            game._cached_field_name = game.field_rel.location_title
+        else:
+            game._cached_field_name = game.location or ''
 
     # Group games by date
     games_by_date = {}
