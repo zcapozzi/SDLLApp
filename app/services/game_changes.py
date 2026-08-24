@@ -292,9 +292,23 @@ class GameChangeService:
 
         old_values = GameChangeService.capture_old_values(game)
 
-        # Apply changes
+        # Apply changes - use field_id instead of location string
         if new_field is not None:
-            game.location = new_field
+            # Check if it's a numeric ID or a field name
+            if str(new_field).isdigit():
+                game.field_id = int(new_field)
+                game.location = None
+            else:
+                # Look up field by name
+                from app.models.field import Field
+                field = Field.query.filter_by(location_title=new_field, active=1).first()
+                if field:
+                    game.field_id = field.ID
+                    game.location = None
+                else:
+                    # Fall back to string if field not found
+                    game.field_id = None
+                    game.location = new_field
 
         if new_date is not None or new_time is not None:
             # Parse existing date/time
