@@ -625,6 +625,10 @@ def delegation_report(year=None, is_spring=None):
         if umpire_count == 0:
             continue
 
+        # Skip scrimmages without an umpire partner assigned
+        if game.is_scrimmage and not game.umpire_override:
+            continue
+
         # Determine partner code (NULL or empty = SDL)
         partner_code = game.umpire_override or 'SDL'
         if partner_code not in summary:

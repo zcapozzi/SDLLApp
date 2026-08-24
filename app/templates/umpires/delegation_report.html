@@ -449,9 +449,15 @@ function changeSeason(value) {
 var helpContent = {
     games: {
         title: 'Total Games',
-        body: '<p><strong>What it shows:</strong> The total number of regular season and playoff games that require umpires.</p>' +
-              '<p><strong>Excludes:</strong> Practices and games from leagues that do not use umpires (e.g., Tee Ball).</p>' +
-              '<p><strong>Includes:</strong> Both normal games and No Time Limit (NTL) games.</p>'
+        body: '<p><strong>What it shows:</strong> The total number of regular season, playoff, and scrimmage games that require umpires.</p>' +
+              '<p><strong>Includes:</strong></p>' +
+              '<p>&bull; Regular season and playoff games from leagues that use umpires</p>' +
+              '<p>&bull; Scrimmages that have an umpire partner assigned</p>' +
+              '<p>&bull; Both normal games and No Time Limit (NTL) games</p>' +
+              '<p><strong>Excludes:</strong></p>' +
+              '<p>&bull; Practices</p>' +
+              '<p>&bull; Leagues that do not use umpires (e.g., Tee Ball)</p>' +
+              '<p>&bull; Scrimmages without an umpire partner assigned</p>'
     },
     cost: {
         title: 'Total Cost',
