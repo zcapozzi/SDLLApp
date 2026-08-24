@@ -1,0 +1,456 @@
+{% extends "base.html" %}
+
+{% block title %}Umpire Calendar - {{ season_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .calendar-nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding: 15px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .calendar-nav .week-label {
+        font-size: 18px;
+        font-weight: bold;
+    }
+    .calendar-grid {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 30px;
+    }
+    .calendar-day {
+        background: white;
+        border-radius: 8px;
+        min-height: 150px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        overflow: hidden;
+        flex: 1;
+        min-width: 0;
+    }
+    .calendar-day.empty-day {
+        flex: 0.4;
+        min-height: 100px;
+    }
+    .calendar-day.today {
+        box-shadow: 0 0 0 2px rgb(34, 139, 34);
+    }
+    .day-header {
+        padding: 10px;
+        font-weight: bold;
+        text-align: center;
+        background: #f5f5f5;
+        border-bottom: 1px solid #eee;
+    }
+    .calendar-day.today .day-header {
+        background: rgb(34, 139, 34);
+        color: white;
+    }
+    .day-content {
+        padding: 6px;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    .game-card {
+        padding: 4px 6px;
+        margin-bottom: 4px;
+        border-radius: 4px;
+        font-size: 11px;
+        cursor: pointer;
+        transition: transform 0.1s, box-shadow 0.1s;
+        line-height: 1.3;
+        position: relative;
+    }
+    .game-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+    .game-card.regular {
+        background: #e8f5e9;
+        border-left: 3px solid #2e7d32;
+    }
+    .game-card.playoff {
+        background: #fff3e0;
+        border-left: 3px solid #e65100;
+    }
+    .game-time {
+        font-weight: bold;
+        color: #333;
+        font-size: 10px;
+    }
+    .game-location {
+        color: #666;
+        font-size: 10px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .game-teams {
+        margin-top: 2px;
+        font-size: 10px;
+        line-height: 1.2;
+    }
+    .no-games {
+        color: #999;
+        font-size: 11px;
+        text-align: center;
+        padding: 20px 10px;
+    }
+    .filter-bar {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    /* Umpire badge styles */
+    .umpire-badge {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        font-size: 9px;
+        padding: 1px 4px;
+        border-radius: 3px;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+    .umpire-academy {
+        background: #4CAF50;
+        color: white;
+    }
+    .umpire-diamond {
+        background: #2196F3;
+        color: white;
+    }
+    .umpire-dynamic {
+        background: #FF9800;
+        color: white;
+    }
+    .umpire-unassigned {
+        background: #ccc;
+        color: #666;
+    }
+
+    /* Context Menu */
+    .context-menu {
+        position: fixed;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        min-width: 180px;
+        z-index: 3000;
+        display: none;
+        padding: 4px 0;
+    }
+    .context-menu.show {
+        display: block;
+    }
+    .context-menu-item {
+        padding: 8px 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+    }
+    .context-menu-item:hover {
+        background: #f0f0f0;
+    }
+    .context-menu-item.active {
+        background: #e8f5e9;
+    }
+    .umpire-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+    }
+    .umpire-dot.academy {
+        background: #4CAF50;
+    }
+    .umpire-dot.diamond {
+        background: #2196F3;
+    }
+    .umpire-dot.dynamic {
+        background: #FF9800;
+    }
+
+    /* Hidden by filter */
+    .game-card.filtered-out {
+        display: none;
+    }
+
+    @media (max-width: 900px) {
+        .calendar-grid {
+            grid-template-columns: 1fr;
+        }
+        .calendar-day {
+            min-height: auto;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Season context for JavaScript -->
+<input type="hidden" id="season-year" value="{{ year }}">
+<input type="hidden" id="season-is-spring" value="{{ is_spring }}">
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>
+        <span class="badge badge-{{ 'spring' if is_spring else 'fall' }}">{{ season_name }}</span>
+        Umpire Calendar
+    </h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('umpires.schedule') }}" class="btn btn-outline">List View</a>
+        <a href="{{ url_for('umpires.delegation') }}" class="btn btn-secondary">Delegation Rules</a>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="filter-bar">
+    <label>Season:
+        <select id="season-select" onchange="changeSeason()" class="form-control">
+            {% for s in seasons %}
+            <option value="{{ s.year }}-{{ s.is_spring }}"
+                {% if s.year == year and s.is_spring == is_spring %}selected{% endif %}>
+                {{ s.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>League:
+        <select id="filter-league" onchange="applyFilters()" class="form-control">
+            <option value="">All Leagues</option>
+            {% for l in leagues %}
+            <option value="{{ l }}" {{ 'selected' if current_league == l else '' }}>{{ l }}</option>
+            {% endfor %}
+        </select>
+    </label>
+</div>
+
+<!-- Week Navigation -->
+<div class="calendar-nav">
+    <a href="?week={{ prev_week }}{% if current_league %}&league={{ current_league }}{% endif %}" class="btn btn-outline">&larr; Previous Week</a>
+    <span class="week-label">{{ week_start.strftime('%B %d') }} - {{ week_end.strftime('%B %d, %Y') }}</span>
+    <a href="?week={{ next_week }}{% if current_league %}&league={{ current_league }}{% endif %}" class="btn btn-outline">Next Week &rarr;</a>
+</div>
+
+<!-- Calendar Grid -->
+<div class="calendar-grid">
+    {% for day in week_days %}
+    <div class="calendar-day {{ 'today' if day.is_today else '' }} {{ 'empty-day' if not day.games else '' }}" data-date="{{ day.date.strftime('%Y-%m-%d') }}">
+        <div class="day-header">
+            {{ day.date.strftime('%a') }}<br>
+            {{ day.date.strftime('%m/%d') }}
+        </div>
+        <div class="day-content">
+            {% for game in day.games %}
+            <div class="game-card {{ game.display_type }}"
+                 data-game-id="{{ game.ID }}"
+                 data-league="{{ game.league }}"
+                 data-umpire-source="{{ game.umpire_override or '' }}">
+                <span class="umpire-badge umpire-{{ game.umpire_override or 'unassigned' }}">
+                    {{ (game.umpire_override or '?')[:3] }}
+                </span>
+                <div class="game-time">
+                    {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
+                </div>
+                <div class="game-location">{{ game.field_name or 'TBD' }}</div>
+                <div class="game-teams">
+                    <strong>{{ game.league }}</strong>
+                    {% if game.home_team %} - {{ game.home_team.scheduler_display_name }}{% endif %}
+                    {% if game.away_team %} vs {{ game.away_team.scheduler_display_name }}{% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="no-games">-</div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Legend -->
+<div class="card" style="padding: 15px;">
+    <strong>Umpire Sources:</strong>
+    <span style="margin-left: 15px;"><span class="umpire-dot academy"></span> SDLL Academy</span>
+    <span style="margin-left: 15px;"><span class="umpire-dot diamond"></span> Diamond</span>
+    <span style="margin-left: 15px;"><span class="umpire-dot dynamic"></span> Dynamic</span>
+    <span style="margin-left: 15px; color: #999;">? = Unassigned</span>
+    <span style="margin-left: 30px;">|</span>
+    <span style="margin-left: 15px; padding: 2px 8px; background: #e8f5e9; border-radius: 4px;">Regular</span>
+    <span style="margin-left: 10px; padding: 2px 8px; background: #fff3e0; border-radius: 4px;">Playoff</span>
+</div>
+
+<!-- Context Menu for Umpire Assignment -->
+<div id="umpire-context-menu" class="context-menu">
+    <div class="context-menu-item" data-source="academy" onclick="setUmpireSource('academy')">
+        <span class="umpire-dot academy"></span> Assign SDLL
+    </div>
+    <div class="context-menu-item" data-source="diamond" onclick="setUmpireSource('diamond')">
+        <span class="umpire-dot diamond"></span> Assign Diamond
+    </div>
+    <div class="context-menu-item" data-source="dynamic" onclick="setUmpireSource('dynamic')">
+        <span class="umpire-dot dynamic"></span> Assign Dynamic
+    </div>
+</div>
+
+<script>
+var csrfToken = '{{ csrf_token() }}';
+var contextGameId = null;
+var contextMenu = document.getElementById('umpire-context-menu');
+
+// Change season - navigates to new URL
+function changeSeason() {
+    var select = document.getElementById('season-select');
+    var value = select.value;
+    var parts = value.split('-');
+    var year = parts[0];
+    var isSpring = parts[1];
+    window.location.href = '/umpires/' + year + '/' + isSpring + '/calendar';
+}
+
+// CSS-based filtering (no page reload)
+function applyFilters() {
+    var leagueFilter = document.getElementById('filter-league').value;
+
+    var cards = document.querySelectorAll('.game-card');
+
+    cards.forEach(function(card) {
+        var cardLeague = card.dataset.league;
+        var showLeague = !leagueFilter || cardLeague === leagueFilter;
+
+        if (showLeague) {
+            card.classList.remove('filtered-out');
+        } else {
+            card.classList.add('filtered-out');
+        }
+    });
+
+    // Update URL for bookmarking/sharing (without page reload)
+    var url = new URL(window.location);
+    if (leagueFilter) {
+        url.searchParams.set('league', leagueFilter);
+    } else {
+        url.searchParams.delete('league');
+    }
+    history.replaceState(null, '', url);
+}
+
+// Restore filters from URL on page load
+document.addEventListener('DOMContentLoaded', function() {
+    var url = new URL(window.location);
+    var league = url.searchParams.get('league');
+
+    if (league) {
+        document.getElementById('filter-league').value = league;
+        applyFilters();
+    }
+});
+
+// Right-click context menu for game cards
+document.querySelectorAll('.game-card').forEach(function(card) {
+    card.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        contextGameId = card.dataset.gameId;
+        var currentSource = card.dataset.umpireSource;
+
+        // Highlight current selection
+        document.querySelectorAll('.context-menu-item').forEach(function(item) {
+            item.classList.remove('active');
+            if (item.dataset.source === currentSource) {
+                item.classList.add('active');
+            }
+        });
+
+        showContextMenu(e);
+    });
+});
+
+function showContextMenu(e) {
+    // Position the menu
+    contextMenu.style.left = e.clientX + 'px';
+    contextMenu.style.top = e.clientY + 'px';
+    contextMenu.classList.add('show');
+
+    // Ensure menu stays in viewport
+    var rect = contextMenu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+        contextMenu.style.left = (window.innerWidth - rect.width - 10) + 'px';
+    }
+    if (rect.bottom > window.innerHeight) {
+        contextMenu.style.top = (window.innerHeight - rect.height - 10) + 'px';
+    }
+}
+
+function hideContextMenu() {
+    contextMenu.classList.remove('show');
+    contextGameId = null;
+}
+
+// Hide context menu on click outside or scroll
+document.addEventListener('click', function(e) {
+    if (!contextMenu.contains(e.target)) {
+        hideContextMenu();
+    }
+});
+
+document.addEventListener('scroll', function() {
+    hideContextMenu();
+});
+
+function setUmpireSource(source) {
+    if (!contextGameId) return;
+
+    fetch('/umpires/api/set-umpire-source', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            game_id: contextGameId,
+            source: source
+        })
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(result) {
+        if (result.success) {
+            updateBadge(contextGameId, source);
+        } else {
+            alert('Error: ' + result.error);
+        }
+        hideContextMenu();
+    })
+    .catch(function(err) {
+        alert('Error setting umpire source: ' + err);
+        hideContextMenu();
+    });
+}
+
+function updateBadge(gameId, source) {
+    var card = document.querySelector('.game-card[data-game-id="' + gameId + '"]');
+    if (!card) return;
+
+    // Update data attribute
+    card.dataset.umpireSource = source;
+
+    // Update badge
+    var badge = card.querySelector('.umpire-badge');
+    if (badge) {
+        // Remove old class
+        badge.className = 'umpire-badge';
+        // Add new class
+        badge.classList.add('umpire-' + source);
+        // Update text
+        badge.textContent = source.substring(0, 3).toUpperCase();
+    }
+}
+</script>
+{% endblock %}

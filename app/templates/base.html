@@ -238,6 +238,11 @@
                     <div class="dropdown-divider"></div>
                     {% endif %}
                     {% if current_user.can_manage_umpires() %}
+                    {% if current_season_year %}
+                    <a href="{{ url_for('umpires.umpire_calendar', year=current_season_year, is_spring=current_season_is_spring) }}">
+                        <strong>Umpire Calendar</strong>
+                    </a>
+                    {% endif %}
                     <a href="{{ url_for('umpires.index') }}">Manage Umpires</a>
                     <a href="{{ url_for('umpires.partners') }}">Partners</a>
                     <a href="{{ url_for('umpires.delegation') }}">Delegation Rules</a>

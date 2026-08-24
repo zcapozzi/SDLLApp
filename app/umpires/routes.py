@@ -10,10 +10,12 @@ Provides admin interfaces for:
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from functools import wraps
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 from app.extensions import db
 from app.models.user import User
+from app.models.field import Field
+from app.models.team import TeamSeason
 from app.models.umpire_profile import UmpireProfile
 from app.models.umpire_partner import UmpirePartner
 from app.models.game_umpire import GameUmpire
@@ -592,3 +594,159 @@ def api_unassign():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+
+@umpires_bp.route('/api/set-umpire-source', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def api_set_umpire_source():
+    """Set the umpire source for a game via right-click menu."""
+    data = request.get_json()
+    game_id = data.get('game_id')
+    source = data.get('source')  # 'academy', 'diamond', 'dynamic'
+
+    if source not in ['academy', 'diamond', 'dynamic']:
+        return jsonify({'error': 'Invalid source'}), 400
+
+    game = Game.query.get(game_id)
+    if not game:
+        return jsonify({'error': 'Game not found'}), 404
+
+    game.umpire_override = source
+    db.session.commit()
+
+    logger.info(f'Set umpire source for game {game_id} to {source}')
+    return jsonify({'success': True, 'source': source})
+
+
+# =============================================================================
+# Umpire Calendar View
+# =============================================================================
+
+@umpires_bp.route('/<int:year>/<int:is_spring>/calendar')
+@login_required
+@umpire_coordinator_required
+def umpire_calendar(year, is_spring):
+    """Calendar view for umpire coordination - assign umpire sources to games."""
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    # Get week parameter (ISO week number) or default to current week
+    week_param = request.args.get('week')
+
+    # Get league filter
+    league = request.args.get('league')
+
+    # Determine the date range for this season
+    from app.models.league_season import LeagueSeason
+    configs = LeagueSeason.get_by_season(year, is_spring)
+
+    # Find earliest opening day across all leagues
+    opening_dates = [c.opening_day_date for c in configs if c.opening_day_date]
+    if opening_dates:
+        season_start = min(opening_dates)
+    else:
+        # Default to a reasonable start date
+        season_start = date(year, 3 if is_spring else 9, 1)
+
+    # Calculate current week
+    today = date.today()
+    if week_param:
+        # Parse week parameter (format: YYYY-WW)
+        try:
+            week_year, week_num = week_param.split('-')
+            # Get Monday of that week
+            week_start = datetime.strptime(f'{week_year}-W{week_num}-1', '%G-W%V-%u').date()
+        except (ValueError, AttributeError):
+            week_start = today - timedelta(days=today.weekday())
+    else:
+        # Default to current week if in season, otherwise opening week
+        if season_start <= today:
+            week_start = today - timedelta(days=today.weekday())
+        else:
+            week_start = season_start - timedelta(days=season_start.weekday())
+
+    week_end = week_start + timedelta(days=6)
+
+    # Build week days with games
+    week_days = []
+
+    for i in range(7):
+        day_date = week_start + timedelta(days=i)
+
+        # Get games from database - only games that need umpires (regular/playoff)
+        query = Game.query.filter(
+            Game.active == 1,
+            Game.year == year,
+            Game.is_spring == is_spring,
+            db.func.date(Game.game_date) == day_date,
+            Game.game_type.in_(['regular', 'playoff'])
+        )
+        if league:
+            query = query.filter(Game.league == league)
+
+        day_games = query.order_by(Game.game_date, Game.location).all()
+
+        week_days.append({
+            'date': day_date,
+            'is_today': day_date == today,
+            'games': day_games
+        })
+
+    # Calculate prev/next week
+    prev_week = (week_start - timedelta(days=7)).strftime('%G-%V')
+    next_week = (week_start + timedelta(days=7)).strftime('%G-%V')
+
+    # Get leagues for filter
+    leagues = db.session.query(Game.league).filter(
+        Game.year == year,
+        Game.is_spring == is_spring,
+        Game.league.isnot(None),
+        Game.game_type.in_(['regular', 'playoff'])
+    ).distinct().all()
+    leagues = [l[0] for l in leagues if l[0]]
+    leagues.sort()
+
+    # Get teams and fields for reference
+    teams = TeamSeason.query.filter_by(
+        year=year,
+        is_spring=is_spring,
+        active=1
+    ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+
+    fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
+
+    # Get umpire partners for legend
+    partners = UmpirePartner.get_active()
+
+    # Get available seasons (those with games)
+    available_seasons = db.session.query(
+        Game.year,
+        Game.is_spring
+    ).filter(
+        Game.active == 1,
+        Game.game_type.in_(['regular', 'playoff'])
+    ).distinct().order_by(Game.year.desc(), Game.is_spring.desc()).all()
+
+    seasons = [
+        {'year': y, 'is_spring': s, 'name': f'{"Spring" if s else "Fall"} {y}'}
+        for y, s in available_seasons
+    ]
+
+    return render_template(
+        'umpires/calendar.html',
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name,
+        week_start=week_start,
+        week_end=week_end,
+        week_days=week_days,
+        prev_week=prev_week,
+        next_week=next_week,
+        leagues=leagues,
+        teams=teams,
+        fields=fields,
+        current_league=league,
+        today=today,
+        partners=partners,
+        seasons=seasons
+    )
