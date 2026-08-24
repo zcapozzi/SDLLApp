@@ -23,6 +23,101 @@
         border-radius: 4px;
         font-size: 14px;
     }
+    .btn-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    /* Season Totals at top */
+    .grand-totals {
+        background: rgb(34, 139, 34);
+        color: white;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .grand-totals h3 {
+        margin: 0 0 15px 0;
+        font-size: 18px;
+    }
+    .grand-totals-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+    }
+    .grand-total-item {
+        text-align: center;
+    }
+    .grand-total-item .value {
+        font-size: 24px;
+        font-weight: bold;
+    }
+    .grand-total-item .label {
+        font-size: 12px;
+        opacity: 0.9;
+        margin-top: 4px;
+    }
+
+    /* Summary Grid */
+    .summary-section {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        margin-bottom: 30px;
+        overflow: hidden;
+    }
+    .summary-section h2 {
+        background: rgb(34, 139, 34);
+        color: white;
+        margin: 0;
+        padding: 15px 20px;
+        font-size: 16px;
+    }
+    .summary-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .summary-table th {
+        background: rgb(34, 139, 34);
+        color: white;
+        padding: 10px 15px;
+        text-align: center;
+        font-weight: 600;
+        font-size: 13px;
+        border: 1px solid rgb(28, 112, 28);
+    }
+    .summary-table th:first-child {
+        text-align: left;
+    }
+    .summary-table td {
+        padding: 10px 15px;
+        border: 1px solid #eee;
+        font-size: 14px;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+    }
+    .summary-table td:first-child {
+        text-align: left;
+        font-weight: 500;
+    }
+    .summary-table tr:nth-child(even) {
+        background: #f9f9f9;
+    }
+    .summary-table .totals-row {
+        background: #e8f5e9 !important;
+        font-weight: 600;
+    }
+    .summary-table .totals-row td {
+        border-top: 2px solid rgb(34, 139, 34);
+    }
+
+    /* Partner Sections */
+    .details-header {
+        margin: 30px 0 20px 0;
+        padding-bottom: 10px;
+        border-bottom: 2px solid rgb(34, 139, 34);
+    }
     .partner-section {
         background: white;
         border-radius: 8px;
@@ -51,12 +146,13 @@
         border-collapse: collapse;
     }
     .partner-table th {
-        background: #f5f5f5;
+        background: rgb(34, 139, 34);
+        color: white;
         padding: 10px 15px;
         text-align: left;
         font-weight: 600;
         font-size: 13px;
-        border-bottom: 1px solid #ddd;
+        border: 1px solid rgb(28, 112, 28);
     }
     .partner-table td {
         padding: 10px 15px;
@@ -90,39 +186,6 @@
     .blended-rate strong {
         color: rgb(34, 139, 34);
     }
-    .grand-totals {
-        background: rgb(34, 139, 34);
-        color: white;
-        border-radius: 8px;
-        padding: 20px;
-        margin-top: 20px;
-    }
-    .grand-totals h3 {
-        margin: 0 0 15px 0;
-        font-size: 18px;
-    }
-    .grand-totals-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 15px;
-    }
-    .grand-total-item {
-        text-align: center;
-    }
-    .grand-total-item .value {
-        font-size: 24px;
-        font-weight: bold;
-    }
-    .grand-total-item .label {
-        font-size: 12px;
-        opacity: 0.9;
-        margin-top: 4px;
-    }
-    .btn-row {
-        display: flex;
-        gap: 10px;
-        margin-bottom: 20px;
-    }
     .empty-state {
         text-align: center;
         padding: 40px;
@@ -153,13 +216,93 @@
 </div>
 
 {% if report_data %}
+    <!-- Season Totals at Top -->
+    <div class="grand-totals">
+        <h3>Season Totals - {{ season_name }}</h3>
+        <div class="grand-totals-grid">
+            <div class="grand-total-item">
+                <div class="value">{{ "{:,}".format(grand_totals.games + grand_totals.ntl_games) }}</div>
+                <div class="label">Total Games</div>
+            </div>
+            <div class="grand-total-item">
+                <div class="value">{{ "{:,}".format(grand_totals.umpires + grand_totals.ntl_umpires) }}</div>
+                <div class="label">Umpire Assignments</div>
+            </div>
+            <div class="grand-total-item">
+                <div class="value">${{ "{:,.0f}".format(grand_totals.cost_normal) }}</div>
+                <div class="label">Normal Game Costs</div>
+            </div>
+            <div class="grand-total-item">
+                <div class="value">${{ "{:,.0f}".format(grand_totals.cost_ntl) }}</div>
+                <div class="label">NTL Game Costs</div>
+            </div>
+            <div class="grand-total-item">
+                <div class="value">${{ "{:,.0f}".format(grand_totals.cost_total) }}</div>
+                <div class="label">Total Cost</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Allocation Summary Grid -->
+    <div class="summary-section">
+        <h2>Game Allocation by League</h2>
+        <table class="summary-table">
+            <thead>
+                <tr>
+                    <th>League</th>
+                    {% for partner in report_data %}
+                    <th>{{ partner.code }}</th>
+                    {% endfor %}
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set all_leagues = [] %}
+                {% for partner in report_data %}
+                    {% for league_row in partner.leagues %}
+                        {% if league_row.league not in all_leagues %}
+                            {% set _ = all_leagues.append(league_row.league) %}
+                        {% endif %}
+                    {% endfor %}
+                {% endfor %}
+                {% for league in all_leagues|sort %}
+                <tr>
+                    <td>{{ league }}</td>
+                    {% set row_total = namespace(value=0) %}
+                    {% for partner in report_data %}
+                        {% set league_games = 0 %}
+                        {% for lr in partner.leagues %}
+                            {% if lr.league == league %}
+                                {% set league_games = lr.games + lr.ntl_games %}
+                            {% endif %}
+                        {% endfor %}
+                        <td>{{ "{:,}".format(league_games) if league_games > 0 else '-' }}</td>
+                        {% set row_total.value = row_total.value + league_games %}
+                    {% endfor %}
+                    <td><strong>{{ "{:,}".format(row_total.value) }}</strong></td>
+                </tr>
+                {% endfor %}
+                <tr class="totals-row">
+                    <td><strong>Total</strong></td>
+                    {% for partner in report_data %}
+                    <td><strong>{{ "{:,}".format(partner.totals.games + partner.totals.ntl_games) }}</strong></td>
+                    {% endfor %}
+                    <td><strong>{{ "{:,}".format(grand_totals.games + grand_totals.ntl_games) }}</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Detailed Cost Breakdown -->
+    <h2 class="details-header">Cost Details by Partner</h2>
+
     {% for partner in report_data %}
     <div class="partner-section">
         <div class="partner-header">
             <h3>{{ partner.name }}</h3>
             <div class="partner-rates">
-                Normal: ${{ "%.2f"|format(partner.rate_normal) }}/ump |
-                NTL: ${{ "%.2f"|format(partner.rate_ntl) }}/ump
+                Normal: ${{ "{:,.0f}".format(partner.rate_normal) }}/ump |
+                NTL: ${{ "{:,.0f}".format(partner.rate_ntl) }}/ump
             </div>
         </div>
 
@@ -181,30 +324,30 @@
                 {% for row in partner.leagues %}
                 <tr>
                     <td>{{ row.league }}</td>
-                    <td class="number">{{ row.games }}</td>
-                    <td class="number">{{ row.umpires }}</td>
-                    <td class="number">{{ row.ntl_games }}</td>
-                    <td class="number">{{ row.ntl_umpires }}</td>
-                    <td class="currency">${{ "%.2f"|format(row.cost_normal) }}</td>
-                    <td class="currency">${{ "%.2f"|format(row.cost_ntl) }}</td>
-                    <td class="currency">${{ "%.2f"|format(row.cost_total) }}</td>
+                    <td class="number">{{ "{:,}".format(row.games) }}</td>
+                    <td class="number">{{ "{:,}".format(row.umpires) }}</td>
+                    <td class="number">{{ "{:,}".format(row.ntl_games) }}</td>
+                    <td class="number">{{ "{:,}".format(row.ntl_umpires) }}</td>
+                    <td class="currency">${{ "{:,.0f}".format(row.cost_normal) }}</td>
+                    <td class="currency">${{ "{:,.0f}".format(row.cost_ntl) }}</td>
+                    <td class="currency">${{ "{:,.0f}".format(row.cost_total) }}</td>
                 </tr>
                 {% endfor %}
                 <tr class="totals-row">
                     <td><strong>Total</strong></td>
-                    <td class="number"><strong>{{ partner.totals.games }}</strong></td>
-                    <td class="number"><strong>{{ partner.totals.umpires }}</strong></td>
-                    <td class="number"><strong>{{ partner.totals.ntl_games }}</strong></td>
-                    <td class="number"><strong>{{ partner.totals.ntl_umpires }}</strong></td>
-                    <td class="currency"><strong>${{ "%.2f"|format(partner.totals.cost_normal) }}</strong></td>
-                    <td class="currency"><strong>${{ "%.2f"|format(partner.totals.cost_ntl) }}</strong></td>
-                    <td class="currency"><strong>${{ "%.2f"|format(partner.totals.cost_total) }}</strong></td>
+                    <td class="number"><strong>{{ "{:,}".format(partner.totals.games) }}</strong></td>
+                    <td class="number"><strong>{{ "{:,}".format(partner.totals.umpires) }}</strong></td>
+                    <td class="number"><strong>{{ "{:,}".format(partner.totals.ntl_games) }}</strong></td>
+                    <td class="number"><strong>{{ "{:,}".format(partner.totals.ntl_umpires) }}</strong></td>
+                    <td class="currency"><strong>${{ "{:,.0f}".format(partner.totals.cost_normal) }}</strong></td>
+                    <td class="currency"><strong>${{ "{:,.0f}".format(partner.totals.cost_ntl) }}</strong></td>
+                    <td class="currency"><strong>${{ "{:,.0f}".format(partner.totals.cost_total) }}</strong></td>
                 </tr>
             </tbody>
         </table>
         <div class="blended-rate">
-            Blended Rate: <strong>${{ "%.2f"|format(partner.blended_rate) }}</strong> per umpire
-            ({{ partner.totals.umpires + partner.totals.ntl_umpires }} total umpire assignments)
+            Blended Rate: <strong>${{ "{:,.0f}".format(partner.blended_rate) }}</strong> per umpire
+            ({{ "{:,}".format(partner.totals.umpires + partner.totals.ntl_umpires) }} total umpire assignments)
         </div>
         {% else %}
         <div class="empty-state">No games assigned to {{ partner.name }} this season.</div>
@@ -212,31 +355,6 @@
     </div>
     {% endfor %}
 
-    <div class="grand-totals">
-        <h3>Season Totals</h3>
-        <div class="grand-totals-grid">
-            <div class="grand-total-item">
-                <div class="value">{{ grand_totals.games + grand_totals.ntl_games }}</div>
-                <div class="label">Total Games</div>
-            </div>
-            <div class="grand-total-item">
-                <div class="value">{{ grand_totals.umpires + grand_totals.ntl_umpires }}</div>
-                <div class="label">Umpire Assignments</div>
-            </div>
-            <div class="grand-total-item">
-                <div class="value">${{ "%.2f"|format(grand_totals.cost_normal) }}</div>
-                <div class="label">Normal Game Costs</div>
-            </div>
-            <div class="grand-total-item">
-                <div class="value">${{ "%.2f"|format(grand_totals.cost_ntl) }}</div>
-                <div class="label">NTL Game Costs</div>
-            </div>
-            <div class="grand-total-item">
-                <div class="value">${{ "%.2f"|format(grand_totals.cost_total) }}</div>
-                <div class="label">Total Cost</div>
-            </div>
-        </div>
-    </div>
 {% else %}
     <div class="empty-state">
         <h3>No Games Found</h3>
