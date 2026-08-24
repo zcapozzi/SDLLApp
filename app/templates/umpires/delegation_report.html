@@ -270,14 +270,14 @@
                     <td>{{ league }}</td>
                     {% set row_total = namespace(value=0) %}
                     {% for partner in report_data %}
-                        {% set league_games = 0 %}
+                        {% set ns = namespace(league_games=0) %}
                         {% for lr in partner.leagues %}
                             {% if lr.league == league %}
-                                {% set league_games = lr.games + lr.ntl_games %}
+                                {% set ns.league_games = lr.games + lr.ntl_games %}
                             {% endif %}
                         {% endfor %}
-                        <td>{{ "{:,}".format(league_games) if league_games > 0 else '-' }}</td>
-                        {% set row_total.value = row_total.value + league_games %}
+                        <td>{{ "{:,}".format(ns.league_games) if ns.league_games > 0 else '-' }}</td>
+                        {% set row_total.value = row_total.value + ns.league_games %}
                     {% endfor %}
                     <td><strong>{{ "{:,}".format(row_total.value) }}</strong></td>
                 </tr>
