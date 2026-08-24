@@ -704,6 +704,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="update_game">
             <input type="hidden" name="game_id" id="edit-game-id">
+            <input type="hidden" name="return_to" value="{{ url_for('games.day_view', year=year, is_spring=is_spring, target_date=view_date.strftime('%Y-%m-%d')) }}">
 
             <div class="form-group">
                 <label>Type</label>
@@ -1160,6 +1161,7 @@ addEventModal.addEventListener('click', function(e) {
         <form method="POST" action="{{ url_for('games.manage', year=year, is_spring=is_spring) }}" id="create-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="create_game">
+            <input type="hidden" name="return_to" value="{{ url_for('games.day_view', year=year, is_spring=is_spring, target_date=view_date.strftime('%Y-%m-%d')) }}">
 
             <!-- League -->
             <div class="form-group">

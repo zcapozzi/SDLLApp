@@ -240,6 +240,15 @@
             background: #1976d2;
             color: white;
         }
+        .badge-changed {
+            background: #e65100;
+            color: white;
+        }
+        .game-originally {
+            font-size: 11px;
+            color: #e65100;
+            font-style: italic;
+        }
 
         /* Game count */
         .game-count {
@@ -434,7 +443,12 @@
                             -
                             {% endif %}
                         </td>
-                        <td class="cell-assigned"></td>
+                        <td class="cell-notes">
+                            {% if game_originals and game.ID in game_originals %}
+                            <span class="badge badge-changed">CHANGED</span>
+                            <div class="game-originally">{{ game_originals[game.ID] }}</div>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

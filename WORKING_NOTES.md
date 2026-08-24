@@ -4,7 +4,55 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Added partner schedule URLs, improved manage games view, fixed umpire calendar short codes.
+Last session: Fixed calendar/day view edit redirect, added game change tracking features.
+
+---
+
+## Session: August 24, 2026 (Continued) - Calendar Edit Redirect Fix & Game Change Tracking
+
+### 1. Calendar/Day View Edit Redirect Fix
+
+**Problem:** When editing a game from the calendar or day view, the page would redirect to the manage games page instead of staying on the current view.
+
+**Solution:** Added a hidden `return_to` field to form submissions that redirects back to the originating page.
+
+**Files Modified:**
+- `app/games/routes.py` - Check for `return_to` form field and redirect appropriately
+- `app/templates/games/calendar.html` - Added `return_to` hidden field with calendar URL (preserves week and league filter)
+- `app/templates/games/day_view.html` - Added `return_to` hidden field to edit and create forms (preserves current date)
+
+### 2. Game Change Tracking & "Originally" Display
+
+**Features:**
+- Fixed NEW badge to use correct `date_added` column instead of `created_at`
+- Track umpire_override changes (only for subsequent assignments, not initial)
+- Show "Originally scheduled for..." text on team schedule pages for rescheduled games
+- Added `GameChange.get_original_values()` and `GameChange.get_original_display()` methods
+
+**Files Modified:**
+- `app/models/game_change.py` - Added methods to reconstruct original game schedule
+- `app/services/game_changes.py` - Added `umpire_override` to tracked fields
+- `app/public/routes.py` - Fixed NEW badge logic, added game_originals context
+- `app/templates/public/team_schedule.html` - Display "Originally..." text
+- `app/umpires/routes.py` - Log change when umpire source is reassigned
+
+### 3. Performance Optimizations
+
+Fixed N+1 query issues on umpire schedule pages:
+- Added eager loading with `joinedload()` for relationships
+- Pre-loaded field and team data into lookup dictionaries
+- Cached computed values (`_cached_field_name`, `_cached_umpire_count`)
+
+**Files Modified:**
+- `app/public/routes.py` - Optimized partner_schedule and partner_schedule_csv routes
+- `app/umpires/routes.py` - Optimized umpire_calendar and umpire_schedule routes
+
+### 4. Standardized Umpire Source Codes
+
+Changed from 'academy'/'SDLL' to consistent 'SDL' everywhere:
+- API validation accepts SDL, DIA, DYN (and any active partner short codes)
+- CSS classes: `.umpire-SDL`, `.umpire-DIA`, `.umpire-DYN`
+- Frontend onclick handlers use SDL
 
 ---
 

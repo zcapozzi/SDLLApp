@@ -21,6 +21,7 @@ from app.models.league_season import LeagueSeason
 from app.models.schedule_proposal import ScheduleProposal
 from app.models.field import Field
 from app.models.umpire_partner import UmpirePartner
+from app.models.game_change import GameChange
 from app.extensions import db
 import sys
 import csv
@@ -582,6 +583,13 @@ def partner_schedule(token):
         if g.no_time_limit:
             has_ntl_games = True
 
+    # Build game_originals for rescheduled games
+    game_originals = {}
+    for g in games:
+        original_text = GameChange.get_original_display(g.ID)
+        if original_text:
+            game_originals[g.ID] = original_text
+
     # Apply filters (using cached field_name)
     if field_filter:
         games = [g for g in games if g._cached_field_name and field_filter.lower() in g._cached_field_name.lower()]
@@ -620,6 +628,7 @@ def partner_schedule(token):
         token=token,
         new_game_ids=new_game_ids,
         has_ntl_games=has_ntl_games,
+        game_originals=game_originals,
         today=date.today()
     )
 

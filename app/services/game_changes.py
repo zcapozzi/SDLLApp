@@ -245,6 +245,27 @@ class GameChangeService:
                 except Exception:
                     pass
 
+        # Queue for umpire partner organization if game is assigned to a partner
+        if game.umpire_override:
+            from app.models.umpire_partner import UmpirePartner
+            partner = UmpirePartner.query.filter_by(
+                short_code=game.umpire_override,
+                active=True
+            ).first()
+            if partner and partner.contact_email:
+                try:
+                    NotificationQueue.create_for_change(
+                        change=change,
+                        game=game,
+                        recipient_type='partner',
+                        recipient_email=partner.contact_email,
+                        recipient_name=partner.contact_name or partner.name,
+                        recipient_id=None
+                    )
+                    notifications_queued += 1
+                except Exception:
+                    pass
+
         return notifications_queued
 
     @staticmethod

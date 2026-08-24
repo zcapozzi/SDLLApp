@@ -692,7 +692,12 @@ def manage(year, is_spring):
                 flash(f'Game created successfully.', 'success')
                 anchor = f'game-{new_game.ID}'
 
-        redirect_url = url_for('games.manage', year=year, is_spring=is_spring)
+        # Check if we should return to a different page (e.g., calendar)
+        return_to = request.form.get('return_to')
+        if return_to:
+            redirect_url = return_to
+        else:
+            redirect_url = url_for('games.manage', year=year, is_spring=is_spring)
         if anchor:
             redirect_url += f'#{anchor}'
         return redirect(redirect_url)
@@ -1044,9 +1049,10 @@ def calendar(year, is_spring):
             'games': day_games
         })
 
-    # Calculate prev/next week
+    # Calculate prev/next/current week
     prev_week = (week_start - timedelta(days=7)).strftime('%G-%V')
     next_week = (week_start + timedelta(days=7)).strftime('%G-%V')
+    current_week = week_start.strftime('%G-%V')
 
     # Get leagues for filter
     if has_proposal:
@@ -1081,6 +1087,7 @@ def calendar(year, is_spring):
         week_days=week_days,
         prev_week=prev_week,
         next_week=next_week,
+        current_week=current_week,
         leagues=leagues,
         teams=teams,
         fields=fields,
