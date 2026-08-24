@@ -476,6 +476,9 @@ def partner_schedule(token):
 
     Shows games assigned to a partner (Diamond, Dynamic, etc.) in a table format.
     """
+    from sqlalchemy.orm import joinedload
+    from app.models.league import League
+
     partner = UmpirePartner.get_by_schedule_token(token)
     if not partner:
         abort(404)
@@ -501,20 +504,73 @@ def partner_schedule(token):
 
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
 
-    # Get games where umpire_override matches this partner's short_code
-    # umpire_override values are: 'DIA', 'DYN', 'academy'
-    partner_code = partner.short_code
+    # Pre-load leagues and fields to avoid N+1 queries
+    all_leagues = {l.display_name: l for l in League.get_all_active()}
+    all_fields = {f.location_title: f for f in Field.query.filter_by(active=1).all()}
 
-    games = Game.query.filter(
+    # Get games with eager loading of relationships
+    partner_code = partner.short_code
+    games = Game.query.options(
+        joinedload(Game.home_team),
+        joinedload(Game.away_team)
+    ).filter(
         Game.active == 1,
         Game.year == year,
         Game.is_spring == (is_spring == 1),
         Game.umpire_override == partner_code
     ).order_by(Game.game_date).all()
 
-    # Apply filters
+    # Pre-compute values that would otherwise trigger N+1 queries
+    # and collect filter options from the SAME query (no duplicate query)
+    fields_set = set()
+    leagues_set = set()
+    one_week_ago = datetime.utcnow() - timedelta(days=7)
+    new_game_ids = set()
+    has_ntl_games = False
+
+    for g in games:
+        # Cache computed values on the game object to avoid repeated lookups
+        field_name = g.location or ''
+        if g.field_id and g.field_rel:
+            field_name = g.field_rel.location_title
+        g._cached_field_name = field_name
+
+        # Cache umpire count
+        if g.umpire_count_override is not None:
+            g._cached_umpire_count = g.umpire_count_override
+        else:
+            league_obj = all_leagues.get(g.league)
+            if league_obj:
+                is_playoff = g.game_type == 'playoff'
+                g._cached_umpire_count = league_obj.get_umpire_count(is_playoff=is_playoff)
+            else:
+                g._cached_umpire_count = 1
+
+        # Cache rules URL
+        league_obj = all_leagues.get(g.league)
+        g._cached_rules_url = league_obj.rules_doc_url if league_obj else None
+
+        # Cache directions URL
+        field_obj = all_fields.get(field_name) or (g.field_rel if g.field_id else None)
+        g._cached_directions_url = field_obj.google_maps_url if field_obj else None
+
+        # Collect filter options
+        if field_name:
+            fields_set.add(field_name)
+        if g.league:
+            leagues_set.add(g.league)
+
+        # Check for new games
+        if hasattr(g, 'created_at') and g.created_at and g.created_at > one_week_ago:
+            new_game_ids.add(g.ID)
+
+        # Check for NTL games
+        if g.no_time_limit:
+            has_ntl_games = True
+
+    # Apply filters (using cached field_name)
     if field_filter:
-        games = [g for g in games if g.field_name and field_filter.lower() in g.field_name.lower()]
+        games = [g for g in games if g._cached_field_name and field_filter.lower() in g._cached_field_name.lower()]
     if league_filter:
         games = [g for g in games if g.league and league_filter.lower() in g.league.lower()]
     if date_filter:
@@ -524,35 +580,15 @@ def partner_schedule(token):
         except ValueError:
             pass
 
-    # Get unique fields and leagues for filter dropdowns
-    all_games = Game.query.filter(
-        Game.active == 1,
-        Game.year == year,
-        Game.is_spring == (is_spring == 1),
-        Game.umpire_override == partner_code
-    ).all()
+    fields = sorted(fields_set)
+    leagues = sorted(leagues_set)
 
-    fields = sorted(set(g.field_name for g in all_games if g.field_name))
-    leagues = sorted(set(g.league for g in all_games if g.league))
-
-    # Get available seasons for the season picker (unique year/is_spring combinations)
+    # Get available seasons for the season picker
     seasons = db.session.query(
         LeagueSeason.year, LeagueSeason.is_spring
     ).filter_by(active=1).distinct().order_by(
         LeagueSeason.year.desc(), LeagueSeason.is_spring.desc()
     ).all()
-
-    # Calculate "new this week" - games added in the past 7 days
-    one_week_ago = datetime.utcnow() - timedelta(days=7)
-    new_game_ids = set()
-    has_ntl_games = False
-    for g in games:
-        # If game has created_at and it's within the last week
-        if hasattr(g, 'created_at') and g.created_at and g.created_at > one_week_ago:
-            new_game_ids.add(g.ID)
-        # Check for no-time-limit games
-        if g.no_time_limit:
-            has_ntl_games = True
 
     return render_template(
         'public/partner_schedule.html',
@@ -577,6 +613,10 @@ def partner_schedule(token):
 @public_bp.route('/partner/<token>/csv')
 def partner_schedule_csv(token):
     """Download partner schedule as CSV."""
+    from sqlalchemy.orm import joinedload
+    from app.models.game_umpire import GameUmpire
+    from app.models.league import League
+
     partner = UmpirePartner.get_by_schedule_token(token)
     if not partner:
         abort(404)
@@ -598,15 +638,36 @@ def partner_schedule_csv(token):
             is_spring = 1 if date.today().month < 7 else 0
 
     season_name = f'{"Spring" if is_spring else "Fall"}{year}'
-    # Match using partner's short_code (DIA, DYN, etc.)
     partner_code = partner.short_code
 
-    games = Game.query.filter(
+    # Pre-load leagues for umpire count lookup
+    all_leagues = {l.display_name: l for l in League.get_all_active()}
+
+    # Get games with eager loading
+    games = Game.query.options(
+        joinedload(Game.home_team),
+        joinedload(Game.away_team)
+    ).filter(
         Game.active == 1,
         Game.year == year,
         Game.is_spring == (is_spring == 1),
         Game.umpire_override == partner_code
     ).order_by(Game.game_date).all()
+
+    # Pre-load all umpire assignments for these games in ONE query
+    game_ids = [g.ID for g in games]
+    all_assignments = {}
+    if game_ids:
+        assignments = GameUmpire.query.filter(
+            GameUmpire.game_id.in_(game_ids),
+            GameUmpire.partner_id == partner.id,
+            GameUmpire.status != 'cancelled'
+        ).all()
+        for a in assignments:
+            if a.game_id not in all_assignments:
+                all_assignments[a.game_id] = []
+            if a.notes:
+                all_assignments[a.game_id].append(a.notes)
 
     # Build CSV
     output = StringIO()
@@ -632,17 +693,23 @@ def partner_schedule_csv(token):
         home_name = game.home_team.computed_display_name if game.home_team else 'TBD'
         away_name = game.away_team.computed_display_name if game.away_team else 'TBD'
 
-        # Get assigned umpire name if any
-        from app.models.game_umpire import GameUmpire
-        assignments = GameUmpire.query.filter_by(
-            game_id=game.ID,
-            partner_id=partner.id
-        ).filter(GameUmpire.status != 'cancelled').all()
+        # Get field name efficiently
+        field_name = game.location or ''
+        if game.field_id and game.field_rel:
+            field_name = game.field_rel.location_title
 
-        umpire_names = []
-        for a in assignments:
-            if a.notes:  # Notes field used for umpire name
-                umpire_names.append(a.notes)
+        # Get umpire count efficiently
+        if game.umpire_count_override is not None:
+            umpire_count = game.umpire_count_override
+        else:
+            league_obj = all_leagues.get(game.league)
+            if league_obj:
+                umpire_count = league_obj.get_umpire_count(is_playoff=game.game_type == 'playoff')
+            else:
+                umpire_count = 1
+
+        # Get pre-loaded assignments
+        umpire_names = all_assignments.get(game.ID, [])
 
         writer.writerow([
             date_str,
@@ -651,9 +718,9 @@ def partner_schedule_csv(token):
             game.league or '',
             home_name,
             away_name,
-            game.field_name or '',
+            field_name,
             game.game_type or 'regular',
-            game.umpire_count,
+            umpire_count,
             ', '.join(umpire_names)
         ])
 

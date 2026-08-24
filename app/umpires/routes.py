@@ -486,11 +486,16 @@ def delete_override(id):
 @umpire_coordinator_required
 def schedule():
     """View upcoming games with umpire assignments."""
+    from sqlalchemy.orm import joinedload
+
     # Get filter params
     view_type = request.args.get('view', 'upcoming')  # upcoming, unassigned, partner
 
-    # Base query for upcoming games
-    base_query = Game.query.filter(
+    # Base query for upcoming games with eager loading
+    base_query = Game.query.options(
+        joinedload(Game.home_team),
+        joinedload(Game.away_team)
+    ).filter(
         Game.game_date > datetime.utcnow(),
         Game.active == 1,
         Game.game_type.in_(['regular', 'playoff'])
@@ -518,10 +523,17 @@ def schedule():
         # All upcoming games
         games = base_query.order_by(Game.game_date).limit(50).all()
 
-    # Get assignments for each game
-    game_assignments = {}
-    for game in games:
-        game_assignments[game.ID] = GameUmpire.get_for_game(game.ID)
+    # Get ALL assignments for these games in ONE query (not N queries)
+    game_ids = [g.ID for g in games]
+    game_assignments = {gid: [] for gid in game_ids}
+
+    if game_ids:
+        all_assignments = GameUmpire.query.filter(
+            GameUmpire.game_id.in_(game_ids),
+            GameUmpire.status != 'cancelled'
+        ).all()
+        for a in all_assignments:
+            game_assignments[a.game_id].append(a)
 
     return render_template(
         'umpires/schedule.html',
@@ -726,29 +738,41 @@ def umpire_calendar(year, is_spring):
 
     week_end = week_start + timedelta(days=6)
 
+    # Query all games for the week in ONE query (not 7 separate queries)
+    from sqlalchemy.orm import joinedload
+    week_query = Game.query.options(
+        joinedload(Game.home_team),
+        joinedload(Game.away_team)
+    ).filter(
+        Game.active == 1,
+        Game.year == year,
+        Game.is_spring == is_spring,
+        db.func.date(Game.game_date) >= week_start,
+        db.func.date(Game.game_date) <= week_end,
+        Game.game_type.in_(['regular', 'playoff'])
+    )
+    if league:
+        week_query = week_query.filter(Game.league == league)
+
+    all_week_games = week_query.order_by(Game.game_date, Game.location).all()
+
+    # Group games by date
+    games_by_date = {}
+    for game in all_week_games:
+        if game.game_date:
+            game_date = game.game_date.date()
+            if game_date not in games_by_date:
+                games_by_date[game_date] = []
+            games_by_date[game_date].append(game)
+
     # Build week days with games
     week_days = []
-
     for i in range(7):
         day_date = week_start + timedelta(days=i)
-
-        # Get games from database - only games that need umpires (regular/playoff)
-        query = Game.query.filter(
-            Game.active == 1,
-            Game.year == year,
-            Game.is_spring == is_spring,
-            db.func.date(Game.game_date) == day_date,
-            Game.game_type.in_(['regular', 'playoff'])
-        )
-        if league:
-            query = query.filter(Game.league == league)
-
-        day_games = query.order_by(Game.game_date, Game.location).all()
-
         week_days.append({
             'date': day_date,
             'is_today': day_date == today,
-            'games': day_games
+            'games': games_by_date.get(day_date, [])
         })
 
     # Calculate prev/next week

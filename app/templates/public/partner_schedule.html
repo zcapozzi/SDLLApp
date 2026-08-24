@@ -409,9 +409,9 @@
                             {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
                         </td>
                         <td class="cell-field">
-                            {{ game.field_name or 'TBD' }}
-                            {% if game.directions_url %}
-                            <a href="{{ game.directions_url }}" target="_blank" rel="noopener" class="directions-icon" title="Get directions">
+                            {{ game._cached_field_name or game.field_name or 'TBD' }}
+                            {% if game._cached_directions_url or game.directions_url %}
+                            <a href="{{ game._cached_directions_url or game.directions_url }}" target="_blank" rel="noopener" class="directions-icon" title="Get directions">
                                 <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
                             </a>
                             {% endif %}
@@ -425,10 +425,11 @@
                             Regular
                             {% endif %}
                         </td>
-                        <td class="cell-umpires">{{ game.umpire_count }}</td>
+                        <td class="cell-umpires">{{ game._cached_umpire_count if game._cached_umpire_count is defined else game.umpire_count }}</td>
                         <td>
-                            {% if game.rules_url %}
-                            <a href="{{ game.rules_url }}" target="_blank" rel="noopener" style="color: #1976d2; text-decoration: none; font-size: 12px;">View Rules</a>
+                            {% set rules = game._cached_rules_url if game._cached_rules_url is defined else game.rules_url %}
+                            {% if rules %}
+                            <a href="{{ rules }}" target="_blank" rel="noopener" style="color: #1976d2; text-decoration: none; font-size: 12px;">View Rules</a>
                             {% else %}
                             -
                             {% endif %}
