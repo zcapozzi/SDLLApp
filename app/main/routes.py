@@ -138,6 +138,149 @@ def cron_check_new_games():
         return jsonify({'error': f'Failed to send email: {str(e)}'}), 500
 
 
+@main_bp.route('/cron/unassigned-umpires')
+def cron_unassigned_umpires():
+    """
+    Cron endpoint to check for upcoming games needing umpires but without assignments.
+
+    Finds games that:
+    - Are in leagues requiring umpires (umpire_count > 0)
+    - Don't have umpire_override set (no delegation decision made)
+    - Don't have umpire_count_override = 0 (not flagged as no-umpires)
+    - Are scheduled and upcoming (within next N days)
+    - Don't have umpire assignments yet
+
+    Call with ?token=YOUR_SECRET&days=7
+    """
+    import os
+    from datetime import datetime, timedelta
+    from app.models.league import League
+    from app.models.game_umpire import GameUmpire
+    from app.services.notification_service import GmailService
+
+    # Verify secret token
+    expected_token = os.environ.get('CRON_SECRET')
+    provided_token = request.args.get('token')
+
+    if not expected_token:
+        return jsonify({'error': 'CRON_SECRET not configured'}), 500
+
+    if provided_token != expected_token:
+        return jsonify({'error': 'Invalid token'}), 403
+
+    # Get parameters
+    days = request.args.get('days', 7, type=int)
+    recipient = request.args.get('recipient', 'sdll.umpires@gmail.com')
+
+    # Find upcoming games in date range
+    now = datetime.utcnow()
+    cutoff = now + timedelta(days=days)
+
+    upcoming_games = Game.query.filter(
+        Game.game_date >= now,
+        Game.game_date <= cutoff,
+        Game.active == 1,
+        Game.status == 'scheduled',
+        Game.game_type != 'practice'
+    ).all()
+
+    # Filter to games needing umpires but missing assignments
+    games_needing_umpires = []
+
+    for game in upcoming_games:
+        # Skip scrimmages
+        if game.is_scrimmage:
+            continue
+
+        # Skip if explicitly marked as no umpires needed
+        if game.umpire_count_override == 0:
+            continue
+
+        # Get league to check if it needs umpires
+        league = League.get_by_name(game.league)
+        if not league or not league.needs_umpires:
+            continue
+
+        # Skip if umpire_override is already set (delegation decision made)
+        if game.umpire_override:
+            continue
+
+        # Check if game has any active umpire assignments
+        active_assignments = GameUmpire.query.filter(
+            GameUmpire.game_id == game.ID,
+            GameUmpire.status.notin_(['cancelled'])
+        ).count()
+
+        # Get required umpire count
+        required_count = game.umpire_count
+
+        # If no assignments or fewer than required, add to list
+        if active_assignments < required_count:
+            games_needing_umpires.append((game, league, required_count, active_assignments))
+
+    if not games_needing_umpires:
+        return jsonify({
+            'status': 'ok',
+            'message': 'All upcoming games have umpire assignments',
+            'games_checked': len(upcoming_games),
+            'days': days
+        }), 200
+
+    # Send alert email
+    gmail = GmailService()
+    if not gmail.is_configured:
+        return jsonify({'error': 'Email service not configured'}), 500
+
+    # Group by league
+    by_league = {}
+    for game, league, required, assigned in games_needing_umpires:
+        league_name = league.display_name
+        if league_name not in by_league:
+            by_league[league_name] = []
+        by_league[league_name].append((game, required, assigned))
+
+    count = len(games_needing_umpires)
+    subject = f"SDLL Alert: {count} game(s) need umpire assignments"
+
+    # Build email body
+    body_lines = [f"{count} upcoming game(s) in the next {days} days need umpire assignments:", ""]
+    for league_name, games in sorted(by_league.items()):
+        body_lines.append(f"{league_name} ({len(games)} game(s)):")
+        for game, required, assigned in games:
+            game_date = game.game_date.strftime('%a, %b %d at %I:%M %p') if game.game_date else 'TBD'
+            body_lines.append(f"  - {game_date} (need {required}, have {assigned})")
+        body_lines.append("")
+    body_lines.extend(["Please assign umpires or delegate to a partner.", "", "- SDLL Automated Alert"])
+    body_text = '\n'.join(body_lines)
+
+    # HTML version
+    html_parts = [
+        '<!DOCTYPE html><html><body style="font-family: Arial, sans-serif; color: #333;">',
+        f'<h2 style="color: #c33;">{count} Game(s) Need Umpire Assignments</h2>',
+        f'<p>The following games in the next {days} days need umpires:</p>'
+    ]
+    for league_name, games in sorted(by_league.items()):
+        html_parts.append(f'<h3 style="color: #FF8C00;">{league_name}</h3><ul>')
+        for game, required, assigned in games:
+            game_date = game.game_date.strftime('%a, %b %d at %I:%M %p') if game.game_date else 'TBD'
+            html_parts.append(f'<li>{game_date} <span style="color: #c33;">(need {required}, have {assigned})</span></li>')
+        html_parts.append('</ul>')
+    html_parts.append('<p>Please assign umpires or delegate to a partner.</p>')
+    html_parts.append('<hr><p style="color: #888; font-size: 12px;">SDLL Automated Alert</p></body></html>')
+    body_html = '\n'.join(html_parts)
+
+    try:
+        gmail.send_email(recipient, subject, body_text, body_html)
+        return jsonify({
+            'status': 'ok',
+            'message': f'Alert sent for {count} games',
+            'games': count,
+            'recipient': recipient
+        }), 200
+    except Exception as e:
+        return jsonify({'error': f'Failed to send email: {str(e)}'}), 500
+
+
 @main_bp.route('/')
 def index():
     """Home page - redirect to dashboard if logged in"""
