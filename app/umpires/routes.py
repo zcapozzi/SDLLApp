@@ -583,13 +583,13 @@ def delegation_report(year=None, is_spring=None):
     partner_lookup = {p.short_code: p for p in partners}
 
     # Get all leagues with umpire counts
-    # Build lookup by both display_name and fall_display_name
+    # Build lookup by both display_name and fall_display_name (case-insensitive)
     leagues = League.get_all_active()
     league_lookup = {}
     for l in leagues:
-        league_lookup[l.display_name] = l
+        league_lookup[l.display_name.lower().strip()] = l
         if l.fall_display_name:
-            league_lookup[l.fall_display_name] = l
+            league_lookup[l.fall_display_name.lower().strip()] = l
 
     # Get games for this season
     games = Game.query.filter(
@@ -623,8 +623,8 @@ def delegation_report(year=None, is_spring=None):
                 'ntl_umpires': 0
             }
 
-        # Get umpire count for this game
-        league_obj = league_lookup.get(league_name)
+        # Get umpire count for this game (case-insensitive lookup)
+        league_obj = league_lookup.get(league_name.lower().strip())
         if game.umpire_count_override is not None:
             umpire_count = game.umpire_count_override
         elif league_obj:
