@@ -1,9 +1,11 @@
-"""Service for sending notifications via Gmail SMTP or API"""
+"""Service for sending notifications via Resend, SMTP, or Gmail API"""
 
 import json
 import os
 import smtplib
 import base64
+import urllib.request
+import urllib.error
 from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -13,15 +15,19 @@ from app.models.notification_queue import NotificationQueue
 
 
 class GmailService:
-    """Send emails via Gmail SMTP (preferred) or API"""
+    """Send emails via Resend (preferred), SMTP, or Gmail API"""
 
     def __init__(self):
-        self.sender_email = os.environ.get('GMAIL_SENDER', 'sdll.umpires@gmail.com')
+        self.sender_email = os.environ.get('GMAIL_SENDER', 'noreply@southdurhamlittleleague.org')
 
     @property
     def is_configured(self):
-        """Check if email sending is properly configured (SMTP or API)"""
-        return self._check_smtp() or self._check_api()
+        """Check if email sending is properly configured"""
+        return self._check_resend() or self._check_smtp() or self._check_api()
+
+    def _check_resend(self):
+        """Check if Resend is configured"""
+        return bool(os.environ.get('RESEND_API_KEY'))
 
     def _check_smtp(self):
         """Check if SMTP is configured"""
@@ -39,7 +45,7 @@ class GmailService:
 
     def send_email(self, to, subject, body_text, body_html=None):
         """
-        Send an email via SMTP (preferred) or Gmail API.
+        Send an email via Resend (preferred), SMTP, or Gmail API.
 
         Args:
             to: Recipient email address
@@ -53,7 +59,11 @@ class GmailService:
         Raises:
             Exception if sending fails
         """
-        # Try SMTP first (simpler and more reliable for regular Gmail)
+        # Try Resend first (Railway-approved, most reliable)
+        if self._check_resend():
+            return self._send_via_resend(to, subject, body_text, body_html)
+
+        # Try SMTP
         if self._check_smtp():
             return self._send_via_smtp(to, subject, body_text, body_html)
 
@@ -61,7 +71,41 @@ class GmailService:
         if self._check_api():
             return self._send_via_api(to, subject, body_text, body_html)
 
-        raise Exception("Email not configured. Set SMTP_* or GOOGLE_SERVICE_JSON environment variables.")
+        raise Exception("Email not configured. Set RESEND_API_KEY, SMTP_*, or GOOGLE_SERVICE_JSON.")
+
+    def _send_via_resend(self, to, subject, body_text, body_html=None):
+        """Send email via Resend API"""
+        api_key = os.environ.get('RESEND_API_KEY')
+
+        payload = {
+            "from": self.sender_email,
+            "to": [to] if isinstance(to, str) else to,
+            "subject": subject,
+            "text": body_text,
+        }
+        if body_html:
+            payload["html"] = body_html
+
+        data = json.dumps(payload).encode('utf-8')
+
+        req = urllib.request.Request(
+            'https://api.resend.com/emails',
+            data=data,
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            },
+            method='POST'
+        )
+
+        try:
+            with urllib.request.urlopen(req) as response:
+                result = json.loads(response.read().decode('utf-8'))
+                print(f"Resend email sent: {result.get('id')}")
+                return True
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode('utf-8')
+            raise Exception(f"Resend API error: {e.code} - {error_body}")
 
     def _send_via_smtp(self, to, subject, body_text, body_html=None):
         """Send email via SMTP (supports both TLS on 587 and SSL on 465)"""
