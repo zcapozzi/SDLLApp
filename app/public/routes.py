@@ -340,7 +340,7 @@ def team_schedule(token):
         all_games = upcoming_games + past_games
         for game in all_games:
             try:
-                original_text = GameChange.get_original_display(game.ID)
+                original_text = GameChange.get_original_display(game.ID, current_game=game)
                 if original_text:
                     game_originals[game.ID] = original_text
             except Exception:
@@ -583,10 +583,10 @@ def partner_schedule(token):
         if g.no_time_limit:
             has_ntl_games = True
 
-    # Build game_originals for rescheduled games
+    # Build game_originals for rescheduled games (only shows if current differs from original)
     game_originals = {}
     for g in games:
-        original_text = GameChange.get_original_display(g.ID)
+        original_text = GameChange.get_original_display(g.ID, current_game=g)
         if original_text:
             game_originals[g.ID] = original_text
 

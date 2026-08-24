@@ -161,19 +161,43 @@ class GameChange(db.Model):
         return original if original else None
 
     @classmethod
-    def get_original_display(cls, game_id):
+    def get_original_display(cls, game_id, current_game=None):
         """
         Get a human-readable string describing the original game schedule.
 
+        Only returns a message if the original values differ from the current
+        game values. If the game was changed and then changed back, this will
+        return None (no message needed).
+
         Args:
             game_id: ID of the game
+            current_game: Optional Game object to compare against. If provided,
+                         only shows message if original differs from current.
 
         Returns:
-            String like "Originally scheduled for Sep 15 at 5:30 PM at Herndon 1" or None
+            String like "Originally Sep 15 at 5:30 PM at Herndon 1" or None
         """
         original = cls.get_original_values(game_id)
         if not original:
             return None
+
+        # If we have the current game, compare and skip if values match
+        if current_game:
+            current_date = current_game.game_date.strftime('%Y-%m-%d') if current_game.game_date else None
+            current_time = current_game.game_date.strftime('%H:%M') if current_game.game_date else None
+            current_field = current_game.location or ''
+
+            # Check if any original value differs from current
+            has_diff = False
+            if 'date' in original and original['date'] != current_date:
+                has_diff = True
+            if 'time' in original and original['time'] != current_time:
+                has_diff = True
+            if 'field' in original and original['field'] != current_field:
+                has_diff = True
+
+            if not has_diff:
+                return None  # Game is back to original, no message needed
 
         parts = []
 
