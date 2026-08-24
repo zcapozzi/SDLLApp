@@ -27,6 +27,117 @@ def health():
     return jsonify({'status': 'healthy'}), 200
 
 
+# ============================================================================
+# Cron Job Endpoints (called by external scheduler)
+# ============================================================================
+
+@main_bp.route('/cron/check-new-games')
+def cron_check_new_games():
+    """
+    Cron endpoint to check for new games needing umpires.
+
+    Protected by CRON_SECRET token. Call with ?token=YOUR_SECRET
+
+    Set up an external cron service (cron-job.org, etc.) to hit this every 2 hours:
+    https://your-app.railway.app/cron/check-new-games?token=YOUR_CRON_SECRET
+    """
+    import os
+    from datetime import datetime, timedelta
+    from app.models.league import League
+    from app.services.notification_service import GmailService
+
+    # Verify secret token
+    expected_token = os.environ.get('CRON_SECRET')
+    provided_token = request.args.get('token')
+
+    if not expected_token:
+        return jsonify({'error': 'CRON_SECRET not configured'}), 500
+
+    if provided_token != expected_token:
+        return jsonify({'error': 'Invalid token'}), 403
+
+    # Get parameters
+    hours = request.args.get('hours', 2, type=int)
+    recipient = request.args.get('recipient', 'sdll.umpires@gmail.com')
+
+    # Find games added in the last N hours that need umpires
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+
+    recent_games = Game.query.filter(
+        Game.date_added >= cutoff,
+        Game.active == 1,
+        Game.game_type != 'practice'
+    ).all()
+
+    games_needing_umpires = []
+    for game in recent_games:
+        league = League.get_by_name(game.league)
+        if league and league.needs_umpires:
+            games_needing_umpires.append((game, league))
+
+    if not games_needing_umpires:
+        return jsonify({
+            'status': 'ok',
+            'message': 'No new games needing umpires',
+            'games_checked': len(recent_games),
+            'hours': hours
+        }), 200
+
+    # Send alert email
+    gmail = GmailService()
+    if not gmail.is_configured:
+        return jsonify({'error': 'Email service not configured'}), 500
+
+    # Group by league
+    by_league = {}
+    for game, league in games_needing_umpires:
+        league_name = league.display_name
+        if league_name not in by_league:
+            by_league[league_name] = []
+        by_league[league_name].append(game)
+
+    count = len(games_needing_umpires)
+    subject = f"SDLL Alert: {count} new game(s) added needing umpires"
+
+    # Build email body
+    body_lines = [f"{count} game(s) added in the last {hours} hour(s) for leagues requiring umpires:", ""]
+    for league_name, games in sorted(by_league.items()):
+        body_lines.append(f"{league_name} ({len(games)} game(s)):")
+        for game in games:
+            game_date = game.game_date.strftime('%a, %b %d at %I:%M %p') if game.game_date else 'TBD'
+            body_lines.append(f"  - {game_date}")
+        body_lines.append("")
+    body_lines.extend(["Please review and ensure umpire assignments are in place.", "", "- SDLL Automated Alert"])
+    body_text = '\n'.join(body_lines)
+
+    # HTML version
+    html_parts = [
+        '<!DOCTYPE html><html><body style="font-family: Arial, sans-serif; color: #333;">',
+        f'<h2 style="color: #228B22;">{count} New Game(s) Need Umpires</h2>',
+        f'<p>Added in the last {hours} hour(s):</p>'
+    ]
+    for league_name, games in sorted(by_league.items()):
+        html_parts.append(f'<h3 style="color: #FF8C00;">{league_name}</h3><ul>')
+        for game in games:
+            game_date = game.game_date.strftime('%a, %b %d at %I:%M %p') if game.game_date else 'TBD'
+            html_parts.append(f'<li>{game_date}</li>')
+        html_parts.append('</ul>')
+    html_parts.append('<p>Please review and ensure umpire assignments are in place.</p>')
+    html_parts.append('<hr><p style="color: #888; font-size: 12px;">SDLL Automated Alert</p></body></html>')
+    body_html = '\n'.join(html_parts)
+
+    try:
+        gmail.send_email(recipient, subject, body_text, body_html)
+        return jsonify({
+            'status': 'ok',
+            'message': f'Alert sent for {count} games',
+            'games': count,
+            'recipient': recipient
+        }), 200
+    except Exception as e:
+        return jsonify({'error': f'Failed to send email: {str(e)}'}), 500
+
+
 @main_bp.route('/')
 def index():
     """Home page - redirect to dashboard if logged in"""

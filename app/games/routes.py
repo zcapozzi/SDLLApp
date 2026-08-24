@@ -605,7 +605,6 @@ def manage(year, is_spring):
                             game.location = None  # Clear legacy string
                         else:
                             # Look up field by name and set field_id
-                            from app.models.field import Field
                             field = Field.query.filter_by(location_title=field_value, active=1).first()
                             if field:
                                 game.field_id = field.ID

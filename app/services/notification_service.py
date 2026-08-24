@@ -1,7 +1,8 @@
-"""Service for sending notifications via Gmail"""
+"""Service for sending notifications via Gmail SMTP or API"""
 
 import json
 import os
+import smtplib
 import base64
 from datetime import datetime
 from email.mime.text import MIMEText
@@ -12,56 +13,37 @@ from app.models.notification_queue import NotificationQueue
 
 
 class GmailService:
-    """Send emails via Gmail API using a Google Service Account"""
-
-    SCOPES = ['https://www.googleapis.com/auth/gmail.send']
+    """Send emails via Gmail SMTP (preferred) or API"""
 
     def __init__(self):
-        self.service = None
-        self.sender_email = os.environ.get('GMAIL_SENDER', 'notifications@southdurhamlittleleague.org')
-        self._initialized = False
-
-    def _initialize(self):
-        """Initialize the Gmail service lazily"""
-        if self._initialized:
-            return
-
-        creds_json = os.environ.get('GOOGLE_SERVICE_JSON')
-        if not creds_json:
-            self._initialized = True
-            return
-
-        try:
-            from google.oauth2 import service_account
-            from googleapiclient.discovery import build
-
-            creds_dict = json.loads(creds_json)
-            credentials = service_account.Credentials.from_service_account_info(
-                creds_dict,
-                scopes=self.SCOPES
-            )
-
-            # Delegate to the sender email (requires domain-wide delegation)
-            delegated_credentials = credentials.with_subject(self.sender_email)
-
-            self.service = build('gmail', 'v1', credentials=delegated_credentials)
-        except ImportError:
-            # Google libraries not installed
-            pass
-        except Exception as e:
-            print(f"Failed to initialize Gmail service: {e}")
-
-        self._initialized = True
+        self.sender_email = os.environ.get('GMAIL_SENDER', 'sdll.umpires@gmail.com')
+        self._smtp_configured = None
+        self._api_configured = None
 
     @property
     def is_configured(self):
-        """Check if Gmail service is properly configured"""
-        self._initialize()
-        return self.service is not None
+        """Check if email sending is properly configured (SMTP or API)"""
+        return self._check_smtp() or self._check_api()
+
+    def _check_smtp(self):
+        """Check if SMTP is configured"""
+        if self._smtp_configured is None:
+            self._smtp_configured = all([
+                os.environ.get('SMTP_HOST'),
+                os.environ.get('SMTP_USER'),
+                os.environ.get('SMTP_PASSWORD')
+            ])
+        return self._smtp_configured
+
+    def _check_api(self):
+        """Check if Gmail API is configured"""
+        if self._api_configured is None:
+            self._api_configured = bool(os.environ.get('GOOGLE_SERVICE_JSON'))
+        return self._api_configured
 
     def send_email(self, to, subject, body_text, body_html=None):
         """
-        Send an email via Gmail API.
+        Send an email via SMTP (preferred) or Gmail API.
 
         Args:
             to: Recipient email address
@@ -75,15 +57,27 @@ class GmailService:
         Raises:
             Exception if sending fails
         """
-        self._initialize()
+        # Try SMTP first (simpler and more reliable for regular Gmail)
+        if self._check_smtp():
+            return self._send_via_smtp(to, subject, body_text, body_html)
 
-        if not self.service:
-            raise Exception("Gmail service not configured. Set GOOGLE_SERVICE_JSON environment variable.")
+        # Fall back to Gmail API
+        if self._check_api():
+            return self._send_via_api(to, subject, body_text, body_html)
+
+        raise Exception("Email not configured. Set SMTP_* or GOOGLE_SERVICE_JSON environment variables.")
+
+    def _send_via_smtp(self, to, subject, body_text, body_html=None):
+        """Send email via SMTP"""
+        smtp_host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
+        smtp_port = int(os.environ.get('SMTP_PORT', 587))
+        smtp_user = os.environ.get('SMTP_USER')
+        smtp_password = os.environ.get('SMTP_PASSWORD')
 
         message = MIMEMultipart('alternative')
-        message['to'] = to
-        message['from'] = self.sender_email
-        message['subject'] = subject
+        message['To'] = to
+        message['From'] = self.sender_email
+        message['Subject'] = subject
 
         # Add plain text part
         message.attach(MIMEText(body_text, 'plain'))
@@ -92,16 +86,50 @@ class GmailService:
         if body_html:
             message.attach(MIMEText(body_html, 'html'))
 
-        # Encode the message
-        raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-
-        # Send via Gmail API
-        self.service.users().messages().send(
-            userId='me',
-            body={'raw': raw}
-        ).execute()
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.sendmail(self.sender_email, to, message.as_string())
 
         return True
+
+    def _send_via_api(self, to, subject, body_text, body_html=None):
+        """Send email via Gmail API (requires domain-wide delegation)"""
+        creds_json = os.environ.get('GOOGLE_SERVICE_JSON')
+        if not creds_json:
+            raise Exception("GOOGLE_SERVICE_JSON not configured")
+
+        try:
+            from google.oauth2 import service_account
+            from googleapiclient.discovery import build
+
+            creds_dict = json.loads(creds_json)
+            credentials = service_account.Credentials.from_service_account_info(
+                creds_dict,
+                scopes=['https://www.googleapis.com/auth/gmail.send']
+            )
+
+            # Delegate to the sender email (requires domain-wide delegation)
+            delegated_credentials = credentials.with_subject(self.sender_email)
+            service = build('gmail', 'v1', credentials=delegated_credentials)
+
+            message = MIMEMultipart('alternative')
+            message['to'] = to
+            message['from'] = self.sender_email
+            message['subject'] = subject
+
+            message.attach(MIMEText(body_text, 'plain'))
+            if body_html:
+                message.attach(MIMEText(body_html, 'html'))
+
+            raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+            service.users().messages().send(userId='me', body={'raw': raw}).execute()
+
+            return True
+        except ImportError:
+            raise Exception("Google API libraries not installed")
+        except Exception as e:
+            raise Exception(f"Gmail API error: {e}")
 
 
 class NotificationService:

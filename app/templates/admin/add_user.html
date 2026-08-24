@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+
+{% block title %}Add User{% endblock %}
+
+{% block extra_css %}
+<style>
+    .add-user-form {
+        max-width: 500px;
+    }
+    .form-row {
+        display: flex;
+        gap: 15px;
+    }
+    .form-row .form-group {
+        flex: 1;
+    }
+    .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 20px;
+        padding: 15px;
+        background-color: #f9f9f9;
+        border-radius: 4px;
+    }
+    .checkbox-group input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+    }
+    .checkbox-group label {
+        margin: 0;
+        font-weight: normal;
+    }
+    .help-text {
+        font-size: 13px;
+        color: #666;
+        margin-top: 5px;
+    }
+    .btn-row {
+        margin-top: 25px;
+        display: flex;
+        gap: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>Add User</h1>
+    <p class="text-muted">Create a new user account. They will receive an email to set their password.</p>
+
+    <form method="post" action="{{ url_for('admin.users') }}" class="add-user-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add">
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="first_name">First Name *</label>
+                <input type="text" id="first_name" name="first_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="last_name">Last Name *</label>
+                <input type="text" id="last_name" name="last_name" class="form-control" required>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="email">Email *</label>
+            <input type="email" id="email" name="email" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+            <label for="phone">Phone</label>
+            <input type="tel" id="phone" name="phone" class="form-control" placeholder="Optional">
+        </div>
+
+        <div class="form-group">
+            <label for="role">Role *</label>
+            <select id="role" name="role" class="form-control" required>
+                {% for role in roles %}
+                <option value="{{ role }}" {% if role == 'viewer' %}selected{% endif %}>
+                    {{ role|replace('_', ' ')|title }}
+                </option>
+                {% endfor %}
+            </select>
+            <p class="help-text">
+                <strong>Admin:</strong> Full system access |
+                <strong>Scheduler:</strong> Manage schedules and games |
+                <strong>Umpire Coordinator:</strong> Manage umpires |
+                <strong>Viewer:</strong> Read-only access
+            </p>
+        </div>
+
+        <div class="checkbox-group">
+            <input type="checkbox" id="send_welcome" name="send_welcome" checked>
+            <label for="send_welcome">Send welcome email with password creation link</label>
+        </div>
+        <p class="help-text" style="margin-top: 5px;">
+            If unchecked, you'll need to manually send a password reset link later.
+        </p>
+
+        <div class="btn-row">
+            <button type="submit" class="btn btn-primary">Create User</button>
+            <a href="{{ url_for('admin.users') }}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+
+{% block title %}User Management{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-bar {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .filter-bar select {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    .user-table th { white-space: nowrap; }
+    .user-table td { vertical-align: middle; }
+    .role-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 3px;
+        font-size: 12px;
+        font-weight: 500;
+        text-transform: capitalize;
+    }
+    .role-admin { background-color: #dc3545; color: white; }
+    .role-scheduler { background-color: #228B22; color: white; }
+    .role-umpire_coordinator { background-color: #17a2b8; color: white; }
+    .role-treasurer { background-color: #6f42c1; color: white; }
+    .role-umpire { background-color: #FF8C00; color: white; }
+    .role-coach { background-color: #20c997; color: white; }
+    .role-parent { background-color: #6c757d; color: white; }
+    .role-partner_contact { background-color: #fd7e14; color: white; }
+    .role-viewer { background-color: #adb5bd; color: #333; }
+    .status-inactive { opacity: 0.6; }
+    .action-btn {
+        padding: 4px 8px;
+        font-size: 12px;
+        margin-right: 4px;
+        cursor: pointer;
+    }
+    .btn-link {
+        background: none;
+        border: none;
+        color: #228B22;
+        text-decoration: underline;
+        cursor: pointer;
+        padding: 0;
+        font-size: 12px;
+    }
+    .btn-link:hover { color: #1a6a1a; }
+    .btn-danger-link {
+        background: none;
+        border: none;
+        color: #dc3545;
+        text-decoration: underline;
+        cursor: pointer;
+        padding: 0;
+        font-size: 12px;
+    }
+    .btn-danger-link:hover { color: #a71d2a; }
+    .edit-form { display: none; }
+    .edit-form.active { display: table-row; }
+    .edit-form td { padding: 15px; background-color: #f9f9f9; }
+    .edit-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+    .edit-row .form-group { margin-bottom: 0; }
+    .edit-row label { font-size: 12px; margin-bottom: 3px; }
+    .edit-row input, .edit-row select { padding: 6px 10px; font-size: 13px; }
+    .no-users { padding: 40px; text-align: center; color: #666; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h1 style="margin: 0;">User Management</h1>
+        <a href="{{ url_for('admin.add_user') }}" class="btn btn-primary">Add User</a>
+    </div>
+
+    <div class="filter-bar">
+        <form method="get" style="display: flex; gap: 10px; align-items: center;">
+            <label>Status:</label>
+            <select name="status" onchange="this.form.submit()">
+                <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+                <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive</option>
+                <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All</option>
+            </select>
+
+            <label style="margin-left: 15px;">Role:</label>
+            <select name="role" onchange="this.form.submit()">
+                <option value="all" {% if role_filter == 'all' %}selected{% endif %}>All Roles</option>
+                {% for role in roles %}
+                <option value="{{ role }}" {% if role_filter == role %}selected{% endif %}>{{ role|replace('_', ' ')|title }}</option>
+                {% endfor %}
+            </select>
+        </form>
+        <span class="text-muted text-small" style="margin-left: auto;">{{ users|length }} user(s)</span>
+    </div>
+
+    {% if users %}
+    <table class="user-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Phone</th>
+                <th>Last Login</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr id="user-{{ user.ID }}" class="{% if not user.active %}status-inactive{% endif %}">
+                <td>
+                    {{ user.name or '(No name)' }}
+                    {% if not user.active %}<span class="text-muted text-small">(inactive)</span>{% endif %}
+                </td>
+                <td>{{ user.email }}</td>
+                <td><span class="role-badge role-{{ user.role }}">{{ user.role|replace('_', ' ') }}</span></td>
+                <td>{{ user.phone or '-' }}</td>
+                <td>
+                    {% if user.last_login %}
+                    {{ user.last_login.strftime('%b %d, %Y') }}
+                    {% else %}
+                    <span class="text-muted">Never</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if user.ID != current_user.ID %}
+                    <button type="button" class="btn-link" onclick="toggleEdit({{ user.ID }})">Edit</button>
+                    <form method="post" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="send_reset">
+                        <input type="hidden" name="user_id" value="{{ user.ID }}">
+                        <button type="submit" class="btn-link">Send Reset</button>
+                    </form>
+                    <form method="post" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="toggle_active">
+                        <input type="hidden" name="user_id" value="{{ user.ID }}">
+                        <button type="submit" class="{% if user.active %}btn-danger-link{% else %}btn-link{% endif %}">
+                            {% if user.active %}Deactivate{% else %}Activate{% endif %}
+                        </button>
+                    </form>
+                    {% else %}
+                    <span class="text-muted text-small">(You)</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr id="edit-{{ user.ID }}" class="edit-form">
+                <td colspan="6">
+                    <form method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="edit">
+                        <input type="hidden" name="user_id" value="{{ user.ID }}">
+                        <div class="edit-row">
+                            <div class="form-group">
+                                <label>Name</label>
+                                <input type="text" name="name" value="{{ user.name or '' }}" class="form-control" style="width: 200px;">
+                            </div>
+                            <div class="form-group">
+                                <label>Phone</label>
+                                <input type="text" name="phone" value="{{ user.phone or '' }}" class="form-control" style="width: 150px;">
+                            </div>
+                            <div class="form-group">
+                                <label>Role</label>
+                                <select name="role" class="form-control">
+                                    {% for role in roles %}
+                                    <option value="{{ role }}" {% if user.role == role %}selected{% endif %}>
+                                        {{ role|replace('_', ' ')|title }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                                <button type="button" class="btn btn-outline btn-sm" onclick="toggleEdit({{ user.ID }})">Cancel</button>
+                            </div>
+                        </div>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="no-users">
+        <p>No users found matching your filters.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleEdit(userId) {
+    var editRow = document.getElementById('edit-' + userId);
+    if (editRow.classList.contains('active')) {
+        editRow.classList.remove('active');
+    } else {
+        // Close any other open edit forms
+        document.querySelectorAll('.edit-form.active').forEach(function(row) {
+            row.classList.remove('active');
+        });
+        editRow.classList.add('active');
+    }
+}
+</script>
+{% endblock %}

@@ -51,6 +51,7 @@ def create_app(config_name=None):
     from .public import public_bp
     from .umpires import umpires_bp
     from .umpire_portal import umpire_portal_bp
+    from .admin import admin_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(main_bp)
@@ -64,6 +65,7 @@ def create_app(config_name=None):
     app.register_blueprint(public_bp)  # Public team schedules (no auth required)
     app.register_blueprint(umpires_bp, url_prefix='/umpires')  # Umpire coordinator management
     app.register_blueprint(umpire_portal_bp, url_prefix='/umpire-portal')  # Umpire self-service
+    app.register_blueprint(admin_bp, url_prefix='/admin')  # Admin user management
 
     # User loader for Flask-Login
     from .models.user import User
