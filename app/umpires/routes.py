@@ -617,10 +617,10 @@ def api_set_umpire_source():
     """Set the umpire source for a game via right-click menu."""
     data = request.get_json()
     game_id = data.get('game_id')
-    source = data.get('source')  # Short codes: 'SDLL', 'DIA', 'DYN' or None to clear
+    source = data.get('source')  # Short codes: 'SDL', 'DIA', 'DYN' or None to clear
 
-    # Valid short codes (stored in DB) - get from active partners plus SDLL
-    valid_sources = ['SDLL']  # SDLL Academy is always valid
+    # Valid short codes (stored in DB) - get from active partners plus SDL
+    valid_sources = ['SDL']  # SDLL Academy is always valid
     partners = UmpirePartner.get_active()
     for p in partners:
         valid_sources.append(p.short_code)
