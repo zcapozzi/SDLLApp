@@ -596,8 +596,26 @@ def manage(year, is_spring):
                     elif game_date_str:
                         game.game_date = datetime.strptime(game_date_str, '%Y-%m-%d')
 
-                    # Update location
-                    game.location = request.form.get('location')
+                    # Update field - use field_id (FK) instead of location string
+                    field_value = request.form.get('field_id') or request.form.get('location')
+                    if field_value:
+                        # Check if it's a numeric ID or a field name
+                        if field_value.isdigit():
+                            game.field_id = int(field_value)
+                            game.location = None  # Clear legacy string
+                        else:
+                            # Look up field by name and set field_id
+                            from app.models.field import Field
+                            field = Field.query.filter_by(location_title=field_value, active=1).first()
+                            if field:
+                                game.field_id = field.ID
+                                game.location = None  # Clear legacy string
+                            else:
+                                game.field_id = None
+                                game.location = field_value  # Fall back to string
+                    else:
+                        game.field_id = None
+                        game.location = None
 
                     # Update teams
                     home_id = request.form.get('home_id')
@@ -652,7 +670,7 @@ def manage(year, is_spring):
             game_type = request.form.get('game_type', 'regular')
             game_date_str = request.form.get('game_date')
             game_time_str = request.form.get('game_time')
-            location = request.form.get('location')
+            field_value = request.form.get('field_id') or request.form.get('location')
             home_id = request.form.get('home_id')
             away_id = request.form.get('away_id')
             is_scrimmage = 1 if request.form.get('is_scrimmage') else 0
@@ -662,13 +680,22 @@ def manage(year, is_spring):
                 flash('League is required.', 'error')
             elif not game_date_str or not game_time_str:
                 flash('Date and time are required.', 'error')
-            elif not location:
+            elif not field_value:
                 flash('Field is required.', 'error')
             else:
                 # Parse date and time
                 game_date = datetime.strptime(
                     f'{game_date_str} {game_time_str}', '%Y-%m-%d %H:%M'
                 )
+
+                # Resolve field_id
+                field_id = None
+                if field_value.isdigit():
+                    field_id = int(field_value)
+                else:
+                    field = Field.query.filter_by(location_title=field_value, active=1).first()
+                    if field:
+                        field_id = field.ID
 
                 # Create the game
                 new_game = Game(
@@ -678,7 +705,7 @@ def manage(year, is_spring):
                     league=league,
                     game_type=game_type,
                     game_date=game_date,
-                    location=location,
+                    field_id=field_id,
                     home_ID=int(home_id) if home_id else None,
                     away_ID=int(away_id) if away_id and game_type != 'practice' else None,
                     is_scrimmage=is_scrimmage,
@@ -688,7 +715,7 @@ def manage(year, is_spring):
                 db.session.add(new_game)
                 db.session.commit()
 
-                logger.info(f'Created new game: {new_game.ID} - {league} at {location} on {game_date}')
+                logger.info(f'Created new game: {new_game.ID} - {league} at field {field_id} on {game_date}')
                 flash(f'Game created successfully.', 'success')
                 anchor = f'game-{new_game.ID}'
 

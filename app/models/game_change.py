@@ -251,7 +251,7 @@ class GameChange(db.Model):
         if current_game:
             current_date = current_game.game_date.strftime('%Y-%m-%d') if current_game.game_date else None
             current_time = current_game.game_date.strftime('%H:%M') if current_game.game_date else None
-            current_field = current_game.location or ''
+            current_field = current_game.field_name or ''  # Use field_name property
 
             # Check if any original value differs from current
             has_diff = False

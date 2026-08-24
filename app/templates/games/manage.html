@@ -307,7 +307,7 @@
                 <td>{{ game.field_name or 'TBD' }}</td>
                 <td>
                     <button type="button" class="btn btn-outline btn-sm"
-                            onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.field_name or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage }}, {{ game.no_time_limit or 0 }}, '{{ game.league }}')">
+                            onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', {{ game.field_id or 'null' }}, {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage }}, {{ game.no_time_limit or 0 }}, '{{ game.league }}')">
                         Edit
                     </button>
                 </td>
@@ -370,7 +370,7 @@
             </div>
             <div>
                 <button type="button" class="btn btn-outline btn-sm"
-                        onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.field_name or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage }}, {{ game.no_time_limit or 0 }}, '{{ game.league }}')">
+                        onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', {{ game.field_id or 'null' }}, {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage }}, {{ game.no_time_limit or 0 }}, '{{ game.league }}')">
                     Edit
                 </button>
             </div>
@@ -414,10 +414,10 @@
             <!-- Field -->
             <div class="form-group">
                 <label>Field</label>
-                <select name="location" id="edit-game-location" class="form-control">
+                <select name="field_id" id="edit-game-location" class="form-control">
                     <option value="">-- Select Field --</option>
                     {% for field in fields %}
-                    <option value="{{ field.location_title }}">{{ field.location_title }}</option>
+                    <option value="{{ field.ID }}">{{ field.location_title }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -532,10 +532,10 @@
             <!-- Field -->
             <div class="form-group">
                 <label>Field</label>
-                <select name="location" id="create-game-location" class="form-control" required>
+                <select name="field_id" id="create-game-location" class="form-control" required>
                     <option value="">-- Select Field --</option>
                     {% for field in fields %}
-                    <option value="{{ field.location_title }}">{{ field.location_title }}</option>
+                    <option value="{{ field.ID }}">{{ field.location_title }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -696,12 +696,12 @@ function setView(view) {
     history.replaceState(null, '', url);
 }
 
-function openEditModal(gameId, gameDate, gameTime, location, homeId, awayId, status, gameType, isScrimmage, noTimeLimit, league) {
+function openEditModal(gameId, gameDate, gameTime, fieldId, homeId, awayId, status, gameType, isScrimmage, noTimeLimit, league) {
     document.getElementById('edit-game-id').value = gameId;
     document.getElementById('delete-game-id').value = gameId;
     document.getElementById('edit-game-date').value = gameDate;
     document.getElementById('edit-game-time').value = gameTime;
-    document.getElementById('edit-game-location').value = location;
+    document.getElementById('edit-game-location').value = fieldId || '';
     document.getElementById('edit-home-team').value = homeId || '';
     document.getElementById('edit-away-team').value = awayId || '';
     document.getElementById('edit-status').value = status;

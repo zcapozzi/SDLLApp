@@ -113,7 +113,8 @@ class GameChangeService:
         return {
             'date': game.game_date.strftime('%Y-%m-%d') if game.game_date else None,
             'time': game.game_date.strftime('%H:%M') if game.game_date else None,
-            'field': game.location,
+            'field': game.field_name,  # Use field_name property (resolves field_id to name)
+            'field_id': game.field_id,
             'status': game.status,
             'home_team': game.home_ID,
             'away_team': game.away_ID,
@@ -140,7 +141,8 @@ class GameChangeService:
         new_values = {
             'date': game.game_date.strftime('%Y-%m-%d') if game.game_date else None,
             'time': game.game_date.strftime('%H:%M') if game.game_date else None,
-            'field': game.location,
+            'field': game.field_name,  # Use field_name property (resolves field_id to name)
+            'field_id': game.field_id,
             'status': game.status,
             'home_team': game.home_ID,
             'away_team': game.away_ID,

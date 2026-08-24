@@ -388,7 +388,7 @@
                  data-game-id="{{ game.ID }}"
                  data-league="{{ game.league }}"
                  data-type="{{ game.display_type }}"
-                 onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', '{{ game.field_name or '' }}', {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage|int }}, {{ game.no_time_limit|int if game.no_time_limit else 0 }}, '{{ game.league }}')">
+                 onclick="openEditModal({{ game.ID }}, '{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}', '{{ game.game_date.strftime('%H:%M') if game.game_date else '' }}', {{ game.field_id or 'null' }}, {{ game.home_ID or 'null' }}, {{ game.away_ID or 'null' }}, '{{ game.status }}', '{{ game.game_type }}', {{ game.is_scrimmage|int }}, {{ game.no_time_limit|int if game.no_time_limit else 0 }}, '{{ game.league }}')">
                 <div class="game-time">
                     {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
                 </div>
@@ -622,10 +622,10 @@
 
             <div class="form-group">
                 <label>Field</label>
-                <select name="location" id="edit-game-location" class="form-control">
+                <select name="field_id" id="edit-game-location" class="form-control">
                     <option value="">-- Select Field --</option>
                     {% for field in fields %}
-                    <option value="{{ field.location_title }}">{{ field.location_title }}</option>
+                    <option value="{{ field.ID }}">{{ field.location_title }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -765,11 +765,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-function openEditModal(gameId, gameDate, gameTime, location, homeId, awayId, status, gameType, isScrimmage, noTimeLimit, league) {
+function openEditModal(gameId, gameDate, gameTime, fieldId, homeId, awayId, status, gameType, isScrimmage, noTimeLimit, league) {
     document.getElementById('edit-game-id').value = gameId;
     document.getElementById('edit-game-date').value = gameDate;
     document.getElementById('edit-game-time').value = gameTime;
-    document.getElementById('edit-game-location').value = location;
+    document.getElementById('edit-game-location').value = fieldId || '';
     document.getElementById('edit-home-team').value = homeId || '';
     document.getElementById('edit-away-team').value = awayId || '';
     document.getElementById('edit-status').value = status;
