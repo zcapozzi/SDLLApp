@@ -168,13 +168,13 @@ def generate_sql():
         email_hash = hash_for_lookup(email)
 
         print(f"-- Link: {full_name} -> {sport}")
-        print(f"INSERT INTO sdll_coaches (user_id, sport, season_year, is_spring, active, created_at)")
-        print(f"SELECT u.ID, '{sport}', 2026, 1, 1, NOW()")
+        print(f"INSERT INTO sdll_coaches (user_id, sport, status, created_at)")
+        print(f"SELECT u.ID, '{sport}', 'active', NOW()")
         print(f"FROM sdll_users u")
         print(f"WHERE u.email_hash = {escape_sql(email_hash)}")
         print(f"AND NOT EXISTS (")
         print(f"    SELECT 1 FROM sdll_coaches c")
-        print(f"    WHERE c.user_id = u.ID AND c.season_year = 2026 AND c.is_spring = 1")
+        print(f"    WHERE c.user_id = u.ID")
         print(f");")
         print()
 

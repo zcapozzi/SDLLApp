@@ -10,15 +10,21 @@ class CoachUser(db.Model):
 
     This table tracks which users are registered as coaches and what
     sport(s) they coach (baseball, softball, or both).
+
+    Season assignments are handled via sdll_coach_seasons which links
+    coaches to specific team seasons.
     """
     __tablename__ = 'sdll_coaches'
+
+    # Status values
+    STATUS_ACTIVE = 'active'
+    STATUS_INACTIVE = 'inactive'
+    STATUS_PENDING = 'pending'
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     user_id = db.Column(db.BigInteger, db.ForeignKey('sdll_users.ID'), nullable=False)
     sport = db.Column(db.Enum('baseball', 'softball', 'both'), nullable=False)
-    season_year = db.Column(db.Integer, default=2026)
-    is_spring = db.Column(db.SmallInteger, default=1)
-    active = db.Column(db.SmallInteger, default=1)
+    status = db.Column(db.String(15), default=STATUS_ACTIVE)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationship to User
@@ -27,15 +33,16 @@ class CoachUser(db.Model):
     def __repr__(self):
         return f'<CoachUser {self.id} user={self.user_id} sport={self.sport}>'
 
-    @classmethod
-    def get_active_coaches(cls, season_year=None, is_spring=None, sport=None):
-        """Get all active coaches, optionally filtered by season and sport."""
-        query = cls.query.filter_by(active=1)
+    @property
+    def is_active(self):
+        """Check if coach is active."""
+        return self.status == self.STATUS_ACTIVE
 
-        if season_year:
-            query = query.filter_by(season_year=season_year)
-        if is_spring is not None:
-            query = query.filter_by(is_spring=is_spring)
+    @classmethod
+    def get_active_coaches(cls, sport=None):
+        """Get all active coaches, optionally filtered by sport."""
+        query = cls.query.filter_by(status=cls.STATUS_ACTIVE)
+
         if sport:
             query = query.filter(
                 (cls.sport == sport) | (cls.sport == 'both')
@@ -44,22 +51,9 @@ class CoachUser(db.Model):
         return query.all()
 
     @classmethod
-    def get_by_user(cls, user_id, season_year=None, is_spring=None):
+    def get_by_user(cls, user_id):
         """Get coach record for a specific user."""
-        query = cls.query.filter_by(user_id=user_id, active=1)
-
-        if season_year:
-            query = query.filter_by(season_year=season_year)
-        if is_spring is not None:
-            query = query.filter_by(is_spring=is_spring)
-
-        return query.first()
-
-    @property
-    def season_name(self):
-        """Get formatted season name."""
-        season_type = 'Spring' if self.is_spring else 'Fall'
-        return f"{season_type} {self.season_year}"
+        return cls.query.filter_by(user_id=user_id).first()
 
 
 class CoachSeason(db.Model):
