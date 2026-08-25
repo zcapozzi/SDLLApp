@@ -58,7 +58,7 @@ def cron_check_new_games():
 
     # Get parameters
     hours = request.args.get('hours', 2, type=int)
-    recipient = request.args.get('recipient', 'sdll.umpires@gmail.com')
+    recipient = request.args.get('recipient', 'umpires@sdll.org')
 
     # Find games added in the last N hours that need umpires
     cutoff = datetime.utcnow() - timedelta(hours=hours)
@@ -172,7 +172,7 @@ def cron_unassigned_umpires():
 
     # Get parameters
     days = request.args.get('days', 7, type=int)
-    recipient = request.args.get('recipient', 'sdll.umpires@gmail.com')
+    recipient = request.args.get('recipient', 'umpires@sdll.org')
 
     # Find upcoming games in date range with eager loading
     now = datetime.utcnow()
