@@ -19,6 +19,7 @@ class GmailService:
 
     def __init__(self):
         self.sender_email = os.environ.get('GMAIL_SENDER', 'umpires@sdll.org')
+        self.sender_name = os.environ.get('GMAIL_SENDER_NAME', 'SDLL Umpires')
 
     @property
     def is_configured(self):
@@ -77,8 +78,11 @@ class GmailService:
         """Send email via Resend API"""
         api_key = os.environ.get('RESEND_API_KEY')
 
+        # Resend requires format: "Display Name <email@domain.com>"
+        from_address = f"{self.sender_name} <{self.sender_email}>"
+
         payload = {
-            "from": self.sender_email,
+            "from": from_address,
             "to": [to] if isinstance(to, str) else to,
             "subject": subject,
             "text": body_text,
@@ -99,12 +103,14 @@ class GmailService:
         )
 
         try:
+            print(f"Resend: sending from '{from_address}' to '{to}'")
             with urllib.request.urlopen(req) as response:
                 result = json.loads(response.read().decode('utf-8'))
                 print(f"Resend email sent: {result.get('id')}")
                 return True
         except urllib.error.HTTPError as e:
             error_body = e.read().decode('utf-8')
+            print(f"Resend error - from: '{from_address}', to: '{to}', error: {error_body}")
             raise Exception(f"Resend API error: {e.code} - {error_body}")
 
     def _send_via_smtp(self, to, subject, body_text, body_html=None):
