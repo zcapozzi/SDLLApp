@@ -45,6 +45,7 @@ class User(UserMixin, db.Model):
 
     # Valid roles - ordered by typical privilege level
     ROLES = ['admin', 'scheduler', 'umpire_coordinator', 'treasurer',
+             'BBPlayerAgent', 'SBPlayerAgent', 'coaching_coordinator',
              'umpire', 'coach', 'parent', 'partner_contact', 'viewer']
 
     def __repr__(self):
@@ -177,6 +178,7 @@ class User(UserMixin, db.Model):
             str: The highest privilege role this user has.
         """
         priority = ['admin', 'scheduler', 'umpire_coordinator', 'treasurer',
+                    'BBPlayerAgent', 'SBPlayerAgent', 'coaching_coordinator',
                     'umpire', 'coach', 'parent', 'partner_contact', 'viewer']
         user_roles = self.roles_list
         for role in priority:
