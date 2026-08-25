@@ -25,3 +25,4 @@ from .umpire_delegation import UmpireDelegationRule, UmpireDelegationOverride
 from .umpire_payment import UmpirePayment
 from .coach import CoachSeason
 from .scheduled_email import ScheduledEmail
+from .weekly_digest import WeeklyDigest

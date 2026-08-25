@@ -670,3 +670,110 @@ def cron_process_scheduled_emails():
             'status': 'error',
             'error': str(e)
         }), 500
+
+
+@main_bp.route('/cron/generate-weekly-digests')
+def cron_generate_weekly_digests():
+    """
+    Cron endpoint to generate weekly umpire partner digest emails.
+
+    Runs Sunday 6pm ET (23:00 UTC). Generates digest drafts for all partners
+    with games in the upcoming week. Partners with auto_send_digest=True
+    will have their digests sent immediately.
+
+    Protected by CRON_SECRET token. Call with ?token=YOUR_SECRET
+
+    Set up an external cron service to hit this on Sundays at 6pm ET:
+    https://your-app.railway.app/cron/generate-weekly-digests?token=YOUR_CRON_SECRET
+    """
+    import os
+    from app.services.weekly_digest_service import WeeklyDigestService
+
+    # Verify secret token
+    expected_token = os.environ.get('CRON_SECRET')
+    provided_token = request.args.get('token')
+
+    if not expected_token:
+        return jsonify({'error': 'CRON_SECRET not configured'}), 500
+
+    if provided_token != expected_token:
+        return jsonify({'error': 'Invalid token'}), 403
+
+    try:
+        service = WeeklyDigestService()
+        digests = service.generate_all_digests()
+
+        results = {
+            'total': len(digests),
+            'drafts': sum(1 for d in digests if d.status == 'draft'),
+            'sent': sum(1 for d in digests if d.status == 'sent'),
+            'skipped': sum(1 for d in digests if d.status == 'skipped'),
+            'partners': [d.partner_code for d in digests]
+        }
+
+        return jsonify({
+            'status': 'ok',
+            'results': results
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
+@main_bp.route('/cron/digest-reminders')
+def cron_digest_reminders():
+    """
+    Cron endpoint to send reminders about pending umpire digest emails.
+
+    Runs Monday 8am ET (13:00 UTC). Sends reminder to admins if any
+    digests are still in draft status and haven't been sent.
+
+    Protected by CRON_SECRET token. Call with ?token=YOUR_SECRET
+
+    Set up an external cron service to hit this on Mondays at 8am ET:
+    https://your-app.railway.app/cron/digest-reminders?token=YOUR_CRON_SECRET
+    """
+    import os
+    from app.models.weekly_digest import WeeklyDigest
+    from app.services.weekly_digest_service import WeeklyDigestService
+
+    # Verify secret token
+    expected_token = os.environ.get('CRON_SECRET')
+    provided_token = request.args.get('token')
+
+    if not expected_token:
+        return jsonify({'error': 'CRON_SECRET not configured'}), 500
+
+    if provided_token != expected_token:
+        return jsonify({'error': 'Invalid token'}), 403
+
+    try:
+        # Get pending digests that haven't had reminders sent
+        pending = WeeklyDigest.get_pending_reminders()
+
+        if not pending:
+            return jsonify({
+                'status': 'ok',
+                'message': 'No pending digests requiring reminders',
+                'count': 0
+            }), 200
+
+        # Send reminder
+        service = WeeklyDigestService()
+        success = service.send_reminder_to_admins(pending)
+
+        return jsonify({
+            'status': 'ok',
+            'reminder_sent': success,
+            'pending_count': len(pending),
+            'partners': [d.partner_code for d in pending]
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500

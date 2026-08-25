@@ -4,7 +4,125 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Implemented Email Blast Feature for coaches.
+Last session: Implemented Week-Ahead Umpire Partner Email Digest System.
+
+---
+
+## Session: August 25, 2026 - Weekly Umpire Partner Digest System
+
+### Overview
+Implemented a comprehensive weekly digest system that generates and sends upcoming game schedules to umpire partner organizations (Diamond, Dynamic, SDLL Academy). The system auto-generates drafts for review, allows admin approval before sending, tracks history, and sends reminders if digests aren't sent by Monday morning.
+
+### Features Implemented
+
+1. **Auto-Generate Drafts**: Cron job runs Sunday 6pm ET to create draft digests for each partner
+2. **Review Workflow**: Admin reviews/edits before sending (configurable per partner)
+3. **Auto-Send Mode**: Optional per-partner setting to skip review and send immediately
+4. **Partner Targeting**: Uses `umpire_override` field on games (DIA, DYN, SDL)
+5. **Reminder System**: Monday 8am ET reminder if drafts aren't sent (only in review mode)
+6. **History Tracking**: Full history of sent/skipped digests
+7. **HTML Format**: Styled email matching existing umpire email format
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `scripts/migrations/add_weekly_digests.sql` | Database migration (table + column) |
+| `app/models/weekly_digest.py` | WeeklyDigest model with status workflow |
+| `app/services/weekly_digest_service.py` | Generation, rendering, sending logic |
+| `app/templates/umpires/weekly_digests.html` | List view with status badges |
+| `app/templates/umpires/digest_preview.html` | Preview/edit/send page |
+| `app/templates/umpires/digest_settings.html` | Auto-send configuration per partner |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `app/umpires/routes.py` | Added 6 digest routes (list, preview, action, generate, settings) |
+| `app/main/routes.py` | Added 2 cron endpoints (generate, reminders) |
+| `app/templates/base.html` | Added "Weekly Digests" link to Umpires dropdown |
+| `app/models/__init__.py` | Import WeeklyDigest model |
+| `app/models/umpire_partner.py` | Added `auto_send_digest` column |
+
+### Database Schema
+
+```sql
+CREATE TABLE `sdll_weekly_digests` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `partner_code` VARCHAR(10) NOT NULL,  -- 'DIA', 'DYN', 'SDL'
+  `partner_name` VARCHAR(100) NOT NULL,
+  `week_start` DATE NOT NULL,  -- Monday of target week
+  `year` INT NOT NULL,
+  `is_spring` SMALLINT NOT NULL,
+  `recipient_emails` TEXT NOT NULL,  -- JSON array
+  `subject` VARCHAR(255) NOT NULL,
+  `body_html` TEXT NOT NULL,
+  `game_count` INT NOT NULL DEFAULT 0,
+  `status` ENUM('draft', 'ready', 'sent', 'skipped') NOT NULL DEFAULT 'draft',
+  `reviewed_by` BIGINT DEFAULT NULL,
+  `reviewed_at` DATETIME DEFAULT NULL,
+  `sent_at` DATETIME DEFAULT NULL,
+  `sent_by` BIGINT DEFAULT NULL,
+  `reminder_sent` TINYINT DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_partner_week` (`partner_code`, `week_start`)
+);
+
+ALTER TABLE sdll_umpire_partners ADD COLUMN auto_send_digest TINYINT DEFAULT 0;
+```
+
+### Routes Added
+
+| Route | Method | Description |
+|-------|--------|-------------|
+| `/umpires/<year>/<is_spring>/digests` | GET | List all digests for season |
+| `/umpires/<year>/<is_spring>/digests/<id>` | GET | Preview specific digest |
+| `/umpires/<year>/<is_spring>/digests/<id>` | POST | Actions: approve, send, skip, regenerate |
+| `/umpires/<year>/<is_spring>/digests/generate` | POST | Manually generate for week |
+| `/umpires/<year>/<is_spring>/digests/settings` | GET/POST | Configure auto-send per partner |
+| `/cron/generate-weekly-digests` | GET | Auto-generate (Sunday 6pm ET) |
+| `/cron/digest-reminders` | GET | Send reminders (Monday 8am ET) |
+
+### Status Workflow
+
+```
+draft -> ready (admin approval)
+draft -> skipped (no games or admin decision)
+ready -> sent (email sent successfully)
+ready -> draft (admin wants to re-edit)
+```
+
+### Cron Setup
+
+Set up in cron-job.org:
+```
+# Sunday 6pm ET (23:00 UTC)
+0 23 * * 0 https://your-app.railway.app/cron/generate-weekly-digests?token=YOUR_CRON_SECRET
+
+# Monday 8am ET (13:00 UTC)
+0 13 * * 1 https://your-app.railway.app/cron/digest-reminders?token=YOUR_CRON_SECRET
+```
+
+### Access Control
+
+Same as Email Coaches feature:
+- `admin`
+- `scheduler`
+- `SBPlayerAgent`
+- `BBPlayerAgent`
+
+### Usage
+
+1. Navigate to Umpires > Weekly Digests
+2. Click "Generate This Week" to create drafts
+3. Review each partner's digest by clicking "Preview"
+4. Click "Send Now" to send email, or "Skip" if not needed
+5. For auto-send partners, configure in Settings
+
+### Production Migration Required
+
+Run `scripts/migrations/add_weekly_digests.sql` on Railway MySQL.
 
 ---
 

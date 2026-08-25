@@ -39,6 +39,9 @@ class UmpirePartner(db.Model):
     # Schedule token for public schedule URL
     schedule_token = db.Column(db.String(32), unique=True, nullable=True, index=True)
 
+    # Weekly digest settings
+    auto_send_digest = db.Column(db.Boolean, default=False)  # Auto-send weekly digests without review
+
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

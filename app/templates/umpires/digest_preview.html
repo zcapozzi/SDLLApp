@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Digest Preview - {{ digest.partner_name }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.weekly_digests', year=year, is_spring=is_spring) }}">&larr; Back to Digests</a>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+    <div>
+        <h1 style="margin-bottom: 5px;">{{ digest.partner_name }}</h1>
+        <p style="color: var(--text-muted); margin: 0;">Week of {{ digest.week_start.strftime('%B %d, %Y') }}</p>
+    </div>
+    <div>
+        {% if digest.status == 'draft' %}
+        <span class="badge" style="background: #f0ad4e; font-size: 14px; padding: 6px 12px;">DRAFT</span>
+        {% elif digest.status == 'ready' %}
+        <span class="badge badge-spring" style="font-size: 14px; padding: 6px 12px;">READY</span>
+        {% elif digest.status == 'sent' %}
+        <span class="badge" style="background: #228B22; font-size: 14px; padding: 6px 12px;">SENT</span>
+        {% elif digest.status == 'skipped' %}
+        <span class="badge" style="background: #999; font-size: 14px; padding: 6px 12px;">SKIPPED</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-top: 0;">Digest Details</h3>
+    <table style="max-width: 500px;">
+        <tr>
+            <td style="padding: 8px 20px 8px 0; color: var(--text-muted);">Partner Code:</td>
+            <td style="padding: 8px 0;"><code>{{ digest.partner_code }}</code></td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 20px 8px 0; color: var(--text-muted);">Games:</td>
+            <td style="padding: 8px 0;"><strong>{{ digest.game_count }}</strong></td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 20px 8px 0; color: var(--text-muted);">Recipients:</td>
+            <td style="padding: 8px 0;">
+                {% set recipients = digest.recipient_emails_list %}
+                {% if recipients %}
+                {{ recipients|join(', ') }}
+                {% else %}
+                <span style="color: var(--text-muted);">No recipients configured</span>
+                {% endif %}
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 20px 8px 0; color: var(--text-muted);">Subject:</td>
+            <td style="padding: 8px 0;">{{ digest.subject }}</td>
+        </tr>
+        {% if digest.sent_at %}
+        <tr>
+            <td style="padding: 8px 20px 8px 0; color: var(--text-muted);">Sent:</td>
+            <td style="padding: 8px 0;">{{ digest.sent_at.strftime('%B %d, %Y at %I:%M %p') }}</td>
+        </tr>
+        {% endif %}
+        {% if digest.reviewer %}
+        <tr>
+            <td style="padding: 8px 20px 8px 0; color: var(--text-muted);">Reviewed by:</td>
+            <td style="padding: 8px 0;">{{ digest.reviewer.name }} on {{ digest.reviewed_at.strftime('%m/%d/%Y') }}</td>
+        </tr>
+        {% endif %}
+    </table>
+</div>
+
+<!-- Action Buttons -->
+{% if digest.status in ['draft', 'ready'] %}
+<div class="card" style="margin-bottom: 20px; background: #f8f9fa;">
+    <h3 style="margin-top: 0;">Actions</h3>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        {% if digest.status == 'draft' %}
+        <form method="POST" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="regenerate">
+            <button type="submit" class="btn btn-secondary">Regenerate</button>
+        </form>
+        <form method="POST" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="skip">
+            <button type="submit" class="btn btn-outline">Skip</button>
+        </form>
+        {% if digest.game_count > 0 %}
+        <form method="POST" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="approve">
+            <button type="submit" class="btn btn-secondary">Approve</button>
+        </form>
+        <form method="POST" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="send">
+            <button type="submit" class="btn btn-primary"
+                    onclick="return confirm('Send this digest to {{ digest.recipient_emails_list|join(', ') }}?')">
+                Send Now
+            </button>
+        </form>
+        {% endif %}
+        {% elif digest.status == 'ready' %}
+        <form method="POST" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="revert">
+            <button type="submit" class="btn btn-outline">Revert to Draft</button>
+        </form>
+        <form method="POST" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="send">
+            <button type="submit" class="btn btn-primary"
+                    onclick="return confirm('Send this digest to {{ digest.recipient_emails_list|join(', ') }}?')">
+                Send Now
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Email Preview -->
+<div class="card">
+    <h3 style="margin-top: 0;">Email Preview</h3>
+    <div style="border: 1px solid #ddd; border-radius: 4px; padding: 20px; background: #fff; max-height: 600px; overflow-y: auto;">
+        {{ digest.body_html|safe }}
+    </div>
+</div>
+{% endblock %}

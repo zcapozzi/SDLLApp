@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}Digest Settings - {{ season_name }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.weekly_digests', year=year, is_spring=is_spring) }}">&larr; Back to Digests</a>
+</div>
+
+<h1>Digest Settings</h1>
+
+<p style="color: var(--text-muted); margin-bottom: 20px;">
+    Configure automatic sending behavior for weekly partner digests.
+</p>
+
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card" style="margin-bottom: 20px;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Partner</th>
+                    <th>Contact Email</th>
+                    <th style="text-align: center;">Auto-Send</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for partner in partners %}
+                <tr>
+                    <td>
+                        <strong>{{ partner.name }}</strong>
+                        <br>
+                        <code style="font-size: 11px; color: var(--text-muted);">{{ partner.short_code }}</code>
+                    </td>
+                    <td>
+                        {% if partner.contact_email %}
+                        {{ partner.contact_email }}
+                        {% else %}
+                        <span style="color: var(--text-muted);">Not configured</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: center;">
+                        <label class="toggle-switch">
+                            <input type="checkbox" name="auto_send_{{ partner.id }}"
+                                   {% if partner.auto_send_digest %}checked{% endif %}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="3" style="text-align: center; color: var(--text-muted);">
+                        No partners configured.
+                        <a href="{{ url_for('umpires.add_partner') }}">Add one</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if partners %}
+    <button type="submit" class="btn btn-primary">Save Settings</button>
+    {% endif %}
+</form>
+
+<div class="card" style="margin-top: 30px;">
+    <h3 style="margin-top: 0;">About Auto-Send</h3>
+    <ul style="color: var(--text-muted); line-height: 1.8;">
+        <li><strong>Off (Default):</strong> Digests are generated as drafts and require manual review before sending</li>
+        <li><strong>On:</strong> Digests are generated AND sent automatically on Sunday 6pm ET</li>
+        <li>When auto-send is on, no Monday reminder is needed (already sent or skipped)</li>
+        <li>Partners without contact emails configured will be skipped regardless of this setting</li>
+        <li>Sent digests are still recorded in history for reference</li>
+    </ul>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 26px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.3s;
+    border-radius: 26px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+    background-color: #228B22;
+}
+
+input:checked + .toggle-slider:before {
+    transform: translateX(24px);
+}
+</style>
+{% endblock %}
