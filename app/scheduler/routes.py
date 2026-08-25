@@ -1265,7 +1265,7 @@ def can_email_coaches():
     """Check if current user can use email coaches feature."""
     if not current_user.is_authenticated:
         return False
-    return current_user.role in ['admin', 'scheduler', 'SBPlayerAgent', 'BBPlayerAgent']
+    return current_user.has_role('admin', 'scheduler', 'SBPlayerAgent', 'BBPlayerAgent')
 
 
 @scheduler_bp.route('/email-coaches', methods=['GET', 'POST'])

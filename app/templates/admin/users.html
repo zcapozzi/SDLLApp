@@ -128,7 +128,11 @@
                     {% if not user.active %}<span class="text-muted text-small">(inactive)</span>{% endif %}
                 </td>
                 <td>{{ user.email }}</td>
-                <td><span class="role-badge role-{{ user.role }}">{{ user.role|replace('_', ' ') }}</span></td>
+                <td>
+                    {% for role in (user.role or '').split('|') if role %}
+                    <span class="role-badge role-{{ role }}">{{ role|replace('_', ' ') }}</span>
+                    {% endfor %}
+                </td>
                 <td>{{ user.phone or '-' }}</td>
                 <td>
                     {% if user.last_login %}
@@ -179,14 +183,18 @@
                                 <input type="text" name="phone" value="{{ user.phone or '' }}" class="form-control" style="width: 150px;">
                             </div>
                             <div class="form-group">
-                                <label>Role</label>
-                                <select name="role" class="form-control" {% if user.ID == current_user.ID %}disabled{% endif %}>
+                                <label>Roles</label>
+                                <div class="role-checkboxes" style="display: flex; flex-wrap: wrap; gap: 10px;">
+                                    {% set user_roles = (user.role or '').split('|') %}
                                     {% for role in roles %}
-                                    <option value="{{ role }}" {% if user.role == role %}selected{% endif %}>
+                                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; font-weight: normal;">
+                                        <input type="checkbox" name="roles" value="{{ role }}"
+                                               {% if role in user_roles %}checked{% endif %}
+                                               {% if user.ID == current_user.ID %}disabled{% endif %}>
                                         {{ role|replace('_', ' ')|title }}
-                                    </option>
+                                    </label>
                                     {% endfor %}
-                                </select>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <button type="submit" class="btn btn-primary btn-sm">Save</button>

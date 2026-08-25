@@ -149,11 +149,16 @@ def handle_edit_user():
         logger.info(f'Admin {current_user.ID} changed user {user.ID} email from {old_email} to {new_email}')
 
     # Only allow role changes for other users (not yourself)
-    if not is_editing_self and new_role and new_role in User.ROLES:
-        old_role = user.role
-        user.role = new_role
-        if old_role != new_role:
-            logger.info(f'Admin {current_user.ID} changed user {user.ID} role from {old_role} to {new_role}')
+    if not is_editing_self:
+        new_roles = request.form.getlist('roles')  # Multiple checkboxes
+        # Filter to valid roles only
+        valid_roles = [r for r in new_roles if r in User.ROLES]
+        if valid_roles:
+            new_role_str = '|'.join(valid_roles)
+            old_role = user.role
+            if old_role != new_role_str:
+                user.role = new_role_str
+                logger.info(f'Admin {current_user.ID} changed user {user.ID} role from {old_role} to {new_role_str}')
 
     if new_name:
         user.name = new_name

@@ -181,7 +181,7 @@
                     <a href="{{ url_for('scheduler.picker') }}">Schedule Generator</a>
                     <a href="{{ url_for('seasons.schedule_settings_picker') }}">Schedule Settings</a>
                     {% endif %}
-                    {% if current_user.role in ['admin', 'scheduler', 'SBPlayerAgent', 'BBPlayerAgent'] %}
+                    {% if current_user.has_role('admin', 'scheduler', 'SBPlayerAgent', 'BBPlayerAgent') %}
                     <div class="dropdown-divider"></div>
                     <a href="{{ url_for('scheduler.email_coaches') }}">Email Coaches</a>
                     {% endif %}

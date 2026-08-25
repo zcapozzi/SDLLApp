@@ -119,24 +119,36 @@ class User(UserMixin, db.Model):
         db.session.commit()
 
     # Role checking methods
+    @property
+    def roles_list(self):
+        """Return list of roles (handles pipe-delimited storage)."""
+        if not self.role:
+            return []
+        return [r.strip() for r in self.role.split('|') if r.strip()]
+
+    def has_role(self, *check_roles):
+        """Check if user has any of the specified roles."""
+        user_roles = self.roles_list
+        return any(r in user_roles for r in check_roles)
+
     def is_admin(self):
-        return self.role == 'admin'
+        return self.has_role('admin')
 
     def is_scheduler(self):
-        return self.role in ['admin', 'scheduler']
+        return self.has_role('admin', 'scheduler')
 
     def is_umpire_coordinator(self):
-        return self.role in ['admin', 'umpire_coordinator']
+        return self.has_role('admin', 'umpire_coordinator')
 
     def can_edit_schedule(self):
-        return self.role in ['admin', 'scheduler']
+        return self.has_role('admin', 'scheduler')
 
     def can_manage_umpires(self):
-        return self.role in ['admin', 'umpire_coordinator']
+        return self.has_role('admin', 'umpire_coordinator')
 
     def is_umpire(self):
         """Check if user has umpire role or has an umpire profile."""
-        return self.role == 'umpire' or self.has_umpire_profile()
+        return self.has_role('umpire') or self.has_umpire_profile()
 
     def has_umpire_profile(self):
         """Check if user has an associated umpire profile."""
@@ -144,19 +156,19 @@ class User(UserMixin, db.Model):
 
     def is_treasurer(self):
         """Check if user is treasurer or admin (who can also act as treasurer)."""
-        return self.role in ['admin', 'treasurer']
+        return self.has_role('admin', 'treasurer')
 
     def can_process_payments(self):
         """Only treasurer and admin can mark payments as complete."""
-        return self.role in ['admin', 'treasurer']
+        return self.has_role('admin', 'treasurer')
 
     def is_coach(self):
         """Check if user has coach role."""
-        return self.role == 'coach'
+        return self.has_role('coach')
 
     def is_partner_contact(self):
         """Check if user is a partner organization contact."""
-        return self.role == 'partner_contact'
+        return self.has_role('partner_contact')
 
     def get_highest_role(self):
         """Return highest privilege role for dashboard routing.
@@ -166,8 +178,10 @@ class User(UserMixin, db.Model):
         """
         priority = ['admin', 'scheduler', 'umpire_coordinator', 'treasurer',
                     'umpire', 'coach', 'parent', 'partner_contact', 'viewer']
-        if self.role in priority:
-            return self.role
+        user_roles = self.roles_list
+        for role in priority:
+            if role in user_roles:
+                return role
         return 'viewer'
 
     def get_dashboard_route(self):

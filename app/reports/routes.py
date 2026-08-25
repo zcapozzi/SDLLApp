@@ -112,8 +112,15 @@ def umpire_changes():
     umpire_id = request.args.get('umpire_id', type=int)
     days = request.args.get('days', 7, type=int)
 
-    # Get umpires for filter dropdown
-    umpires = User.query.filter(User.role == 'umpire').all()
+    # Get umpires for filter dropdown (handles pipe-delimited roles)
+    umpires = User.query.filter(
+        db.or_(
+            User.role == 'umpire',
+            User.role.like('umpire|%'),
+            User.role.like('%|umpire'),
+            User.role.like('%|umpire|%')
+        )
+    ).all()
 
     if not umpire_id and umpires:
         # Default to first umpire
