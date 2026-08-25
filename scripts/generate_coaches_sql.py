@@ -3,10 +3,9 @@
 Generate SQL to import coaches from f2026_coaches.json.
 
 This script generates a .sql file with INSERT statements.
-It requires ENCRYPTION_KEY to be set (to encrypt PII fields).
+It reads ENCRYPTION_KEY from .env file.
 
 Usage:
-    set ENCRYPTION_KEY=your_key_here
     python scripts/generate_coaches_sql.py > scripts/import_coaches_data.sql
 
 Then run the SQL file against your database.
@@ -17,6 +16,19 @@ import os
 import sys
 import hashlib
 from datetime import datetime
+
+# Load .env file
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
+env_path = os.path.join(project_root, '.env')
+
+if os.path.exists(env_path):
+    with open(env_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                key, value = line.split('=', 1)
+                os.environ.setdefault(key.strip(), value.strip())
 
 # Check for encryption key
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY')
