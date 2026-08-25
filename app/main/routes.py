@@ -154,8 +154,10 @@ def cron_unassigned_umpires():
     """
     import os
     from datetime import datetime, timedelta
+    from sqlalchemy.orm import joinedload
     from app.models.league import League
     from app.models.game_umpire import GameUmpire
+    from app.models.field_slot import FieldSlot
     from app.services.notification_service import GmailService
 
     # Verify secret token
@@ -172,17 +174,47 @@ def cron_unassigned_umpires():
     days = request.args.get('days', 7, type=int)
     recipient = request.args.get('recipient', 'sdll.umpires@gmail.com')
 
-    # Find upcoming games in date range
+    # Find upcoming games in date range with eager loading
     now = datetime.utcnow()
     cutoff = now + timedelta(days=days)
 
-    upcoming_games = Game.query.filter(
+    upcoming_games = Game.query.options(
+        joinedload(Game.home_team),
+        joinedload(Game.away_team),
+        joinedload(Game.field_rel)
+    ).filter(
         Game.game_date >= now,
         Game.game_date <= cutoff,
         Game.active == 1,
         Game.status == 'scheduled',
         Game.game_type != 'practice'
     ).all()
+
+    # Pre-load field slots for the season to check ownership
+    if upcoming_games:
+        sample_game = upcoming_games[0]
+        field_slots = FieldSlot.query.filter_by(
+            year=sample_game.year,
+            is_spring=1 if sample_game.is_spring else 0,
+            active=1
+        ).all()
+        # Build lookup: (field_id, day_of_week, hour, minute) -> is_owned
+        slot_ownership = {}
+        for slot in field_slots:
+            key = (slot.field_ID, slot.day_of_week, slot.start_time.hour, slot.start_time.minute)
+            slot_ownership[key] = slot.is_owned
+    else:
+        slot_ownership = {}
+
+    def is_slot_sdll_owned(game):
+        """Check if the game's time slot is SDLL-owned."""
+        if not game.game_date or not game.field_id:
+            return True  # Assume owned if we can't determine
+        day_of_week = game.game_date.weekday()
+        hour = game.game_date.hour
+        minute = game.game_date.minute
+        key = (game.field_id, day_of_week, hour, minute)
+        return slot_ownership.get(key, 1) == 1
 
     # Filter to games needing umpires but missing assignments
     games_needing_umpires = []
@@ -216,7 +248,8 @@ def cron_unassigned_umpires():
 
         # If no assignments or fewer than required, add to list
         if active_assignments < required_count:
-            games_needing_umpires.append((game, league, required_count, active_assignments))
+            is_owned = is_slot_sdll_owned(game)
+            games_needing_umpires.append((game, league, required_count, active_assignments, is_owned))
 
     if not games_needing_umpires:
         return jsonify({
@@ -233,22 +266,37 @@ def cron_unassigned_umpires():
 
     # Group by league
     by_league = {}
-    for game, league, required, assigned in games_needing_umpires:
+    for game, league, required, assigned, is_owned in games_needing_umpires:
         league_name = league.display_name
         if league_name not in by_league:
             by_league[league_name] = []
-        by_league[league_name].append((game, required, assigned))
+        by_league[league_name].append((game, required, assigned, is_owned))
 
     count = len(games_needing_umpires)
+    owned_count = sum(1 for _, _, _, _, is_owned in games_needing_umpires if is_owned)
+    away_count = count - owned_count
     subject = f"SDLL Alert: {count} game(s) need umpire assignments"
+    if away_count > 0:
+        subject += f" ({away_count} away-only)"
+
+    # Base URL for links
+    base_url = os.environ.get('APP_URL', 'https://www.southdurhamlittleleague.org')
 
     # Build email body
     body_lines = [f"{count} upcoming game(s) in the next {days} days need umpire assignments:", ""]
+    if away_count > 0:
+        body_lines.append(f"Note: {away_count} game(s) are in AWAY-ONLY slots and may not require SDLL umpires.")
+        body_lines.append("")
     for league_name, games in sorted(by_league.items()):
         body_lines.append(f"{league_name} ({len(games)} game(s)):")
-        for game, required, assigned in games:
+        for game, required, assigned, is_owned in games:
             game_date = game.game_date.strftime('%a, %b %d at %I:%M %p') if game.game_date else 'TBD'
-            body_lines.append(f"  - {game_date} (need {required}, have {assigned})")
+            field = game.field_rel.location_title if game.field_rel else (game.location or 'TBD')
+            home = game.home_team.display_name if game.home_team else 'TBD'
+            away = game.away_team.display_name if game.away_team else 'TBD'
+            owned_tag = "" if is_owned else " [AWAY-ONLY SLOT]"
+            body_lines.append(f"  - {game_date} @ {field}{owned_tag}")
+            body_lines.append(f"    {away} vs {home} (need {required}, have {assigned})")
         body_lines.append("")
     body_lines.extend(["Please assign umpires or delegate to a partner.", "", "- SDLL Automated Alert"])
     body_text = '\n'.join(body_lines)
@@ -259,12 +307,45 @@ def cron_unassigned_umpires():
         f'<h2 style="color: #c33;">{count} Game(s) Need Umpire Assignments</h2>',
         f'<p>The following games in the next {days} days need umpires:</p>'
     ]
+    if away_count > 0:
+        html_parts.append(
+            f'<p style="background: #fff3cd; padding: 10px; border-radius: 4px; border-left: 4px solid #ffc107;">'
+            f'<strong>Note:</strong> {away_count} game(s) are in <strong>AWAY-ONLY</strong> slots '
+            f'and may not require SDLL umpires. These are marked with a yellow badge below.</p>'
+        )
     for league_name, games in sorted(by_league.items()):
-        html_parts.append(f'<h3 style="color: #FF8C00;">{league_name}</h3><ul>')
-        for game, required, assigned in games:
-            game_date = game.game_date.strftime('%a, %b %d at %I:%M %p') if game.game_date else 'TBD'
-            html_parts.append(f'<li>{game_date} <span style="color: #c33;">(need {required}, have {assigned})</span></li>')
-        html_parts.append('</ul>')
+        html_parts.append(f'<h3 style="color: #FF8C00; margin-bottom: 8px;">{league_name}</h3>')
+        html_parts.append('<table style="border-collapse: collapse; width: 100%; margin-bottom: 15px;">')
+        for game, required, assigned, is_owned in games:
+            game_date = game.game_date.strftime('%a, %b %d') if game.game_date else 'TBD'
+            game_time = game.game_date.strftime('%I:%M %p').lstrip('0') if game.game_date else ''
+            field = game.field_rel.location_title if game.field_rel else (game.location or 'TBD')
+            home = game.home_team.display_name if game.home_team else 'TBD'
+            away = game.away_team.display_name if game.away_team else 'TBD'
+
+            # Build links
+            calendar_date = game.game_date.strftime('%Y-%m-%d') if game.game_date else ''
+            calendar_url = f"{base_url}/umpires/{game.year}/{1 if game.is_spring else 0}/calendar?week={calendar_date}"
+
+            # Slot ownership badge
+            if is_owned:
+                owned_badge = ''
+            else:
+                owned_badge = '<span style="background: #ffc107; color: #000; padding: 2px 6px; border-radius: 3px; font-size: 11px; margin-left: 8px;">AWAY-ONLY</span>'
+
+            html_parts.append(
+                f'<tr style="border-bottom: 1px solid #eee;">'
+                f'<td style="padding: 8px 0;">'
+                f'<strong>{game_date}</strong> {game_time} @ {field}{owned_badge}<br>'
+                f'<span style="color: #555;">{away} vs {home}</span><br>'
+                f'<span style="color: #c33; font-size: 12px;">Need {required}, have {assigned}</span>'
+                f'</td>'
+                f'<td style="padding: 8px; text-align: right; vertical-align: top;">'
+                f'<a href="{calendar_url}" style="color: #1976d2; text-decoration: none; font-size: 13px;">View in Calendar</a>'
+                f'</td>'
+                f'</tr>'
+            )
+        html_parts.append('</table>')
     html_parts.append('<p>Please assign umpires or delegate to a partner.</p>')
     html_parts.append('<hr><p style="color: #888; font-size: 12px;">SDLL Automated Alert</p></body></html>')
     body_html = '\n'.join(html_parts)
