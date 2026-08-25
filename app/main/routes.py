@@ -352,7 +352,8 @@ def cron_diagnose_email():
             'https://api.resend.com/domains',
             headers={
                 'Authorization': f'Bearer {clean_key}',
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'User-Agent': 'SDLL-App/1.0'
             },
             method='GET'
         )
@@ -371,7 +372,8 @@ def cron_diagnose_email():
             'https://api.resend.com/api-keys',
             headers={
                 'Authorization': f'Bearer {clean_key}',
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'User-Agent': 'SDLL-App/1.0'
             },
             method='GET'
         )
@@ -401,7 +403,8 @@ def cron_diagnose_email():
                 data=data,
                 headers={
                     'Authorization': f'Bearer {clean_key}',
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'SDLL-App/1.0'
                 },
                 method='POST'
             )

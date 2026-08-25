@@ -97,7 +97,8 @@ class GmailService:
             data=data,
             headers={
                 'Authorization': f'Bearer {api_key}',
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'User-Agent': 'SDLL-App/1.0'
             },
             method='POST'
         )
