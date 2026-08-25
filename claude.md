@@ -168,3 +168,69 @@ When a page has filter controls (dropdowns, date pickers, search boxes), filteri
 ### Pages with Client-Side Filtering
 - Umpire Calendar (`/umpires/<year>/<is_spring>/calendar`) - League filter
 - Partner Schedule (`/schedule/<token>`) - Field, league, date filters
+
+## Avoiding N+1 Query Problems
+
+**CRITICAL: Never execute database queries inside loops.** This causes N+1 query problems where loading N items requires N+1 database queries instead of 1-2.
+
+### The Problem
+
+```python
+# BAD - N+1 queries (1 query for teams + N queries for coaches)
+teams = TeamSeason.query.filter_by(year=year).all()
+for team in teams:
+    print(team.coaches)  # Each access triggers a new query!
+```
+
+### The Solution: Eager Loading
+
+Use SQLAlchemy's `joinedload()` to fetch related data in a single query:
+
+```python
+# GOOD - 1 query with JOIN
+from sqlalchemy.orm import joinedload
+
+teams = TeamSeason.query.filter_by(year=year).options(
+    joinedload(TeamSeason.coaches)
+).all()
+
+for team in teams:
+    print(team.coaches)  # No additional queries - data already loaded
+```
+
+### When to Use Eager Loading
+
+Always use `joinedload()` when:
+- Accessing relationships in templates (e.g., `team.coaches`, `coach.user`)
+- Iterating over a list and accessing related objects
+- Displaying lists with related data
+
+### Common Patterns
+
+```python
+# Load coaches with their user records
+coaches = CoachUser.query.filter_by(status='active').options(
+    joinedload(CoachUser.user)
+).all()
+
+# Load teams with their assigned coaches
+teams = TeamSeason.query.filter_by(year=year).options(
+    joinedload(TeamSeason.coaches)
+).all()
+
+# Multiple relationships
+games = Game.query.filter_by(year=year).options(
+    joinedload(Game.home_team),
+    joinedload(Game.away_team),
+    joinedload(Game.field)
+).all()
+```
+
+### Warning Signs
+
+If you see code that:
+1. Queries inside a `for` loop
+2. Accesses `.relationship` in a template loop without prior eager loading
+3. Has slow page loads that get worse with more data
+
+...it likely has an N+1 problem. Fix it with `joinedload()`.
