@@ -4,7 +4,127 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Fixed calendar/day view edit redirect, added game change tracking features.
+Last session: Implemented Email Blast Feature for coaches.
+
+---
+
+## Session: August 25, 2026 - Email Blast Feature (Coach + Generic)
+
+### Overview
+Implemented a comprehensive email blast system with a coach-focused entry point. Located under "Email Coaches" in the Schedule menu. Supports three send modes, rich text editing, scheduling, and manual recipient entry.
+
+### Features Implemented
+
+1. **League Selection**: Multi-select checkboxes for current season leagues with select all/deselect all controls
+2. **Send Modes**:
+   - CC (default): All recipients in one email, visible to each other
+   - BCC: All recipients in one email, hidden from each other
+   - Individual (per team): One email per team with all coaches CC'd together
+3. **Reply-To**: Sender's email address (auto-set)
+4. **Rich Text**: Quill.js editor for links and formatting
+5. **Scheduling**: Optional future send date with Gmail-style split button
+6. **Recipient Preview**: Live count with option to expand and see actual emails
+7. **Manual Entry**: Optional field to add additional email addresses
+8. **One-Time Send**: No retry - notify sender + admins on failure
+
+### Access Control
+Users with ANY of these roles can access:
+- `admin`
+- `scheduler`
+- `SBPlayerAgent`
+- `BBPlayerAgent`
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `scripts/migrations/add_scheduled_email.sql` | Database migration |
+| `app/models/scheduled_email.py` | ScheduledEmail model with JSON properties for recipients |
+| `app/services/email_blast_service.py` | Recipient gathering, send logic, failure notifications |
+| `app/templates/scheduler/email_coaches.html` | Compose form with Quill.js editor |
+| `app/templates/scheduler/email_history.html` | View sent/scheduled emails history |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `app/scheduler/routes.py` | Added `email_coaches`, `email_coaches_history`, `api_coach_email_preview` routes |
+| `app/templates/base.html` | Added "Email Coaches" to Schedule dropdown menu |
+| `app/main/routes.py` | Added `/cron/process-scheduled-emails` endpoint |
+| `app/models/__init__.py` | Import `ScheduledEmail` model |
+| `app/models/league_season.py` | Added `get_current_season()` class method |
+
+### Database Schema
+
+```sql
+CREATE TABLE `sdll_scheduled_emails` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_by` BIGINT NOT NULL,
+  `email_type` VARCHAR(50) NOT NULL DEFAULT 'coach_blast',
+  `year` INT DEFAULT NULL,
+  `is_spring` SMALLINT DEFAULT NULL,
+  `leagues` TEXT DEFAULT NULL,  -- JSON array
+  `recipients` TEXT NOT NULL,    -- JSON array of recipient objects
+  `manual_recipients` TEXT DEFAULT NULL,  -- JSON array
+  `send_mode` ENUM('cc', 'bcc', 'individual') NOT NULL DEFAULT 'cc',
+  `subject` VARCHAR(255) NOT NULL,
+  `body_html` TEXT NOT NULL,
+  `body_text` TEXT NOT NULL,
+  `reply_to` VARCHAR(255) NOT NULL,
+  `scheduled_for` DATETIME DEFAULT NULL,
+  `status` ENUM('pending', 'sending', 'sent', 'partial', 'failed') NOT NULL DEFAULT 'pending',
+  `sent_at` DATETIME DEFAULT NULL,
+  `attempted_at` DATETIME DEFAULT NULL,
+  `recipient_count` INT DEFAULT 0,
+  `sent_count` INT DEFAULT 0,
+  `failed_count` INT DEFAULT 0,
+  `error_message` TEXT,
+  `failure_notified` TINYINT DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `idx_status_scheduled` (`status`, `scheduled_for`),
+  KEY `idx_attempted` (`attempted_at`),
+  CONSTRAINT `fk_scheduled_email_created_by` FOREIGN KEY (`created_by`) REFERENCES `sdll_users` (`ID`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+### Routes Added
+
+| Route | Method | Description |
+|-------|--------|-------------|
+| `/scheduler/email-coaches` | GET, POST | Compose and send/schedule email |
+| `/scheduler/email-coaches/history` | GET | View email history |
+| `/scheduler/api/coach-email-preview` | GET | API for recipient count/list |
+| `/cron/process-scheduled-emails` | GET | Process scheduled emails (cron) |
+
+### Cron Setup
+Set up in cron-job.org every 5 minutes (`*/5 * * * *`):
+```
+https://your-app.railway.app/cron/process-scheduled-emails?token=YOUR_CRON_SECRET
+```
+
+### Usage
+
+1. Navigate to Schedule > Email Coaches
+2. Select leagues using checkboxes
+3. Optionally add manual recipients
+4. Choose send mode (CC/BCC/Individual)
+5. Compose email with rich text editor
+6. Send immediately or schedule for later
+
+### Verification
+
+```bash
+# Test imports
+python -c "from app.models.scheduled_email import ScheduledEmail; print('OK')"
+python -c "from app.services.email_blast_service import get_coaches_by_leagues; print('OK')"
+
+# Test routes
+python -c "from app.scheduler.routes import scheduler_bp; print('OK')"
+```
+
+### Production Migration Required
+Run `scripts/migrations/add_scheduled_email.sql` on Railway MySQL.
 
 ---
 

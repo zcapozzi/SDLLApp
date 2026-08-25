@@ -629,3 +629,44 @@ def test_error():
     """
     # Raise a deliberate error with a recognizable message
     raise ValueError("TEST ERROR: This is a deliberate test error for the error diagnosis system. Error ID: test-" + str(int(__import__('time').time())))
+
+
+@main_bp.route('/cron/process-scheduled-emails')
+def cron_process_scheduled_emails():
+    """
+    Cron endpoint to process scheduled emails.
+
+    Runs every 5 minutes. Each email is attempted exactly once.
+    Protected by CRON_SECRET token. Call with ?token=YOUR_SECRET
+
+    Set up an external cron service (cron-job.org, etc.) to hit this every 5 minutes:
+    https://your-app.railway.app/cron/process-scheduled-emails?token=YOUR_CRON_SECRET
+    """
+    import os
+    from app.services.email_blast_service import process_pending_emails
+
+    # Verify secret token
+    expected_token = os.environ.get('CRON_SECRET')
+    provided_token = request.args.get('token')
+
+    if not expected_token:
+        return jsonify({'error': 'CRON_SECRET not configured'}), 500
+
+    if provided_token != expected_token:
+        return jsonify({'error': 'Invalid token'}), 403
+
+    # Process pending emails
+    try:
+        results = process_pending_emails()
+
+        return jsonify({
+            'status': 'ok',
+            'processed': len(results),
+            'results': results
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500

@@ -424,8 +424,9 @@ def review(year, is_spring):
     field_lookup.update({f.location_title: f.location_title for f in all_fields})
 
     for lp in league_practices:
-        # Resolve field name from location (could be ID or name)
-        field_name = field_lookup.get(str(lp.location), lp.location) if lp.location else None
+        # Use field_id FK if available, otherwise fall back to location string
+        lp_field_id = lp.field_id
+        field_name = lp.field_name  # Uses the model's field_name property (FK lookup)
 
         # Convert to proposal-style dict format
         lp_dict = {
@@ -438,7 +439,7 @@ def review(year, is_spring):
             'home_team_name': lp.home_team.scheduler_display_name if lp.home_team else 'Unknown',
             'away_team_id': None,
             'away_team_name': None,
-            'field_id': lp.location,
+            'field_id': lp_field_id,
             'field_name': field_name,
             'game_date': lp.game_date.isoformat() if lp.game_date else None,
             'is_scrimmage': False,
@@ -1254,3 +1255,187 @@ def picker():
         'scheduler/picker.html',
         seasons=seasons
     )
+
+
+# ============================================================================
+# Email Coaches Feature
+# ============================================================================
+
+def can_email_coaches():
+    """Check if current user can use email coaches feature."""
+    if not current_user.is_authenticated:
+        return False
+    return current_user.role in ['admin', 'scheduler', 'SBPlayerAgent', 'BBPlayerAgent']
+
+
+@scheduler_bp.route('/email-coaches', methods=['GET', 'POST'])
+@login_required
+def email_coaches():
+    """Compose and send email blast to coaches."""
+    if not can_email_coaches():
+        flash('You do not have permission to email coaches.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    from app.models.scheduled_email import ScheduledEmail
+    from app.services.email_blast_service import (
+        get_coaches_by_leagues, html_to_plain_text, parse_manual_recipients,
+        send_scheduled_email
+    )
+
+    # Get current season
+    current_season = LeagueSeason.get_current_season()
+    if not current_season:
+        flash('No active season found.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    year = current_season.year
+    is_spring = current_season.is_spring
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    # Get available leagues for this season
+    league_configs = LeagueSeason.get_by_season(year, is_spring)
+    leagues = [config.league for config in league_configs]
+
+    if request.method == 'POST':
+        # Get form data
+        selected_leagues = request.form.getlist('leagues')
+        subject = request.form.get('subject', '').strip()
+        body_html = request.form.get('body_html', '').strip()
+        send_mode = request.form.get('send_mode', 'cc')
+        manual_recipients_text = request.form.get('manual_recipients', '').strip()
+        schedule_date = request.form.get('schedule_date', '').strip()
+        schedule_time = request.form.get('schedule_time', '').strip()
+        action = request.form.get('action', 'send_now')
+
+        # Validate
+        if not selected_leagues:
+            flash('Please select at least one league.', 'error')
+            return redirect(url_for('scheduler.email_coaches'))
+
+        if not subject:
+            flash('Please enter a subject.', 'error')
+            return redirect(url_for('scheduler.email_coaches'))
+
+        if not body_html:
+            flash('Please enter a message.', 'error')
+            return redirect(url_for('scheduler.email_coaches'))
+
+        # Get recipients
+        recipients = get_coaches_by_leagues(year, is_spring, selected_leagues)
+
+        if not recipients:
+            flash('No coaches found for the selected leagues.', 'error')
+            return redirect(url_for('scheduler.email_coaches'))
+
+        # Parse manual recipients
+        manual_recipients = parse_manual_recipients(manual_recipients_text)
+
+        # Convert HTML to plain text
+        body_text = html_to_plain_text(body_html)
+
+        # Get reply-to from current user
+        reply_to = current_user.email or 'scheduler@sdll.org'
+
+        # Parse scheduled time
+        scheduled_for = None
+        if action == 'schedule' and schedule_date and schedule_time:
+            try:
+                scheduled_for = datetime.strptime(f'{schedule_date} {schedule_time}', '%Y-%m-%d %H:%M')
+            except ValueError:
+                flash('Invalid schedule date/time format.', 'error')
+                return redirect(url_for('scheduler.email_coaches'))
+
+        # Create the scheduled email
+        email_record = ScheduledEmail.create_coach_blast(
+            user_id=current_user.ID,
+            year=year,
+            is_spring=is_spring,
+            leagues=selected_leagues,
+            recipients=recipients,
+            subject=subject,
+            body_html=body_html,
+            body_text=body_text,
+            reply_to=reply_to,
+            send_mode=send_mode,
+            manual_recipients=manual_recipients,
+            scheduled_for=scheduled_for
+        )
+
+        # Send immediately if not scheduled
+        if action == 'send_now':
+            send_scheduled_email(email_record)
+
+            if email_record.status == ScheduledEmail.STATUS_SENT:
+                flash(f'Email sent successfully to {email_record.sent_count} recipients!', 'success')
+            elif email_record.status == ScheduledEmail.STATUS_PARTIAL:
+                flash(f'Email partially sent: {email_record.sent_count} sent, {email_record.failed_count} failed.', 'warning')
+            else:
+                flash(f'Email failed to send: {email_record.error_message}', 'error')
+        else:
+            flash(f'Email scheduled for {scheduled_for.strftime("%b %d, %Y at %I:%M %p")}!', 'success')
+
+        return redirect(url_for('scheduler.email_coaches_history'))
+
+    return render_template(
+        'scheduler/email_coaches.html',
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name,
+        leagues=leagues,
+        user_email=current_user.email or 'scheduler@sdll.org'
+    )
+
+
+@scheduler_bp.route('/email-coaches/history')
+@login_required
+def email_coaches_history():
+    """View email history."""
+    if not can_email_coaches():
+        flash('You do not have permission to view email history.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    from app.models.scheduled_email import ScheduledEmail
+
+    emails = ScheduledEmail.get_history(limit=50)
+
+    return render_template(
+        'scheduler/email_history.html',
+        emails=emails
+    )
+
+
+@scheduler_bp.route('/api/coach-email-preview')
+@login_required
+def api_coach_email_preview():
+    """Get recipient list preview for selected leagues."""
+    if not can_email_coaches():
+        return jsonify({'error': 'Permission denied'}), 403
+
+    from app.services.email_blast_service import get_coaches_by_leagues
+
+    leagues = request.args.get('leagues', '').split(',')
+    leagues = [l.strip() for l in leagues if l.strip()]
+    show_emails = request.args.get('show_emails', 'false') == 'true'
+
+    if not leagues:
+        return jsonify({'coach_count': 0, 'team_count': 0, 'recipients': []})
+
+    # Get current season
+    current_season = LeagueSeason.get_current_season()
+    if not current_season:
+        return jsonify({'error': 'No active season'}), 400
+
+    coaches = get_coaches_by_leagues(current_season.year, current_season.is_spring, leagues)
+
+    # Count unique teams
+    teams = set(c['team'] for c in coaches)
+
+    response = {
+        'coach_count': len(coaches),
+        'team_count': len(teams)
+    }
+
+    if show_emails:
+        response['recipients'] = coaches
+
+    return jsonify(response)

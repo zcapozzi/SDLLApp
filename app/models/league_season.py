@@ -423,3 +423,63 @@ class LeagueSeason(db.Model):
             config.schedule_locked_at = None
             config.schedule_locked_by = None
         db.session.commit()
+
+    @classmethod
+    def get_current_season(cls):
+        """Get the current season (most recent with activity).
+
+        Returns the first LeagueSeason config for the current season.
+        Uses the same logic as the base template context processor:
+        - Prefer Spring if current month is Jan-Jun
+        - Prefer Fall if current month is Jul-Dec
+        - Fall back to most recent season with configs
+        """
+        today = date.today()
+        current_year = today.year
+
+        # Determine season preference
+        # Jan-Jun = Spring, Jul-Dec = Fall
+        prefer_spring = today.month <= 6
+
+        if prefer_spring:
+            # Try Spring current year first
+            config = cls.query.filter_by(
+                year=current_year,
+                is_spring=1,
+                active=1
+            ).first()
+            if config:
+                return config
+
+            # Try Fall previous year
+            config = cls.query.filter_by(
+                year=current_year - 1,
+                is_spring=0,
+                active=1
+            ).first()
+            if config:
+                return config
+        else:
+            # Try Fall current year first
+            config = cls.query.filter_by(
+                year=current_year,
+                is_spring=0,
+                active=1
+            ).first()
+            if config:
+                return config
+
+            # Try Spring current year
+            config = cls.query.filter_by(
+                year=current_year,
+                is_spring=1,
+                active=1
+            ).first()
+            if config:
+                return config
+
+        # Fall back to most recent season
+        return cls.query.filter_by(active=1).order_by(
+            cls.year.desc(),
+            cls.is_spring.desc()
+        ).first()

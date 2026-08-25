@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Email History{% endblock %}
+
+{% block extra_css %}
+<style>
+    .status-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    .status-pending {
+        background: rgba(255, 140, 0, 0.2);
+        color: #cc7000;
+    }
+    .status-sending {
+        background: rgba(255, 140, 0, 0.2);
+        color: #cc7000;
+    }
+    .status-sent {
+        background: rgba(34, 139, 34, 0.2);
+        color: rgb(34, 139, 34);
+    }
+    .status-partial {
+        background: rgba(255, 140, 0, 0.3);
+        color: #cc7000;
+    }
+    .status-failed {
+        background: rgba(200, 50, 50, 0.2);
+        color: #c33;
+    }
+    .header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .email-subject {
+        max-width: 250px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .mode-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 11px;
+        background: #eee;
+        color: #666;
+    }
+    .leagues-list {
+        font-size: 12px;
+        color: #666;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: #666;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="header-row">
+    <h1>Email History</h1>
+    <a href="{{ url_for('scheduler.email_coaches') }}" class="btn btn-primary">Compose New Email</a>
+</div>
+
+<div class="card">
+    {% if emails %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Subject</th>
+                <th>Leagues</th>
+                <th>Recipients</th>
+                <th>Mode</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for email in emails %}
+            <tr>
+                <td>
+                    <div>{{ email.created_at.strftime('%b %d, %Y') }}</div>
+                    <div class="text-small text-muted">{{ email.created_at.strftime('%I:%M %p') }}</div>
+                    {% if email.is_scheduled and email.status == 'pending' %}
+                    <div class="text-small" style="color: rgb(255, 140, 0);">
+                        Scheduled: {{ email.scheduled_for.strftime('%b %d at %I:%M %p') }}
+                    </div>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="email-subject" title="{{ email.subject }}">{{ email.subject }}</div>
+                    <div class="text-small text-muted">by {{ email.creator.name if email.creator else 'Unknown' }}</div>
+                </td>
+                <td>
+                    <div class="leagues-list" title="{{ email.leagues|join(', ') }}">
+                        {{ email.leagues|join(', ') or 'N/A' }}
+                    </div>
+                </td>
+                <td>
+                    {% if email.status in ['sent', 'partial'] %}
+                    <span style="color: rgb(34, 139, 34);">{{ email.sent_count }}</span>
+                    {% if email.failed_count > 0 %}
+                    / <span style="color: #c33;">{{ email.failed_count }} failed</span>
+                    {% endif %}
+                    {% else %}
+                    {{ email.recipient_count }}
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="mode-badge">{{ email.send_mode.upper() }}</span>
+                </td>
+                <td>
+                    <span class="status-badge status-{{ email.status }}">
+                        {{ email.status_display }}
+                    </span>
+                    {% if email.sent_at and email.status in ['sent', 'partial', 'failed'] %}
+                    <div class="text-small text-muted">
+                        {{ email.sent_at.strftime('%I:%M %p') }}
+                    </div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No emails sent yet.</p>
+        <a href="{{ url_for('scheduler.email_coaches') }}" class="btn btn-primary">Send Your First Email</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
