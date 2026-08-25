@@ -84,22 +84,22 @@
     <div class="filter-bar">
         <input type="text" id="searchFilter" class="form-control" placeholder="Search name, email, or phone..."
                style="width: 250px;" oninput="filterUsers()">
-        <form method="get" style="display: flex; gap: 10px; align-items: center;">
+        <div style="display: flex; gap: 10px; align-items: center;">
             <label>Status:</label>
-            <select name="status" onchange="this.form.submit()">
-                <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
-                <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive</option>
-                <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All</option>
+            <select id="statusFilter" onchange="filterUsers()">
+                <option value="all">All</option>
+                <option value="active" selected>Active</option>
+                <option value="inactive">Inactive</option>
             </select>
 
             <label style="margin-left: 15px;">Role:</label>
-            <select name="role" onchange="this.form.submit()">
-                <option value="all" {% if role_filter == 'all' %}selected{% endif %}>All Roles</option>
+            <select id="roleFilter" onchange="filterUsers()">
+                <option value="all">All Roles</option>
                 {% for role in roles %}
-                <option value="{{ role }}" {% if role_filter == role %}selected{% endif %}>{{ role|replace('_', ' ')|title }}</option>
+                <option value="{{ role }}">{{ role|replace('_', ' ')|title }}</option>
                 {% endfor %}
             </select>
-        </form>
+        </div>
         <span class="text-muted text-small" id="userCount" style="margin-left: auto;">{{ users|length }} user(s)</span>
     </div>
 
@@ -120,7 +120,9 @@
             <tr id="user-{{ user.ID }}" class="user-row {% if not user.active %}status-inactive{% endif %}"
                 data-name="{{ (user.name or '')|lower }}"
                 data-email="{{ (user.email or '')|lower }}"
-                data-phone="{{ (user.phone or '')|replace('-', '')|replace('.', '')|replace(' ', '')|replace('(', '')|replace(')', '') }}">
+                data-phone="{{ (user.phone or '')|replace('-', '')|replace('.', '')|replace(' ', '')|replace('(', '')|replace(')', '') }}"
+                data-status="{{ 'active' if user.active else 'inactive' }}"
+                data-role="{{ user.role }}">
                 <td>
                     {{ user.name or '(No name)' }}
                     {% if not user.active %}<span class="text-muted text-small">(inactive)</span>{% endif %}
@@ -219,6 +221,8 @@ function toggleEdit(userId) {
 function filterUsers() {
     var searchTerm = document.getElementById('searchFilter').value.toLowerCase().trim();
     var searchDigits = searchTerm.replace(/\D/g, ''); // Extract digits for phone search
+    var statusFilter = document.getElementById('statusFilter').value;
+    var roleFilter = document.getElementById('roleFilter').value;
     var rows = document.querySelectorAll('.user-row');
     var visibleCount = 0;
 
@@ -226,19 +230,34 @@ function filterUsers() {
         var name = row.dataset.name || '';
         var email = row.dataset.email || '';
         var phone = row.dataset.phone || '';
+        var status = row.dataset.status || '';
+        var role = row.dataset.role || '';
         var editRow = document.getElementById('edit-' + row.id.replace('user-', ''));
 
-        var matches = false;
+        var matchesSearch = false;
+        var matchesStatus = false;
+        var matchesRole = false;
 
+        // Search filter
         if (searchTerm === '') {
-            matches = true;
+            matchesSearch = true;
         } else if (name.includes(searchTerm) || email.includes(searchTerm)) {
-            matches = true;
+            matchesSearch = true;
         } else if (searchDigits.length > 0 && phone.includes(searchDigits)) {
-            matches = true;
+            matchesSearch = true;
         }
 
-        if (matches) {
+        // Status filter
+        if (statusFilter === 'all' || status === statusFilter) {
+            matchesStatus = true;
+        }
+
+        // Role filter
+        if (roleFilter === 'all' || role === roleFilter) {
+            matchesRole = true;
+        }
+
+        if (matchesSearch && matchesStatus && matchesRole) {
             row.style.display = '';
             if (editRow) editRow.style.display = '';
             visibleCount++;

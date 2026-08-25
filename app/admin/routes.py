@@ -56,29 +56,13 @@ def users():
             redirect_url += f'#{anchor}'
         return redirect(redirect_url)
 
-    # GET: Display user list with filters
-    status_filter = request.args.get('status', 'active')
-    role_filter = request.args.get('role', 'all')
-
-    query = User.query
-
-    if status_filter == 'active':
-        query = query.filter_by(active=1)
-    elif status_filter == 'inactive':
-        query = query.filter_by(active=0)
-    # 'all' shows both
-
-    if role_filter != 'all':
-        query = query.filter_by(role=role_filter)
-
-    users_list = query.order_by(User.role, User.ID).all()
+    # GET: Display user list (filtering done client-side via JS)
+    users_list = User.query.order_by(User.role, User.ID).all()
 
     return render_template(
         'admin/users.html',
         users=users_list,
-        roles=User.ROLES,
-        status_filter=status_filter,
-        role_filter=role_filter
+        roles=User.ROLES
     )
 
 
