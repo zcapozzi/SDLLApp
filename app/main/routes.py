@@ -281,6 +281,122 @@ def cron_unassigned_umpires():
         return jsonify({'error': f'Failed to send email: {str(e)}'}), 500
 
 
+@main_bp.route('/cron/diagnose-email')
+def cron_diagnose_email():
+    """
+    Diagnostic endpoint to debug email configuration.
+
+    Call with ?token=YOUR_CRON_SECRET to check Resend setup.
+    """
+    import os
+    import json
+    import urllib.request
+    import urllib.error
+
+    # Verify secret token
+    expected_token = os.environ.get('CRON_SECRET')
+    provided_token = request.args.get('token')
+
+    if not expected_token:
+        return jsonify({'error': 'CRON_SECRET not configured'}), 500
+
+    if provided_token != expected_token:
+        return jsonify({'error': 'Invalid token'}), 403
+
+    diagnostics = {
+        'environment': {},
+        'resend_domains': None,
+        'resend_api_keys': None,
+        'test_send': None
+    }
+
+    # Check environment variables
+    resend_key = os.environ.get('RESEND_API_KEY')
+    gmail_sender = os.environ.get('GMAIL_SENDER', 'umpires@sdll.org')
+    gmail_sender_name = os.environ.get('GMAIL_SENDER_NAME', 'SDLL Umpires')
+
+    diagnostics['environment'] = {
+        'RESEND_API_KEY': f"{'set' if resend_key else 'NOT SET'} ({len(resend_key) if resend_key else 0} chars)",
+        'GMAIL_SENDER': gmail_sender,
+        'GMAIL_SENDER_NAME': gmail_sender_name,
+        'from_address_would_be': f"{gmail_sender_name} <{gmail_sender}>"
+    }
+
+    if not resend_key:
+        diagnostics['error'] = 'RESEND_API_KEY not set'
+        return jsonify(diagnostics), 500
+
+    # Query Resend API for domains
+    try:
+        req = urllib.request.Request(
+            'https://api.resend.com/domains',
+            headers={
+                'Authorization': f'Bearer {resend_key}',
+                'Content-Type': 'application/json'
+            },
+            method='GET'
+        )
+        with urllib.request.urlopen(req) as response:
+            domains_data = json.loads(response.read().decode('utf-8'))
+            diagnostics['resend_domains'] = domains_data
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        diagnostics['resend_domains'] = {'error': f'{e.code}: {error_body}'}
+    except Exception as e:
+        diagnostics['resend_domains'] = {'error': str(e)}
+
+    # Query Resend API for API keys info
+    try:
+        req = urllib.request.Request(
+            'https://api.resend.com/api-keys',
+            headers={
+                'Authorization': f'Bearer {resend_key}',
+                'Content-Type': 'application/json'
+            },
+            method='GET'
+        )
+        with urllib.request.urlopen(req) as response:
+            keys_data = json.loads(response.read().decode('utf-8'))
+            diagnostics['resend_api_keys'] = keys_data
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        diagnostics['resend_api_keys'] = {'error': f'{e.code}: {error_body}'}
+    except Exception as e:
+        diagnostics['resend_api_keys'] = {'error': str(e)}
+
+    # Optional: Try test send if requested
+    test_to = request.args.get('test_to')
+    if test_to:
+        try:
+            from_address = f"{gmail_sender_name} <{gmail_sender}>"
+            payload = {
+                "from": from_address,
+                "to": [test_to],
+                "subject": "SDLL Email Test",
+                "text": "This is a test email from the SDLL diagnostic endpoint."
+            }
+            data = json.dumps(payload).encode('utf-8')
+            req = urllib.request.Request(
+                'https://api.resend.com/emails',
+                data=data,
+                headers={
+                    'Authorization': f'Bearer {resend_key}',
+                    'Content-Type': 'application/json'
+                },
+                method='POST'
+            )
+            with urllib.request.urlopen(req) as response:
+                result = json.loads(response.read().decode('utf-8'))
+                diagnostics['test_send'] = {'success': True, 'result': result}
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode('utf-8')
+            diagnostics['test_send'] = {'success': False, 'error': f'{e.code}: {error_body}'}
+        except Exception as e:
+            diagnostics['test_send'] = {'success': False, 'error': str(e)}
+
+    return jsonify(diagnostics), 200
+
+
 @main_bp.route('/')
 def index():
     """Home page - redirect to dashboard if logged in"""
