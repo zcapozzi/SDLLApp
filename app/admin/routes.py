@@ -130,16 +130,26 @@ def handle_edit_user():
         flash('User not found.', 'error')
         return None
 
-    # Prevent editing yourself via this form
-    if user.ID == current_user.ID:
-        flash('You cannot edit your own account here.', 'error')
-        return None
+    is_editing_self = (user.ID == current_user.ID)
 
+    new_email = request.form.get('email', '').strip()
     new_role = request.form.get('role')
     new_name = request.form.get('name', '').strip()
     new_phone = request.form.get('phone', '').strip()
 
-    if new_role and new_role in User.ROLES:
+    # Update email if provided
+    if new_email and new_email != user.email:
+        # Check if email is already taken by another user
+        existing = User.query.filter(User.email == new_email, User.ID != user.ID).first()
+        if existing:
+            flash('That email is already in use by another account.', 'error')
+            return None
+        old_email = user.email
+        user.email = new_email
+        logger.info(f'Admin {current_user.ID} changed user {user.ID} email from {old_email} to {new_email}')
+
+    # Only allow role changes for other users (not yourself)
+    if not is_editing_self and new_role and new_role in User.ROLES:
         old_role = user.role
         user.role = new_role
         if old_role != new_role:

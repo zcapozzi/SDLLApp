@@ -138,8 +138,8 @@
                     {% endif %}
                 </td>
                 <td>
-                    {% if user.ID != current_user.ID %}
                     <button type="button" class="btn-link" onclick="toggleEdit({{ user.ID }})">Edit</button>
+                    {% if user.ID != current_user.ID %}
                     <form method="post" style="display: inline;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="send_reset">
@@ -167,6 +167,10 @@
                         <input type="hidden" name="user_id" value="{{ user.ID }}">
                         <div class="edit-row">
                             <div class="form-group">
+                                <label>Email</label>
+                                <input type="email" name="email" value="{{ user.email or '' }}" class="form-control" style="width: 220px;">
+                            </div>
+                            <div class="form-group">
                                 <label>Name</label>
                                 <input type="text" name="name" value="{{ user.name or '' }}" class="form-control" style="width: 200px;">
                             </div>
@@ -176,7 +180,7 @@
                             </div>
                             <div class="form-group">
                                 <label>Role</label>
-                                <select name="role" class="form-control">
+                                <select name="role" class="form-control" {% if user.ID == current_user.ID %}disabled{% endif %}>
                                     {% for role in roles %}
                                     <option value="{{ role }}" {% if user.role == role %}selected{% endif %}>
                                         {{ role|replace('_', ' ')|title }}
