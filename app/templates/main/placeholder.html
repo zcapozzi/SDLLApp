@@ -23,6 +23,7 @@
             </p>
 
             <form method="POST" action="{{ url_for('main.contact') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="form-group">
                     <label for="subject">Subject</label>
                     <input type="text" id="subject" name="subject" class="form-control"
