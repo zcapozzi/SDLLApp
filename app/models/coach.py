@@ -1,8 +1,65 @@
-"""Coach model - coach contact information per team per season."""
+"""Coach models - coach users and team assignments."""
 
 from datetime import datetime
 from app.extensions import db
 from app.utils.encryption import encrypt_value, decrypt_value, hash_for_lookup
+
+
+class CoachUser(db.Model):
+    """Links a user to coaching role with sport affiliation.
+
+    This table tracks which users are registered as coaches and what
+    sport(s) they coach (baseball, softball, or both).
+    """
+    __tablename__ = 'sdll_coaches'
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.BigInteger, db.ForeignKey('sdll_users.ID'), nullable=False)
+    sport = db.Column(db.Enum('baseball', 'softball', 'both'), nullable=False)
+    season_year = db.Column(db.Integer, default=2026)
+    is_spring = db.Column(db.SmallInteger, default=1)
+    active = db.Column(db.SmallInteger, default=1)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationship to User
+    user = db.relationship('User', backref=db.backref('coach_records', lazy='dynamic'))
+
+    def __repr__(self):
+        return f'<CoachUser {self.id} user={self.user_id} sport={self.sport}>'
+
+    @classmethod
+    def get_active_coaches(cls, season_year=None, is_spring=None, sport=None):
+        """Get all active coaches, optionally filtered by season and sport."""
+        query = cls.query.filter_by(active=1)
+
+        if season_year:
+            query = query.filter_by(season_year=season_year)
+        if is_spring is not None:
+            query = query.filter_by(is_spring=is_spring)
+        if sport:
+            query = query.filter(
+                (cls.sport == sport) | (cls.sport == 'both')
+            )
+
+        return query.all()
+
+    @classmethod
+    def get_by_user(cls, user_id, season_year=None, is_spring=None):
+        """Get coach record for a specific user."""
+        query = cls.query.filter_by(user_id=user_id, active=1)
+
+        if season_year:
+            query = query.filter_by(season_year=season_year)
+        if is_spring is not None:
+            query = query.filter_by(is_spring=is_spring)
+
+        return query.first()
+
+    @property
+    def season_name(self):
+        """Get formatted season name."""
+        season_type = 'Spring' if self.is_spring else 'Fall'
+        return f"{season_type} {self.season_year}"
 
 
 class CoachSeason(db.Model):
