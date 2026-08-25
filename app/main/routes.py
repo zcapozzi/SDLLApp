@@ -317,9 +317,15 @@ def cron_diagnose_email():
 
     # Show first 8 chars of key to verify which key is loaded
     key_prefix = resend_key[:8] if resend_key else 'N/A'
+    key_suffix = resend_key[-4:] if resend_key else 'N/A'
+    # Check for hidden characters
+    key_repr = repr(resend_key) if resend_key else 'N/A'
+    has_whitespace = any(c in resend_key for c in [' ', '\t', '\n', '\r']) if resend_key else False
 
     diagnostics['environment'] = {
-        'RESEND_API_KEY': f"{'set' if resend_key else 'NOT SET'} ({len(resend_key) if resend_key else 0} chars, starts with: {key_prefix}...)",
+        'RESEND_API_KEY': f"{'set' if resend_key else 'NOT SET'} ({len(resend_key) if resend_key else 0} chars, starts: {key_prefix}..., ends: ...{key_suffix})",
+        'RESEND_API_KEY_has_whitespace': has_whitespace,
+        'RESEND_API_KEY_repr_length': len(key_repr) if resend_key else 0,
         'GMAIL_SENDER': gmail_sender,
         'GMAIL_SENDER_NAME': gmail_sender_name,
         'from_address_would_be': f"{gmail_sender_name} <{gmail_sender}>"
@@ -329,12 +335,15 @@ def cron_diagnose_email():
         diagnostics['error'] = 'RESEND_API_KEY not set'
         return jsonify(diagnostics), 500
 
+    # Strip whitespace from key just in case
+    clean_key = resend_key.strip() if resend_key else ''
+
     # Query Resend API for domains
     try:
         req = urllib.request.Request(
             'https://api.resend.com/domains',
             headers={
-                'Authorization': f'Bearer {resend_key}',
+                'Authorization': f'Bearer {clean_key}',
                 'Content-Type': 'application/json'
             },
             method='GET'
@@ -353,7 +362,7 @@ def cron_diagnose_email():
         req = urllib.request.Request(
             'https://api.resend.com/api-keys',
             headers={
-                'Authorization': f'Bearer {resend_key}',
+                'Authorization': f'Bearer {clean_key}',
                 'Content-Type': 'application/json'
             },
             method='GET'
@@ -383,7 +392,7 @@ def cron_diagnose_email():
                 'https://api.resend.com/emails',
                 data=data,
                 headers={
-                    'Authorization': f'Bearer {resend_key}',
+                    'Authorization': f'Bearer {clean_key}',
                     'Content-Type': 'application/json'
                 },
                 method='POST'

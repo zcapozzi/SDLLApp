@@ -76,7 +76,7 @@ class GmailService:
 
     def _send_via_resend(self, to, subject, body_text, body_html=None):
         """Send email via Resend API"""
-        api_key = os.environ.get('RESEND_API_KEY')
+        api_key = os.environ.get('RESEND_API_KEY', '').strip()
 
         # Resend requires format: "Display Name <email@domain.com>"
         from_address = f"{self.sender_name} <{self.sender_email}>"
