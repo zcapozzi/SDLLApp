@@ -598,7 +598,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="update_game">
             <input type="hidden" name="game_id" id="edit-game-id">
-            <input type="hidden" name="return_to" value="{{ url_for('games.calendar', year=year, is_spring=is_spring, week=current_week, league=current_league) if current_league else url_for('games.calendar', year=year, is_spring=is_spring, week=current_week) }}">
+            <input type="hidden" name="return_to" id="edit-return-to" value="{{ url_for('games.calendar', year=year, is_spring=is_spring, week=current_week, league=current_league) if current_league else url_for('games.calendar', year=year, is_spring=is_spring, week=current_week) }}">
 
             <div class="form-group">
                 <label>Type</label>

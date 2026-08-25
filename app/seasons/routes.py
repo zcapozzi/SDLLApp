@@ -326,9 +326,17 @@ def manage_teams(year, is_spring):
         return redirect(redirect_url)
 
     # GET - show teams
-    from app.models.coach import CoachUser
+    from app.models.coach import CoachUser, CoachSeason
+    from sqlalchemy.orm import joinedload
 
-    teams = TeamSeason.get_by_season(year, is_spring)
+    # Eager load coaches relationship to avoid N+1 queries
+    teams = TeamSeason.query.filter_by(
+        year=year,
+        is_spring=is_spring,
+        active=1
+    ).options(
+        joinedload(TeamSeason.coaches)
+    ).order_by(TeamSeason.league, TeamSeason.display_name).all()
 
     # Group by league
     teams_by_league = {}
@@ -341,8 +349,10 @@ def manage_teams(year, is_spring):
     # Get available leagues
     leagues = League.get_all_active()
 
-    # Get available coaches for assignment
-    coaches = CoachUser.query.filter_by(status='active').all()
+    # Get available coaches for assignment - eager load user to avoid N+1
+    coaches = CoachUser.query.filter_by(status='active').options(
+        joinedload(CoachUser.user)
+    ).all()
 
     return render_template(
         'seasons/manage_teams.html',

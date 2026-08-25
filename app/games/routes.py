@@ -720,12 +720,17 @@ def manage(year, is_spring):
 
         # Check if we should return to a different page (e.g., calendar)
         return_to = request.form.get('return_to')
-        if return_to:
+        logger.info(f'POST action={action}, return_to={return_to}')
+        if return_to and return_to.startswith('/'):
+            # Validate it's a relative URL (same origin) for security
             redirect_url = return_to
         else:
             redirect_url = url_for('games.manage', year=year, is_spring=is_spring)
         if anchor:
-            redirect_url += f'#{anchor}'
+            # Only add anchor if URL doesn't already have a fragment
+            if '#' not in redirect_url:
+                redirect_url += f'#{anchor}'
+        logger.info(f'Redirecting to: {redirect_url}')
         return redirect(redirect_url)
 
     # GET - show management page
@@ -1037,11 +1042,18 @@ def calendar(year, is_spring):
             day_games = []
             for g in sorted(day_games_raw, key=lambda x: x.get('game_date', '')):
                 field_name = g.get('field_name') or g.get('location') or ''
+                # Resolve field_id from field_name if possible
+                field_id = None
+                if field_name:
+                    field_obj = Field.query.filter_by(location_title=field_name, active=1).first()
+                    if field_obj:
+                        field_id = field_obj.ID
                 game_obj = type('ProposedGame', (), {
                     'ID': g.get('id'),
                     'game_date': datetime.fromisoformat(g['game_date']) if g.get('game_date') else None,
                     'location': field_name,
                     'field_name': field_name,  # Add field_name for template compatibility
+                    'field_id': field_id,  # Add field_id for edit modal compatibility
                     'league': g.get('league'),
                     'status': 'scheduled',
                     'game_type': g.get('game_type', 'regular'),
