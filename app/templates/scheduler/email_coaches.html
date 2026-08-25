@@ -187,11 +187,12 @@
     </div>
 
     <div class="card">
-        <h3>Additional Recipients (optional)</h3>
+        <h3>Additional Recipients</h3>
         <div class="form-group">
-            <textarea name="manual_recipients" class="form-control" rows="2"
-                      placeholder="Enter additional emails, one per line or comma-separated"></textarea>
-            <small class="text-muted">These will be added to the coach recipients above</small>
+            <textarea name="manual_recipients" id="manual_recipients" class="form-control" rows="2"
+                      placeholder="Enter additional emails, one per line or comma-separated"
+                      onchange="updateTotalCount()"></textarea>
+            <small class="text-muted">Can be used alone or added to coach recipients above</small>
         </div>
     </div>
 
@@ -390,10 +391,29 @@
         return div.innerHTML;
     }
 
+    function getManualRecipientCount() {
+        var text = document.getElementById('manual_recipients').value.trim();
+        if (!text) return 0;
+        // Split by commas, semicolons, or newlines and count valid-looking emails
+        var emails = text.split(/[,;\n\r]+/);
+        var count = 0;
+        var emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        emails.forEach(function(email) {
+            if (emailPattern.test(email.trim())) count++;
+        });
+        return count;
+    }
+
+    function updateTotalCount() {
+        // This is called when manual recipients change - could update a display if needed
+    }
+
     function confirmSend() {
-        var selected = document.querySelectorAll('input[name="leagues"]:checked').length;
-        if (selected === 0) {
-            alert('Please select at least one league.');
+        var selectedLeagues = document.querySelectorAll('input[name="leagues"]:checked').length;
+        var manualCount = getManualRecipientCount();
+
+        if (selectedLeagues === 0 && manualCount === 0) {
+            alert('Please select at least one league or enter manual recipients.');
             return false;
         }
 
@@ -409,8 +429,9 @@
             return false;
         }
 
-        var count = document.getElementById('recipient-count').textContent;
-        return confirm('Send this email to ' + count + ' coaches?');
+        var coachCount = parseInt(document.getElementById('recipient-count').textContent) || 0;
+        var totalCount = coachCount + manualCount;
+        return confirm('Send this email to ' + totalCount + ' recipient(s)?');
     }
 </script>
 {% endblock %}

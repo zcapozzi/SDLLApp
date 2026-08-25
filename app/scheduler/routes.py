@@ -1307,9 +1307,12 @@ def email_coaches():
         schedule_time = request.form.get('schedule_time', '').strip()
         action = request.form.get('action', 'send_now')
 
-        # Validate
-        if not selected_leagues:
-            flash('Please select at least one league.', 'error')
+        # Parse manual recipients first
+        manual_recipients = parse_manual_recipients(manual_recipients_text)
+
+        # Validate - need either leagues selected OR manual recipients
+        if not selected_leagues and not manual_recipients:
+            flash('Please select at least one league or enter manual recipients.', 'error')
             return redirect(url_for('scheduler.email_coaches'))
 
         if not subject:
@@ -1320,15 +1323,15 @@ def email_coaches():
             flash('Please enter a message.', 'error')
             return redirect(url_for('scheduler.email_coaches'))
 
-        # Get recipients
-        recipients = get_coaches_by_leagues(year, is_spring, selected_leagues)
+        # Get coach recipients (only if leagues selected)
+        recipients = []
+        if selected_leagues:
+            recipients = get_coaches_by_leagues(year, is_spring, selected_leagues)
 
-        if not recipients:
-            flash('No coaches found for the selected leagues.', 'error')
+        # Ensure we have at least one recipient total
+        if not recipients and not manual_recipients:
+            flash('No recipients found. Please select leagues with coaches or enter manual recipients.', 'error')
             return redirect(url_for('scheduler.email_coaches'))
-
-        # Parse manual recipients
-        manual_recipients = parse_manual_recipients(manual_recipients_text)
 
         # Convert HTML to plain text
         body_text = html_to_plain_text(body_html)
