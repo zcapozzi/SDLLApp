@@ -503,8 +503,8 @@ def contact():
         return redirect(url_for('main.dashboard'))
 
     # Get user info
-    user_name = f"{current_user.first_name} {current_user.last_name}"
-    user_email = current_user.get_email()
+    user_name = current_user.name or 'Unknown'
+    user_email = current_user.email or 'Unknown'
 
     # Build email
     email_subject = f"[SDLL Feedback] {subject}"
