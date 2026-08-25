@@ -82,6 +82,8 @@
     </div>
 
     <div class="filter-bar">
+        <input type="text" id="searchFilter" class="form-control" placeholder="Search name, email, or phone..."
+               style="width: 250px;" oninput="filterUsers()">
         <form method="get" style="display: flex; gap: 10px; align-items: center;">
             <label>Status:</label>
             <select name="status" onchange="this.form.submit()">
@@ -98,7 +100,7 @@
                 {% endfor %}
             </select>
         </form>
-        <span class="text-muted text-small" style="margin-left: auto;">{{ users|length }} user(s)</span>
+        <span class="text-muted text-small" id="userCount" style="margin-left: auto;">{{ users|length }} user(s)</span>
     </div>
 
     {% if users %}
@@ -115,7 +117,10 @@
         </thead>
         <tbody>
             {% for user in users %}
-            <tr id="user-{{ user.ID }}" class="{% if not user.active %}status-inactive{% endif %}">
+            <tr id="user-{{ user.ID }}" class="user-row {% if not user.active %}status-inactive{% endif %}"
+                data-name="{{ (user.name or '')|lower }}"
+                data-email="{{ (user.email or '')|lower }}"
+                data-phone="{{ (user.phone or '')|replace('-', '')|replace('.', '')|replace(' ', '')|replace('(', '')|replace(')', '') }}">
                 <td>
                     {{ user.name or '(No name)' }}
                     {% if not user.active %}<span class="text-muted text-small">(inactive)</span>{% endif %}
@@ -209,6 +214,44 @@ function toggleEdit(userId) {
         });
         editRow.classList.add('active');
     }
+}
+
+function filterUsers() {
+    var searchTerm = document.getElementById('searchFilter').value.toLowerCase().trim();
+    var searchDigits = searchTerm.replace(/\D/g, ''); // Extract digits for phone search
+    var rows = document.querySelectorAll('.user-row');
+    var visibleCount = 0;
+
+    rows.forEach(function(row) {
+        var name = row.dataset.name || '';
+        var email = row.dataset.email || '';
+        var phone = row.dataset.phone || '';
+        var editRow = document.getElementById('edit-' + row.id.replace('user-', ''));
+
+        var matches = false;
+
+        if (searchTerm === '') {
+            matches = true;
+        } else if (name.includes(searchTerm) || email.includes(searchTerm)) {
+            matches = true;
+        } else if (searchDigits.length > 0 && phone.includes(searchDigits)) {
+            matches = true;
+        }
+
+        if (matches) {
+            row.style.display = '';
+            if (editRow) editRow.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+            if (editRow) {
+                editRow.style.display = 'none';
+                editRow.classList.remove('active');
+            }
+        }
+    });
+
+    document.getElementById('userCount').textContent = visibleCount + ' user(s)';
 }
 </script>
 {% endblock %}
