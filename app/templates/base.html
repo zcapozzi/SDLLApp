@@ -108,6 +108,7 @@
     <nav class="navbar">
         <a href="{{ url_for('main.dashboard') }}" class="navbar-brand">SDLL</a>
         <div class="navbar-nav">
+            {% if current_user.can_edit_schedule() or current_user.is_umpire() or current_user.can_manage_umpires() %}
             <div class="nav-item">
                 <a href="{{ url_for('main.dashboard') }}" class="nav-link">Dashboard</a>
             </div>
@@ -267,6 +268,7 @@
                 </div>
             </div>
             {% endif %}
+            {% endif %}{# End of can_edit_schedule/is_umpire check for full nav #}
 
             <div class="nav-item">
                 <a href="{{ url_for('auth.logout') }}" class="nav-link">Logout</a>

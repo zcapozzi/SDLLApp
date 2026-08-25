@@ -432,6 +432,17 @@ def index():
 @login_required
 def dashboard():
     """Main dashboard view"""
+    # Check if user has access to full dashboard
+    has_full_access = (
+        current_user.can_edit_schedule() or
+        current_user.is_umpire() or
+        current_user.can_manage_umpires()
+    )
+
+    if not has_full_access:
+        # Show placeholder page for regular users
+        return render_template('main/placeholder.html')
+
     # Get upcoming games
     upcoming_games = Game.get_upcoming(limit=10)
 
