@@ -489,6 +489,53 @@ def privacy():
     return render_template('public/privacy.html')
 
 
+@main_bp.route('/contact', methods=['POST'])
+@login_required
+def contact():
+    """Handle contact form submission from placeholder page."""
+    from app.services.notification_service import GmailService
+
+    subject = request.form.get('subject', '').strip()
+    message = request.form.get('message', '').strip()
+
+    if not subject or not message:
+        flash('Please fill in both subject and message.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    # Get user info
+    user_name = f"{current_user.first_name} {current_user.last_name}"
+    user_email = current_user.get_email()
+
+    # Build email
+    email_subject = f"[SDLL Feedback] {subject}"
+    email_body = f"""Message from: {user_name}
+Email: {user_email}
+
+Subject: {subject}
+
+Message:
+{message}
+"""
+
+    gmail = GmailService()
+    if not gmail.is_configured:
+        flash('Email service is not configured. Please try again later.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    try:
+        gmail.send_email(
+            to='umpires@sdll.org',
+            subject=email_subject,
+            body_text=email_body
+        )
+        flash('Thank you! Your message has been sent.', 'success')
+    except Exception as e:
+        flash(f'Failed to send message. Please try again later.', 'error')
+        print(f"Contact form error: {e}")
+
+    return redirect(url_for('main.dashboard'))
+
+
 # ============================================================================
 # Admin Error Management Routes
 # ============================================================================
