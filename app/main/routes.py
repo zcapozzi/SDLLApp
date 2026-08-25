@@ -338,6 +338,14 @@ def cron_diagnose_email():
     # Strip whitespace from key just in case
     clean_key = resend_key.strip() if resend_key else ''
 
+    # Test with a simple curl-like request to see raw response
+    import socket
+    diagnostics['railway_ip'] = None
+    try:
+        diagnostics['railway_ip'] = socket.gethostbyname(socket.gethostname())
+    except:
+        pass
+
     # Query Resend API for domains
     try:
         req = urllib.request.Request(
