@@ -32,6 +32,9 @@ class GameChange(db.Model):
     home_team_id = db.Column(db.BigInteger)
     away_team_id = db.Column(db.BigInteger)
 
+    # Pre-release acknowledgment - changes before schedule release don't show "Originally..."
+    acknowledged = db.Column(db.SmallInteger, default=0)
+
     # Relationships
     game = db.relationship('Game', backref=db.backref('changes', lazy='dynamic'))
     user = db.relationship('User', backref=db.backref('game_changes', lazy='dynamic'))
@@ -124,7 +127,7 @@ class GameChange(db.Model):
         """
         Get the original values for a game before any changes.
 
-        Looks at the oldest change record and extracts the 'old' values
+        Looks at the oldest NON-ACKNOWLEDGED change record and extracts the 'old' values
         to reconstruct what the game was originally scheduled as.
 
         Args:
@@ -133,8 +136,8 @@ class GameChange(db.Model):
         Returns:
             Dictionary with original values (date, time, field) or None if no changes
         """
-        # Get the oldest change that has relevant info
-        changes = cls.query.filter_by(game_id=game_id).filter(
+        # Get the oldest non-acknowledged change that has relevant info
+        changes = cls.query.filter_by(game_id=game_id, acknowledged=0).filter(
             cls.change_type.in_(['update', 'reschedule'])
         ).order_by(cls.changed_at.asc()).all()
 
@@ -180,8 +183,8 @@ class GameChange(db.Model):
         """
         from datetime import timedelta
 
-        # Get all changes ordered newest first
-        changes = cls.query.filter_by(game_id=game_id).filter(
+        # Get all non-acknowledged changes ordered newest first
+        changes = cls.query.filter_by(game_id=game_id, acknowledged=0).filter(
             cls.change_type.in_(['update', 'reschedule'])
         ).order_by(cls.changed_at.desc()).all()
 
@@ -311,3 +314,39 @@ class GameChange(db.Model):
             String like "Originally Sep 15 at 5:30 PM" or "Changed from 6:00 PM" or None
         """
         return cls.get_change_display(game_id, current_game)
+
+    @classmethod
+    def acknowledge_all_for_season(cls, year, is_spring):
+        """
+        Mark all changes for a season as acknowledged.
+
+        This is called when the schedule is officially released.
+        Acknowledged changes won't show "Originally..." on public pages.
+
+        Args:
+            year: Season year
+            is_spring: 1 for spring, 0 for fall
+
+        Returns:
+            Number of changes acknowledged
+        """
+        from app.models.game import Game
+
+        # Get all game IDs for this season
+        game_ids = db.session.query(Game.ID).filter(
+            Game.year == year,
+            Game.is_spring == is_spring
+        ).all()
+        game_ids = [g[0] for g in game_ids]
+
+        if not game_ids:
+            return 0
+
+        # Update all non-acknowledged changes for these games
+        count = cls.query.filter(
+            cls.game_id.in_(game_ids),
+            cls.acknowledged == 0
+        ).update({cls.acknowledged: 1}, synchronize_session=False)
+
+        db.session.commit()
+        return count

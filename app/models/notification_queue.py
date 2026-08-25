@@ -118,3 +118,39 @@ class NotificationQueue(db.Model):
         db.session.add(notification)
         db.session.commit()
         return notification
+
+    @classmethod
+    def skip_all_for_season(cls, year, is_spring):
+        """
+        Mark all pending notifications for a season as skipped.
+
+        This is called when the schedule is officially released.
+        Pre-release notifications don't need to be sent.
+
+        Args:
+            year: Season year
+            is_spring: 1 for spring, 0 for fall
+
+        Returns:
+            Number of notifications skipped
+        """
+        from app.models.game import Game
+
+        # Get all game IDs for this season
+        game_ids = db.session.query(Game.ID).filter(
+            Game.year == year,
+            Game.is_spring == is_spring
+        ).all()
+        game_ids = [g[0] for g in game_ids]
+
+        if not game_ids:
+            return 0
+
+        # Mark all pending notifications for these games as skipped
+        count = cls.query.filter(
+            cls.game_id.in_(game_ids),
+            cls.status == 'pending'
+        ).update({cls.status: 'skipped'}, synchronize_session=False)
+
+        db.session.commit()
+        return count

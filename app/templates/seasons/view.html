@@ -15,6 +15,9 @@
         <a href="{{ url_for('seasons.schedule_settings', year=year, is_spring=is_spring) }}" class="btn btn-outline">Schedule Settings</a>
         <a href="{{ url_for('seasons.reset_season', year=year, is_spring=is_spring) }}" class="btn btn-outline" style="color: #c0392b; border-color: #c0392b;">Reset</a>
         {% endif %}
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('seasons.release_schedule', year=year, is_spring=is_spring) }}" class="btn btn-outline">Release Schedule</a>
+        {% endif %}
         <a href="{{ url_for('seasons.index') }}" class="btn btn-outline">All Seasons</a>
     </div>
 </div>

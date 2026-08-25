@@ -109,7 +109,7 @@
     {% for change in changes %}
     <div class="timeline-item {{ change.change_type }}">
         <div class="timeline-time">
-            {{ change.changed_at.strftime('%B %d, %Y at %I:%M %p') }}
+            {{ change.changed_at | local_datetime('%B %d, %Y at %I:%M %p') }}
         </div>
         <div>
             <span class="timeline-user">{{ change.user.name if change.user else 'Unknown' }}</span>

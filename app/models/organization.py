@@ -1,5 +1,7 @@
 """Organization model - maps to sdll_organizations table"""
 
+from datetime import datetime, timezone as tz
+from zoneinfo import ZoneInfo
 from app.extensions import db
 
 
@@ -16,6 +18,7 @@ class Organization(db.Model):
     name = db.Column(db.String(100), nullable=False)  # "South Durham Little League"
     short_name = db.Column(db.String(30))  # "SDLL" or "Bull City"
     location = db.Column(db.String(100))  # City/area
+    timezone = db.Column(db.String(50), default='America/New_York')  # IANA timezone
     is_home_org = db.Column(db.SmallInteger, default=0)  # 1 = SDLL itself
     notes = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
@@ -54,3 +57,58 @@ class Organization(db.Model):
             db.session.add(org)
             db.session.commit()
         return org
+
+    @classmethod
+    def get_default_timezone(cls):
+        """Get the timezone for the home organization (default for all displays)."""
+        home = cls.get_home_org()
+        if home and home.timezone:
+            return home.timezone
+        return 'America/New_York'
+
+    @classmethod
+    def utc_to_local(cls, utc_dt, tz_name=None):
+        """
+        Convert a UTC datetime to local time.
+
+        Args:
+            utc_dt: datetime object (assumed UTC if naive)
+            tz_name: IANA timezone name (e.g., 'America/New_York'). If None, uses home org timezone.
+
+        Returns:
+            datetime object in local timezone
+        """
+        if utc_dt is None:
+            return None
+
+        if tz_name is None:
+            tz_name = cls.get_default_timezone()
+
+        try:
+            local_tz = ZoneInfo(tz_name)
+        except Exception:
+            local_tz = ZoneInfo('America/New_York')
+
+        # If naive datetime, assume UTC
+        if utc_dt.tzinfo is None:
+            utc_dt = utc_dt.replace(tzinfo=tz.utc)
+
+        return utc_dt.astimezone(local_tz)
+
+    @classmethod
+    def format_local_datetime(cls, utc_dt, fmt='%m/%d/%Y %I:%M %p', tz_name=None):
+        """
+        Convert UTC datetime to local time and format as string.
+
+        Args:
+            utc_dt: datetime object (assumed UTC if naive)
+            fmt: strftime format string
+            tz_name: IANA timezone name. If None, uses home org timezone.
+
+        Returns:
+            Formatted string in local time, or empty string if None
+        """
+        local_dt = cls.utc_to_local(utc_dt, tz_name)
+        if local_dt is None:
+            return ''
+        return local_dt.strftime(fmt)

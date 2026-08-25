@@ -170,6 +170,21 @@ def create_app(config_name=None):
                 pass
             return dt_str
 
+    @app.template_filter('local_datetime')
+    def local_datetime_filter(utc_dt, fmt='%m/%d/%Y %I:%M %p'):
+        """Convert UTC datetime to local time and format.
+
+        Uses the home organization's timezone setting.
+
+        Examples:
+            {{ change.changed_at | local_datetime }}  -> '08/25/2026 02:30 PM'
+            {{ game.game_date | local_datetime('%a, %b %d at %I:%M %p') }}  -> 'Mon, Aug 25 at 2:30 PM'
+        """
+        if utc_dt is None:
+            return ''
+        from app.models.organization import Organization
+        return Organization.format_local_datetime(utc_dt, fmt)
+
     # CSRF error handler - session expired or token missing
     @app.errorhandler(CSRFError)
     def handle_csrf_error(e):

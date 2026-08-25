@@ -67,7 +67,7 @@
         <tbody>
             {% for change in changes %}
             <tr>
-                <td>{{ change.changed_at.strftime('%m/%d/%Y %H:%M') }}</td>
+                <td>{{ change.changed_at | local_datetime }}</td>
                 <td>
                     <a href="{{ url_for('reports.game_history', game_id=change.game_id) }}">
                         Game #{{ change.game_id }}

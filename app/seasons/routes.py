@@ -1273,3 +1273,73 @@ def practice_pairings(year, is_spring):
         pairings=pairings,
         teams_by_league=teams_by_league
     )
+
+
+@seasons_bp.route('/<int:year>/<int:is_spring>/release-schedule', methods=['GET', 'POST'])
+@login_required
+def release_schedule(year, is_spring):
+    """
+    Mark the schedule as officially released.
+
+    This acknowledges all pre-release changes so they won't show
+    "Originally..." on public schedule pages, and clears the
+    notification queue for this season.
+    """
+    if not current_user.is_admin():
+        flash('Only administrators can release the schedule.', 'error')
+        return redirect(url_for('seasons.view', year=year, is_spring=is_spring))
+
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    if request.method == 'POST':
+        from app.models.game_change import GameChange
+        from app.models.notification_queue import NotificationQueue
+
+        # Acknowledge all changes for this season
+        changes_acknowledged = GameChange.acknowledge_all_for_season(year, is_spring)
+
+        # Skip all pending notifications for this season
+        notifications_skipped = NotificationQueue.skip_all_for_season(year, is_spring)
+
+        flash(
+            f'Schedule released! {changes_acknowledged} pre-release changes acknowledged, '
+            f'{notifications_skipped} pending notifications cleared.',
+            'success'
+        )
+
+        return redirect(url_for('seasons.view', year=year, is_spring=is_spring))
+
+    # GET - show confirmation page
+    from app.models.game_change import GameChange
+    from app.models.notification_queue import NotificationQueue
+    from app.models.game import Game
+
+    # Count pending items
+    game_ids = db.session.query(Game.ID).filter(
+        Game.year == year,
+        Game.is_spring == is_spring
+    ).all()
+    game_ids = [g[0] for g in game_ids]
+
+    pending_changes = 0
+    pending_notifications = 0
+
+    if game_ids:
+        pending_changes = GameChange.query.filter(
+            GameChange.game_id.in_(game_ids),
+            GameChange.acknowledged == 0
+        ).count()
+
+        pending_notifications = NotificationQueue.query.filter(
+            NotificationQueue.game_id.in_(game_ids),
+            NotificationQueue.status == 'pending'
+        ).count()
+
+    return render_template(
+        'seasons/release_schedule.html',
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name,
+        pending_changes=pending_changes,
+        pending_notifications=pending_notifications
+    )
