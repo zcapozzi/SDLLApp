@@ -264,12 +264,70 @@ def manage_teams(year, is_spring):
                 flash(f'Team settings updated', 'success')
                 anchor = f'league-{team.league.replace(" ", "-")}'
 
+        elif action == 'assign_coach':
+            from app.models.coach import CoachUser, CoachSeason
+            team_id = int(request.form.get('team_id'))
+            coach_id = request.form.get('coach_id')
+            role = request.form.get('coach_role', 'head')
+
+            team = TeamSeason.query.get(team_id)
+            if team and team.year == year and team.is_spring == is_spring and coach_id:
+                coach_id = int(coach_id)
+                coach = CoachUser.query.get(coach_id)
+                if coach and coach.user:
+                    # Check if this coach is already assigned to this team
+                    existing = CoachSeason.query.filter_by(
+                        team_id=team_id,
+                        coach_id=coach_id
+                    ).first()
+
+                    if existing:
+                        flash(f'{coach.user.name} is already assigned to this team', 'info')
+                    else:
+                        # Create coach season record
+                        coach_season = CoachSeason(
+                            team_id=team_id,
+                            coach_id=coach_id,
+                            role=role
+                        )
+                        # Auto-fill contact info from user
+                        coach_season.name = coach.user.name
+                        coach_season.email = coach.user.email
+                        coach_season.phone = coach.user.phone
+
+                        db.session.add(coach_season)
+
+                        # Also update team's coach_name if this is head coach
+                        if role == 'head' and not team.coach_name:
+                            team.coach_name = coach.user.name
+
+                        db.session.commit()
+                        logger.info(f'Assigned coach {coach.user.name} to {team.display_name}')
+                        flash(f'Assigned {coach.user.name} as {role} coach', 'success')
+
+                anchor = f'league-{team.league.replace(" ", "-")}'
+
+        elif action == 'remove_coach_assignment':
+            from app.models.coach import CoachSeason
+            assignment_id = int(request.form.get('assignment_id'))
+            assignment = CoachSeason.query.get(assignment_id)
+            if assignment:
+                team = TeamSeason.query.get(assignment.team_id)
+                anchor = f'league-{team.league.replace(" ", "-")}' if team else None
+                coach_name = assignment.name
+                db.session.delete(assignment)
+                db.session.commit()
+                logger.info(f'Removed coach assignment {coach_name}')
+                flash(f'Removed {coach_name} from team', 'success')
+
         redirect_url = url_for('seasons.manage_teams', year=year, is_spring=is_spring)
         if anchor:
             redirect_url += f'#{anchor}'
         return redirect(redirect_url)
 
     # GET - show teams
+    from app.models.coach import CoachUser
+
     teams = TeamSeason.get_by_season(year, is_spring)
 
     # Group by league
@@ -283,6 +341,9 @@ def manage_teams(year, is_spring):
     # Get available leagues
     leagues = League.get_all_active()
 
+    # Get available coaches for assignment
+    coaches = CoachUser.query.filter_by(status='active').all()
+
     return render_template(
         'seasons/manage_teams.html',
         year=year,
@@ -290,7 +351,8 @@ def manage_teams(year, is_spring):
         season_name=season_name,
         teams_by_league=teams_by_league,
         team_count=len(teams),
-        leagues=leagues
+        leagues=leagues,
+        coaches=coaches
     )
 
 

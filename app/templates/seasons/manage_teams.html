@@ -2,6 +2,13 @@
 
 {% block title %}Manage Teams - {{ season_name }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    .role-badge.role-head { background-color: #228B22; color: white; }
+    .role-badge.role-assistant { background-color: #6c757d; color: white; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
     <h1>
@@ -92,11 +99,11 @@
                     <thead>
                         <tr>
                             <th>Placeholder</th>
-                            <th>Coach Name</th>
+                            <th>Assigned Coaches</th>
                             <th>Team Name</th>
                             <th style="width: 120px;">Practice Days</th>
                             <th style="width: 100px;">Status</th>
-                            <th style="width: 290px;">Actions</th>
+                            <th style="width: 320px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -104,10 +111,24 @@
                         <tr>
                             <td style="color: #666;">{{ team.display_name }}</td>
                             <td>
-                                {% if team.coach_name %}
-                                <strong>{{ team.coach_name }}</strong>
+                                {% if team.coaches %}
+                                    {% for coach_season in team.coaches %}
+                                    <div style="display: flex; align-items: center; gap: 5px; margin-bottom: 3px;">
+                                        <span class="role-badge role-{{ coach_season.role }}" style="font-size: 10px; padding: 2px 5px;">
+                                            {{ coach_season.role[0]|upper }}
+                                        </span>
+                                        <strong>{{ coach_season.name }}</strong>
+                                        <form method="POST" style="display: inline;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <input type="hidden" name="action" value="remove_coach_assignment">
+                                            <input type="hidden" name="assignment_id" value="{{ coach_season.id }}">
+                                            <button type="submit" class="btn-link" style="color: #c33; font-size: 10px;"
+                                                    onclick="return confirm('Remove this coach?')">×</button>
+                                        </form>
+                                    </div>
+                                    {% endfor %}
                                 {% else %}
-                                <span class="text-muted">Not set</span>
+                                <span class="text-muted">No coaches</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -134,6 +155,10 @@
                                 {% endif %}
                             </td>
                             <td>
+                                <button type="button" class="btn btn-sm" style="background: #17a2b8; color: white;"
+                                        onclick="openCoachModal({{ team.team_ID }}, '{{ team.display_name }}')">
+                                    + Coach
+                                </button>
                                 <button type="button" class="btn btn-outline btn-sm"
                                         onclick="setTeamSettings({{ team.team_ID }}, '{{ team.coach_name|e if team.coach_name else '' }}', '{{ team.team_name|e if team.team_name else '' }}', '{{ team.display_name }}', '{{ team.practice_days or '' }}')">
                                     Edit
@@ -165,6 +190,62 @@
             No teams yet. Add teams using the forms on the left.
         </p>
         {% endif %}
+    </div>
+</div>
+
+<!-- Assign Coach Modal -->
+<div id="coach-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+     background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+    <div class="card" style="max-width: 500px; margin: auto; max-height: 80vh; display: flex; flex-direction: column;">
+        <h3 style="margin-bottom: 10px;">Assign Coach</h3>
+        <p class="text-muted text-small" style="margin-bottom: 15px;">
+            Team: <strong id="coach-modal-team"></strong>
+        </p>
+
+        <input type="text" id="coachSearchFilter" class="form-control" placeholder="Search by name..."
+               oninput="filterCoaches()" style="margin-bottom: 15px;">
+
+        <div style="overflow-y: auto; flex: 1; max-height: 300px; border: 1px solid #ddd; border-radius: 4px;">
+            <table style="margin: 0; font-size: 13px;">
+                <thead style="position: sticky; top: 0; background: white;">
+                    <tr>
+                        <th>Name</th>
+                        <th>Sport</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="coach-list">
+                    {% for coach in coaches %}
+                    <tr class="coach-row" data-name="{{ coach.user.name|lower if coach.user else '' }}">
+                        <td>{{ coach.user.name if coach.user else '(Unknown)' }}</td>
+                        <td>
+                            <span class="badge" style="background: {% if coach.sport == 'baseball' %}#228B22{% elif coach.sport == 'softball' %}#FF8C00{% else %}#6c757d{% endif %}; color: white; font-size: 10px;">
+                                {{ coach.sport }}
+                            </span>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-primary btn-sm"
+                                    onclick="assignCoach({{ coach.id }}, 'head')">Head</button>
+                            <button type="button" class="btn btn-outline btn-sm"
+                                    onclick="assignCoach({{ coach.id }}, 'assistant')">Asst</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <form method="POST" id="assign-coach-form" style="display: none;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="assign_coach">
+            <input type="hidden" name="team_id" id="assign-team-id">
+            <input type="hidden" name="coach_id" id="assign-coach-id">
+            <input type="hidden" name="coach_role" id="assign-coach-role">
+        </form>
+
+        <div style="margin-top: 15px;">
+            <button type="button" class="btn btn-outline" onclick="closeCoachModal()">Close</button>
+        </div>
     </div>
 </div>
 
@@ -268,8 +349,44 @@ function closeNameModal() {
 }
 
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') closeNameModal();
+    if (e.key === 'Escape') {
+        closeNameModal();
+        closeCoachModal();
+    }
 });
+
+function openCoachModal(teamId, teamName) {
+    document.getElementById('assign-team-id').value = teamId;
+    document.getElementById('coach-modal-team').textContent = teamName;
+    document.getElementById('coachSearchFilter').value = '';
+    filterCoaches(); // Reset filter
+    document.getElementById('coach-modal').style.display = 'flex';
+    document.getElementById('coachSearchFilter').focus();
+}
+
+function closeCoachModal() {
+    document.getElementById('coach-modal').style.display = 'none';
+}
+
+function filterCoaches() {
+    var searchTerm = document.getElementById('coachSearchFilter').value.toLowerCase().trim();
+    var rows = document.querySelectorAll('.coach-row');
+
+    rows.forEach(function(row) {
+        var name = row.dataset.name || '';
+        if (searchTerm === '' || name.includes(searchTerm)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+function assignCoach(coachId, role) {
+    document.getElementById('assign-coach-id').value = coachId;
+    document.getElementById('assign-coach-role').value = role;
+    document.getElementById('assign-coach-form').submit();
+}
 
 function copyScheduleLink(token, button) {
     var url = window.location.origin + '/s/' + token;

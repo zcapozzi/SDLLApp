@@ -59,16 +59,18 @@ class CoachUser(db.Model):
 class CoachSeason(db.Model):
     """Coach assignment to a team for a season.
 
-    Stores coach contact information for emergency notifications
-    (e.g., when umpire is missing).
+    Links a coach (from sdll_coaches) to a team season.
+    Also stores contact info for emergency notifications.
     """
     __tablename__ = 'sdll_coach_seasons'
 
     id = db.Column(db.Integer, primary_key=True)
     team_id = db.Column(db.BigInteger, db.ForeignKey('sdll_team_seasons.team_ID',
                                                       ondelete='CASCADE'), nullable=False)
+    coach_id = db.Column(db.BigInteger, db.ForeignKey('sdll_coaches.id',
+                                                       ondelete='SET NULL'), nullable=True)
 
-    # Coach info (encrypted)
+    # Coach info (encrypted) - can be auto-filled from coach's user record
     _name = db.Column('name', db.String(500), nullable=False)
     _email = db.Column('email', db.String(500))
     email_hash = db.Column(db.String(64))
@@ -82,6 +84,7 @@ class CoachSeason(db.Model):
 
     # Relationships
     team = db.relationship('TeamSeason', backref='coaches')
+    coach = db.relationship('CoachUser', backref=db.backref('team_assignments', lazy='dynamic'))
 
     # Role constants
     ROLE_HEAD = 'head'
