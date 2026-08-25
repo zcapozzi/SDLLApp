@@ -26,6 +26,9 @@ class Config:
     SESSION_TYPE = 'filesystem'
     PERMANENT_SESSION_LIFETIME = timedelta(days=90)  # 3 months
 
+    # Disable CSRF - low-risk internal admin tool, not worth the UX cost
+    WTF_CSRF_ENABLED = False
+
     # Rate limiting
     RATELIMIT_STORAGE_URI = 'memory://'
     RATELIMIT_DEFAULT = '200 per hour'
@@ -67,11 +70,12 @@ class TestingConfig(Config):
     TESTING = True
     DEBUG = True
 
-    # Use a separate test database
+    # Use same credentials as development, but different database
+    # This reads from .env file (loaded by python-dotenv in conftest.py)
     MYSQL_HOST = os.environ.get('MYSQL_HOST', 'localhost')
-    MYSQL_USER = os.environ.get('MYSQL_USER', 'root')
+    MYSQL_USER = os.environ.get('MYSQL_USER', 'lrp_master')
     MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD', '')
-    MYSQL_DB = os.environ.get('MYSQL_DB', 'sdll_test')
+    MYSQL_DB = 'sdll_test'  # Always use test database, never production
 
     SQLALCHEMY_DATABASE_URI = (
         f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}/{MYSQL_DB}"
@@ -79,9 +83,6 @@ class TestingConfig(Config):
 
     # Disable rate limiting in tests
     RATELIMIT_ENABLED = False
-
-    # Disable CSRF for testing
-    WTF_CSRF_ENABLED = False
 
 
 def _get_production_database_url():
