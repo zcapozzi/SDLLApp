@@ -154,6 +154,7 @@
 </div>
 
 <form method="POST" id="email-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="card">
         <h3>Select Leagues</h3>
         <div class="select-controls">
