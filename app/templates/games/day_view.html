@@ -440,7 +440,8 @@
                 {% set has_games = field.location_title in fields_with_games %}
                 <th class="field-header {% if not has_games %}empty-field{% endif %}"
                     data-field="{{ field.location_title }}"
-                    data-has-games="{{ 'true' if has_games else 'false' }}">{{ field.location_title }}</th>
+                    data-has-games="{{ 'true' if has_games else 'false' }}"
+                    title="{{ field.location_title }}">{{ field.location_title }}</th>
                 {% endfor %}
             </tr>
         </thead>
