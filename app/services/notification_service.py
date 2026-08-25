@@ -18,7 +18,7 @@ class GmailService:
     """Send emails via Resend (preferred), SMTP, or Gmail API"""
 
     def __init__(self):
-        self.sender_email = os.environ.get('GMAIL_SENDER', 'noreply@southdurhamlittleleague.org')
+        self.sender_email = os.environ.get('GMAIL_SENDER', 'umpires@sdll.org')
 
     @property
     def is_configured(self):
