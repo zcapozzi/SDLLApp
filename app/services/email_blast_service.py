@@ -152,6 +152,33 @@ def html_to_plain_text(html):
     return text.strip()
 
 
+def wrap_html_for_email(html):
+    """
+    Wrap HTML content with proper email styling.
+
+    Normalizes Quill.js output (which uses <p> tags with default margins)
+    to have cleaner line spacing in email clients.
+    """
+    if not html:
+        return html
+
+    return f'''<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body {{ font-family: Arial, sans-serif; color: #333; line-height: 1.5; }}
+  p {{ margin: 0 0 0.5em 0; }}
+  p:last-child {{ margin-bottom: 0; }}
+  p br {{ display: none; }}
+  p:empty {{ display: none; }}
+</style>
+</head>
+<body>
+{html}
+</body>
+</html>'''
+
+
 def parse_manual_recipients(text):
     """
     Parse manual recipients from text input.
@@ -227,6 +254,9 @@ def _send_bulk_mode(email_record):
         to_email = all_emails[0]
         other_emails = all_emails[1:] if len(all_emails) > 1 else None
 
+        # Wrap HTML for proper email formatting
+        wrapped_html = wrap_html_for_email(email_record.body_html)
+
         # Send via Resend with CC/BCC support
         _send_with_cc_bcc(
             gmail=gmail,
@@ -234,7 +264,7 @@ def _send_bulk_mode(email_record):
             cc=other_emails if email_record.send_mode == ScheduledEmail.MODE_CC else None,
             bcc=other_emails if email_record.send_mode == ScheduledEmail.MODE_BCC else None,
             subject=email_record.subject,
-            body_html=email_record.body_html,
+            body_html=wrapped_html,
             body_text=email_record.body_text,
             reply_to=email_record.reply_to
         )
@@ -264,6 +294,9 @@ def _send_individual_mode(email_record):
 
     results = {'sent': 0, 'failed': 0}
 
+    # Wrap HTML for proper email formatting
+    wrapped_html = wrap_html_for_email(email_record.body_html)
+
     for team_name, coaches in recipients_by_team.items():
         emails = [c['email'] for c in coaches if c.get('email')]
         if not emails:
@@ -280,7 +313,7 @@ def _send_individual_mode(email_record):
                 cc=cc_emails,
                 bcc=None,
                 subject=email_record.subject,
-                body_html=email_record.body_html,
+                body_html=wrapped_html,
                 body_text=email_record.body_text,
                 reply_to=email_record.reply_to
             )
@@ -298,7 +331,7 @@ def _send_individual_mode(email_record):
                 to=email,
                 subject=email_record.subject,
                 body_text=email_record.body_text,
-                body_html=email_record.body_html,
+                body_html=wrapped_html,
                 reply_to=email_record.reply_to
             )
             results['sent'] += 1
