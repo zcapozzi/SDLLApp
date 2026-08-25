@@ -315,8 +315,11 @@ def cron_diagnose_email():
     gmail_sender = os.environ.get('GMAIL_SENDER', 'umpires@sdll.org')
     gmail_sender_name = os.environ.get('GMAIL_SENDER_NAME', 'SDLL Umpires')
 
+    # Show first 8 chars of key to verify which key is loaded
+    key_prefix = resend_key[:8] if resend_key else 'N/A'
+
     diagnostics['environment'] = {
-        'RESEND_API_KEY': f"{'set' if resend_key else 'NOT SET'} ({len(resend_key) if resend_key else 0} chars)",
+        'RESEND_API_KEY': f"{'set' if resend_key else 'NOT SET'} ({len(resend_key) if resend_key else 0} chars, starts with: {key_prefix}...)",
         'GMAIL_SENDER': gmail_sender,
         'GMAIL_SENDER_NAME': gmail_sender_name,
         'from_address_would_be': f"{gmail_sender_name} <{gmail_sender}>"
