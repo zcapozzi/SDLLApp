@@ -44,7 +44,7 @@ class GmailService:
         """Check if Gmail API is configured"""
         return bool(os.environ.get('GOOGLE_SERVICE_JSON'))
 
-    def send_email(self, to, subject, body_text, body_html=None):
+    def send_email(self, to, subject, body_text, body_html=None, reply_to=None):
         """
         Send an email via Resend (preferred), SMTP, or Gmail API.
 
@@ -53,6 +53,7 @@ class GmailService:
             subject: Email subject
             body_text: Plain text body
             body_html: Optional HTML body
+            reply_to: Optional reply-to email address
 
         Returns:
             True if sent successfully
@@ -62,19 +63,19 @@ class GmailService:
         """
         # Try Resend first (Railway-approved, most reliable)
         if self._check_resend():
-            return self._send_via_resend(to, subject, body_text, body_html)
+            return self._send_via_resend(to, subject, body_text, body_html, reply_to)
 
         # Try SMTP
         if self._check_smtp():
-            return self._send_via_smtp(to, subject, body_text, body_html)
+            return self._send_via_smtp(to, subject, body_text, body_html, reply_to)
 
         # Fall back to Gmail API
         if self._check_api():
-            return self._send_via_api(to, subject, body_text, body_html)
+            return self._send_via_api(to, subject, body_text, body_html, reply_to)
 
         raise Exception("Email not configured. Set RESEND_API_KEY, SMTP_*, or GOOGLE_SERVICE_JSON.")
 
-    def _send_via_resend(self, to, subject, body_text, body_html=None):
+    def _send_via_resend(self, to, subject, body_text, body_html=None, reply_to=None):
         """Send email via Resend API"""
         api_key = os.environ.get('RESEND_API_KEY', '').strip()
 
@@ -89,6 +90,8 @@ class GmailService:
         }
         if body_html:
             payload["html"] = body_html
+        if reply_to:
+            payload["reply_to"] = reply_to
 
         data = json.dumps(payload).encode('utf-8')
 
@@ -114,7 +117,7 @@ class GmailService:
             print(f"Resend error - from: '{from_address}', to: '{to}', error: {error_body}")
             raise Exception(f"Resend API error: {e.code} - {error_body}")
 
-    def _send_via_smtp(self, to, subject, body_text, body_html=None):
+    def _send_via_smtp(self, to, subject, body_text, body_html=None, reply_to=None):
         """Send email via SMTP (supports both TLS on 587 and SSL on 465)"""
         smtp_host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
         smtp_port = int(os.environ.get('SMTP_PORT', 465))
@@ -125,6 +128,8 @@ class GmailService:
         message['To'] = to
         message['From'] = self.sender_email
         message['Subject'] = subject
+        if reply_to:
+            message['Reply-To'] = reply_to
 
         # Add plain text part
         message.attach(MIMEText(body_text, 'plain'))
@@ -146,7 +151,7 @@ class GmailService:
 
         return True
 
-    def _send_via_api(self, to, subject, body_text, body_html=None):
+    def _send_via_api(self, to, subject, body_text, body_html=None, reply_to=None):
         """Send email via Gmail API (requires domain-wide delegation)"""
         creds_json = os.environ.get('GOOGLE_SERVICE_JSON')
         if not creds_json:
@@ -170,6 +175,8 @@ class GmailService:
             message['to'] = to
             message['from'] = self.sender_email
             message['subject'] = subject
+            if reply_to:
+                message['Reply-To'] = reply_to
 
             message.attach(MIMEText(body_text, 'plain'))
             if body_html:

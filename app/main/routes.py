@@ -526,7 +526,8 @@ Message:
         gmail.send_email(
             to='umpires@sdll.org',
             subject=email_subject,
-            body_text=email_body
+            body_text=email_body,
+            reply_to=user_email
         )
         flash('Thank you! Your message has been sent.', 'success')
     except Exception as e:
