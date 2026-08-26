@@ -1074,9 +1074,8 @@ document.addEventListener('keydown', function(e) {
 function jumpToDate() {
     var dateInput = document.getElementById('jump-date').value;
     if (dateInput) {
-        var url = new URL(window.location.href);
-        url.searchParams.set('week', dateInput);
-        window.location.href = url.toString();
+        // Go to day view for the selected date
+        window.location.href = '{{ url_for("games.day_view", year=year, is_spring=is_spring, target_date="__DATE__") }}'.replace('__DATE__', dateInput);
     }
 }
 </script>
