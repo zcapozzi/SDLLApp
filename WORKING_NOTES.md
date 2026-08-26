@@ -4,7 +4,58 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Removed deprecated `location` column from `sdll_games` table. Games now exclusively use `field_id` (FK to `sdll_fields`) instead of the legacy `location` string.
+Last session: Enhanced delegation proposal review page with dynamic allocation preview. Users can now see how assignments affect allocation percentages in real-time.
+
+---
+
+## Session: August 26, 2026 - Delegation Proposal Allocation Preview
+
+### Overview
+Enhanced the delegation proposal review page to show league context and dynamic allocation previews, allowing umpire coordinators to see how their assignment changes affect allocation percentages in real-time.
+
+### Changes Made
+
+**Route Enhancement** (`app/umpires/routes.py`)
+- Added allocation data to `delegation_proposal_review` route:
+  - `current_stats`: Counts of existing delegated games by league/partner (games with `umpire_override` set)
+  - `proposal_counts`: Counts in the current proposal by league/partner
+  - `allocation_rules`: Target percentages from delegation rules by league/partner
+  - `leagues_in_proposal`: Sorted list of leagues in the proposal
+  - `partners_json`: Partner info (id, code, name) for JavaScript
+
+**Template Enhancement** (`app/templates/umpires/delegation_proposal_review.html`)
+- Added league column to game tables with `data-league` attribute for JavaScript
+- Added "Game Allocation by League" section showing:
+  - Current: games already delegated this season
+  - + Proposal: games in this proposal
+  - = Projected: total after accepting
+  - Target %: from delegation rules
+  - Current %: current allocation percentage
+  - Projected %: allocation percentage if proposal accepted
+  - Deviation: difference from target (color-coded)
+- JavaScript for dynamic updates:
+  - `updateAllocationTable(league)`: Calculates and displays stats for one league
+  - `updateAllAllocationTables()`: Updates all league tables
+  - `recalculateProposalCounts()`: Recalculates from dropdown selections when changed
+  - Color coding: green (<5%), yellow (5-10%), red (>10%)
+
+### Bug Fixes in Same Session
+
+1. **Card view filter not working** (manage games page)
+   - Issue: Inline `style="display: flex;"` on `.game-row` overrode CSS `display: none`
+   - Fix: Moved display styles to CSS, added `!important` to filter rules
+
+2. **Jump to date going to week view**
+   - Issue: `jumpToDate()` set `week` parameter instead of navigating to day view
+   - Fix: Redirect to `games.day_view` route with selected date
+
+3. **Tier II violation display TypeError**
+   - Issue: Template used `violation.target` but service returns `violation.target_pct`
+   - Fix: Updated template to use correct field names
+
+### Test Results
+- All 12 delegation_proposal tests pass
+- All tests pass after changes
 
 ---
 
