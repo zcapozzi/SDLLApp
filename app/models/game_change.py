@@ -316,6 +316,113 @@ class GameChange(db.Model):
         return cls.get_change_display(game_id, current_game)
 
     @classmethod
+    def get_original_display_batch(cls, games):
+        """
+        Get original display strings for multiple games in a single query.
+
+        This avoids N+1 queries when displaying schedules with many games.
+
+        Args:
+            games: List of Game objects
+
+        Returns:
+            Dict of {game_id: original_display_string} for games that have changes
+        """
+        from datetime import timedelta
+        from collections import defaultdict
+
+        if not games:
+            return {}
+
+        game_ids = [g.ID for g in games]
+        game_lookup = {g.ID: g for g in games}
+
+        # Fetch all non-acknowledged changes for these games in one query
+        all_changes = cls.query.filter(
+            cls.game_id.in_(game_ids),
+            cls.acknowledged == 0,
+            cls.change_type.in_(['update', 'reschedule'])
+        ).order_by(cls.game_id, cls.changed_at.desc()).all()
+
+        # Group changes by game_id
+        changes_by_game = defaultdict(list)
+        for change in all_changes:
+            changes_by_game[change.game_id].append(change)
+
+        # Process each game's changes
+        result = {}
+        for game_id, changes in changes_by_game.items():
+            if not changes:
+                continue
+
+            current_game = game_lookup.get(game_id)
+
+            # Check if most recent change was > 24 hours after previous change
+            if len(changes) >= 2:
+                most_recent = changes[0]
+                previous = changes[1]
+                time_gap = most_recent.changed_at - previous.changed_at
+
+                if time_gap > timedelta(hours=24):
+                    # The previous value was "communicated" - show what changed from
+                    prev_values = most_recent.changes_dict or {}
+                    display = cls._format_changed_from(prev_values)
+                    if display:
+                        result[game_id] = display
+                    continue
+
+            # Fall back to comparing current to original
+            display = cls._get_original_display_internal_from_changes(changes, current_game)
+            if display:
+                result[game_id] = display
+
+        return result
+
+    @classmethod
+    def _get_original_display_internal_from_changes(cls, changes, current_game):
+        """
+        Helper to compute original display from pre-fetched changes.
+        """
+        if not changes:
+            return None
+
+        # Build original values from the oldest changes
+        original = {}
+        for change in reversed(changes):  # Process oldest first
+            changes_dict = change.changes_dict
+            if not changes_dict:
+                continue
+
+            for field in ['date', 'time', 'field', 'location']:
+                if field in changes_dict and field not in original:
+                    old_val = changes_dict[field].get('old')
+                    if old_val:
+                        key = 'field' if field == 'location' else field
+                        original[key] = old_val
+
+        if not original:
+            return None
+
+        # Compare to current - if same, no need to show
+        if current_game:
+            current_date = current_game.game_date.strftime('%Y-%m-%d') if current_game.game_date else None
+            current_time = current_game.game_date.strftime('%H:%M') if current_game.game_date else None
+            current_field = current_game.field_name
+
+            matches_current = True
+            if 'date' in original and original['date'] != current_date:
+                matches_current = False
+            if 'time' in original and original['time'] != current_time:
+                matches_current = False
+            if 'field' in original and original['field'] != current_field:
+                matches_current = False
+
+            if matches_current:
+                return None
+
+        return cls._format_original_values(original)
+
+    @classmethod
     def acknowledge_all_for_season(cls, year, is_spring):
         """
         Mark all changes for a season as acknowledged.

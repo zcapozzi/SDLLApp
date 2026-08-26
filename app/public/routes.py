@@ -334,17 +334,13 @@ def team_schedule(token):
         template_vars['past_games'] = past_games
         template_vars['next_game'] = next_game
 
-        # Get "originally" display text for games that have been changed
+        # Get "originally" display text for games that have been changed (batch query)
         from app.models.game_change import GameChange
-        game_originals = {}
         all_games = upcoming_games + past_games
-        for game in all_games:
-            try:
-                original_text = GameChange.get_original_display(game.ID, current_game=game)
-                if original_text:
-                    game_originals[game.ID] = original_text
-            except Exception:
-                pass  # Don't fail if change lookup fails
+        try:
+            game_originals = GameChange.get_original_display_batch(all_games)
+        except Exception:
+            game_originals = {}  # Don't fail if change lookup fails
         template_vars['game_originals'] = game_originals
 
     # =========================================================================
@@ -580,12 +576,8 @@ def partner_schedule(token):
         if g.no_time_limit:
             has_ntl_games = True
 
-    # Build game_originals for rescheduled games (only shows if current differs from original)
-    game_originals = {}
-    for g in games:
-        original_text = GameChange.get_original_display(g.ID, current_game=g)
-        if original_text:
-            game_originals[g.ID] = original_text
+    # Build game_originals for rescheduled games (batch query to avoid N+1)
+    game_originals = GameChange.get_original_display_batch(games)
 
     # Apply filters (using cached field_name)
     if field_filter:
