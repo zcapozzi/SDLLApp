@@ -563,12 +563,12 @@ def partner_schedule(token):
         g._cached_rules_url = league_obj.rules_doc_url if league_obj else None
 
         # Cache directions URL
-        field_obj = all_fields.get(field_name) or (g.field_rel if g.field_id else None)
+        field_obj = all_fields.get(g._cached_field_name) or (g.field_rel if g.field_id else None)
         g._cached_directions_url = field_obj.google_maps_url if field_obj else None
 
         # Collect filter options
-        if field_name:
-            fields_set.add(field_name)
+        if g._cached_field_name:
+            fields_set.add(g._cached_field_name)
         if g.league:
             leagues_set.add(g.league)
 
