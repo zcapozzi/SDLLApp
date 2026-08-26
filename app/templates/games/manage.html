@@ -130,10 +130,17 @@
         padding: 2px 8px;
         font-size: 11px;
     }
-    /* Card view filtering */
+    /* Card view game rows */
+    .game-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 15px;
+    }
+    /* Card view filtering - use !important to override inline styles */
     .game-row.filtered-out,
     .date-separator.filtered-out {
-        display: none;
+        display: none !important;
     }
     .edit-modal {
         display: none;
@@ -338,8 +345,7 @@
              data-date="{{ game_date_ymd }}"
              data-home-id="{{ game.home_ID or '' }}"
              data-away-id="{{ game.away_ID or '' }}"
-             data-type="{{ 'practice' if game.game_type == 'practice' else 'game' }}"
-             style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px;">
+             data-type="{{ 'practice' if game.game_type == 'practice' else 'game' }}">
             <div style="flex: 1;">
                 <div style="margin-bottom: 5px;">
                     <span class="type-badge type-{{ game.game_type }}">
