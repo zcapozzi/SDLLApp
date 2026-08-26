@@ -4,7 +4,91 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Enhanced delegation proposal review page with dynamic allocation preview. Users can now see how assignments affect allocation percentages in real-time.
+Last session: Added game start time recording feature to public team schedule pages. Users can record first pitch time for games on the day of the game. Added `umpire_was_unassigned` field for games mistakenly assigned to partners.
+
+---
+
+## Session: August 26, 2026 (Continued) - Game Start Time Recording
+
+### Overview
+Added a feature to public team schedule pages allowing coaches/parents to record the actual first pitch time. This is used to determine when the "no new inning" time window applies.
+
+### Features Implemented
+
+1. **Three-dot Menu**: Game cards on team schedule show a three-dot menu for eligible games
+2. **Inline Form**: Mobile-first design with time input (no modal)
+3. **Session Tracking**: Records user ID if logged in, or session cookie for anonymous users
+4. **Testing Mode**: Add `?allowStartTimeRecord=1` to URL to enable on non-game days
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `app/models/game_start_record.py` | GameStartRecord model |
+| `scripts/migrations/add_game_start_records.sql` | Database migration |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `app/models/__init__.py` | Import GameStartRecord |
+| `app/public/routes.py` | Added `record_game_start` and `get_game_start` API endpoints |
+| `app/templates/public/team_schedule.html` | Added three-dot menu, inline form, CSS, and JavaScript |
+
+### Database Schema
+
+```sql
+CREATE TABLE sdll_game_start_records (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    game_id INT NOT NULL,
+    start_time DATETIME NOT NULL,
+    user_id INT DEFAULT NULL,
+    session_id VARCHAR(64) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_game_id (game_id),
+    INDEX idx_session_id (session_id),
+    CONSTRAINT fk_game_start_game FOREIGN KEY (game_id) REFERENCES sdll_games(ID) ON DELETE CASCADE,
+    CONSTRAINT fk_game_start_user FOREIGN KEY (user_id) REFERENCES sdll_users(ID) ON DELETE SET NULL
+);
+```
+
+### API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/s/api/game-start` | POST | Record/update first pitch time |
+| `/s/api/game-start/<game_id>` | GET | Get existing start record for game |
+
+### UI Features
+
+- Three-dot menu only appears for games on day of game (non-practice)
+- Time input defaults to current time
+- Previously recorded time is displayed as "First pitch: X:XX PM"
+- Success message after saving
+- Testing mode bypasses date check
+
+### Migration Required
+Run `scripts/migrations/add_game_start_records.sql` after deployment.
+
+---
+
+## Session: August 26, 2026 - Umpire Was Unassigned Field
+
+### Overview
+Added `umpire_was_unassigned` field to track games that were assigned to a partner in error. These games remain on the partner's schedule with an indicator but are excluded from delegation report counts.
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `app/models/game.py` | Added `umpire_was_unassigned` column |
+| `app/umpires/routes.py` | Added `api_mark_no_umpire_required` endpoint; updated delegation report to exclude unassigned games |
+| `app/templates/umpires/calendar.html` | Added "No Umpire Required" context menu option |
+| `app/templates/public/partner_schedule.html` | Show "Umpire(s) not required" badge for unassigned games |
+
+### Migration Required
+Run `scripts/migrations/add_umpire_was_unassigned.sql` after deployment.
 
 ---
 

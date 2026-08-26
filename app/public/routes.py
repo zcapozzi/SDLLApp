@@ -22,6 +22,7 @@ from app.models.schedule_proposal import ScheduleProposal
 from app.models.field import Field
 from app.models.umpire_partner import UmpirePartner
 from app.models.game_change import GameChange
+from app.models.game_start_record import GameStartRecord
 from app.extensions import db
 import sys
 import csv
@@ -197,6 +198,9 @@ def team_schedule(token):
     season_name = f'{"Spring" if team.is_spring else "Fall"} {team.year}'
     is_locked = LeagueSeason.is_season_locked(team.year, team.is_spring)
 
+    # Check for testing flag to allow start time recording on non-game days
+    allow_start_time_record = request.args.get('allowStartTimeRecord', '0') == '1'
+
     # Check if user can see proposed schedule
     can_see_proposal = False
     try:
@@ -342,6 +346,64 @@ def team_schedule(token):
         except Exception:
             game_originals = {}  # Don't fail if change lookup fails
         template_vars['game_originals'] = game_originals
+
+    # =========================================================================
+    # PHASE 1.5: GET GAME START RECORDS FOR TODAY'S GAMES
+    # =========================================================================
+
+    # Find games eligible for start time recording
+    # Normally only today's games, but allowStartTimeRecord=1 enables all upcoming games
+    recordable_game_ids = set()
+    for game in template_vars.get('upcoming_games', []):
+        if game.game_date and game.game_type != 'practice':
+            game_date = game.game_date.date() if hasattr(game.game_date, 'date') else game.game_date
+            # Include if it's today, OR if testing flag is set
+            if game_date == today or allow_start_time_record:
+                # Get the actual game ID (handle both Game objects and wrapper objects)
+                game_id = getattr(game, 'ID', None)
+                if game_id and isinstance(game_id, int):
+                    recordable_game_ids.add(game_id)
+
+    # Get existing start records for user's session/user
+    game_start_records = {}
+    if recordable_game_ids:
+        try:
+            user_id = None
+            try:
+                if current_user.is_authenticated:
+                    user_id = current_user.ID
+            except Exception:
+                pass
+
+            # Batch query for all records by this session or user
+            records_query = GameStartRecord.query.filter(
+                GameStartRecord.game_id.in_(recordable_game_ids)
+            )
+
+            if user_id:
+                records_query = records_query.filter(
+                    db.or_(
+                        GameStartRecord.user_id == user_id,
+                        GameStartRecord.session_id == session_id
+                    )
+                )
+            elif session_id:
+                records_query = records_query.filter(
+                    GameStartRecord.session_id == session_id
+                )
+
+            for record in records_query.all():
+                game_start_records[record.game_id] = {
+                    'start_time': record.start_time.isoformat(),
+                    'formatted_time': record.start_time.strftime('%I:%M %p'),
+                    'is_own': True
+                }
+        except Exception as e:
+            _log_tracking_error("get_game_start_records", e)
+
+    template_vars['recordable_game_ids'] = list(recordable_game_ids)
+    template_vars['game_start_records'] = game_start_records
+    template_vars['allow_start_time_record'] = allow_start_time_record
 
     # =========================================================================
     # PHASE 2: SAFELY GET AD (optional, fail silently)
@@ -744,3 +806,126 @@ def partner_schedule_csv(token):
         mimetype='text/csv',
         headers={'Content-Disposition': f'attachment; filename={filename}'}
     )
+
+
+@public_bp.route('/api/game-start', methods=['POST'])
+def record_game_start():
+    """Record or update a game start time (first pitch).
+
+    This is a public API for recording when games actually start.
+    Only available for non-practice games on the day of the game.
+    Pass allowStartTimeRecord=1 in request body to bypass date check for testing.
+    """
+    try:
+        data = request.get_json() or {}
+        game_id = data.get('game_id')
+        start_time_str = data.get('start_time')
+        allow_any_date = data.get('allowStartTimeRecord', False)
+
+        if not game_id or not start_time_str:
+            return jsonify({'error': 'Missing game_id or start_time'}), 400
+
+        # Parse the start time
+        try:
+            start_time = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            return jsonify({'error': 'Invalid start_time format'}), 400
+
+        # Verify the game exists and is not a practice
+        game = Game.query.get(game_id)
+        if not game:
+            return jsonify({'error': 'Game not found'}), 404
+
+        if game.game_type == 'practice':
+            return jsonify({'error': 'Cannot record start time for practices'}), 400
+
+        # Verify it's the day of the game (unless testing flag is set)
+        if not allow_any_date and game.game_date:
+            game_date = game.game_date.date() if hasattr(game.game_date, 'date') else game.game_date
+            if game_date != date.today():
+                return jsonify({'error': 'Can only record start time on day of game'}), 400
+
+        # Get user/session info
+        session_id = _get_or_create_session_id()
+        user_id = None
+        try:
+            if current_user.is_authenticated:
+                user_id = current_user.ID
+        except Exception:
+            pass
+
+        # Record the start time
+        record = GameStartRecord.record_start(
+            game_id=game_id,
+            start_time=start_time,
+            user_id=user_id,
+            session_id=session_id
+        )
+
+        # Build response
+        response = make_response(jsonify({
+            'status': 'ok',
+            'record_id': record.id,
+            'start_time': record.start_time.isoformat(),
+            'was_update': record.created_at != record.updated_at
+        }))
+
+        # Set session cookie
+        _set_session_cookie(response, session_id)
+
+        return response
+
+    except Exception as e:
+        _log_tracking_error("record_game_start", e)
+        _safe_rollback()
+        return jsonify({'error': 'Failed to record start time'}), 500
+
+
+@public_bp.route('/api/game-start/<int:game_id>', methods=['GET'])
+def get_game_start(game_id):
+    """Get game start time record for current user/session.
+
+    Returns the user's own record if they've submitted one,
+    or the latest record if they haven't.
+    """
+    try:
+        session_id = request.cookies.get(SESSION_COOKIE_NAME)
+        user_id = None
+        try:
+            if current_user.is_authenticated:
+                user_id = current_user.ID
+        except Exception:
+            pass
+
+        # First check for user's own record
+        record = None
+        if user_id:
+            record = GameStartRecord.get_for_game_by_user(game_id, user_id)
+        if not record and session_id:
+            record = GameStartRecord.get_for_game_by_session(game_id, session_id)
+
+        if record:
+            return jsonify({
+                'has_record': True,
+                'is_own': True,
+                'start_time': record.start_time.isoformat(),
+                'created_at': record.created_at.isoformat(),
+                'updated_at': record.updated_at.isoformat()
+            })
+
+        # Check if there's any record for this game
+        latest = GameStartRecord.get_latest_for_game(game_id)
+        if latest:
+            return jsonify({
+                'has_record': True,
+                'is_own': False,
+                'start_time': latest.start_time.isoformat(),
+                'created_at': latest.created_at.isoformat(),
+                'updated_at': latest.updated_at.isoformat()
+            })
+
+        return jsonify({'has_record': False})
+
+    except Exception as e:
+        _log_tracking_error("get_game_start", e)
+        return jsonify({'has_record': False})

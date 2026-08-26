@@ -121,6 +121,143 @@
             display: flex;
             align-items: center;
             gap: 15px;
+            position: relative;
+        }
+
+        /* Three-dot menu */
+        .game-menu-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: none;
+            border: none;
+            padding: 4px 8px;
+            cursor: pointer;
+            color: #666;
+            font-size: 18px;
+            line-height: 1;
+            border-radius: 4px;
+        }
+        .game-menu-btn:hover {
+            background: #f0f0f0;
+        }
+        .game-menu-btn:focus {
+            outline: 2px solid rgb(34, 139, 34);
+            outline-offset: 2px;
+        }
+        .game-menu {
+            position: absolute;
+            top: 32px;
+            right: 8px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 100;
+            min-width: 180px;
+            display: none;
+        }
+        .game-menu.show {
+            display: block;
+        }
+        .game-menu-item {
+            display: block;
+            width: 100%;
+            padding: 12px 16px;
+            text-align: left;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 14px;
+            color: #333;
+        }
+        .game-menu-item:hover {
+            background: #f5f5f5;
+        }
+        .game-menu-item:first-child {
+            border-radius: 8px 8px 0 0;
+        }
+        .game-menu-item:last-child {
+            border-radius: 0 0 8px 8px;
+        }
+        .game-menu-item:only-child {
+            border-radius: 8px;
+        }
+
+        /* Game start form */
+        .game-start-form {
+            display: none;
+            background: #f8f9fa;
+            border-top: 1px solid #eee;
+            margin: 10px -15px -15px -15px;
+            padding: 12px 15px;
+            border-radius: 0 0 8px 8px;
+        }
+        .game-start-form.show {
+            display: block;
+        }
+        .game-start-form label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 6px;
+        }
+        .game-start-form .input-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .game-start-form input[type="time"] {
+            flex: 1;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+        .game-start-form input[type="time"]:focus {
+            outline: none;
+            border-color: rgb(34, 139, 34);
+            box-shadow: 0 0 0 2px rgba(34, 139, 34, 0.2);
+        }
+        .game-start-form .btn-save {
+            background: rgb(34, 139, 34);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .game-start-form .btn-save:hover {
+            background: rgb(28, 120, 28);
+        }
+        .game-start-form .btn-cancel {
+            background: none;
+            color: #666;
+            border: 1px solid #ddd;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .game-start-form .btn-cancel:hover {
+            background: #f0f0f0;
+        }
+        .game-start-success {
+            color: rgb(34, 139, 34);
+            font-size: 13px;
+            margin-top: 8px;
+        }
+
+        /* Recorded start time badge */
+        .game-start-badge {
+            display: inline-block;
+            background: #e8f5e9;
+            color: #2e7d32;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-top: 4px;
         }
         .game-card.practice {
             border-left: 4px solid #9c27b0;
@@ -416,7 +553,15 @@
         <div class="section">
             <div class="section-title">Upcoming Schedule</div>
             {% for game in upcoming_games %}
-            <div class="game-card {{ 'practice' if game.game_type == 'practice' else 'scrimmage' if game.is_scrimmage else 'game' }} {{ game.status }}">
+            {% set is_recordable = game.ID in recordable_game_ids %}
+            {% set existing_record = game_start_records.get(game.ID) if is_recordable else None %}
+            <div class="game-card {{ 'practice' if game.game_type == 'practice' else 'scrimmage' if game.is_scrimmage else 'game' }} {{ game.status }}" data-game-id="{{ game.ID if game.ID is number else '' }}">
+                {% if is_recordable %}
+                <button class="game-menu-btn" onclick="toggleGameMenu(this)" aria-label="Game options">&#8942;</button>
+                <div class="game-menu">
+                    <button class="game-menu-item" onclick="showStartForm(this)">Record Game Start</button>
+                </div>
+                {% endif %}
                 <div class="game-date-box">
                     <div class="month">{{ game.game_date.strftime('%b') if game.game_date else '' }}</div>
                     <div class="day">{{ game.game_date.strftime('%d') if game.game_date else '?' }}</div>
@@ -460,7 +605,21 @@
                     {% if game_originals and game.ID in game_originals %}
                     <div class="game-originally">{{ game_originals[game.ID] }}</div>
                     {% endif %}
+                    {% if existing_record %}
+                    <div class="game-start-badge">First pitch: {{ existing_record.formatted_time }}</div>
+                    {% endif %}
                 </div>
+                {% if is_recordable %}
+                <div class="game-start-form" id="start-form-{{ game.ID }}">
+                    <label>When was the first pitch thrown?</label>
+                    <div class="input-row">
+                        <input type="time" id="start-time-{{ game.ID }}" value="{{ existing_record.start_time[11:16] if existing_record else '' }}">
+                        <button class="btn-save" onclick="saveGameStart({{ game.ID }})">Save</button>
+                        <button class="btn-cancel" onclick="hideStartForm({{ game.ID }})">Cancel</button>
+                    </div>
+                    <div class="game-start-success" id="success-{{ game.ID }}" style="display: none;"></div>
+                </div>
+                {% endif %}
             </div>
             {% endfor %}
         </div>
@@ -659,6 +818,146 @@
             return true; // Allow the click to proceed
         };
     })();
+
+    // Game Start Recording Functions
+    function toggleGameMenu(btn) {
+        var menu = btn.nextElementSibling;
+        var isOpen = menu.classList.contains('show');
+
+        // Close all other menus
+        document.querySelectorAll('.game-menu.show').forEach(function(m) {
+            m.classList.remove('show');
+        });
+
+        if (!isOpen) {
+            menu.classList.add('show');
+        }
+    }
+
+    // Close menus when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.game-menu-btn') && !e.target.closest('.game-menu')) {
+            document.querySelectorAll('.game-menu.show').forEach(function(m) {
+                m.classList.remove('show');
+            });
+        }
+    });
+
+    function showStartForm(menuItem) {
+        var card = menuItem.closest('.game-card');
+        var gameId = card.dataset.gameId;
+        var form = document.getElementById('start-form-' + gameId);
+        var timeInput = document.getElementById('start-time-' + gameId);
+
+        // Close menu
+        menuItem.closest('.game-menu').classList.remove('show');
+
+        // Show form
+        form.classList.add('show');
+
+        // Set default time to now if empty
+        if (!timeInput.value) {
+            var now = new Date();
+            var hours = String(now.getHours()).padStart(2, '0');
+            var minutes = String(now.getMinutes()).padStart(2, '0');
+            timeInput.value = hours + ':' + minutes;
+        }
+
+        // Focus the input
+        timeInput.focus();
+    }
+
+    function hideStartForm(gameId) {
+        var form = document.getElementById('start-form-' + gameId);
+        form.classList.remove('show');
+    }
+
+    // Check if testing mode is enabled
+    var allowStartTimeRecord = {{ 'true' if allow_start_time_record else 'false' }};
+
+    function saveGameStart(gameId) {
+        var timeInput = document.getElementById('start-time-' + gameId);
+        var successEl = document.getElementById('success-' + gameId);
+
+        if (!timeInput.value) {
+            alert('Please enter a time');
+            return;
+        }
+
+        // Build ISO datetime for today with the entered time
+        var today = new Date();
+        var dateStr = today.getFullYear() + '-' +
+            String(today.getMonth() + 1).padStart(2, '0') + '-' +
+            String(today.getDate()).padStart(2, '0');
+        var startTime = dateStr + 'T' + timeInput.value + ':00';
+
+        // Build request body
+        var requestBody = {
+            game_id: gameId,
+            start_time: startTime
+        };
+
+        // Include testing flag if enabled
+        if (allowStartTimeRecord) {
+            requestBody.allowStartTimeRecord = true;
+        }
+
+        // Send to API
+        fetch('/s/api/game-start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        })
+        .then(function(response) {
+            return response.json();
+        })
+        .then(function(data) {
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+
+            // Show success message
+            successEl.textContent = data.was_update ? 'Start time updated!' : 'Start time recorded!';
+            successEl.style.display = 'block';
+
+            // Update or add the badge
+            var card = document.querySelector('[data-game-id="' + gameId + '"]');
+            var badge = card.querySelector('.game-start-badge');
+            var formattedTime = formatTime(timeInput.value);
+
+            if (badge) {
+                badge.textContent = 'First pitch: ' + formattedTime;
+            } else {
+                var gameInfo = card.querySelector('.game-info');
+                badge = document.createElement('div');
+                badge.className = 'game-start-badge';
+                badge.textContent = 'First pitch: ' + formattedTime;
+                gameInfo.appendChild(badge);
+            }
+
+            // Hide form after a moment
+            setTimeout(function() {
+                hideStartForm(gameId);
+                successEl.style.display = 'none';
+            }, 1500);
+        })
+        .catch(function(err) {
+            console.error('Error saving game start:', err);
+            alert('Failed to save. Please try again.');
+        });
+    }
+
+    function formatTime(time24) {
+        var parts = time24.split(':');
+        var hours = parseInt(parts[0], 10);
+        var minutes = parts[1];
+        var ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12 || 12;
+        return hours + ':' + minutes + ' ' + ampm;
+    }
     </script>
 </body>
 </html>
