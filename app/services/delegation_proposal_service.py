@@ -61,8 +61,20 @@ def get_undelegated_games(year, is_spring):
 
     # Pre-fetch all leagues in one query to avoid N+1
     league_names = set(g.league for g in games if g.league)
-    leagues = League.query.filter(League.league_name.in_(league_names)).all() if league_names else []
-    league_lookup = {lg.league_name: lg for lg in leagues}
+    if league_names:
+        leagues = League.query.filter(
+            (League.display_name.in_(league_names)) |
+            (League.fall_display_name.in_(league_names))
+        ).all()
+    else:
+        leagues = []
+    # Build lookup by both display_name and fall_display_name
+    league_lookup = {}
+    for lg in leagues:
+        if lg.display_name:
+            league_lookup[lg.display_name] = lg
+        if lg.fall_display_name:
+            league_lookup[lg.fall_display_name] = lg
 
     # Filter out games where the league requires 0 umpires
     # (unless game has explicit override > 0)
