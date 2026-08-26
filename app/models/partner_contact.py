@@ -91,7 +91,8 @@ class PartnerContact(db.Model):
         query = cls.query.filter_by(partner_id=partner_id)
         if active_only:
             query = query.filter_by(active=True)
-        return query.order_by(cls.is_primary.desc(), cls.name).all()
+        # Sort primary contacts first, then by name
+        return query.order_by(db.desc('is_primary'), 'name').all()
 
     @classmethod
     def get_for_message_type(cls, partner_id, msg_type, active_only=True):
