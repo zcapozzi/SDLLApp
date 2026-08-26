@@ -117,9 +117,9 @@
                     <td>{{ pg.game.game_date.strftime('%I:%M %p') if pg.game.game_date else '-' }}</td>
                     <td>{{ pg.game.location or '-' }}</td>
                     <td>
-                        {{ pg.game.away_team.team.team_name if pg.game.away_team else '?' }}
+                        {{ pg.game.away_team.computed_display_name if pg.game.away_team else '?' }}
                         @
-                        {{ pg.game.home_team.team.team_name if pg.game.home_team else '?' }}
+                        {{ pg.game.home_team.computed_display_name if pg.game.home_team else '?' }}
                     </td>
                     <td>
                         {% if pg.is_in_sequence %}
@@ -168,8 +168,8 @@
             {% for pg in seq_games|sort(attribute='game.game_date') %}
             <li style="color: var(--text-muted);">
                 {{ pg.game.game_date.strftime('%I:%M %p') if pg.game.game_date else '?' }} -
-                {{ pg.game.away_team.team.team_name if pg.game.away_team else '?' }} @
-                {{ pg.game.home_team.team.team_name if pg.game.home_team else '?' }}
+                {{ pg.game.away_team.computed_display_name if pg.game.away_team else '?' }} @
+                {{ pg.game.home_team.computed_display_name if pg.game.home_team else '?' }}
                 ({{ pg.assigned_partner.name if pg.assigned_partner else '?' }})
             </li>
             {% endfor %}
