@@ -448,7 +448,7 @@
                         </td>
                         <td class="cell-umpires">
                             {% if game.umpire_was_unassigned %}
-                            <span class="badge badge-no-umpire" title="No umpire needed for this game">0</span>
+                            -
                             {% else %}
                             {{ game._cached_umpire_count if game._cached_umpire_count is defined else game.umpire_count }}
                             {% endif %}
@@ -462,7 +462,9 @@
                             {% endif %}
                         </td>
                         <td class="cell-notes">
-                            {% if game_originals and game.ID in game_originals %}
+                            {% if game.umpire_was_unassigned %}
+                            <span class="badge badge-no-umpire">Umpire(s) not required</span>
+                            {% elif game_originals and game.ID in game_originals %}
                             <span class="badge badge-changed">CHANGED</span>
                             <div class="game-originally">{{ game_originals[game.ID] }}</div>
                             {% endif %}
