@@ -34,10 +34,11 @@
                         <code style="font-size: 11px; color: var(--text-muted);">{{ partner.short_code }}</code>
                     </td>
                     <td>
-                        {% if partner.contact_email %}
-                        {{ partner.contact_email }}
+                        {% set digest_emails = partner.get_emails_for_message_type('weeklyDigest') %}
+                        {% if digest_emails %}
+                        {{ digest_emails|join(', ') }}
                         {% else %}
-                        <span style="color: var(--text-muted);">Not configured</span>
+                        <span style="color: var(--text-muted);">No contacts for weekly digest</span>
                         {% endif %}
                     </td>
                     <td style="text-align: center;">
@@ -71,7 +72,7 @@
         <li><strong>Off (Default):</strong> Digests are generated as drafts and require manual review before sending</li>
         <li><strong>On:</strong> Digests are generated AND sent automatically on Sunday 6pm ET</li>
         <li>When auto-send is on, no Monday reminder is needed (already sent or skipped)</li>
-        <li>Partners without contact emails configured will be skipped regardless of this setting</li>
+        <li>Partners without contacts subscribed to "weeklyDigest" will be skipped regardless of this setting</li>
         <li>Sent digests are still recorded in history for reference</li>
     </ul>
 </div>

@@ -96,7 +96,10 @@
             <tr>
                 <td><strong>{{ partner.name }}</strong></td>
                 <td>{{ partner.short_code }}</td>
-                <td>{{ partner.contact_name or '-' }}</td>
+                <td>
+                    {% set primary = partner.primary_contact %}
+                    {{ primary.display_name if primary else '-' }}
+                </td>
                 <td>{{ partner.notification_preference|title }}</td>
             </tr>
             {% endfor %}

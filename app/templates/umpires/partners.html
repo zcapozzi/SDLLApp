@@ -34,13 +34,22 @@
                 <td><strong>{{ partner.name }}</strong></td>
                 <td><code>{{ partner.short_code }}</code></td>
                 <td>
-                    {% if partner.contact_name %}
-                    {{ partner.contact_name }}<br>
+                    {% set primary = partner.primary_contact %}
+                    {% set contact_count = partner.contacts.filter_by(active=True).count() %}
+                    {% if primary %}
+                    {{ primary.display_name }}<br>
                     <span style="font-size: 12px; color: var(--text-muted);">
-                        {{ partner.contact_email or '' }}
+                        {{ primary.display_email }}
+                        {% if contact_count > 1 %}
+                        (+{{ contact_count - 1 }} more)
+                        {% endif %}
+                    </span>
+                    {% elif contact_count > 0 %}
+                    <span style="font-size: 12px; color: var(--text-muted);">
+                        {{ contact_count }} contact{% if contact_count > 1 %}s{% endif %}
                     </span>
                     {% else %}
-                    <span style="color: var(--text-muted);">-</span>
+                    <span style="color: var(--text-muted);">No contacts</span>
                     {% endif %}
                 </td>
                 <td>

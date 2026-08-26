@@ -260,9 +260,6 @@ def add_partner():
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
         short_code = request.form.get('short_code', '').strip().upper()
-        contact_name = request.form.get('contact_name', '').strip()
-        contact_email = request.form.get('contact_email', '').strip()
-        contact_phone = request.form.get('contact_phone', '').strip()
         notification_preference = request.form.get('notification_preference', 'weekly')
 
         if not name or not short_code:
@@ -279,9 +276,6 @@ def add_partner():
             org_id=1,
             name=name,
             short_code=short_code,
-            contact_name=contact_name or None,
-            contact_email=contact_email or None,
-            contact_phone=contact_phone or None,
             notification_preference=notification_preference,
             active=True
         )
@@ -290,8 +284,8 @@ def add_partner():
         db.session.commit()
 
         logger.info(f'Added partner: {name} ({short_code})')
-        flash(f'Added partner: {name}', 'success')
-        return redirect(url_for('umpires.partners'))
+        flash(f'Added partner: {name}. You can now add contacts.', 'success')
+        return redirect(url_for('umpires.edit_partner', id=partner.id))
 
     return render_template('umpires/add_partner.html')
 
@@ -301,23 +295,103 @@ def add_partner():
 @umpire_coordinator_required
 def edit_partner(id):
     """Edit umpire partner organization."""
+    from app.models.partner_contact import PartnerContact
+
     partner = UmpirePartner.query.get_or_404(id)
+    contacts = partner.get_active_contacts()
+    users = User.query.filter(User.role.like('%partner_contact%')).order_by(User.name).all()
 
     if request.method == 'POST':
-        partner.name = request.form.get('name', '').strip()
-        partner.short_code = request.form.get('short_code', '').strip().upper()
-        partner.contact_name = request.form.get('contact_name', '').strip() or None
-        partner.contact_email = request.form.get('contact_email', '').strip() or None
-        partner.contact_phone = request.form.get('contact_phone', '').strip() or None
-        partner.notification_preference = request.form.get('notification_preference', 'weekly')
-        partner.active = request.form.get('active') == 'on'
+        action = request.form.get('action', 'save_partner')
 
-        db.session.commit()
-        logger.info(f'Updated partner: {partner.name}')
-        flash(f'Updated partner: {partner.name}', 'success')
+        if action == 'save_partner':
+            partner.name = request.form.get('name', '').strip()
+            partner.short_code = request.form.get('short_code', '').strip().upper()
+            partner.notification_preference = request.form.get('notification_preference', 'weekly')
+            partner.active = request.form.get('active') == 'on'
+
+            db.session.commit()
+            logger.info(f'Updated partner: {partner.name}')
+            flash(f'Updated partner: {partner.name}', 'success')
+            return redirect(url_for('umpires.edit_partner', id=id))
+
+        elif action == 'add_contact':
+            user_id = request.form.get('user_id')
+            email = request.form.get('contact_email', '').strip()
+            name = request.form.get('contact_name', '').strip()
+            phone = request.form.get('contact_phone', '').strip()
+            message_types = request.form.getlist('message_types')
+            is_primary = request.form.get('is_primary') == 'on'
+
+            if not email and not user_id:
+                flash('Email is required for a contact.', 'error')
+                return redirect(url_for('umpires.edit_partner', id=id))
+
+            # If using a user, get their email
+            if user_id:
+                user = User.query.get(user_id)
+                if user:
+                    email = user.decrypted_email
+                    name = user.name
+
+            contact = PartnerContact(
+                partner_id=partner.id,
+                user_id=int(user_id) if user_id else None,
+                email=email,
+                name=name or None,
+                phone=phone or None,
+                message_types='|'.join(message_types) if message_types else '',
+                is_primary=is_primary
+            )
+            db.session.add(contact)
+
+            # If this is primary, unset other primary contacts
+            if is_primary:
+                for c in contacts:
+                    c.is_primary = False
+
+            db.session.commit()
+            flash(f'Added contact: {name or email}', 'success')
+            return redirect(url_for('umpires.edit_partner', id=id) + '#contacts')
+
+        elif action == 'update_contact':
+            contact_id = request.form.get('contact_id')
+            contact = PartnerContact.query.get(contact_id)
+            if contact and contact.partner_id == partner.id:
+                contact.email = request.form.get('contact_email', '').strip()
+                contact.name = request.form.get('contact_name', '').strip() or None
+                contact.phone = request.form.get('contact_phone', '').strip() or None
+                message_types = request.form.getlist('message_types')
+                contact.message_types = '|'.join(message_types) if message_types else ''
+                is_primary = request.form.get('is_primary') == 'on'
+
+                # If this is primary, unset other primary contacts
+                if is_primary and not contact.is_primary:
+                    for c in contacts:
+                        c.is_primary = False
+                contact.is_primary = is_primary
+
+                db.session.commit()
+                flash(f'Updated contact: {contact.display_name}', 'success')
+            return redirect(url_for('umpires.edit_partner', id=id) + '#contacts')
+
+        elif action == 'delete_contact':
+            contact_id = request.form.get('contact_id')
+            contact = PartnerContact.query.get(contact_id)
+            if contact and contact.partner_id == partner.id:
+                name = contact.display_name
+                db.session.delete(contact)
+                db.session.commit()
+                flash(f'Removed contact: {name}', 'success')
+            return redirect(url_for('umpires.edit_partner', id=id) + '#contacts')
+
         return redirect(url_for('umpires.partners'))
 
-    return render_template('umpires/edit_partner.html', partner=partner)
+    return render_template('umpires/edit_partner.html',
+                           partner=partner,
+                           contacts=contacts,
+                           users=users,
+                           message_types=PartnerContact.ALL_MESSAGE_TYPES)
 
 
 @umpires_bp.route('/partners/<int:id>/generate-token', methods=['POST'])

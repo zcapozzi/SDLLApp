@@ -267,7 +267,7 @@ class TestUmpirePartnerModel:
     """Test UmpirePartner model (Dynamic, Diamond, etc.)."""
 
     def test_create_umpire_partner(self, app, db_session):
-        """UmpirePartner can be created with contact info."""
+        """UmpirePartner can be created."""
         from app.models.umpire_partner import UmpirePartner
 
         # Use unique short code
@@ -276,9 +276,6 @@ class TestUmpirePartnerModel:
             org_id=1,
             name=f'Diamond Umpires {code}',
             short_code=code,
-            contact_name='John Diamond',
-            contact_email='john@diamond.com',
-            contact_phone='555-123-4567',
             notification_preference='weekly',
             active=True
         )

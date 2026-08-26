@@ -30,31 +30,6 @@
             </div>
         </div>
 
-        <hr style="margin: 20px 0;">
-        <h3>Contact Information</h3>
-
-        <div class="form-group">
-            <label for="contact_name">Contact Name</label>
-            <input type="text" name="contact_name" id="contact_name" class="form-control"
-                   placeholder="Primary contact person">
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-            <div class="form-group">
-                <label for="contact_email">Contact Email</label>
-                <input type="email" name="contact_email" id="contact_email" class="form-control"
-                       placeholder="email@example.com">
-            </div>
-
-            <div class="form-group">
-                <label for="contact_phone">Contact Phone</label>
-                <input type="tel" name="contact_phone" id="contact_phone" class="form-control"
-                       placeholder="(555) 123-4567">
-            </div>
-        </div>
-
-        <hr style="margin: 20px 0;">
-
         <div class="form-group">
             <label for="notification_preference">Notification Preference</label>
             <select name="notification_preference" id="notification_preference" class="form-control" style="width: auto;">
@@ -68,12 +43,17 @@
             </p>
         </div>
 
-        <hr style="margin: 20px 0;">
-
         <div style="display: flex; gap: 10px;">
             <button type="submit" class="btn btn-primary">Add Partner</button>
             <a href="{{ url_for('umpires.partners') }}" class="btn btn-outline">Cancel</a>
         </div>
     </form>
+</div>
+
+<div class="card" style="margin-top: 20px; background: #f8f9fa;">
+    <p style="margin: 0; color: var(--text-muted);">
+        <strong>Note:</strong> After adding the partner, you'll be able to add contacts on the edit page.
+        Each contact can subscribe to different types of automated emails (weekly digests, game change notifications, etc.).
+    </p>
 </div>
 {% endblock %}

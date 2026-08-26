@@ -84,22 +84,24 @@ class WeeklyDigestService:
 
     def get_partner_recipients(self, partner_code):
         """
-        Get recipient email addresses for a partner.
+        Get recipient email addresses for a partner's weekly digest.
 
         Args:
             partner_code: Partner short code
 
         Returns:
-            List of email addresses
+            List of email addresses for contacts subscribed to weeklyDigest
         """
+        from app.models.partner_contact import PartnerContact
+
         if partner_code == self.SDLL_ACADEMY_CODE:
             # For SDLL Academy, could use a configured email or skip
             # For now, return empty to indicate internal handling
             return []
 
         partner = UmpirePartner.get_by_code(partner_code)
-        if partner and partner.contact_email:
-            return [partner.contact_email]
+        if partner:
+            return partner.get_emails_for_message_type(PartnerContact.MSG_WEEKLY_DIGEST)
         return []
 
     def get_partner_info(self, partner_code):

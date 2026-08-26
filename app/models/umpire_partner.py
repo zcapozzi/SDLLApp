@@ -20,11 +20,6 @@ class UmpirePartner(db.Model):
     name = db.Column(db.String(100), nullable=False)
     short_code = db.Column(db.String(20))  # "DIA", "DYN" for quick reference
 
-    # Contact information
-    contact_name = db.Column(db.String(200))
-    contact_email = db.Column(db.String(255))
-    contact_phone = db.Column(db.String(50))
-
     # Notification preferences
     notification_preference = db.Column(db.String(20), default='weekly')
     # Options: 'daily', 'weekly', 'per_game'
@@ -49,6 +44,8 @@ class UmpirePartner(db.Model):
     organization = db.relationship('Organization', backref='umpire_partners')
     game_assignments = db.relationship('GameUmpire', back_populates='partner',
                                        foreign_keys='GameUmpire.partner_id')
+    contacts = db.relationship('PartnerContact', back_populates='partner',
+                               cascade='all, delete-orphan', lazy='dynamic')
 
     # Notification preference constants
     NOTIFY_DAILY = 'daily'
@@ -141,3 +138,42 @@ class UmpirePartner(db.Model):
             schedule_token=token,
             active=True
         ).first()
+
+    def get_contacts_for_message_type(self, msg_type):
+        """Get contacts that receive a specific message type.
+
+        Args:
+            msg_type: Message type (e.g., 'weeklyDigest', 'recentChanges')
+
+        Returns:
+            List of PartnerContact objects
+        """
+        from app.models.partner_contact import PartnerContact
+        return PartnerContact.get_for_message_type(self.id, msg_type)
+
+    def get_emails_for_message_type(self, msg_type):
+        """Get email addresses for contacts that receive a message type.
+
+        Args:
+            msg_type: Message type
+
+        Returns:
+            List of email addresses
+        """
+        from app.models.partner_contact import PartnerContact
+        return PartnerContact.get_emails_for_message_type(self.id, msg_type)
+
+    def get_active_contacts(self):
+        """Get all active contacts for this partner.
+
+        Returns:
+            List of PartnerContact objects
+        """
+        from app.models.partner_contact import PartnerContact
+        return PartnerContact.get_for_partner(self.id)
+
+    @property
+    def primary_contact(self):
+        """Get the primary contact for display purposes."""
+        from app.models.partner_contact import PartnerContact
+        return PartnerContact.get_primary_contact(self.id)

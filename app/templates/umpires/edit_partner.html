@@ -12,6 +12,7 @@
 <div class="card">
     <form method="POST">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="save_partner">
         <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
             <div class="form-group">
                 <label for="name">Organization Name <span style="color: #c33;">*</span></label>
@@ -26,31 +27,6 @@
                        style="text-transform: uppercase;">
             </div>
         </div>
-
-        <hr style="margin: 20px 0;">
-        <h3>Contact Information</h3>
-
-        <div class="form-group">
-            <label for="contact_name">Contact Name</label>
-            <input type="text" name="contact_name" id="contact_name" class="form-control"
-                   value="{{ partner.contact_name or '' }}">
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-            <div class="form-group">
-                <label for="contact_email">Contact Email</label>
-                <input type="email" name="contact_email" id="contact_email" class="form-control"
-                       value="{{ partner.contact_email or '' }}">
-            </div>
-
-            <div class="form-group">
-                <label for="contact_phone">Contact Phone</label>
-                <input type="tel" name="contact_phone" id="contact_phone" class="form-control"
-                       value="{{ partner.contact_phone or '' }}">
-            </div>
-        </div>
-
-        <hr style="margin: 20px 0;">
 
         <div class="form-group">
             <label for="notification_preference">Notification Preference</label>
@@ -72,12 +48,190 @@
             </p>
         </div>
 
-        <hr style="margin: 20px 0;">
-
         <div style="display: flex; gap: 10px;">
-            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <button type="submit" class="btn btn-primary">Save Partner</button>
             <a href="{{ url_for('umpires.partners') }}" class="btn btn-outline">Cancel</a>
         </div>
     </form>
 </div>
+
+<div id="contacts" class="card" style="margin-top: 30px;">
+    <h2 style="margin-top: 0;">Contacts</h2>
+    <p style="color: var(--text-muted); margin-bottom: 20px;">
+        Add contacts who should receive automated emails. Each contact can subscribe to different message types.
+    </p>
+
+    {% if contacts %}
+    <table style="margin-bottom: 30px;">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Message Types</th>
+                <th>Primary</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for contact in contacts %}
+            <tr id="contact-{{ contact.id }}">
+                <td>{{ contact.display_name or '-' }}</td>
+                <td>{{ contact.display_email }}</td>
+                <td>{{ contact.phone or '-' }}</td>
+                <td>
+                    {% for mt in contact.message_types_list %}
+                    <span class="badge" style="background: #e0e0e0; color: #333; margin-right: 3px;">{{ mt }}</span>
+                    {% endfor %}
+                </td>
+                <td>
+                    {% if contact.is_primary %}
+                    <span class="badge badge-spring">Primary</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: right;">
+                    <button type="button" class="btn btn-outline" style="padding: 3px 10px; font-size: 12px;"
+                            onclick="editContact({{ contact.id }}, '{{ contact.name or '' }}', '{{ contact.email }}', '{{ contact.phone or '' }}', '{{ contact.message_types }}', {{ 'true' if contact.is_primary else 'false' }})">Edit</button>
+                    <form method="POST" style="display: inline;" onsubmit="return confirm('Remove this contact?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="delete_contact">
+                        <input type="hidden" name="contact_id" value="{{ contact.id }}">
+                        <button type="submit" class="btn btn-danger" style="padding: 3px 10px; font-size: 12px;">Remove</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: var(--text-muted); margin-bottom: 20px;">No contacts configured yet.</p>
+    {% endif %}
+
+    <h3>Add Contact</h3>
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add_contact">
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+            <div class="form-group">
+                <label for="contact_name">Name</label>
+                <input type="text" name="contact_name" id="contact_name" class="form-control">
+            </div>
+            <div class="form-group">
+                <label for="contact_email">Email <span style="color: #c33;">*</span></label>
+                <input type="email" name="contact_email" id="contact_email" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="contact_phone">Phone</label>
+                <input type="tel" name="contact_phone" id="contact_phone" class="form-control">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Message Types</label>
+            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                {% for mt in message_types %}
+                <label style="display: flex; align-items: center; gap: 5px;">
+                    <input type="checkbox" name="message_types" value="{{ mt }}" checked>
+                    <span>{{ mt }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">
+                <strong>weeklyDigest</strong>: Weekly schedule summary &nbsp;|&nbsp;
+                <strong>recentChanges</strong>: Notifications when games change
+            </p>
+        </div>
+
+        <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 5px;">
+                <input type="checkbox" name="is_primary">
+                <span>Primary Contact</span>
+            </label>
+            <p style="font-size: 12px; color: var(--text-muted);">
+                The primary contact is shown on the partners list.
+            </p>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Add Contact</button>
+    </form>
+</div>
+
+<!-- Edit Contact Modal -->
+<div id="editContactModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="background: white; max-width: 500px; margin: 100px auto; padding: 30px; border-radius: 8px;">
+        <h3 style="margin-top: 0;">Edit Contact</h3>
+        <form method="POST" id="editContactForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="update_contact">
+            <input type="hidden" name="contact_id" id="edit_contact_id">
+
+            <div class="form-group">
+                <label for="edit_contact_name">Name</label>
+                <input type="text" name="contact_name" id="edit_contact_name" class="form-control">
+            </div>
+            <div class="form-group">
+                <label for="edit_contact_email">Email <span style="color: #c33;">*</span></label>
+                <input type="email" name="contact_email" id="edit_contact_email" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="edit_contact_phone">Phone</label>
+                <input type="tel" name="contact_phone" id="edit_contact_phone" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Message Types</label>
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                    {% for mt in message_types %}
+                    <label style="display: flex; align-items: center; gap: 5px;">
+                        <input type="checkbox" name="message_types" value="{{ mt }}" id="edit_mt_{{ mt }}">
+                        <span>{{ mt }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 5px;">
+                    <input type="checkbox" name="is_primary" id="edit_is_primary">
+                    <span>Primary Contact</span>
+                </label>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="button" class="btn btn-outline" onclick="closeEditModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function editContact(id, name, email, phone, messageTypes, isPrimary) {
+    document.getElementById('edit_contact_id').value = id;
+    document.getElementById('edit_contact_name').value = name;
+    document.getElementById('edit_contact_email').value = email;
+    document.getElementById('edit_contact_phone').value = phone;
+    document.getElementById('edit_is_primary').checked = isPrimary;
+
+    // Parse message types and check boxes
+    var mtArray = messageTypes.split('|');
+    {% for mt in message_types %}
+    document.getElementById('edit_mt_{{ mt }}').checked = mtArray.indexOf('{{ mt }}') >= 0;
+    {% endfor %}
+
+    document.getElementById('editContactModal').style.display = 'block';
+}
+
+function closeEditModal() {
+    document.getElementById('editContactModal').style.display = 'none';
+}
+
+// Close modal when clicking outside
+document.getElementById('editContactModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeEditModal();
+    }
+});
+</script>
 {% endblock %}

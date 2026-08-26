@@ -24,7 +24,8 @@ class GmailService:
     @property
     def is_configured(self):
         """Check if email sending is properly configured"""
-        return self._check_resend() or self._check_smtp() or self._check_api()
+        return (self._check_resend() or self._check_brevo() or
+                self._check_sendgrid() or self._check_smtp() or self._check_api())
 
     def _check_resend(self):
         """Check if Resend is configured"""
@@ -44,9 +45,19 @@ class GmailService:
         """Check if Gmail API is configured"""
         return bool(os.environ.get('GOOGLE_SERVICE_JSON'))
 
+    def _check_brevo(self):
+        """Check if Brevo (formerly Sendinblue) is configured"""
+        return bool(os.environ.get('BREVO_API_KEY'))
+
+    def _check_sendgrid(self):
+        """Check if SendGrid is configured"""
+        return bool(os.environ.get('SENDGRID_API_KEY'))
+
     def send_email(self, to, subject, body_text, body_html=None, reply_to=None):
         """
-        Send an email via Resend (preferred), SMTP, or Gmail API.
+        Send an email via Resend (preferred), Brevo, SendGrid, SMTP, or Gmail API.
+
+        Automatically falls back to next provider if one fails (e.g., rate limit).
 
         Args:
             to: Recipient email address
@@ -59,21 +70,52 @@ class GmailService:
             True if sent successfully
 
         Raises:
-            Exception if sending fails
+            Exception if all providers fail
         """
+        errors = []
+
         # Try Resend first (Railway-approved, most reliable)
         if self._check_resend():
-            return self._send_via_resend(to, subject, body_text, body_html, reply_to)
+            try:
+                return self._send_via_resend(to, subject, body_text, body_html, reply_to)
+            except Exception as e:
+                errors.append(f"Resend: {e}")
+                print(f"Resend failed, trying next provider: {e}")
+
+        # Try Brevo (300/day free)
+        if self._check_brevo():
+            try:
+                return self._send_via_brevo(to, subject, body_text, body_html, reply_to)
+            except Exception as e:
+                errors.append(f"Brevo: {e}")
+                print(f"Brevo failed, trying next provider: {e}")
+
+        # Try SendGrid (100/day free)
+        if self._check_sendgrid():
+            try:
+                return self._send_via_sendgrid(to, subject, body_text, body_html, reply_to)
+            except Exception as e:
+                errors.append(f"SendGrid: {e}")
+                print(f"SendGrid failed, trying next provider: {e}")
 
         # Try SMTP
         if self._check_smtp():
-            return self._send_via_smtp(to, subject, body_text, body_html, reply_to)
+            try:
+                return self._send_via_smtp(to, subject, body_text, body_html, reply_to)
+            except Exception as e:
+                errors.append(f"SMTP: {e}")
+                print(f"SMTP failed, trying next provider: {e}")
 
         # Fall back to Gmail API
         if self._check_api():
-            return self._send_via_api(to, subject, body_text, body_html, reply_to)
+            try:
+                return self._send_via_api(to, subject, body_text, body_html, reply_to)
+            except Exception as e:
+                errors.append(f"Gmail API: {e}")
 
-        raise Exception("Email not configured. Set RESEND_API_KEY, SMTP_*, or GOOGLE_SERVICE_JSON.")
+        if errors:
+            raise Exception(f"All email providers failed: {'; '.join(errors)}")
+        raise Exception("Email not configured. Set RESEND_API_KEY, BREVO_API_KEY, SENDGRID_API_KEY, SMTP_*, or GOOGLE_SERVICE_JSON.")
 
     def _send_via_resend(self, to, subject, body_text, body_html=None, reply_to=None):
         """Send email via Resend API"""
@@ -116,6 +158,97 @@ class GmailService:
             error_body = e.read().decode('utf-8')
             print(f"Resend error - from: '{from_address}', to: '{to}', error: {error_body}")
             raise Exception(f"Resend API error: {e.code} - {error_body}")
+
+    def _send_via_brevo(self, to, subject, body_text, body_html=None, reply_to=None):
+        """Send email via Brevo API (formerly Sendinblue) - 300/day free tier"""
+        api_key = os.environ.get('BREVO_API_KEY', '').strip()
+
+        payload = {
+            "sender": {
+                "name": self.sender_name,
+                "email": self.sender_email
+            },
+            "to": [{"email": to}] if isinstance(to, str) else [{"email": addr} for addr in to],
+            "subject": subject,
+            "textContent": body_text,
+        }
+        if body_html:
+            payload["htmlContent"] = body_html
+        if reply_to:
+            payload["replyTo"] = {"email": reply_to}
+
+        data = json.dumps(payload).encode('utf-8')
+
+        req = urllib.request.Request(
+            'https://api.brevo.com/v3/smtp/email',
+            data=data,
+            headers={
+                'api-key': api_key,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            method='POST'
+        )
+
+        try:
+            print(f"Brevo: sending to '{to}'")
+            with urllib.request.urlopen(req) as response:
+                result = json.loads(response.read().decode('utf-8'))
+                print(f"Brevo email sent: {result.get('messageId')}")
+                return True
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode('utf-8')
+            print(f"Brevo error: {error_body}")
+            raise Exception(f"Brevo API error: {e.code} - {error_body}")
+
+    def _send_via_sendgrid(self, to, subject, body_text, body_html=None, reply_to=None):
+        """Send email via SendGrid API - 100/day free tier"""
+        api_key = os.environ.get('SENDGRID_API_KEY', '').strip()
+
+        # Build content array
+        content = [{"type": "text/plain", "value": body_text}]
+        if body_html:
+            content.append({"type": "text/html", "value": body_html})
+
+        # Build recipients
+        to_list = [to] if isinstance(to, str) else to
+
+        payload = {
+            "personalizations": [{
+                "to": [{"email": addr} for addr in to_list]
+            }],
+            "from": {
+                "email": self.sender_email,
+                "name": self.sender_name
+            },
+            "subject": subject,
+            "content": content
+        }
+        if reply_to:
+            payload["reply_to"] = {"email": reply_to}
+
+        data = json.dumps(payload).encode('utf-8')
+
+        req = urllib.request.Request(
+            'https://api.sendgrid.com/v3/mail/send',
+            data=data,
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            },
+            method='POST'
+        )
+
+        try:
+            print(f"SendGrid: sending to '{to}'")
+            with urllib.request.urlopen(req) as response:
+                # SendGrid returns 202 Accepted with empty body on success
+                print(f"SendGrid email sent successfully")
+                return True
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode('utf-8')
+            print(f"SendGrid error: {error_body}")
+            raise Exception(f"SendGrid API error: {e.code} - {error_body}")
 
     def _send_via_smtp(self, to, subject, body_text, body_html=None, reply_to=None):
         """Send email via SMTP (supports both TLS on 587 and SSL on 465)"""
