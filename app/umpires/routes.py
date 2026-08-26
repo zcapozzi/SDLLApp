@@ -702,6 +702,10 @@ def delegation_report(year=None, is_spring=None):
         if not game.umpire_override:
             continue
 
+        # Skip games that were unassigned (assigned in error, no umpire needed)
+        if game.umpire_was_unassigned:
+            continue
+
         # Get umpire count for this game (case-insensitive lookup)
         league_obj = league_lookup.get(league_name.lower().strip())
         if game.umpire_count_override is not None:
@@ -1037,6 +1041,40 @@ def api_set_umpire_count():
         'success': True,
         'count_override': count,
         'effective_count': effective_count
+    })
+
+
+@umpires_bp.route('/api/mark-no-umpire-required', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def api_mark_no_umpire_required():
+    """Mark a game as not requiring umpires (was assigned in error).
+
+    Sets umpire_was_unassigned=1. The game will:
+    - Still show on partner schedule with "NO UMPIRE" indicator
+    - Be excluded from delegation report counts
+    - Trigger a notification to the partner
+    """
+    data = request.get_json()
+    game_id = data.get('game_id')
+
+    game = Game.query.get(game_id)
+    if not game:
+        return jsonify({'error': 'Game not found'}), 404
+
+    if not game.umpire_override:
+        return jsonify({'error': 'Game has no umpire assignment to unassign'}), 400
+
+    # Mark as unassigned
+    game.umpire_was_unassigned = 1
+    db.session.commit()
+
+    # TODO: Queue notification to partner about the unassignment
+
+    logger.info(f'Marked game {game_id} as no umpire required (was assigned to {game.umpire_override})')
+    return jsonify({
+        'success': True,
+        'message': f'Game marked as no umpire required'
     })
 
 

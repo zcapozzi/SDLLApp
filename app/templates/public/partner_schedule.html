@@ -244,6 +244,17 @@
             background: #e65100;
             color: white;
         }
+        .badge-no-umpire {
+            background: #e74c3c;
+            color: white;
+        }
+        tr.no-umpire-row td {
+            opacity: 0.7;
+            text-decoration: line-through;
+        }
+        tr.no-umpire-row td.cell-notes {
+            text-decoration: none;
+        }
         .game-originally {
             font-size: 11px;
             color: #e65100;
@@ -393,7 +404,7 @@
                 </thead>
                 <tbody>
                     {% for game in games %}
-                    <tr class="{{ 'new-game' if game.ID in new_game_ids else '' }}{{ ' past-game' if game.game_date and game.game_date.date() < today else '' }}"
+                    <tr class="{{ 'new-game' if game.ID in new_game_ids else '' }}{{ ' past-game' if game.game_date and game.game_date.date() < today else '' }}{{ ' no-umpire-row' if game.umpire_was_unassigned else '' }}"
                         data-field="{{ game._cached_field_name or game.field_name or '' }}"
                         data-league="{{ game.league or '' }}"
                         data-date="{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}">
@@ -435,7 +446,13 @@
                             Regular
                             {% endif %}
                         </td>
-                        <td class="cell-umpires">{{ game._cached_umpire_count if game._cached_umpire_count is defined else game.umpire_count }}</td>
+                        <td class="cell-umpires">
+                            {% if game.umpire_was_unassigned %}
+                            <span class="badge badge-no-umpire" title="No umpire needed for this game">0</span>
+                            {% else %}
+                            {{ game._cached_umpire_count if game._cached_umpire_count is defined else game.umpire_count }}
+                            {% endif %}
+                        </td>
                         <td>
                             {% set rules = game._cached_rules_url if game._cached_rules_url is defined else game.rules_url %}
                             {% if rules %}

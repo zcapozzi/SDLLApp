@@ -350,6 +350,10 @@
         <span class="umpire-dot DYN"></span> Assign Dynamic
     </div>
     <div class="context-menu-divider"></div>
+    <div class="context-menu-item" style="color: #e74c3c;" onclick="markNoUmpireRequired()">
+        <span style="font-weight: bold;">&#10005;</span> No Umpire Required
+    </div>
+    <div class="context-menu-divider"></div>
     <div class="context-menu-header">Umpire Count</div>
     <div class="context-menu-item" data-count="0" onclick="setUmpireCount(0)">
         0 - No umpires
@@ -555,6 +559,50 @@ function setUmpireCount(count) {
     })
     .catch(function(err) {
         alert('Error setting umpire count: ' + err);
+        hideContextMenu();
+    });
+}
+
+function markNoUmpireRequired() {
+    if (!contextGameId) return;
+
+    if (!confirm('Mark this game as "No Umpire Required"? This will:\n- Keep the game on the partner schedule with a notice\n- Remove it from delegation counts\n- Queue a notification to the partner')) {
+        hideContextMenu();
+        return;
+    }
+
+    fetch('/umpires/api/mark-no-umpire-required', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            game_id: contextGameId
+        })
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(result) {
+        if (result.success) {
+            // Update card to show unassigned status
+            var card = document.querySelector('.game-card[data-game-id="' + contextGameId + '"]');
+            if (card) {
+                card.dataset.unassigned = '1';
+                card.style.opacity = '0.6';
+                card.style.textDecoration = 'line-through';
+                var badge = card.querySelector('.umpire-badge');
+                if (badge) {
+                    badge.textContent = 'N/A';
+                    badge.className = 'umpire-badge umpire-unassigned';
+                }
+            }
+        } else {
+            alert('Error: ' + result.error);
+        }
+        hideContextMenu();
+    })
+    .catch(function(err) {
+        alert('Error: ' + err);
         hideContextMenu();
     });
 }

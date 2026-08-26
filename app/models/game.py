@@ -28,6 +28,7 @@ class Game(db.Model):
     no_time_limit = db.Column(db.SmallInteger, default=0)  # 1 = 3-hour game (no time limit)
     umpire_override = db.Column(db.String(20))  # Override umpire source (academy/diamond/dynamic)
     umpire_count_override = db.Column(db.SmallInteger)  # Override league default umpire count
+    umpire_was_unassigned = db.Column(db.SmallInteger, default=0)  # 1 = was assigned in error, no umpire needed
     home_score = db.Column(db.SmallInteger)  # Only for completed regular/playoff games
     away_score = db.Column(db.SmallInteger)  # Only for completed regular/playoff games
 
