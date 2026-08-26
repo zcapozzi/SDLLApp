@@ -17,55 +17,33 @@
 <div class="card">
     <form method="POST">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin-bottom: 20px;">
+            {% for partner in partners %}
             <div class="form-group">
-                <label for="academy_pct">Academy (SDLL)</label>
+                <label for="partner_{{ partner.id }}_pct">
+                    {{ partner.name }}{% if partner.short_code == 'SDL' %} (Academy){% endif %}
+                </label>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <input type="number" name="academy_pct" id="academy_pct"
-                           class="form-control" style="width: 100px;"
+                    <input type="number" name="partner_{{ partner.id }}_pct" id="partner_{{ partner.id }}_pct"
+                           class="form-control partner-pct-input" style="width: 100px;"
                            min="0" max="100" step="1"
-                           value="{{ rule.academy_pct if rule else 0 }}"
+                           value="{{ rule.get_allocation_for_partner(partner.id) if rule else 0 }}"
                            oninput="updateTotal()">
                     <span>%</span>
                 </div>
                 <p style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">
+                    {% if partner.short_code == 'SDL' %}
                     SDLL youth umpires
+                    {% else %}
+                    {{ partner.name }}
+                    {% endif %}
                 </p>
             </div>
-
-            <div class="form-group">
-                <label for="diamond_pct">Diamond</label>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <input type="number" name="diamond_pct" id="diamond_pct"
-                           class="form-control" style="width: 100px;"
-                           min="0" max="100" step="1"
-                           value="{{ rule.diamond_pct if rule else 0 }}"
-                           oninput="updateTotal()">
-                    <span>%</span>
-                </div>
-                <p style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">
-                    Diamond Sports Officials
-                </p>
-            </div>
-
-            <div class="form-group">
-                <label for="dynamic_pct">Dynamic</label>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <input type="number" name="dynamic_pct" id="dynamic_pct"
-                           class="form-control" style="width: 100px;"
-                           min="0" max="100" step="1"
-                           value="{{ rule.dynamic_pct if rule else 0 }}"
-                           oninput="updateTotal()">
-                    <span>%</span>
-                </div>
-                <p style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">
-                    Dynamic Sports Officials
-                </p>
-            </div>
+            {% endfor %}
         </div>
 
         <div style="padding: 15px; background: #f8f9fa; border-radius: 4px; margin-bottom: 20px;">
-            <strong>Total: <span id="total-pct">{{ (rule.academy_pct + rule.diamond_pct + rule.dynamic_pct) if rule else 0 }}</span>%</strong>
+            <strong>Total: <span id="total-pct">0</span>%</strong>
             <span id="total-status" style="margin-left: 10px;"></span>
         </div>
 
@@ -80,24 +58,34 @@
     <h3 style="margin-top: 0;">Quick Presets</h3>
     <p style="color: var(--text-muted); margin-bottom: 15px;">Click to apply common configurations:</p>
     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-        <button type="button" class="btn btn-outline" onclick="applyPreset(100, 0, 0)">100% Academy</button>
-        <button type="button" class="btn btn-outline" onclick="applyPreset(0, 50, 50)">50/50 Partners</button>
-        <button type="button" class="btn btn-outline" onclick="applyPreset(34, 33, 33)">Even Split</button>
-        <button type="button" class="btn btn-outline" onclick="applyPreset(50, 25, 25)">50% Academy</button>
+        {% if partners|length >= 1 %}
+        <button type="button" class="btn btn-outline" onclick="applyPreset('academy_100')">100% Academy</button>
+        {% endif %}
+        {% if partners|length >= 2 %}
+        <button type="button" class="btn btn-outline" onclick="applyPreset('even_split')">Even Split</button>
+        {% endif %}
+        {% if partners|length >= 3 %}
+        <button type="button" class="btn btn-outline" onclick="applyPreset('academy_50')">50% Academy</button>
+        <button type="button" class="btn btn-outline" onclick="applyPreset('partners_only')">Partners Only (50/50)</button>
+        {% endif %}
     </div>
 </div>
 
 <script>
+// Partner IDs for preset calculations
+var partnerIds = [{% for p in partners %}{{ p.id }}{% if not loop.last %}, {% endif %}{% endfor %}];
+var sdlPartnerId = {% for p in partners %}{% if p.short_code == 'SDL' %}{{ p.id }}{% endif %}{% endfor %};
+
 function updateTotal() {
-    const academy = parseInt(document.getElementById('academy_pct').value) || 0;
-    const diamond = parseInt(document.getElementById('diamond_pct').value) || 0;
-    const dynamic = parseInt(document.getElementById('dynamic_pct').value) || 0;
-    const total = academy + diamond + dynamic;
+    var total = 0;
+    document.querySelectorAll('.partner-pct-input').forEach(function(input) {
+        total += parseInt(input.value) || 0;
+    });
 
     document.getElementById('total-pct').textContent = total;
 
-    const statusEl = document.getElementById('total-status');
-    const saveBtn = document.getElementById('save-btn');
+    var statusEl = document.getElementById('total-status');
+    var saveBtn = document.getElementById('save-btn');
 
     if (total === 100) {
         statusEl.innerHTML = '<span style="color: var(--success-color);">Valid</span>';
@@ -111,15 +99,61 @@ function updateTotal() {
     }
 }
 
-function applyPreset(academy, diamond, dynamic) {
-    document.getElementById('academy_pct').value = academy;
-    document.getElementById('diamond_pct').value = diamond;
-    document.getElementById('dynamic_pct').value = dynamic;
+function setAllPartnerValues(values) {
+    // values is an object: {partnerId: percentage}
+    partnerIds.forEach(function(id) {
+        var input = document.getElementById('partner_' + id + '_pct');
+        if (input) {
+            input.value = values[id] || 0;
+        }
+    });
     updateTotal();
 }
 
+function applyPreset(preset) {
+    var values = {};
+    partnerIds.forEach(function(id) { values[id] = 0; });
+
+    if (preset === 'academy_100') {
+        // 100% to SDL/Academy
+        if (sdlPartnerId) values[sdlPartnerId] = 100;
+    } else if (preset === 'even_split') {
+        // Even split across all partners
+        var pctEach = Math.floor(100 / partnerIds.length);
+        var remainder = 100 - (pctEach * partnerIds.length);
+        partnerIds.forEach(function(id, idx) {
+            values[id] = pctEach + (idx < remainder ? 1 : 0);
+        });
+    } else if (preset === 'academy_50') {
+        // 50% Academy, rest split evenly
+        if (sdlPartnerId) {
+            values[sdlPartnerId] = 50;
+            var nonAcademy = partnerIds.filter(function(id) { return id !== sdlPartnerId; });
+            if (nonAcademy.length > 0) {
+                var pctEach = Math.floor(50 / nonAcademy.length);
+                var remainder = 50 - (pctEach * nonAcademy.length);
+                nonAcademy.forEach(function(id, idx) {
+                    values[id] = pctEach + (idx < remainder ? 1 : 0);
+                });
+            }
+        }
+    } else if (preset === 'partners_only') {
+        // 0% Academy, split evenly among non-Academy partners
+        var nonAcademy = partnerIds.filter(function(id) { return id !== sdlPartnerId; });
+        if (nonAcademy.length > 0) {
+            var pctEach = Math.floor(100 / nonAcademy.length);
+            var remainder = 100 - (pctEach * nonAcademy.length);
+            nonAcademy.forEach(function(id, idx) {
+                values[id] = pctEach + (idx < remainder ? 1 : 0);
+            });
+        }
+    }
+
+    setAllPartnerValues(values);
+}
+
 // Initialize on page load
-updateTotal();
+document.addEventListener('DOMContentLoaded', updateTotal);
 </script>
 
 <style>

@@ -278,12 +278,192 @@ railway run mysqldump -u $MYSQLUSER -p$MYSQLPASSWORD $MYSQLDATABASE > railway_ba
 mysqldump -h <MYSQLHOST> -P <MYSQLPORT> -u <MYSQLUSER> -p<MYSQLPASSWORD> <MYSQLDATABASE> > railway_backup.sql
 ```
 
+## Test-Driven Development (TDD) Workflow
+
+This section describes the iterative process for developing new features using TDD with local testing.
+
+### Prerequisites for TDD
+
+1. **Local MySQL running** with test database credentials in `.env`
+2. **Production backup available**: `railway_backup.sql` in project root
+3. **Local dev server running**: `python run.py` (port 8084)
+
+### Step 1: Set Up Test Database
+
+Before writing tests, restore the test database from production backup:
+
+```bash
+# Windows (using test_db.bat)
+scripts\test_db.bat restore
+
+# Or manually:
+# 1. Drop and recreate test database
+mysql -u lrp_master -p -e "DROP DATABASE IF EXISTS sdll_test; CREATE DATABASE sdll_test;"
+
+# 2. Restore from production backup
+mysql -u lrp_master -p sdll_test < railway_backup.sql
+```
+
+The `test_db.bat` script provides these commands:
+| Command | Description |
+|---------|-------------|
+| `test_db.bat restore` | Restore `railway_backup.sql` to `sdll_test` database |
+| `test_db.bat full` | Drop, recreate, and run migrations on test database |
+| `test_db.bat status` | Check database connection and table count |
+| `test_db.bat shell` | Open MySQL shell to test database |
+| `test_db.bat sync-prod` | Download fresh dump from production and restore |
+
+### Step 2: Write Tests First (RED Phase)
+
+Create or update test file in `tests/` directory:
+
+```python
+# tests/test_my_feature.py
+import pytest
+
+class TestMyFeature:
+    def test_expected_behavior(self, app, db_session):
+        """Describe what should happen."""
+        # Arrange
+        ...
+        # Act
+        result = my_function()
+        # Assert
+        assert result == expected_value
+```
+
+Run the tests - they should FAIL (RED):
+
+```bash
+# Run specific test file
+python -m pytest tests/test_my_feature.py -v
+
+# Run specific test class
+python -m pytest tests/test_my_feature.py::TestMyFeature -v
+
+# Run specific test
+python -m pytest tests/test_my_feature.py::TestMyFeature::test_expected_behavior -v
+
+# Run with short traceback
+python -m pytest tests/test_my_feature.py -v --tb=short
+```
+
+### Step 3: Implement the Feature (GREEN Phase)
+
+1. **Write minimum code** to make tests pass
+2. **Check dev server** for errors (it auto-reloads on file changes)
+3. **Run tests again** - they should PASS (GREEN)
+
+```bash
+python -m pytest tests/test_my_feature.py -v
+```
+
+### Step 4: Refactor (REFACTOR Phase)
+
+1. Clean up code while keeping tests green
+2. Run full test suite to ensure no regressions:
+
+```bash
+# Run all tests
+python run_tests.py
+
+# Or with pytest directly
+python -m pytest tests/ -v
+```
+
+### Step 5: Manual Verification
+
+1. **Test in browser** at http://localhost:8084
+2. **Check affected pages** work correctly
+3. **Verify edge cases** that automated tests might miss
+
+### Step 6: Run Database Migration (if applicable)
+
+If your feature requires schema changes:
+
+```bash
+# Run migration on test database first
+mysql -u lrp_master -p sdll_test < scripts/migrations/your_migration.sql
+
+# Re-run tests to verify migration works
+python -m pytest tests/test_my_feature.py -v
+```
+
+### TDD Iteration Loop
+
+Repeat this cycle until feature is complete:
+
+```
+1. Write/update test (RED - test fails)
+       ↓
+2. Implement code (GREEN - test passes)
+       ↓
+3. Refactor (keep tests GREEN)
+       ↓
+4. Manual verification in browser
+       ↓
+5. Back to step 1 for next test case
+```
+
+### Common Test Fixtures
+
+The `tests/conftest.py` provides these fixtures:
+
+| Fixture | Description |
+|---------|-------------|
+| `app` | Flask application instance |
+| `db_session` | Database session (auto-rollback after test) |
+| `client` | Test client for HTTP requests |
+| `league_factory` | Create test leagues |
+| `field_factory` | Create test fields |
+| `game_factory` | Create test games |
+| `team_factory` | Create test teams |
+
+Example usage:
+
+```python
+def test_with_fixtures(self, app, db_session, league_factory, field_factory):
+    league = league_factory('Test League', umpire_count=2)
+    field = field_factory('Test Field')
+
+    # Your test logic here
+    assert league.umpire_count == 2
+```
+
+### Debugging Failed Tests
+
+```bash
+# Show print statements and logging
+python -m pytest tests/test_my_feature.py -v -s
+
+# Stop on first failure
+python -m pytest tests/test_my_feature.py -v -x
+
+# Show local variables in traceback
+python -m pytest tests/test_my_feature.py -v --tb=long
+
+# Run only tests marked as "quick"
+python -m pytest tests/ -v -m quick
+```
+
+### Quick TDD Reference
+
+| Phase | What to Do | Command |
+|-------|-----------|---------|
+| Setup | Restore test DB | `scripts\test_db.bat restore` |
+| RED | Run failing test | `pytest tests/test_x.py -v` |
+| GREEN | Implement & pass | `pytest tests/test_x.py -v` |
+| REFACTOR | Clean up code | `pytest tests/ -v` |
+| Verify | Manual testing | Browse http://localhost:8084 |
+
 ## Quick Reference
 
 | Action | Command |
 |--------|---------|
 | Start server | `python run.py` |
 | Run tests | `python run_tests.py` |
+| Run specific tests | `python -m pytest tests/test_x.py -v` |
+| Restore test DB | `scripts\test_db.bat restore` |
 | Import backup | `mysql -u root -p sdll < railway_backup.sql` |
 | View app | http://localhost:8084 |
 | Stop server | `Ctrl+C` |

@@ -7,8 +7,11 @@ from app.extensions import db
 class UmpireDelegationRule(db.Model):
     """Configurable umpire delegation percentages by league and season.
 
-    Controls what percentage of games should go to Academy (SDLL),
-    Diamond, or Dynamic umpires.
+    Controls what percentage of games should go to each umpire partner
+    (Academy/SDL, Diamond, Dynamic, or any future partners).
+
+    Allocation percentages are stored in the related UmpireDelegationAllocation
+    records, allowing flexible configuration for any number of partners.
     """
     __tablename__ = 'sdll_umpire_delegation_rules'
 
@@ -20,11 +23,6 @@ class UmpireDelegationRule(db.Model):
     year = db.Column(db.SmallInteger)
     is_spring = db.Column(db.Boolean)
 
-    # Allocation percentages (should sum to 100)
-    academy_pct = db.Column(db.SmallInteger, default=0)  # SDLL umpires
-    diamond_pct = db.Column(db.SmallInteger, default=0)
-    dynamic_pct = db.Column(db.SmallInteger, default=0)
-
     # Status
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -33,14 +31,21 @@ class UmpireDelegationRule(db.Model):
     # Relationships
     organization = db.relationship('Organization', backref='delegation_rules')
     league = db.relationship('League', backref='delegation_rules')
+    allocations = db.relationship(
+        'UmpireDelegationAllocation',
+        back_populates='rule',
+        cascade='all, delete-orphan',
+        lazy='joined'
+    )
 
     def __repr__(self):
-        return f'<UmpireDelegationRule league={self.league_id}: {self.academy_pct}/{self.diamond_pct}/{self.dynamic_pct}>'
+        allocs = '/'.join(f'{a.source_code}:{a.percentage}' for a in self.allocations)
+        return f'<UmpireDelegationRule league={self.league_id}: {allocs}>'
 
     @property
     def total_pct(self):
         """Sum of all allocation percentages."""
-        return (self.academy_pct or 0) + (self.diamond_pct or 0) + (self.dynamic_pct or 0)
+        return sum(a.percentage for a in self.allocations)
 
     def validate_percentages(self):
         """Ensure percentages sum to 100.
@@ -59,13 +64,77 @@ class UmpireDelegationRule(db.Model):
         """Get allocations as a dictionary.
 
         Returns:
-            dict: {'academy': pct, 'diamond': pct, 'dynamic': pct}
+            dict: {source_code: percentage} e.g., {'sdl': 50, 'dia': 25, 'dyn': 25}
         """
-        return {
-            'academy': self.academy_pct or 0,
-            'diamond': self.diamond_pct or 0,
-            'dynamic': self.dynamic_pct or 0
-        }
+        result = {}
+        for alloc in self.allocations:
+            result[alloc.source_code] = alloc.percentage
+        return result
+
+    def get_allocation_for_partner(self, partner_id):
+        """Get percentage for a specific partner by partner_id.
+
+        Args:
+            partner_id: Partner ID to look up
+
+        Returns:
+            int: Percentage allocation (0 if not found)
+        """
+        for alloc in self.allocations:
+            if alloc.partner_id == partner_id:
+                return alloc.percentage
+        return 0
+
+    def set_allocation(self, partner_id, percentage):
+        """Set percentage for a partner, creating allocation if needed.
+
+        Args:
+            partner_id: Partner ID
+            percentage: Percentage to allocate (0-100)
+        """
+        for alloc in self.allocations:
+            if alloc.partner_id == partner_id:
+                alloc.percentage = percentage
+                return
+
+        # Create new allocation
+        from app.models.umpire_delegation_allocation import UmpireDelegationAllocation
+        new_alloc = UmpireDelegationAllocation(
+            rule_id=self.id,
+            partner_id=partner_id,
+            percentage=percentage
+        )
+        self.allocations.append(new_alloc)
+
+    def remove_zero_allocations(self):
+        """Remove allocations with 0 percentage to keep data clean."""
+        self.allocations = [a for a in self.allocations if a.percentage > 0]
+
+    # Legacy property accessors for backwards compatibility during migration
+    # These can be removed after all code is updated to use allocations
+    @property
+    def academy_pct(self):
+        """Legacy accessor for Academy (SDL) percentage."""
+        for alloc in self.allocations:
+            if alloc.is_academy:
+                return alloc.percentage
+        return 0
+
+    @property
+    def diamond_pct(self):
+        """Legacy accessor for Diamond percentage."""
+        for alloc in self.allocations:
+            if alloc.partner and alloc.partner.short_code == 'DIA':
+                return alloc.percentage
+        return 0
+
+    @property
+    def dynamic_pct(self):
+        """Legacy accessor for Dynamic percentage."""
+        for alloc in self.allocations:
+            if alloc.partner and alloc.partner.short_code == 'DYN':
+                return alloc.percentage
+        return 0
 
     @classmethod
     def get_for_league(cls, league_id, year=None, is_spring=None):

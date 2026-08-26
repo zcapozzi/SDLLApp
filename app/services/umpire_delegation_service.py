@@ -139,16 +139,22 @@ def get_allocation_stats(league_id, year, is_spring):
     """Get current umpire allocation statistics for a league.
 
     Args:
-        league_id: League ID
+        league_id: League ID (can be string league name or int ID)
         year: Season year
         is_spring: Whether spring season
 
     Returns:
-        dict: {'academy_pct': float, 'diamond_pct': float, 'dynamic_pct': float, 'total': int}
+        dict: {'total': int, 'sdl': {'count': N, 'pct': float}, 'dia': {...}, ...}
+              Keys are lowercase partner short codes.
     """
     from app.models.game import Game
-    from app.models.game_umpire import GameUmpire
     from app.models.umpire_partner import UmpirePartner
+
+    # Build stats dynamically based on ALL active partners
+    stats = {'total': 0}
+    partners = UmpirePartner.get_active()
+    for p in partners:
+        stats[p.short_code.lower()] = {'count': 0, 'pct': 0}
 
     # Get all games for this league/season
     games = Game.query.filter_by(
@@ -158,36 +164,21 @@ def get_allocation_stats(league_id, year, is_spring):
         active=1
     ).all()
 
-    academy_count = 0
-    diamond_count = 0
-    dynamic_count = 0
-    total = 0
-
+    # Count assignments by source (use umpire_override which stores short_code)
     for game in games:
-        assignment = GameUmpire.query.filter(
-            GameUmpire.game_id == game.ID,
-            GameUmpire.status != 'cancelled'
-        ).first()
+        if game.umpire_override:
+            stats['total'] += 1
+            code = game.umpire_override.lower()
+            if code in stats:
+                stats[code]['count'] += 1
 
-        if assignment:
-            total += 1
-            if assignment.umpire_profile_id:
-                academy_count += 1
-            elif assignment.partner:
-                if assignment.partner.short_code == 'DIA':
-                    diamond_count += 1
-                elif assignment.partner.short_code == 'DYN':
-                    dynamic_count += 1
+    # Calculate percentages
+    if stats['total'] > 0:
+        for key in stats:
+            if key != 'total' and isinstance(stats[key], dict):
+                stats[key]['pct'] = (stats[key]['count'] / stats['total']) * 100
 
-    if total == 0:
-        return {'academy_pct': 0, 'diamond_pct': 0, 'dynamic_pct': 0, 'total': 0}
-
-    return {
-        'academy_pct': (academy_count / total) * 100,
-        'diamond_pct': (diamond_count / total) * 100,
-        'dynamic_pct': (dynamic_count / total) * 100,
-        'total': total
-    }
+    return stats
 
 
 def create_partner_assignment(game, partner_id, assigned_by=None):
@@ -258,40 +249,44 @@ def apply_single_game_delegation(game, assigned_by=None):
 
     # 3. Get delegation rules for this league
     rule = UmpireDelegationRule.get_for_league(league.ID, game.year, game.is_spring)
-    if not rule:
-        # Default to academy if no rules
-        game.umpire_override = 'academy'
-        return 'academy'
+    if not rule or not rule.allocations:
+        # Default to SDL (academy) if no rules
+        game.umpire_override = 'sdl'
+        return 'sdl'
 
     # 4. Get current allocation stats to find most under-allocated source
     stats = get_allocation_stats(game.league, game.year, game.is_spring)
 
-    target_vs_actual = [
-        ('academy', rule.academy_pct, stats.get('academy_pct', 0)),
-        ('diamond', rule.diamond_pct, stats.get('diamond_pct', 0)),
-        ('dynamic', rule.dynamic_pct, stats.get('dynamic_pct', 0)),
-    ]
-
-    # Filter out sources with 0% target
-    target_vs_actual = [(s, t, a) for s, t, a in target_vs_actual if t > 0]
+    # Build target vs actual for ALL allocations dynamically
+    target_vs_actual = []
+    for alloc in rule.allocations:
+        if alloc.percentage > 0:
+            source_code = alloc.source_code  # e.g., 'sdl', 'dia', 'dyn'
+            target = alloc.percentage
+            actual = stats.get(source_code, {}).get('pct', 0) if isinstance(stats.get(source_code), dict) else 0
+            target_vs_actual.append((
+                source_code,
+                alloc.partner_id,
+                alloc.is_academy,
+                target,
+                actual
+            ))
 
     if not target_vs_actual:
-        game.umpire_override = 'academy'
-        return 'academy'
+        game.umpire_override = 'sdl'
+        return 'sdl'
 
     # Sort by deficit (target - actual), assign to largest deficit
-    target_vs_actual.sort(key=lambda x: x[1] - x[2], reverse=True)
+    target_vs_actual.sort(key=lambda x: x[3] - x[4], reverse=True)
 
-    best_source = target_vs_actual[0][0]
-    game.umpire_override = best_source
+    source_code, partner_id, is_academy, _, _ = target_vs_actual[0]
+    game.umpire_override = source_code
 
-    # Create partner assignment if not academy
-    if best_source != 'academy':
-        partner = UmpirePartner.get_by_code(best_source[:3].upper())
-        if partner:
-            create_partner_assignment(game, partner.id, assigned_by)
+    # Create partner assignment for non-Academy partners
+    if not is_academy:
+        create_partner_assignment(game, partner_id, assigned_by)
 
-    return best_source
+    return source_code
 
 
 def identify_partner_sequences(games):
@@ -335,6 +330,9 @@ def identify_partner_sequences(games):
 def get_best_partner_for_sequence(sequence):
     """Choose partner for a sequence based on allocation needs.
 
+    Uses the delegation rules to determine which partner is most under-allocated.
+    Only considers non-Academy partners since sequences are for partner assignments.
+
     Args:
         sequence: List of games in the sequence
 
@@ -342,6 +340,8 @@ def get_best_partner_for_sequence(sequence):
         UmpirePartner to assign to the sequence
     """
     from app.models.umpire_partner import UmpirePartner
+    from app.models.umpire_delegation import UmpireDelegationRule
+    from app.models.league import League
 
     if not sequence:
         return None
@@ -349,16 +349,39 @@ def get_best_partner_for_sequence(sequence):
     # Get first game to check league/season
     game = sequence[0]
 
+    # Get delegation rules for this league
+    league = League.get_by_name(game.league) if game.league else None
+    if not league:
+        # Default to first available partner if no league context
+        partners = UmpirePartner.get_active()
+        non_academy = [p for p in partners if p.short_code != 'SDL']
+        return non_academy[0] if non_academy else None
+
+    rule = UmpireDelegationRule.get_for_league(league.ID, game.year, game.is_spring)
+
     # Get current allocation stats
     stats = get_allocation_stats(game.league, game.year, game.is_spring)
 
-    # Compare Diamond vs Dynamic allocation
-    diamond_deficit = 50 - stats.get('diamond_pct', 0)  # Assume 50% target
-    dynamic_deficit = 50 - stats.get('dynamic_pct', 0)
+    # Build list of partner allocations with deficits
+    partner_deficits = []
+    if rule and rule.allocations:
+        for alloc in rule.allocations:
+            if alloc.percentage > 0 and not alloc.is_academy:
+                source_code = alloc.source_code
+                target = alloc.percentage
+                actual = stats.get(source_code, {}).get('pct', 0) if isinstance(stats.get(source_code), dict) else 0
+                deficit = target - actual
+                partner_deficits.append((alloc.partner, deficit))
 
-    if diamond_deficit >= dynamic_deficit:
-        return UmpirePartner.get_by_code('DIA')
-    return UmpirePartner.get_by_code('DYN')
+    if partner_deficits:
+        # Return partner with largest deficit
+        partner_deficits.sort(key=lambda x: x[1], reverse=True)
+        return partner_deficits[0][0]
+
+    # Fallback: return first non-Academy partner
+    partners = UmpirePartner.get_active()
+    non_academy = [p for p in partners if p.short_code != 'SDL']
+    return non_academy[0] if non_academy else None
 
 
 def assign_sequence_to_partner(sequence, assigned_by=None):

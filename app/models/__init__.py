@@ -23,6 +23,7 @@ from .umpire_partner import UmpirePartner
 from .partner_contact import PartnerContact
 from .game_umpire import GameUmpire
 from .umpire_delegation import UmpireDelegationRule, UmpireDelegationOverride
+from .umpire_delegation_allocation import UmpireDelegationAllocation
 from .umpire_payment import UmpirePayment
 from .coach import CoachSeason
 from .scheduled_email import ScheduledEmail

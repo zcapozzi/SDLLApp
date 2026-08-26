@@ -23,51 +23,102 @@ class TestDelegationRuleModel:
     """Test UmpireDelegationRule model."""
 
     def test_create_delegation_rule(self, app, db_session, league_factory):
-        """Delegation rule with percentage split can be created."""
+        """Delegation rule with allocation objects can be created."""
         from app.models.umpire_delegation import UmpireDelegationRule
+        from app.models.umpire_delegation_allocation import UmpireDelegationAllocation
+        from app.models.umpire_partner import UmpirePartner
 
         # Create a test league
         league = league_factory(f'Rule Test League {uuid.uuid4().hex[:6]}')
+
+        # Get or create partner records for SDL, DIA, DYN
+        sdl_partner = UmpirePartner.get_by_code('SDL')
+        if not sdl_partner:
+            sdl_partner = UmpirePartner(org_id=1, name='SDLL Academy', short_code='SDL')
+            db_session.add(sdl_partner)
+        dia_partner = UmpirePartner.get_by_code('DIA')
+        if not dia_partner:
+            dia_partner = UmpirePartner(org_id=1, name='Diamond', short_code='DIA')
+            db_session.add(dia_partner)
+        dyn_partner = UmpirePartner.get_by_code('DYN')
+        if not dyn_partner:
+            dyn_partner = UmpirePartner(org_id=1, name='Dynamic', short_code='DYN')
+            db_session.add(dyn_partner)
+        db_session.flush()
 
         rule = UmpireDelegationRule(
             org_id=1,
             league_id=league.ID,
             year=None,  # Default for all seasons
             is_spring=None,
-            academy_pct=50,
-            diamond_pct=25,
-            dynamic_pct=25,
             active=True
         )
         db_session.add(rule)
+        db_session.flush()  # Get rule.id
+
+        # Add allocations
+        sdl_alloc = UmpireDelegationAllocation(rule_id=rule.id, partner_id=sdl_partner.id, percentage=50)
+        dia_alloc = UmpireDelegationAllocation(rule_id=rule.id, partner_id=dia_partner.id, percentage=25)
+        dyn_alloc = UmpireDelegationAllocation(rule_id=rule.id, partner_id=dyn_partner.id, percentage=25)
+        db_session.add_all([sdl_alloc, dia_alloc, dyn_alloc])
         db_session.commit()
 
         assert rule.id is not None
-        assert rule.academy_pct == 50
         assert rule.total_pct == 100
+        assert rule.get_allocation_for_partner(sdl_partner.id) == 50
 
     @pytest.mark.quick
     def test_percentages_must_sum_to_100(self, app, db_session):
-        """validate_percentages() ensures percentages sum to 100."""
+        """validate_percentages() ensures allocations sum to 100."""
         from app.models.umpire_delegation import UmpireDelegationRule
+        from app.models.umpire_delegation_allocation import UmpireDelegationAllocation
+        from app.models.umpire_partner import UmpirePartner
 
-        rule = UmpireDelegationRule(
-            org_id=1,
-            league_id=1,
-            academy_pct=50,
-            diamond_pct=25,
-            dynamic_pct=25
-        )
+        # Get or create partners
+        sdl_partner = UmpirePartner.get_by_code('SDL')
+        if not sdl_partner:
+            sdl_partner = UmpirePartner(org_id=1, name='SDLL Academy', short_code='SDL')
+            db_session.add(sdl_partner)
+        dia_partner = UmpirePartner.get_by_code('DIA')
+        if not dia_partner:
+            dia_partner = UmpirePartner(org_id=1, name='Diamond', short_code='DIA')
+            db_session.add(dia_partner)
+        dyn_partner = UmpirePartner.get_by_code('DYN')
+        if not dyn_partner:
+            dyn_partner = UmpirePartner(org_id=1, name='Dynamic', short_code='DYN')
+            db_session.add(dyn_partner)
+        db_session.flush()
+
+        rule = UmpireDelegationRule(org_id=1, league_id=1)
+        db_session.add(rule)
+        db_session.flush()
+
+        # Add allocations that sum to 100
+        sdl_alloc = UmpireDelegationAllocation(rule_id=rule.id, partner_id=sdl_partner.id, percentage=50)
+        dia_alloc = UmpireDelegationAllocation(rule_id=rule.id, partner_id=dia_partner.id, percentage=25)
+        dyn_alloc = UmpireDelegationAllocation(rule_id=rule.id, partner_id=dyn_partner.id, percentage=25)
+        rule.allocations = [sdl_alloc, dia_alloc, dyn_alloc]
+
         assert rule.validate_percentages() is True
 
-        rule.dynamic_pct = 30  # Now sums to 105
+        # Modify to exceed 100
+        dyn_alloc.percentage = 30
         assert rule.validate_percentages() is False
 
     def test_get_for_league_with_season_fallback(self, app, db_session, league_factory):
         """get_for_league() falls back to default when no season-specific rule."""
         from app.models.umpire_delegation import UmpireDelegationRule
+        from app.models.umpire_delegation_allocation import UmpireDelegationAllocation
+        from app.models.umpire_partner import UmpirePartner
 
         league = league_factory(f'Fallback Test League {uuid.uuid4().hex[:6]}')
+
+        # Get or create partner
+        sdl_partner = UmpirePartner.get_by_code('SDL')
+        if not sdl_partner:
+            sdl_partner = UmpirePartner(org_id=1, name='SDLL Academy', short_code='SDL')
+            db_session.add(sdl_partner)
+            db_session.flush()
 
         # Create default rule (no season)
         default_rule = UmpireDelegationRule(
@@ -75,24 +126,35 @@ class TestDelegationRuleModel:
             league_id=league.ID,
             year=None,
             is_spring=None,
-            academy_pct=33,
-            diamond_pct=33,
-            dynamic_pct=34,
             active=True
         )
         db_session.add(default_rule)
+        db_session.flush()
+
+        # Add allocation
+        sdl_alloc = UmpireDelegationAllocation(rule_id=default_rule.id, partner_id=sdl_partner.id, percentage=100)
+        db_session.add(sdl_alloc)
         db_session.commit()
 
         # Query for 2026 Spring - should fall back to default
         result = UmpireDelegationRule.get_for_league(league.ID, year=2026, is_spring=True)
         assert result is not None
-        assert result.academy_pct == 33
+        assert result.get_allocation_for_partner(sdl_partner.id) == 100
 
     def test_get_for_league_season_specific(self, app, db_session, league_factory):
         """get_for_league() returns season-specific rule when available."""
         from app.models.umpire_delegation import UmpireDelegationRule
+        from app.models.umpire_delegation_allocation import UmpireDelegationAllocation
+        from app.models.umpire_partner import UmpirePartner
 
         league = league_factory(f'Season Test League {uuid.uuid4().hex[:6]}')
+
+        # Get or create partner
+        sdl_partner = UmpirePartner.get_by_code('SDL')
+        if not sdl_partner:
+            sdl_partner = UmpirePartner(org_id=1, name='SDLL Academy', short_code='SDL')
+            db_session.add(sdl_partner)
+            db_session.flush()
 
         # Create season-specific rule
         season_rule = UmpireDelegationRule(
@@ -100,17 +162,19 @@ class TestDelegationRuleModel:
             league_id=league.ID,
             year=2026,
             is_spring=True,
-            academy_pct=100,
-            diamond_pct=0,
-            dynamic_pct=0,
             active=True
         )
         db_session.add(season_rule)
+        db_session.flush()
+
+        # Add 100% Academy allocation
+        sdl_alloc = UmpireDelegationAllocation(rule_id=season_rule.id, partner_id=sdl_partner.id, percentage=100)
+        db_session.add(sdl_alloc)
         db_session.commit()
 
         result = UmpireDelegationRule.get_for_league(league.ID, year=2026, is_spring=True)
         assert result is not None
-        assert result.academy_pct == 100
+        assert result.get_allocation_for_partner(sdl_partner.id) == 100
 
 
 class TestDelegationOverrideModel:
@@ -300,9 +364,9 @@ class TestTierIBackToBackConstraint:
         apply_single_game_delegation(game2_obj)
         db_session.commit()
 
-        # This assertion depends on allocation percentages
-        # The key is that it's ALLOWED to differ (unlike back-to-back)
-        assert game2_obj.umpire_override in [code1.lower(), code2.lower(), 'academy', None]
+        # The key is that delegation happened (some source was assigned)
+        # It's ALLOWED to differ from game1's partner (unlike back-to-back)
+        assert game2_obj.umpire_override is not None, "Game should have been assigned a source"
 
     def test_different_fields_can_differ(self, app, db_session, game_factory, field_factory):
         """Games at different fields CAN go to different partners."""
@@ -344,8 +408,8 @@ class TestTierIBackToBackConstraint:
         apply_single_game_delegation(game2_obj)
         db_session.commit()
 
-        # This CAN differ since different fields
-        assert game2_obj.umpire_override in [code1.lower(), code2.lower(), 'academy', None]
+        # The key is that delegation happened - it CAN differ since different fields
+        assert game2_obj.umpire_override is not None, "Game should have been assigned a source"
 
 
 @pytest.mark.critical
@@ -411,6 +475,7 @@ class TestDelegationAllocation:
         """Delegation allocates games approximately matching target percentages."""
         from app.services.umpire_delegation_service import delegate_games_for_season
         from app.models.umpire_delegation import UmpireDelegationRule
+        from app.models.umpire_delegation_allocation import UmpireDelegationAllocation
         from app.models.umpire_partner import UmpirePartner
         from app.models.game import Game
 
@@ -424,21 +489,24 @@ class TestDelegationAllocation:
             db_session.add(diamond)
         if not dynamic.id:
             db_session.add(dynamic)
-        db_session.commit()
+        db_session.flush()
 
         # Create a league that uses partner umpires
         league = league_factory(f'Alloc Test League {uuid.uuid4().hex[:6]}', umpire_source='either')
 
-        # Set 50/50 split
+        # Set 50/50 split using allocations
         rule = UmpireDelegationRule(
             org_id=1,
             league_id=league.ID,
-            academy_pct=0,
-            diamond_pct=50,
-            dynamic_pct=50,
             active=True
         )
         db_session.add(rule)
+        db_session.flush()
+
+        # Add 50/50 split allocations for Diamond and Dynamic
+        dia_alloc = UmpireDelegationAllocation(rule_id=rule.id, partner_id=diamond.id, percentage=50)
+        dyn_alloc = UmpireDelegationAllocation(rule_id=rule.id, partner_id=dynamic.id, percentage=50)
+        db_session.add_all([dia_alloc, dyn_alloc])
         db_session.commit()
 
         # Create 10 games at different DATES (no back-to-back constraint)

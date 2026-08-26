@@ -23,9 +23,11 @@
             <tr>
                 <th>League</th>
                 <th style="text-align: center; width: 80px;" title="Number of umpires">Umps</th>
-                <th style="text-align: center; width: 15%;">Academy (SDLL)</th>
-                <th style="text-align: center; width: 15%;">Diamond</th>
-                <th style="text-align: center; width: 15%;">Dynamic</th>
+                {% for partner in partners %}
+                <th style="text-align: center; width: 12%;">
+                    {{ partner.name }}{% if partner.short_code == 'SDL' %} (Academy){% endif %}
+                </th>
+                {% endfor %}
                 <th style="width: 80px;"></th>
             </tr>
         </thead>
@@ -47,10 +49,12 @@
                         {% endfor %}
                     </span>
                 </td>
+                {% for partner in partners %}
                 <td style="text-align: center;">
                     {% if rule %}
-                        {% if rule.academy_pct > 0 %}
-                        <strong>{{ rule.academy_pct }}%</strong>
+                        {% set pct = rule.get_allocation_for_partner(partner.id) %}
+                        {% if pct > 0 %}
+                        <strong>{{ pct }}%</strong>
                         {% else %}
                         <span class="pct-zero">-</span>
                         {% endif %}
@@ -58,28 +62,7 @@
                     <span class="pct-zero">-</span>
                     {% endif %}
                 </td>
-                <td style="text-align: center;">
-                    {% if rule %}
-                        {% if rule.diamond_pct > 0 %}
-                        <strong>{{ rule.diamond_pct }}%</strong>
-                        {% else %}
-                        <span class="pct-zero">-</span>
-                        {% endif %}
-                    {% else %}
-                    <span class="pct-zero">-</span>
-                    {% endif %}
-                </td>
-                <td style="text-align: center;">
-                    {% if rule %}
-                        {% if rule.dynamic_pct > 0 %}
-                        <strong>{{ rule.dynamic_pct }}%</strong>
-                        {% else %}
-                        <span class="pct-zero">-</span>
-                        {% endif %}
-                    {% else %}
-                    <span class="pct-zero">-</span>
-                    {% endif %}
-                </td>
+                {% endfor %}
                 <td>
                     <a href="{{ url_for('umpires.edit_delegation', league_id=league.ID) }}"
                        class="btn btn-outline" style="padding: 3px 10px;">
@@ -125,10 +108,14 @@
 <div class="card" style="margin-top: 20px;">
     <h3 style="margin-top: 0;">Understanding Delegation</h3>
     <ul style="color: var(--text-muted); line-height: 1.8;">
-        <li><strong>Academy (SDLL)</strong>: SDLL youth umpires - games appear in Umpire Portal for self-signup</li>
-        <li><strong>Diamond / Dynamic</strong>: Partner organizations - games assigned directly to partner</li>
+        <li><strong>Academy (SDL)</strong>: SDLL youth umpires - games appear in Umpire Portal for self-signup</li>
+        {% for partner in partners %}
+            {% if partner.short_code != 'SDL' %}
+        <li><strong>{{ partner.name }}</strong>: Partner organization - games assigned directly to partner</li>
+            {% endif %}
+        {% endfor %}
         <li><strong>Tier I Rule</strong>: Back-to-back games at the same field are always assigned to the same partner</li>
-        <li>Use <a href="{{ url_for('umpires.overrides') }}">override keywords</a> to force specific routing (e.g., "Young Umpire" forces Academy)</li>
+        <li>Use <a href="{{ url_for('umpires.overrides') }}">override keywords</a> to force specific routing</li>
     </ul>
 </div>
 

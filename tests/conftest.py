@@ -594,11 +594,16 @@ def league_factory(app):
     def _create(name=None, **kwargs):
         with app.app_context():
             from app.models.league import League
+            import random
 
             if name is None:
                 name = f'Test League {uuid.uuid4().hex[:8]}'
 
+            # Generate a unique ID in the test range (900000+)
+            test_id = random.randint(900000, 999999)
+
             defaults = {
+                'ID': test_id,
                 'active': 1,
                 'display_name': name,
                 'pitch_type': 'kid_pitch',

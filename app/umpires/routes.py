@@ -455,39 +455,50 @@ def edit_delegation(league_id):
     """Edit delegation percentages for a league."""
     league = League.query.get_or_404(league_id)
     rule = UmpireDelegationRule.get_for_league(league_id)
+    partners = UmpirePartner.get_active()
 
     if request.method == 'POST':
-        academy_pct = int(request.form.get('academy_pct', 0))
-        diamond_pct = int(request.form.get('diamond_pct', 0))
-        dynamic_pct = int(request.form.get('dynamic_pct', 0))
+        # Get each partner's percentage dynamically
+        partner_pcts = {}
+        for partner in partners:
+            pct = int(request.form.get(f'partner_{partner.id}_pct', 0))
+            partner_pcts[partner.id] = pct
 
         # Validate percentages sum to 100
-        total = academy_pct + diamond_pct + dynamic_pct
+        total = sum(partner_pcts.values())
         if total != 100:
             flash(f'Percentages must sum to 100 (currently {total})', 'error')
-            return render_template('umpires/edit_delegation.html', league=league, rule=rule)
+            return render_template('umpires/edit_delegation.html',
+                                   league=league, rule=rule, partners=partners)
 
-        if rule:
-            rule.academy_pct = academy_pct
-            rule.diamond_pct = diamond_pct
-            rule.dynamic_pct = dynamic_pct
-        else:
+        # Create rule if it doesn't exist
+        if not rule:
             rule = UmpireDelegationRule(
                 org_id=1,
                 league_id=league_id,
-                academy_pct=academy_pct,
-                diamond_pct=diamond_pct,
-                dynamic_pct=dynamic_pct,
                 active=True
             )
             db.session.add(rule)
+            db.session.flush()  # Get rule.id
+
+        # Update allocations for each partner
+        for partner_id, pct in partner_pcts.items():
+            rule.set_allocation(partner_id, pct)
+
+        # Clean up zero allocations
+        rule.remove_zero_allocations()
 
         db.session.commit()
-        logger.info(f'Updated delegation for {league.display_name}: {academy_pct}/{diamond_pct}/{dynamic_pct}')
+
+        # Log allocation summary
+        alloc_summary = '/'.join(f'{p.short_code}:{partner_pcts[p.id]}'
+                                 for p in partners if partner_pcts.get(p.id, 0) > 0)
+        logger.info(f'Updated delegation for {league.display_name}: {alloc_summary}')
         flash(f'Updated delegation rules for {league.display_name}', 'success')
         return redirect(url_for('umpires.delegation'))
 
-    return render_template('umpires/edit_delegation.html', league=league, rule=rule)
+    return render_template('umpires/edit_delegation.html',
+                           league=league, rule=rule, partners=partners)
 
 
 @umpires_bp.route('/delegation/overrides')
