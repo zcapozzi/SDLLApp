@@ -321,8 +321,8 @@ class TestTierIBackToBackConstraint:
 
         # CRITICAL: Game2 MUST be assigned to same partner as game1
         # because they are back-to-back at the same field
-        assert game2_obj.umpire_override == code1.lower(), \
-            f"Tier I violation: Back-to-back game at same field assigned to different partner. Expected {code1.lower()}, got {game2_obj.umpire_override}"
+        assert game2_obj.umpire_override == code1.upper(), \
+            f"Tier I violation: Back-to-back game at same field assigned to different partner. Expected {code1.upper()}, got {game2_obj.umpire_override}"
 
     def test_non_adjacent_games_can_differ(self, app, db_session, game_factory, field_factory):
         """Non-adjacent games (>30 min gap) CAN go to different partners."""

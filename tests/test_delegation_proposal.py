@@ -324,7 +324,7 @@ class TestProposalAcceptance:
         with app.app_context():
             game_obj = Game.query.get(game_data.ID)
             assert game_obj is not None, f"Game {game_data.ID} not found"
-            assert game_obj.umpire_override == 'dia', f"Expected 'dia' but got '{game_obj.umpire_override}'"
+            assert game_obj.umpire_override == 'DIA', f"Expected 'DIA' but got '{game_obj.umpire_override}'"
 
     def test_cannot_accept_with_tier1_violations(self, app, db_session, game_factory, field_factory):
         """Cannot accept a proposal that has Tier I violations."""

@@ -503,7 +503,7 @@ def accept_proposal(proposal_id, user_id):
             continue
 
         # Update game's umpire_override
-        game.umpire_override = partner.short_code.lower()
+        game.umpire_override = partner.short_code.upper()
 
         # Track for notifications (non-SDL partners)
         if partner.short_code != 'SDL':

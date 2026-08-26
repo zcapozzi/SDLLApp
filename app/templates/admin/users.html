@@ -63,6 +63,27 @@
         font-size: 12px;
     }
     .btn-danger-link:hover { color: #a71d2a; }
+    .coach-dropdown {
+        display: inline-block;
+        position: relative;
+    }
+    .coach-dropdown select {
+        padding: 2px 4px;
+        font-size: 11px;
+        border: 1px solid #20c997;
+        border-radius: 3px;
+        background: white;
+        cursor: pointer;
+    }
+    .coach-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        font-size: 10px;
+        background: #20c997;
+        color: white;
+        border-radius: 3px;
+        margin-left: 4px;
+    }
     .edit-form { display: none; }
     .edit-form.active { display: table-row; }
     .edit-form td { padding: 15px; background-color: #f9f9f9; }
@@ -160,6 +181,21 @@
                             {% if user.active %}Deactivate{% else %}Activate{% endif %}
                         </button>
                     </form>
+                    {% if user.ID in coach_by_user %}
+                    <span class="coach-badge">Coach ({{ coach_by_user[user.ID].sport }})</span>
+                    {% else %}
+                    <form method="post" style="display: inline;" class="coach-dropdown">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="add_coach">
+                        <input type="hidden" name="user_id" value="{{ user.ID }}">
+                        <select name="sport" onchange="if(this.value) this.form.submit();">
+                            <option value="">+Coach</option>
+                            <option value="baseball">Baseball</option>
+                            <option value="softball">Softball</option>
+                            <option value="both">Both</option>
+                        </select>
+                    </form>
+                    {% endif %}
                     {% else %}
                     <span class="text-muted text-small">(You)</span>
                     {% endif %}

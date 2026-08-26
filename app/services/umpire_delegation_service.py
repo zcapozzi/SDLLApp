@@ -233,29 +233,29 @@ def apply_single_game_delegation(game, assigned_by=None):
         adjacent_partner = get_adjacent_partner_same_field(game)
         if adjacent_partner:
             # MUST use same partner as adjacent game - this is Tier I
-            game.umpire_override = adjacent_partner.short_code.lower()
+            game.umpire_override = adjacent_partner.short_code.upper()
             create_partner_assignment(game, adjacent_partner.id, assigned_by)
-            return adjacent_partner.short_code.lower()
+            return adjacent_partner.short_code.upper()
 
     # 2. Check for manual override keywords
     override = check_override_keywords(game)
     if override:
         if override.target_type == 'academy':
-            game.umpire_override = 'academy'
+            game.umpire_override = 'ACADEMY'
             return 'academy'
         elif override.partner_id:
             partner = UmpirePartner.query.get(override.partner_id)
             if partner:
-                game.umpire_override = partner.short_code.lower()
+                game.umpire_override = partner.short_code.upper()
                 create_partner_assignment(game, partner.id, assigned_by)
-                return partner.short_code.lower()
+                return partner.short_code.upper()
 
     # 3. Get delegation rules for this league
     rule = UmpireDelegationRule.get_for_league(league.ID, game.year, game.is_spring)
     if not rule or not rule.allocations:
         # Default to SDL (academy) if no rules
-        game.umpire_override = 'sdl'
-        return 'sdl'
+        game.umpire_override = 'SDL'
+        return 'SDL'
 
     # 4. Get current allocation stats to find most under-allocated source
     stats = get_allocation_stats(game.league, game.year, game.is_spring)
@@ -276,20 +276,20 @@ def apply_single_game_delegation(game, assigned_by=None):
             ))
 
     if not target_vs_actual:
-        game.umpire_override = 'sdl'
-        return 'sdl'
+        game.umpire_override = 'SDL'
+        return 'SDL'
 
     # Sort by deficit (target - actual), assign to largest deficit
     target_vs_actual.sort(key=lambda x: x[3] - x[4], reverse=True)
 
     source_code, partner_id, is_academy, _, _ = target_vs_actual[0]
-    game.umpire_override = source_code
+    game.umpire_override = source_code.upper()
 
     # Create partner assignment for non-Academy partners
     if not is_academy:
         create_partner_assignment(game, partner_id, assigned_by)
 
-    return source_code
+    return source_code.upper()
 
 
 def identify_partner_sequences(games):
@@ -402,7 +402,7 @@ def assign_sequence_to_partner(sequence, assigned_by=None):
         return
 
     for game in sequence:
-        game.umpire_override = partner.short_code.lower()
+        game.umpire_override = partner.short_code.upper()
         create_partner_assignment(game, partner.id, assigned_by)
 
 

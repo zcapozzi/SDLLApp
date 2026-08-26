@@ -354,9 +354,9 @@
                 </select>
             </div>
             <div class="control-group">
-                <label for="league">League:</label>
+                <label for="league">Division:</label>
                 <select id="league" onchange="applyFilters()">
-                    <option value="">All Leagues</option>
+                    <option value="">All Divisions</option>
                     {% for l in leagues %}
                     <option value="{{ l }}" {{ 'selected' if l == league_filter else '' }}>{{ l }}</option>
                     {% endfor %}
@@ -366,7 +366,7 @@
                 <label for="date">Date:</label>
                 <input type="date" id="date" value="{{ date_filter }}" onchange="applyFilters()">
             </div>
-            <button id="clear-filters-btn" class="btn btn-outline" onclick="clearFilters()" style="display: {% if field_filter or league_filter or date_filter %}inline-block{% else %}none{% endif %};">Clear Filters</button>
+            <button id="clear-filters-btn" class="btn btn-outline" onclick="clearFilters()" style="display: none;">Clear Filters</button>
         </div>
 
         <div class="game-count">
@@ -382,7 +382,7 @@
                         <th>Date</th>
                         <th>Day</th>
                         <th>Time</th>
-                        <th>League</th>
+                        <th>Division</th>
                         <th>Matchup</th>
                         <th>Field</th>
                         <th>Type</th>
@@ -520,16 +520,6 @@
             // Update game count display
             updateGameCount(visibleCount);
 
-            // Update URL for bookmarking (without page reload)
-            var url = new URL(window.location.href);
-            if (fieldFilter) url.searchParams.set('field', document.getElementById('field').value);
-            else url.searchParams.delete('field');
-            if (leagueFilter) url.searchParams.set('league', document.getElementById('league').value);
-            else url.searchParams.delete('league');
-            if (dateFilter) url.searchParams.set('date', dateFilter);
-            else url.searchParams.delete('date');
-            history.replaceState(null, '', url.toString());
-
             // Show/hide clear filters button
             var clearBtn = document.getElementById('clear-filters-btn');
             if (clearBtn) {
@@ -556,21 +546,6 @@
             applyFilters();
         }
 
-        // Restore filters from URL on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            var url = new URL(window.location.href);
-            var field = url.searchParams.get('field');
-            var league = url.searchParams.get('league');
-            var date = url.searchParams.get('date');
-
-            if (field) document.getElementById('field').value = field;
-            if (league) document.getElementById('league').value = league;
-            if (date) document.getElementById('date').value = date;
-
-            if (field || league || date) {
-                applyFilters();
-            }
-        });
     </script>
 </body>
 </html>

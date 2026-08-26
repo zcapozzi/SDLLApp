@@ -7,6 +7,7 @@ from flask_login import login_required, current_user
 
 from app.extensions import db
 from app.models.user import User
+from app.models.coach import CoachUser
 from app.services.notification_service import GmailService
 from app.utils.logging import SDLLLogger
 
@@ -50,6 +51,10 @@ def users():
             user_id = request.form.get('user_id')
             anchor = f'user-{user_id}'
             handle_toggle_active()
+        elif action == 'add_coach':
+            user_id = request.form.get('user_id')
+            anchor = f'user-{user_id}'
+            handle_add_coach()
 
         redirect_url = url_for('admin.users')
         if anchor:
@@ -59,10 +64,15 @@ def users():
     # GET: Display user list (filtering done client-side via JS)
     users_list = User.query.order_by(User.role, User.ID).all()
 
+    # Build lookup of user IDs that are already coaches
+    coach_records = CoachUser.query.all()
+    coach_by_user = {c.user_id: c for c in coach_records}
+
     return render_template(
         'admin/users.html',
         users=users_list,
-        roles=User.ROLES
+        roles=User.ROLES,
+        coach_by_user=coach_by_user
     )
 
 
@@ -216,6 +226,43 @@ def handle_toggle_active():
     status = 'activated' if user.active else 'deactivated'
     logger.info(f'Admin {current_user.ID} {status} user {user.ID}')
     flash(f'User {status} successfully.', 'success')
+
+
+def handle_add_coach():
+    """Handle adding a user to the coaches table"""
+    user_id = request.form.get('user_id')
+    sport = request.form.get('sport')
+
+    if not user_id:
+        flash('User ID is required.', 'error')
+        return
+
+    if sport not in ['baseball', 'softball', 'both']:
+        flash('Invalid sport selection.', 'error')
+        return
+
+    user = db.session.get(User, int(user_id))
+    if not user:
+        flash('User not found.', 'error')
+        return
+
+    # Check if user already has a coach record
+    existing = CoachUser.get_by_user(user.ID)
+    if existing:
+        flash(f'User is already a coach ({existing.sport}).', 'warning')
+        return
+
+    # Create coach record
+    coach = CoachUser(
+        user_id=user.ID,
+        sport=sport,
+        status=CoachUser.STATUS_ACTIVE
+    )
+    db.session.add(coach)
+    db.session.commit()
+
+    logger.info(f'Admin {current_user.ID} added user {user.ID} as coach ({sport})')
+    flash(f'{user.name} added as coach ({sport}).', 'success')
 
 
 @admin_bp.route('/users/add', methods=['GET'])
