@@ -370,7 +370,14 @@
 <!-- Week Navigation -->
 <div class="calendar-nav">
     <a href="?week={{ prev_week }}{% if current_league %}&league={{ current_league }}{% endif %}" class="btn btn-outline">&larr; Previous Week</a>
-    <span class="week-label">{{ week_start.strftime('%B %d') }} - {{ week_end.strftime('%B %d, %Y') }}</span>
+    <div style="text-align: center;">
+        <span class="week-label">{{ week_start.strftime('%B %d') }} - {{ week_end.strftime('%B %d, %Y') }}</span>
+        <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px; justify-content: center;">
+            <label style="font-size: 13px; font-weight: normal; color: #666;">Jump to:</label>
+            <input type="date" id="jump-date" class="form-control" style="width: auto; padding: 4px 8px; font-size: 13px;" value="{{ week_start.strftime('%Y-%m-%d') }}">
+            <button type="button" class="btn btn-outline" style="padding: 4px 12px; font-size: 13px;" onclick="jumpToDate()">Go</button>
+        </div>
+    </div>
     <a href="?week={{ next_week }}{% if current_league %}&league={{ current_league }}{% endif %}" class="btn btn-outline">Next Week &rarr;</a>
 </div>
 
@@ -1063,6 +1070,15 @@ document.addEventListener('keydown', function(e) {
         closeAddEventModal();
     }
 });
+
+function jumpToDate() {
+    var dateInput = document.getElementById('jump-date').value;
+    if (dateInput) {
+        var url = new URL(window.location.href);
+        url.searchParams.set('week', dateInput);
+        window.location.href = url.toString();
+    }
+}
 </script>
 
 <!-- Drag-and-Drop Scripts -->
