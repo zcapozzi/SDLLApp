@@ -872,8 +872,9 @@
         form.classList.remove('show');
     }
 
-    // Check if testing mode is enabled
-    var allowStartTimeRecord = {{ 'true' if allow_start_time_record else 'false' }};
+    // Check if testing mode is enabled (read directly from URL)
+    var urlParams = new URLSearchParams(window.location.search);
+    var allowStartTimeRecord = urlParams.get('allowStartTimeRecord') === '1';
 
     function saveGameStart(gameId) {
         var timeInput = document.getElementById('start-time-' + gameId);
