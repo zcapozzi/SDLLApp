@@ -163,6 +163,7 @@
                     <th>Time</th>
                     <th>League</th>
                     <th>Field</th>
+                    <th>Owner</th>
                     <th>Game</th>
                     <th>B2B</th>
                     {% if proposal.is_pending %}
@@ -177,6 +178,13 @@
                     <td>{{ pg.game.game_date.strftime('%I:%M %p') if pg.game.game_date else '-' }}</td>
                     <td>{{ pg.game.league or '-' }}</td>
                     <td>{{ pg.game.field_name or '-' }}</td>
+                    <td>
+                        {% if pg.game.field_rel and pg.game.field_rel.is_owned %}
+                        <span class="badge badge-success" title="SDLL-owned field">SDLL</span>
+                        {% else %}
+                        <span class="badge badge-secondary" title="Partner organization field">Partner</span>
+                        {% endif %}
+                    </td>
                     <td>
                         {{ pg.game.away_team.computed_display_name if pg.game.away_team else '?' }}
                         @
@@ -201,6 +209,7 @@
                                 {{ p.name }}
                             </option>
                             {% endfor %}
+                            <option value="0" data-code="none" style="color: #e74c3c;">-- No Umpire --</option>
                         </select>
                     </td>
                     {% endif %}
@@ -376,6 +385,21 @@ document.querySelectorAll('.partner-select').forEach(function(select) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
+                // Handle "No Umpire" removal
+                if (data.action === 'removed') {
+                    // Remove the row from the table
+                    var row = document.getElementById('game-' + gameId);
+                    if (row) {
+                        row.style.transition = 'opacity 0.3s';
+                        row.style.opacity = '0';
+                        setTimeout(function() {
+                            row.remove();
+                            // Update game count in header
+                            location.reload();  // Reload to update all counts
+                        }, 300);
+                    }
+                    return;
+                }
                 // If sequence was updated, update all games in sequence
                 if (data.updated_games && data.updated_games.length > 1) {
                     data.updated_games.forEach(function(updatedGameId) {

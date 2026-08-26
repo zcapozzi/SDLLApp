@@ -1584,16 +1584,36 @@ def update_proposal_game_assignment(id):
 
     If the game is part of a back-to-back sequence, all games in the
     sequence will be updated to maintain Tier I compliance.
+
+    Special case: partner_id=0 means "No Umpire" - sets umpire_count_override=0
+    and removes the game from the proposal.
     """
-    from app.services.delegation_proposal_service import update_game_assignment
+    from app.services.delegation_proposal_service import update_game_assignment, mark_game_no_umpire
 
     data = request.get_json()
     game_id = data.get('game_id')
     new_partner_id = data.get('partner_id')
 
-    if not game_id or not new_partner_id:
-        return jsonify({'success': False, 'error': 'Missing game_id or partner_id'}), 400
+    if not game_id:
+        return jsonify({'success': False, 'error': 'Missing game_id'}), 400
 
+    if new_partner_id is None:
+        return jsonify({'success': False, 'error': 'Missing partner_id'}), 400
+
+    # Handle "No Umpire" case (partner_id = 0)
+    if new_partner_id == 0:
+        success, message, removed_games = mark_game_no_umpire(id, game_id)
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message,
+                'removed_games': removed_games,
+                'action': 'removed'
+            })
+        else:
+            return jsonify({'success': False, 'error': message}), 400
+
+    # Normal partner assignment
     success, message, updated_games = update_game_assignment(id, game_id, new_partner_id)
 
     if success:

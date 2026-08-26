@@ -591,6 +591,62 @@ def update_game_assignment(proposal_id, game_id, new_partner_id):
     return True, f'Updated {len(updated_ids)} game(s)', updated_ids
 
 
+def mark_game_no_umpire(proposal_id, game_id):
+    """Mark a game as not needing umpires and remove from proposal.
+
+    Sets umpire_count_override=0 on the game and removes it from the proposal.
+    If the game is in a sequence, only this game is removed (not the whole sequence).
+
+    Args:
+        proposal_id: Proposal ID
+        game_id: Game ID to mark as no umpire
+
+    Returns:
+        (success: bool, message: str, removed_game_ids: list)
+    """
+    proposal = DelegationProposal.query.get(proposal_id)
+    if not proposal or proposal.status != 'pending':
+        return False, 'Invalid or non-pending proposal', []
+
+    # Find the proposal game
+    pg = DelegationProposalGame.query.filter_by(
+        proposal_id=proposal_id,
+        game_id=game_id
+    ).first()
+
+    if not pg:
+        return False, 'Game not found in proposal', []
+
+    # Set umpire_count_override=0 on the actual game
+    game = Game.query.get(game_id)
+    if game:
+        game.umpire_count_override = 0
+
+    # Remove from proposal
+    db.session.delete(pg)
+
+    # Update proposal game count
+    proposal.game_count = DelegationProposalGame.query.filter_by(
+        proposal_id=proposal_id
+    ).count()
+
+    # Re-validate
+    tier1_violations = validate_tier1(proposal)
+    tier2_violations = validate_tier2(proposal)
+    proposal.tier1_violations = len(tier1_violations)
+    proposal.tier2_violations = len(tier2_violations)
+
+    # Update summary
+    summary = proposal.summary or {}
+    summary['tier1_violations'] = tier1_violations
+    summary['tier2_violations'] = tier2_violations
+    proposal.summary = summary
+
+    db.session.commit()
+
+    return True, 'Game marked as no umpire needed and removed from proposal', [game_id]
+
+
 def reject_proposal(proposal_id, user_id):
     """Reject a proposal without applying changes.
 
