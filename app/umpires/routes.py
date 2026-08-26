@@ -698,6 +698,10 @@ def delegation_report(year=None, is_spring=None):
     for game in games:
         league_name = game.league or 'Unknown'
 
+        # Skip games without an umpire partner assigned (we're not paying anyone)
+        if not game.umpire_override:
+            continue
+
         # Get umpire count for this game (case-insensitive lookup)
         league_obj = league_lookup.get(league_name.lower().strip())
         if game.umpire_count_override is not None:
@@ -708,13 +712,9 @@ def delegation_report(year=None, is_spring=None):
         else:
             umpire_count = 1
 
-        # Skip games that don't need umpires
+        # If umpire_override is set, we're paying for at least 1 umpire
         if umpire_count == 0:
-            continue
-
-        # Skip games without an umpire partner assigned (we're not paying anyone)
-        if not game.umpire_override:
-            continue
+            umpire_count = 1
 
         partner_code = game.umpire_override
         if partner_code not in summary:
