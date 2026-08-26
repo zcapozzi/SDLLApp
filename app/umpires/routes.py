@@ -678,12 +678,12 @@ def delegation_report(year=None, is_spring=None):
         if l.fall_display_name:
             league_lookup[l.fall_display_name.lower().strip()] = l
 
-    # Get games for this season
+    # Get games for this season (include scrimmages - we pay for those umpires too)
     games = Game.query.filter(
         Game.year == year,
         Game.is_spring == (is_spring == 1),
         Game.active == 1,
-        Game.game_type.in_(['regular', 'playoff'])
+        Game.game_type.in_(['regular', 'playoff', 'scrimmage'])
     ).all()
 
     # Build summary data structure
