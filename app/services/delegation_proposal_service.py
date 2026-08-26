@@ -24,6 +24,13 @@ from app.services.umpire_delegation_service import get_allocation_stats
 def get_undelegated_games(year, is_spring):
     """Get games that need delegation (no umpire_override set).
 
+    Filters:
+    - Active games for the season
+    - Game types that need umpires (regular, playoff, scrimmage - not practice)
+    - No umpire_override already set
+    - Not explicitly set to 0 umpires via override
+    - At SDLL-owned fields
+
     Args:
         year: Season year
         is_spring: Whether spring season (1) or fall (0)
@@ -31,13 +38,39 @@ def get_undelegated_games(year, is_spring):
     Returns:
         List of Game objects needing delegation
     """
-    return Game.query.filter(
+    from app.models.field import Field
+
+    # Base query with field join for ownership check
+    query = Game.query.join(
+        Field, Game.field_id == Field.ID
+    ).filter(
         Game.year == year,
         Game.is_spring == is_spring,
         Game.active == 1,
-        Game.game_type.in_(['Game', 'Scrimmage', 'EOST', 'Rainout']),
-        (Game.umpire_override.is_(None)) | (Game.umpire_override == '')
-    ).order_by(Game.game_date, Game.location).all()
+        Game.game_type.in_(['regular', 'playoff', 'scrimmage']),
+        (Game.umpire_override.is_(None)) | (Game.umpire_override == ''),
+        # Exclude games explicitly set to 0 umpires
+        (Game.umpire_count_override.is_(None)) | (Game.umpire_count_override > 0),
+        # Only SDLL-owned fields
+        Field.is_owned == 1
+    ).order_by(Game.game_date, Game.location)
+
+    games = query.all()
+
+    # Filter out games where the league requires 0 umpires
+    # (unless game has explicit override > 0)
+    result = []
+    for game in games:
+        if game.umpire_count_override is not None and game.umpire_count_override > 0:
+            # Explicit override > 0, include it
+            result.append(game)
+        elif game.umpire_count_override is None:
+            # Check league's umpire count via the game's umpire_count property
+            # which handles the league lookup internally
+            if game.umpire_count and game.umpire_count > 0:
+                result.append(game)
+
+    return result
 
 
 def identify_back_to_back_sequences(games):
