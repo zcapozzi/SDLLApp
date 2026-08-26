@@ -1447,12 +1447,15 @@ def delegation_proposal_review(id):
     """Review a delegation proposal with ability to modify assignments."""
     from app.models.delegation_proposal import DelegationProposal
     from app.services.delegation_proposal_service import validate_tier1, validate_tier2
+    from app.models.umpire_delegation import UmpireDelegationRule
+    from collections import defaultdict
 
     proposal = DelegationProposal.query.get_or_404(id)
     season_name = f'{"Spring" if proposal.is_spring else "Fall"} {proposal.year}'
 
     # Get active partners for reassignment dropdown
     partners = UmpirePartner.query.filter_by(active=True).order_by(UmpirePartner.name).all()
+    partner_lookup = {p.id: p for p in partners}
 
     # Group games by partner
     games_by_partner = proposal.get_games_by_partner()
@@ -1464,17 +1467,72 @@ def delegation_proposal_review(id):
     tier1_valid, tier1_violations = validate_tier1(proposal)
     tier2_valid, tier2_violations = validate_tier2(proposal)
 
+    # Build allocation data for dynamic preview
+    # 1. Get all leagues in this proposal
+    leagues_in_proposal = set()
+    for pg in proposal.games:
+        if pg.game and pg.game.league:
+            leagues_in_proposal.add(pg.game.league)
+
+    # 2. Get current season allocation stats (existing delegated games)
+    # This counts ALL games with umpire_override set (not in this proposal)
+    current_stats = defaultdict(lambda: defaultdict(int))  # {league: {partner_code: count}}
+    existing_games = Game.query.filter(
+        Game.year == proposal.year,
+        Game.is_spring == proposal.is_spring,
+        Game.active == 1,
+        Game.game_type.in_(['regular', 'playoff', 'scrimmage']),
+        Game.umpire_override.isnot(None),
+        Game.umpire_override != ''
+    ).all()
+
+    for game in existing_games:
+        if game.league:
+            code = game.umpire_override.lower()
+            current_stats[game.league][code] += 1
+
+    # 3. Get delegation rules for each league
+    allocation_rules = {}  # {league: {partner_code: target_pct}}
+    for league_name in leagues_in_proposal:
+        league_obj = League.get_by_name(league_name)
+        if league_obj:
+            rule = UmpireDelegationRule.get_for_league(league_obj.ID, proposal.year, proposal.is_spring)
+            if rule and rule.allocations:
+                allocation_rules[league_name] = {
+                    alloc.partner.short_code.lower(): alloc.percentage
+                    for alloc in rule.allocations if alloc.percentage > 0
+                }
+
+    # 4. Build proposal counts by league/partner (current assignments in proposal)
+    proposal_counts = defaultdict(lambda: defaultdict(int))  # {league: {partner_code: count}}
+    for pg in proposal.games:
+        if pg.game and pg.game.league and pg.assigned_partner:
+            code = pg.assigned_partner.short_code.lower()
+            proposal_counts[pg.game.league][code] += 1
+
+    # Convert to regular dicts for JSON serialization
+    current_stats = {k: dict(v) for k, v in current_stats.items()}
+    proposal_counts = {k: dict(v) for k, v in proposal_counts.items()}
+
+    # Build partner info for JS
+    partners_json = [{'id': p.id, 'code': p.short_code.lower(), 'name': p.name} for p in partners]
+
     return render_template(
         'umpires/delegation_proposal_review.html',
         proposal=proposal,
         season_name=season_name,
         partners=partners,
+        partners_json=partners_json,
         games_by_partner=games_by_partner,
         sequences=sequences,
         tier1_valid=tier1_valid,
         tier1_violations=tier1_violations,
         tier2_valid=tier2_valid,
-        tier2_violations=tier2_violations
+        tier2_violations=tier2_violations,
+        current_stats=current_stats,
+        proposal_counts=proposal_counts,
+        allocation_rules=allocation_rules,
+        leagues_in_proposal=sorted(leagues_in_proposal)
     )
 
 

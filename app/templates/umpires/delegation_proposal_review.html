@@ -86,6 +86,65 @@
 </div>
 {% endif %}
 
+<!-- Allocation Preview -->
+{% if proposal.is_pending and leagues_in_proposal %}
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-top: 0;">Game Allocation by League</h3>
+    <p style="color: var(--text-muted); margin-bottom: 15px;">
+        Shows current season allocations, how they compare to targets, and projected allocations if this proposal is accepted.
+    </p>
+
+    {% for league in leagues_in_proposal %}
+    {% set rules = allocation_rules.get(league, {}) %}
+    {% if rules %}
+    <div style="margin-bottom: 25px;">
+        <h4 style="margin-bottom: 10px;">{{ league }}</h4>
+        <table style="font-size: 13px;">
+            <thead>
+                <tr>
+                    <th>Partner</th>
+                    <th style="text-align: center;">Current</th>
+                    <th style="text-align: center;">+ Proposal</th>
+                    <th style="text-align: center;">= Projected</th>
+                    <th style="text-align: center;">Target %</th>
+                    <th style="text-align: center;">Current %</th>
+                    <th style="text-align: center;">Projected %</th>
+                    <th style="text-align: center;">Deviation</th>
+                </tr>
+            </thead>
+            <tbody id="allocation-table-{{ league|replace(' ', '-') }}">
+                {% for partner_code, target_pct in rules.items() %}
+                {% set current_count = current_stats.get(league, {}).get(partner_code, 0) %}
+                {% set proposal_count = proposal_counts.get(league, {}).get(partner_code, 0) %}
+                <tr data-partner-code="{{ partner_code }}">
+                    <td>{{ partner_code|upper }}</td>
+                    <td style="text-align: center;" class="current-count">{{ current_count }}</td>
+                    <td style="text-align: center;" class="proposal-count">{{ proposal_count }}</td>
+                    <td style="text-align: center;" class="projected-count">{{ current_count + proposal_count }}</td>
+                    <td style="text-align: center;">{{ target_pct }}%</td>
+                    <td style="text-align: center;" class="current-pct">-</td>
+                    <td style="text-align: center;" class="projected-pct">-</td>
+                    <td style="text-align: center;" class="deviation">-</td>
+                </tr>
+                {% endfor %}
+                <tr style="font-weight: bold; border-top: 2px solid #333;">
+                    <td>Total</td>
+                    <td style="text-align: center;" class="total-current">0</td>
+                    <td style="text-align: center;" class="total-proposal">0</td>
+                    <td style="text-align: center;" class="total-projected">0</td>
+                    <td style="text-align: center;">100%</td>
+                    <td style="text-align: center;">-</td>
+                    <td style="text-align: center;">-</td>
+                    <td style="text-align: center;">-</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
 <!-- Games by Partner -->
 <div class="card">
     <h3 style="margin-top: 0;">Games by Partner</h3>
@@ -102,6 +161,7 @@
                 <tr>
                     <th>Date</th>
                     <th>Time</th>
+                    <th>League</th>
                     <th>Field</th>
                     <th>Game</th>
                     <th>B2B</th>
@@ -115,6 +175,7 @@
                 <tr id="game-{{ pg.game_id }}" {% if pg.is_overridden %}style="background: #fff3cd;"{% endif %}>
                     <td>{{ pg.game.game_date.strftime('%a %m/%d') if pg.game.game_date else '-' }}</td>
                     <td>{{ pg.game.game_date.strftime('%I:%M %p') if pg.game.game_date else '-' }}</td>
+                    <td>{{ pg.game.league or '-' }}</td>
                     <td>{{ pg.game.field_name or '-' }}</td>
                     <td>
                         {{ pg.game.away_team.computed_display_name if pg.game.away_team else '?' }}
@@ -131,9 +192,11 @@
                     {% if proposal.is_pending %}
                     <td>
                         <select class="partner-select" data-game-id="{{ pg.game_id }}"
+                                data-league="{{ pg.game.league or '' }}"
                                 {% if pg.is_in_sequence %}data-sequence-id="{{ pg.sequence_id }}"{% endif %}>
                             {% for p in partners %}
                             <option value="{{ p.id }}"
+                                    data-code="{{ p.short_code.lower() }}"
                                     {% if p.id == pg.assigned_partner_id %}selected{% endif %}>
                                 {{ p.name }}
                             </option>
@@ -181,11 +244,122 @@
 
 {% if proposal.is_pending %}
 <script>
+// Allocation data from server
+var currentStats = {{ current_stats|tojson }};
+var proposalCounts = {{ proposal_counts|tojson }};
+var allocationRules = {{ allocation_rules|tojson }};
+var partnersJson = {{ partners_json|tojson }};
+
+// Build partner ID to code lookup
+var partnerIdToCode = {};
+partnersJson.forEach(function(p) {
+    partnerIdToCode[p.id] = p.code;
+});
+
+// Calculate and update allocation table for a league
+function updateAllocationTable(league) {
+    var tableId = 'allocation-table-' + league.replace(/ /g, '-');
+    var table = document.getElementById(tableId);
+    if (!table) return;
+
+    var rules = allocationRules[league] || {};
+    var current = currentStats[league] || {};
+    var proposal = proposalCounts[league] || {};
+
+    // Calculate totals
+    var totalCurrent = 0;
+    var totalProposal = 0;
+
+    for (var code in rules) {
+        totalCurrent += (current[code] || 0);
+        totalProposal += (proposal[code] || 0);
+    }
+    var totalProjected = totalCurrent + totalProposal;
+
+    // Update each row
+    var rows = table.querySelectorAll('tr[data-partner-code]');
+    rows.forEach(function(row) {
+        var code = row.dataset.partnerCode;
+        var currentCount = current[code] || 0;
+        var proposalCount = proposal[code] || 0;
+        var projectedCount = currentCount + proposalCount;
+        var targetPct = rules[code] || 0;
+
+        row.querySelector('.current-count').textContent = currentCount;
+        row.querySelector('.proposal-count').textContent = proposalCount;
+        row.querySelector('.projected-count').textContent = projectedCount;
+
+        // Calculate percentages
+        var currentPct = totalCurrent > 0 ? (currentCount / totalCurrent * 100) : 0;
+        var projectedPct = totalProjected > 0 ? (projectedCount / totalProjected * 100) : 0;
+        var deviation = projectedPct - targetPct;
+
+        row.querySelector('.current-pct').textContent = totalCurrent > 0 ? currentPct.toFixed(1) + '%' : '-';
+        row.querySelector('.projected-pct').textContent = totalProjected > 0 ? projectedPct.toFixed(1) + '%' : '-';
+
+        // Color code deviation
+        var deviationCell = row.querySelector('.deviation');
+        if (totalProjected > 0) {
+            var deviationText = (deviation >= 0 ? '+' : '') + deviation.toFixed(1) + '%';
+            deviationCell.textContent = deviationText;
+            if (Math.abs(deviation) > 10) {
+                deviationCell.style.color = '#e74c3c';
+                deviationCell.style.fontWeight = 'bold';
+            } else if (Math.abs(deviation) > 5) {
+                deviationCell.style.color = '#f39c12';
+                deviationCell.style.fontWeight = 'normal';
+            } else {
+                deviationCell.style.color = '#27ae60';
+                deviationCell.style.fontWeight = 'normal';
+            }
+        } else {
+            deviationCell.textContent = '-';
+            deviationCell.style.color = '';
+        }
+    });
+
+    // Update totals row
+    table.querySelector('.total-current').textContent = totalCurrent;
+    table.querySelector('.total-proposal').textContent = totalProposal;
+    table.querySelector('.total-projected').textContent = totalProjected;
+}
+
+// Update all allocation tables
+function updateAllAllocationTables() {
+    for (var league in allocationRules) {
+        updateAllocationTable(league);
+    }
+}
+
+// Recalculate proposal counts from current dropdown selections
+function recalculateProposalCounts() {
+    proposalCounts = {};
+    document.querySelectorAll('.partner-select').forEach(function(select) {
+        var league = select.dataset.league;
+        if (!league) return;
+
+        var selectedOption = select.options[select.selectedIndex];
+        var code = selectedOption.dataset.code;
+        if (!code) return;
+
+        if (!proposalCounts[league]) proposalCounts[league] = {};
+        proposalCounts[league][code] = (proposalCounts[league][code] || 0) + 1;
+    });
+    updateAllAllocationTables();
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateAllAllocationTables();
+});
+
+// Handle dropdown changes
 document.querySelectorAll('.partner-select').forEach(function(select) {
     select.addEventListener('change', function() {
         var gameId = this.dataset.gameId;
         var newPartnerId = this.value;
         var sequenceId = this.dataset.sequenceId;
+        var changedSelect = this;
 
         fetch('{{ url_for("umpires.update_proposal_game_assignment", id=proposal.id) }}', {
             method: 'POST',
@@ -204,14 +378,13 @@ document.querySelectorAll('.partner-select').forEach(function(select) {
                 if (data.updated_games && data.updated_games.length > 1) {
                     data.updated_games.forEach(function(updatedGameId) {
                         var otherSelect = document.querySelector('.partner-select[data-game-id="' + updatedGameId + '"]');
-                        if (otherSelect && otherSelect !== select) {
+                        if (otherSelect && otherSelect !== changedSelect) {
                             otherSelect.value = newPartnerId;
                         }
                     });
-                    alert('Updated ' + data.updated_games.length + ' games in back-to-back sequence.');
                 }
-                // Reload to update violation counts
-                location.reload();
+                // Recalculate allocation tables dynamically
+                recalculateProposalCounts();
             } else {
                 alert('Error: ' + data.error);
                 location.reload();
