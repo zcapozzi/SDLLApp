@@ -298,12 +298,14 @@ function updateAllocationTable(league) {
         row.querySelector('.projected-pct').textContent = totalProjected > 0 ? projectedPct.toFixed(1) + '%' : '-';
 
         // Color code deviation
+        // Above target (positive) = bold blue, Below target (negative) = red
         var deviationCell = row.querySelector('.deviation');
         if (totalProjected > 0) {
             var deviationText = (deviation >= 0 ? '+' : '') + deviation.toFixed(1) + '%';
             deviationCell.textContent = deviationText;
             if (Math.abs(deviation) > 10) {
-                deviationCell.style.color = '#e74c3c';
+                // Large deviation: blue if above target, red if below
+                deviationCell.style.color = deviation > 0 ? '#2980b9' : '#e74c3c';
                 deviationCell.style.fontWeight = 'bold';
             } else if (Math.abs(deviation) > 5) {
                 deviationCell.style.color = '#f39c12';
