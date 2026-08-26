@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+
+{% block title %}Review Proposal #{{ proposal.id }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.delegation_proposals', year=proposal.year, is_spring=proposal.is_spring) }}">&larr; Back to Proposals</a>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Proposal #{{ proposal.id }} - {{ season_name }}</h1>
+    {% if proposal.is_pending %}
+    <div style="display: flex; gap: 10px;">
+        <form action="{{ url_for('umpires.reject_delegation_proposal', id=proposal.id) }}" method="POST" style="display: inline;">
+            <button type="submit" class="btn btn-outline" onclick="return confirm('Are you sure you want to reject this proposal?');">
+                Reject
+            </button>
+        </form>
+        {% if tier1_valid %}
+        <form action="{{ url_for('umpires.accept_delegation_proposal', id=proposal.id) }}" method="POST" style="display: inline;">
+            <button type="submit" class="btn btn-primary" onclick="return confirm('Accept this proposal and update all {{ proposal.game_count }} games?');">
+                Accept Proposal
+            </button>
+        </form>
+        {% else %}
+        <button class="btn btn-primary" disabled title="Cannot accept with Tier I violations">
+            Accept Proposal
+        </button>
+        {% endif %}
+    </div>
+    {% else %}
+    <span class="badge {% if proposal.status == 'accepted' %}badge-success{% else %}badge-secondary{% endif %}">
+        {{ proposal.status|capitalize }}
+    </span>
+    {% endif %}
+</div>
+
+<!-- Status Summary -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+    <div class="card" style="padding: 15px;">
+        <div style="font-size: 24px; font-weight: bold;">{{ proposal.game_count }}</div>
+        <div style="color: var(--text-muted);">Total Games</div>
+    </div>
+    <div class="card" style="padding: 15px;">
+        {% if tier1_valid %}
+        <div style="font-size: 24px; font-weight: bold; color: #27ae60;">OK</div>
+        {% else %}
+        <div style="font-size: 24px; font-weight: bold; color: #e74c3c;">{{ tier1_violations|length }} Violations</div>
+        {% endif %}
+        <div style="color: var(--text-muted);">Tier I (Back-to-back)</div>
+    </div>
+    <div class="card" style="padding: 15px;">
+        {% if tier2_valid %}
+        <div style="font-size: 24px; font-weight: bold; color: #27ae60;">OK</div>
+        {% else %}
+        <div style="font-size: 24px; font-weight: bold; color: #f39c12;">{{ tier2_violations|length }} Warnings</div>
+        {% endif %}
+        <div style="color: var(--text-muted);">Tier II (Allocation)</div>
+    </div>
+    <div class="card" style="padding: 15px;">
+        <div style="font-size: 24px; font-weight: bold;">{{ sequences|length }}</div>
+        <div style="color: var(--text-muted);">Back-to-back Sequences</div>
+    </div>
+</div>
+
+{% if not tier1_valid %}
+<div class="alert alert-danger" style="margin-bottom: 20px;">
+    <strong>Tier I Violations:</strong> The following back-to-back sequences have different partners assigned.
+    These must be fixed before accepting.
+    <ul style="margin: 10px 0 0 20px;">
+        {% for violation in tier1_violations %}
+        <li>Sequence {{ violation.sequence_id }}: {{ violation.games|length }} games at {{ violation.field }} - multiple partners assigned</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% if not tier2_valid %}
+<div class="alert alert-warning" style="margin-bottom: 20px;">
+    <strong>Tier II Warnings:</strong> Some allocations deviate more than 10% from target.
+    <ul style="margin: 10px 0 0 20px;">
+        {% for violation in tier2_violations %}
+        <li>{{ violation.partner }}: Target {{ violation.target }}%, Actual {{ violation.actual|round(1) }}% (deviation: {{ violation.deviation|round(1) }}%)</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<!-- Games by Partner -->
+<div class="card">
+    <h3 style="margin-top: 0;">Games by Partner</h3>
+
+    {% for partner_id, games in games_by_partner.items() %}
+    {% set partner = partners|selectattr('id', 'eq', partner_id)|first %}
+    <div style="margin-bottom: 30px;">
+        <h4 style="margin-bottom: 10px; border-bottom: 2px solid var(--primary-color); padding-bottom: 5px;">
+            {{ partner.name if partner else 'Unknown' }}
+            <span class="badge badge-primary">{{ games|length }} games</span>
+        </h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Field</th>
+                    <th>Game</th>
+                    <th>B2B</th>
+                    {% if proposal.is_pending %}
+                    <th style="width: 150px;">Assign To</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for pg in games|sort(attribute='game.game_date') %}
+                <tr id="game-{{ pg.game_id }}" {% if pg.is_overridden %}style="background: #fff3cd;"{% endif %}>
+                    <td>{{ pg.game.game_date.strftime('%a %m/%d') if pg.game.game_date else '-' }}</td>
+                    <td>{{ pg.game.game_date.strftime('%I:%M %p') if pg.game.game_date else '-' }}</td>
+                    <td>{{ pg.game.location or '-' }}</td>
+                    <td>
+                        {{ pg.game.away_team.team.team_name if pg.game.away_team else '?' }}
+                        @
+                        {{ pg.game.home_team.team.team_name if pg.game.home_team else '?' }}
+                    </td>
+                    <td>
+                        {% if pg.is_in_sequence %}
+                        <span class="badge badge-info" title="Sequence {{ pg.sequence_id }}">Seq {{ pg.sequence_id }}</span>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    {% if proposal.is_pending %}
+                    <td>
+                        <select class="partner-select" data-game-id="{{ pg.game_id }}"
+                                {% if pg.is_in_sequence %}data-sequence-id="{{ pg.sequence_id }}"{% endif %}>
+                            {% for p in partners %}
+                            <option value="{{ p.id }}"
+                                    {% if p.id == pg.assigned_partner_id %}selected{% endif %}>
+                                {{ p.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Back-to-back Sequences Detail -->
+{% if sequences %}
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">Back-to-back Sequences</h3>
+    <p style="color: var(--text-muted); margin-bottom: 15px;">
+        Games in the same sequence must be assigned to the same partner (Tier I rule).
+        Changing one game in a sequence will update all games in that sequence.
+    </p>
+    {% for seq_id, seq_games in sequences.items() %}
+    {% set first_game = seq_games[0] %}
+    <div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+        <strong>Sequence {{ seq_id }}</strong>
+        <span style="color: var(--text-muted); margin-left: 10px;">
+            {{ first_game.game.location }} - {{ seq_games|length }} games
+        </span>
+        <ul style="margin: 5px 0 0 20px; padding: 0;">
+            {% for pg in seq_games|sort(attribute='game.game_date') %}
+            <li style="color: var(--text-muted);">
+                {{ pg.game.game_date.strftime('%I:%M %p') if pg.game.game_date else '?' }} -
+                {{ pg.game.away_team.team.team_name if pg.game.away_team else '?' }} @
+                {{ pg.game.home_team.team.team_name if pg.game.home_team else '?' }}
+                ({{ pg.assigned_partner.name if pg.assigned_partner else '?' }})
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if proposal.is_pending %}
+<script>
+document.querySelectorAll('.partner-select').forEach(function(select) {
+    select.addEventListener('change', function() {
+        var gameId = this.dataset.gameId;
+        var newPartnerId = this.value;
+        var sequenceId = this.dataset.sequenceId;
+
+        fetch('{{ url_for("umpires.update_proposal_game_assignment", id=proposal.id) }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                game_id: parseInt(gameId),
+                partner_id: parseInt(newPartnerId)
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // If sequence was updated, update all games in sequence
+                if (data.updated_games && data.updated_games.length > 1) {
+                    data.updated_games.forEach(function(updatedGameId) {
+                        var otherSelect = document.querySelector('.partner-select[data-game-id="' + updatedGameId + '"]');
+                        if (otherSelect && otherSelect !== select) {
+                            otherSelect.value = newPartnerId;
+                        }
+                    });
+                    alert('Updated ' + data.updated_games.length + ' games in back-to-back sequence.');
+                }
+                // Reload to update violation counts
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+                location.reload();
+            }
+        })
+        .catch(function(error) {
+            alert('Network error: ' + error);
+            location.reload();
+        });
+    });
+});
+</script>
+{% endif %}
+
+<style>
+.badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.badge-success { background: #27ae60; color: white; }
+.badge-warning { background: #f39c12; color: white; }
+.badge-danger { background: #e74c3c; color: white; }
+.badge-secondary { background: #95a5a6; color: white; }
+.badge-info { background: #3498db; color: white; }
+.badge-primary { background: var(--primary-color); color: white; }
+.alert-danger {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    padding: 15px;
+    border-radius: 4px;
+    color: #721c24;
+}
+.alert-warning {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    padding: 15px;
+    border-radius: 4px;
+    color: #856404;
+}
+.partner-select {
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    width: 100%;
+}
+</style>
+{% endblock %}

@@ -1380,3 +1380,167 @@ def digest_settings(year, is_spring):
         season_name=season_name,
         partners=partners
     )
+
+
+# =============================================================================
+# Delegation Proposals
+# =============================================================================
+
+@umpires_bp.route('/delegation/proposals')
+@umpires_bp.route('/delegation/proposals/<int:year>/<int:is_spring>')
+@login_required
+@umpire_coordinator_required
+def delegation_proposals(year=None, is_spring=None):
+    """List delegation proposals for a season."""
+    from app.models.delegation_proposal import DelegationProposal
+    from app.services.delegation_proposal_service import get_undelegated_games
+
+    if year is None:
+        year = datetime.now().year
+    if is_spring is None:
+        is_spring = 1 if datetime.now().month < 7 else 0
+
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    # Get all proposals for this season
+    proposals = DelegationProposal.get_for_season(year, is_spring)
+
+    # Get undelegated games count
+    undelegated_games = get_undelegated_games(year, is_spring)
+    undelegated_count = len(undelegated_games)
+
+    # Check if there's a pending proposal
+    pending_proposal = DelegationProposal.get_pending_for_season(year, is_spring)
+
+    return render_template(
+        'umpires/delegation_proposals.html',
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name,
+        proposals=proposals,
+        undelegated_count=undelegated_count,
+        pending_proposal=pending_proposal
+    )
+
+
+@umpires_bp.route('/delegation/proposals/generate', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def generate_delegation_proposal():
+    """Generate a new delegation proposal."""
+    from app.services.delegation_proposal_service import generate_proposal
+
+    year = int(request.form.get('year', datetime.now().year))
+    is_spring = int(request.form.get('is_spring', 0))
+
+    proposal, message = generate_proposal(year, is_spring, created_by=current_user.ID)
+
+    if proposal:
+        flash(f'Generated proposal with {proposal.game_count} games', 'success')
+        return redirect(url_for('umpires.delegation_proposal_review', id=proposal.id))
+    else:
+        flash(message, 'error')
+        return redirect(url_for('umpires.delegation_proposals', year=year, is_spring=is_spring))
+
+
+@umpires_bp.route('/delegation/proposals/<int:id>')
+@login_required
+@umpire_coordinator_required
+def delegation_proposal_review(id):
+    """Review a delegation proposal with ability to modify assignments."""
+    from app.models.delegation_proposal import DelegationProposal
+    from app.services.delegation_proposal_service import validate_tier1, validate_tier2
+
+    proposal = DelegationProposal.query.get_or_404(id)
+    season_name = f'{"Spring" if proposal.is_spring else "Fall"} {proposal.year}'
+
+    # Get active partners for reassignment dropdown
+    partners = UmpirePartner.query.filter_by(active=True).order_by(UmpirePartner.name).all()
+
+    # Group games by partner
+    games_by_partner = proposal.get_games_by_partner()
+
+    # Get sequences for Tier I display
+    sequences = proposal.get_sequences()
+
+    # Re-validate to show current status
+    tier1_valid, tier1_violations = validate_tier1(proposal)
+    tier2_valid, tier2_violations = validate_tier2(proposal)
+
+    return render_template(
+        'umpires/delegation_proposal_review.html',
+        proposal=proposal,
+        season_name=season_name,
+        partners=partners,
+        games_by_partner=games_by_partner,
+        sequences=sequences,
+        tier1_valid=tier1_valid,
+        tier1_violations=tier1_violations,
+        tier2_valid=tier2_valid,
+        tier2_violations=tier2_violations
+    )
+
+
+@umpires_bp.route('/delegation/proposals/<int:id>/accept', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def accept_delegation_proposal(id):
+    """Accept a delegation proposal and apply all assignments."""
+    from app.services.delegation_proposal_service import accept_proposal
+
+    success, message, notifications = accept_proposal(id, user_id=current_user.ID)
+
+    if success:
+        flash(f'Proposal accepted. {message}', 'success')
+        # Could trigger email notifications here if notifications returned
+        return redirect(url_for('umpires.delegation_proposals'))
+    else:
+        flash(f'Failed to accept proposal: {message}', 'error')
+        return redirect(url_for('umpires.delegation_proposal_review', id=id))
+
+
+@umpires_bp.route('/delegation/proposals/<int:id>/reject', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def reject_delegation_proposal(id):
+    """Reject a delegation proposal."""
+    from app.services.delegation_proposal_service import reject_proposal
+
+    success, message = reject_proposal(id, user_id=current_user.ID)
+
+    if success:
+        flash('Proposal rejected', 'success')
+    else:
+        flash(f'Failed to reject proposal: {message}', 'error')
+
+    return redirect(url_for('umpires.delegation_proposals'))
+
+
+@umpires_bp.route('/api/delegation-proposals/<int:id>/update-game', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def update_proposal_game_assignment(id):
+    """Update a game's partner assignment in a proposal.
+
+    If the game is part of a back-to-back sequence, all games in the
+    sequence will be updated to maintain Tier I compliance.
+    """
+    from app.services.delegation_proposal_service import update_game_assignment
+
+    data = request.get_json()
+    game_id = data.get('game_id')
+    new_partner_id = data.get('partner_id')
+
+    if not game_id or not new_partner_id:
+        return jsonify({'success': False, 'error': 'Missing game_id or partner_id'}), 400
+
+    success, message, updated_games = update_game_assignment(id, game_id, new_partner_id)
+
+    if success:
+        return jsonify({
+            'success': True,
+            'message': message,
+            'updated_games': updated_games
+        })
+    else:
+        return jsonify({'success': False, 'error': message}), 400

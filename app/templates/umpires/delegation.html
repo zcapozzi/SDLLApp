@@ -9,7 +9,10 @@
 
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
     <h1>Delegation Rules</h1>
-    <a href="{{ url_for('umpires.overrides') }}" class="btn btn-outline">Override Keywords</a>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('umpires.delegation_proposals') }}" class="btn btn-primary">Delegation Proposals</a>
+        <a href="{{ url_for('umpires.overrides') }}" class="btn btn-outline">Override Keywords</a>
+    </div>
 </div>
 
 <p style="color: var(--text-muted); margin-bottom: 20px;">

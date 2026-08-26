@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Delegation Proposals{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.delegation') }}">&larr; Back to Delegation Rules</a>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Delegation Proposals - {{ season_name }}</h1>
+    <div>
+        {% if undelegated_count > 0 and not pending_proposal %}
+        <form action="{{ url_for('umpires.generate_delegation_proposal') }}" method="POST" style="display: inline;">
+            <input type="hidden" name="year" value="{{ year }}">
+            <input type="hidden" name="is_spring" value="{{ is_spring }}">
+            <button type="submit" class="btn btn-primary">
+                Generate Proposal ({{ undelegated_count }} games)
+            </button>
+        </form>
+        {% elif pending_proposal %}
+        <a href="{{ url_for('umpires.delegation_proposal_review', id=pending_proposal.id) }}" class="btn btn-primary">
+            Review Pending Proposal
+        </a>
+        {% else %}
+        <button class="btn btn-outline" disabled>No undelegated games</button>
+        {% endif %}
+    </div>
+</div>
+
+{% if pending_proposal %}
+<div class="alert alert-warning" style="margin-bottom: 20px;">
+    <strong>Pending Proposal:</strong>
+    You have a pending proposal with {{ pending_proposal.game_count }} games awaiting review.
+    <a href="{{ url_for('umpires.delegation_proposal_review', id=pending_proposal.id) }}">Review now</a>
+</div>
+{% endif %}
+
+{% if undelegated_count > 0 and not pending_proposal %}
+<div class="card" style="margin-bottom: 20px; background: #fff3cd; border-left: 4px solid #ffc107;">
+    <p style="margin: 0;">
+        <strong>{{ undelegated_count }}</strong> game{{ 's' if undelegated_count != 1 else '' }}
+        need{{ 's' if undelegated_count == 1 else '' }} umpire delegation.
+        Generate a proposal to review and accept assignments.
+    </p>
+</div>
+{% endif %}
+
+<div class="card">
+    <h3 style="margin-top: 0;">Proposal History</h3>
+    {% if proposals %}
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Created</th>
+                <th>Games</th>
+                <th>Tier I</th>
+                <th>Tier II</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for proposal in proposals %}
+            <tr>
+                <td>#{{ proposal.id }}</td>
+                <td>{{ proposal.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>{{ proposal.game_count }}</td>
+                <td>
+                    {% if proposal.tier1_violations > 0 %}
+                    <span class="badge badge-danger">{{ proposal.tier1_violations }} violations</span>
+                    {% else %}
+                    <span class="badge badge-success">OK</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if proposal.tier2_violations > 0 %}
+                    <span class="badge badge-warning">{{ proposal.tier2_violations }} warnings</span>
+                    {% else %}
+                    <span class="badge badge-success">OK</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if proposal.status == 'pending' %}
+                    <span class="badge badge-warning">Pending</span>
+                    {% elif proposal.status == 'accepted' %}
+                    <span class="badge badge-success">Accepted</span>
+                    {% else %}
+                    <span class="badge badge-secondary">Rejected</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if proposal.status == 'pending' %}
+                    <a href="{{ url_for('umpires.delegation_proposal_review', id=proposal.id) }}"
+                       class="btn btn-outline" style="padding: 3px 10px;">Review</a>
+                    {% else %}
+                    <a href="{{ url_for('umpires.delegation_proposal_review', id=proposal.id) }}"
+                       class="btn btn-outline" style="padding: 3px 10px;">View</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: var(--text-muted); margin: 0;">No proposals yet for this season.</p>
+    {% endif %}
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">About Delegation Proposals</h3>
+    <ul style="color: var(--text-muted); line-height: 1.8;">
+        <li><strong>Tier I (Back-to-back):</strong> Games at the same field within 30 minutes must use the same partner. This is enforced automatically.</li>
+        <li><strong>Tier II (Allocation):</strong> Warnings appear if allocations deviate more than 10% from target percentages.</li>
+        <li>Review proposals before accepting to ensure proper distribution.</li>
+        <li>You can modify individual game assignments before accepting.</li>
+    </ul>
+</div>
+
+<style>
+.badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.badge-success { background: #27ae60; color: white; }
+.badge-warning { background: #f39c12; color: white; }
+.badge-danger { background: #e74c3c; color: white; }
+.badge-secondary { background: #95a5a6; color: white; }
+.alert-warning {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    padding: 15px;
+    border-radius: 4px;
+}
+</style>
+{% endblock %}
