@@ -299,7 +299,9 @@ def edit_partner(id):
 
     partner = UmpirePartner.query.get_or_404(id)
     contacts = partner.get_active_contacts()
-    users = User.query.filter(User.role.like('%partner_contact%')).order_by(User.name).all()
+    # User.name is a property (encrypted), so fetch all and sort in Python
+    users = User.query.filter(User.role.like('%partner_contact%')).all()
+    users = sorted(users, key=lambda u: (u.name or '').lower())
 
     if request.method == 'POST':
         action = request.form.get('action', 'save_partner')
