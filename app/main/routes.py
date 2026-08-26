@@ -139,8 +139,8 @@ def cron_check_new_games():
             away = game.away_team.display_name if game.away_team else 'TBD'
 
             # Build deep link to umpire calendar with game highlight
-            calendar_date = game.game_date.strftime('%Y-%m-%d') if game.game_date else ''
-            calendar_url = f"{base_url}/umpires/{game.year}/{1 if game.is_spring else 0}/calendar?week={calendar_date}&game={game.ID}"
+            calendar_week = game.game_date.strftime('%Y-%W') if game.game_date else ''
+            calendar_url = f"{base_url}/umpires/{game.year}/{1 if game.is_spring else 0}/calendar?week={calendar_week}&game={game.ID}"
 
             html_parts.append(
                 f'<tr style="border-bottom: 1px solid #eee;">'
@@ -356,9 +356,9 @@ def cron_unassigned_umpires():
             home = game.home_team.display_name if game.home_team else 'TBD'
             away = game.away_team.display_name if game.away_team else 'TBD'
 
-            # Build links
-            calendar_date = game.game_date.strftime('%Y-%m-%d') if game.game_date else ''
-            calendar_url = f"{base_url}/umpires/{game.year}/{1 if game.is_spring else 0}/calendar?week={calendar_date}"
+            # Build links - calendar expects year-weeknumber format (e.g., 2026-42)
+            calendar_week = game.game_date.strftime('%Y-%W') if game.game_date else ''
+            calendar_url = f"{base_url}/umpires/{game.year}/{1 if game.is_spring else 0}/calendar?week={calendar_week}"
 
             # Slot ownership badge
             if is_owned:
