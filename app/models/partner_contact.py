@@ -86,13 +86,14 @@ class PartnerContact(db.Model):
             active_only: Only return active contacts (default True)
 
         Returns:
-            List of PartnerContact objects
+            List of PartnerContact objects, sorted with primary first
         """
         query = cls.query.filter_by(partner_id=partner_id)
         if active_only:
             query = query.filter_by(active=True)
-        # Sort primary contacts first, then by name
-        return query.order_by(db.desc('is_primary'), 'name').all()
+        # Fetch all and sort in Python to avoid SQLAlchemy column reference issues
+        contacts = query.all()
+        return sorted(contacts, key=lambda c: (not c.is_primary, c.name or ''))
 
     @classmethod
     def get_for_message_type(cls, partner_id, msg_type, active_only=True):
