@@ -107,6 +107,7 @@
     <table class="user-table">
         <thead>
             <tr>
+                <th style="width: 50px;">ID</th>
                 <th>Name</th>
                 <th>Email</th>
                 <th>Role</th>
@@ -123,6 +124,7 @@
                 data-phone="{{ (user.phone or '')|replace('-', '')|replace('.', '')|replace(' ', '')|replace('(', '')|replace(')', '') }}"
                 data-status="{{ 'active' if user.active else 'inactive' }}"
                 data-role="{{ user.role }}">
+                <td class="text-muted" style="font-size: 12px;">{{ user.ID }}</td>
                 <td>
                     {{ user.name or '(No name)' }}
                     {% if not user.active %}<span class="text-muted text-small">(inactive)</span>{% endif %}
@@ -164,7 +166,7 @@
                 </td>
             </tr>
             <tr id="edit-{{ user.ID }}" class="edit-form">
-                <td colspan="6">
+                <td colspan="7">
                     <form method="post">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="edit">
