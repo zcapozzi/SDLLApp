@@ -1599,3 +1599,146 @@ def update_proposal_game_assignment(id):
         })
     else:
         return jsonify({'success': False, 'error': message}), 400
+
+
+@umpires_bp.route('/debug/game-counts/<int:year>/<int:is_spring>')
+def debug_game_counts(year, is_spring):
+    """Debug endpoint to identify discrepancies between partner schedule and delegation report."""
+    # Temporarily allow without login for debugging
+
+    partner_code = request.args.get('partner', 'DYN')
+
+    # Build league lookup (same as delegation report)
+    leagues = League.get_all_active()
+    league_lookup = {}
+    for l in leagues:
+        league_lookup[l.display_name.lower().strip()] = l
+        if l.fall_display_name:
+            league_lookup[l.fall_display_name.lower().strip()] = l
+
+    # Get ALL games with this partner code
+    all_games = Game.query.filter(
+        Game.year == year,
+        Game.is_spring == (is_spring == 1),
+        Game.active == 1,
+        Game.umpire_override == partner_code
+    ).order_by(Game.game_date).all()
+
+    results = []
+    partner_count = 0
+    delegation_count = 0
+
+    for game in all_games:
+        # Check partner schedule filter: game_type != 'practice'
+        in_partner = game.game_type != 'practice'
+        if in_partner:
+            partner_count += 1
+
+        # Check delegation report filter: game_type in ['regular', 'playoff', 'scrimmage']
+        in_delegation_query = game.game_type in ['regular', 'playoff', 'scrimmage']
+
+        # Check delegation report loop logic
+        league_name = game.league or 'Unknown'
+        league_obj = league_lookup.get(league_name.lower().strip())
+
+        if game.umpire_count_override is not None:
+            umpire_count = game.umpire_count_override
+        elif league_obj:
+            is_playoff = game.game_type == 'playoff'
+            umpire_count = league_obj.get_umpire_count(is_playoff=is_playoff)
+        else:
+            umpire_count = 1
+
+        # The fix: if umpire_override is set and umpire_count is 0, default to 1
+        original_umpire_count = umpire_count
+        if umpire_count == 0:
+            umpire_count = 1
+
+        in_delegation = in_delegation_query  # Would be counted if query matches
+        if in_delegation:
+            delegation_count += 1
+
+        # Identify discrepancy
+        discrepancy = in_partner and not in_delegation
+
+        results.append({
+            'id': game.ID,
+            'date': game.game_date.strftime('%Y-%m-%d %H:%M') if game.game_date else '',
+            'league': league_name,
+            'game_type': game.game_type,
+            'is_scrimmage': game.is_scrimmage,
+            'umpire_override': game.umpire_override,
+            'umpire_count_override': game.umpire_count_override,
+            'league_umpire_count': original_umpire_count,
+            'league_found': league_obj is not None,
+            'in_partner': in_partner,
+            'in_delegation_query': in_delegation_query,
+            'in_delegation': in_delegation,
+            'discrepancy': discrepancy
+        })
+
+    # Build HTML response
+    html = f'''
+    <html>
+    <head>
+        <title>Debug: {partner_code} Game Counts</title>
+        <style>
+            table {{ border-collapse: collapse; width: 100%; font-size: 12px; }}
+            th, td {{ border: 1px solid #ddd; padding: 4px; text-align: left; }}
+            th {{ background: #f5f5f5; }}
+            .yes {{ color: green; font-weight: bold; }}
+            .no {{ color: red; }}
+            .discrepancy {{ background: #ffcccc; }}
+            .summary {{ margin: 20px 0; padding: 15px; background: #f0f0f0; }}
+        </style>
+    </head>
+    <body>
+        <h1>Debug: {partner_code} Game Counts for {"Spring" if is_spring else "Fall"} {year}</h1>
+        <div class="summary">
+            <strong>Partner Schedule Count:</strong> {partner_count}<br>
+            <strong>Delegation Report Count:</strong> {delegation_count}<br>
+            <strong>Difference:</strong> {partner_count - delegation_count}
+        </div>
+        <table>
+            <tr>
+                <th>ID</th>
+                <th>Date</th>
+                <th>League</th>
+                <th>game_type</th>
+                <th>is_scrimmage</th>
+                <th>umpire_override</th>
+                <th>umpire_count_override</th>
+                <th>league_umpire_count</th>
+                <th>league_found</th>
+                <th>In Partner?</th>
+                <th>In Delegation Query?</th>
+                <th>In Delegation?</th>
+            </tr>
+    '''
+
+    for r in results:
+        row_class = 'discrepancy' if r['discrepancy'] else ''
+        html += f'''
+            <tr class="{row_class}">
+                <td>{r['id']}</td>
+                <td>{r['date']}</td>
+                <td>{r['league']}</td>
+                <td>{r['game_type']}</td>
+                <td>{r['is_scrimmage']}</td>
+                <td>{r['umpire_override']}</td>
+                <td>{r['umpire_count_override']}</td>
+                <td>{r['league_umpire_count']}</td>
+                <td class="{'yes' if r['league_found'] else 'no'}">{'Yes' if r['league_found'] else 'No'}</td>
+                <td class="{'yes' if r['in_partner'] else 'no'}">{'Yes' if r['in_partner'] else 'No'}</td>
+                <td class="{'yes' if r['in_delegation_query'] else 'no'}">{'Yes' if r['in_delegation_query'] else 'No'}</td>
+                <td class="{'yes' if r['in_delegation'] else 'no'}">{'Yes' if r['in_delegation'] else 'No'}</td>
+            </tr>
+        '''
+
+    html += '''
+        </table>
+    </body>
+    </html>
+    '''
+
+    return html
