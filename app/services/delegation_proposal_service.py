@@ -251,8 +251,8 @@ def generate_proposal(year, is_spring, created_by=None):
         proposal_counts[game.league][partner.short_code.lower()] += 1
 
     # Validate and store violations
-    tier1_violations = validate_tier1(proposal)
-    tier2_violations = validate_tier2(proposal, rules_by_league, stats_by_league, proposal_counts)
+    _, tier1_violations = validate_tier1(proposal)
+    _, tier2_violations = validate_tier2(proposal, rules_by_league, stats_by_league, proposal_counts)
     proposal.tier1_violations = len(tier1_violations)
     proposal.tier2_violations = len(tier2_violations)
 
@@ -345,7 +345,7 @@ def validate_tier1(proposal):
     but we check anyway for manual overrides.
 
     Returns:
-        List of violation dicts with details
+        Tuple of (is_valid, violations_list)
     """
     violations = []
     sequences = proposal.get_sequences()
@@ -356,16 +356,18 @@ def validate_tier1(proposal):
             partners_in_seq.add(pg.assigned_partner_id)
 
         if len(partners_in_seq) > 1:
-            game_ids = [pg.game_id for pg in games]
+            # Get field name from first game in sequence
+            field = games[0].game.location if games and games[0].game else 'Unknown'
             violations.append({
                 'type': 'tier1_back_to_back',
                 'sequence_id': seq_id,
-                'game_ids': game_ids,
+                'games': games,
+                'field': field,
                 'partners': list(partners_in_seq),
                 'message': f'Sequence {seq_id} has games assigned to different partners'
             })
 
-    return violations
+    return len(violations) == 0, violations
 
 
 def validate_tier2(proposal, rules_by_league=None, stats_by_league=None, proposal_counts=None):
@@ -378,7 +380,7 @@ def validate_tier2(proposal, rules_by_league=None, stats_by_league=None, proposa
         proposal_counts: Dict of {league_name: {partner_code: count}}
 
     Returns:
-        List of violation dicts with details
+        Tuple of (is_valid, violations_list)
     """
     violations = []
 
@@ -450,7 +452,7 @@ def validate_tier2(proposal, rules_by_league=None, stats_by_league=None, proposa
                     'message': f'{league_name}: {partner.name} is {round(deviation, 1)}% off target ({round(actual_pct, 1)}% vs {target_pct}%)'
                 })
 
-    return violations
+    return len(violations) == 0, violations
 
 
 def accept_proposal(proposal_id, user_id):
@@ -471,8 +473,8 @@ def accept_proposal(proposal_id, user_id):
         return False, f'Proposal is already {proposal.status}', {}
 
     # Check for Tier I violations - should not accept if any exist
-    tier1_violations = validate_tier1(proposal)
-    if tier1_violations:
+    tier1_valid, tier1_violations = validate_tier1(proposal)
+    if not tier1_valid:
         return False, f'Cannot accept: {len(tier1_violations)} Tier I violation(s)', {}
 
     # Update each game

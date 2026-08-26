@@ -145,7 +145,8 @@ class TestTier1Validation:
         db_session.add_all([pg1, pg2])
         db_session.commit()
 
-        violations = validate_tier1(proposal)
+        is_valid, violations = validate_tier1(proposal)
+        assert is_valid is True
         assert len(violations) == 0
 
     def test_sequence_different_partners_fails(self, app, db_session, game_factory, field_factory):
@@ -186,7 +187,8 @@ class TestTier1Validation:
         db_session.add_all([pg1, pg2])
         db_session.commit()
 
-        violations = validate_tier1(proposal)
+        is_valid, violations = validate_tier1(proposal)
+        assert is_valid is False
         assert len(violations) == 1
         assert violations[0]['type'] == 'tier1_back_to_back'
 
@@ -233,7 +235,8 @@ class TestTier2Validation:
         stats_by_league = {league.display_name: {'total': 0, 'sdl': {'count': 0, 'pct': 0}, 'dia': {'count': 0, 'pct': 0}}}
         proposal_counts = {league.display_name: {'sdl': 55, 'dia': 45}}
 
-        violations = validate_tier2(proposal, rules_by_league, stats_by_league, proposal_counts)
+        is_valid, violations = validate_tier2(proposal, rules_by_league, stats_by_league, proposal_counts)
+        assert is_valid is True
         assert len(violations) == 0
 
     def test_exceeds_tolerance_fails(self, app, db_session, league_factory):
@@ -273,7 +276,8 @@ class TestTier2Validation:
         stats_by_league = {league.display_name: {'total': 0, 'sdl': {'count': 0, 'pct': 0}, 'dia': {'count': 0, 'pct': 0}}}
         proposal_counts = {league.display_name: {'sdl': 70, 'dia': 30}}
 
-        violations = validate_tier2(proposal, rules_by_league, stats_by_league, proposal_counts)
+        is_valid, violations = validate_tier2(proposal, rules_by_league, stats_by_league, proposal_counts)
+        assert is_valid is False
         assert len(violations) >= 1
         assert any(v['type'] == 'tier2_deviation' for v in violations)
 
