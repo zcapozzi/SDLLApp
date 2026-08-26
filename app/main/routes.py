@@ -113,7 +113,7 @@ def cron_check_new_games():
         body_lines.append(f"{league_name} ({len(games)} game(s)):")
         for game in games:
             game_date = game.game_date.strftime('%a, %b %d at %I:%M %p') if game.game_date else 'TBD'
-            field = game.field_rel.location_title if game.field_rel else (game.location or 'TBD')
+            field = game.field_name or 'TBD'
             home = game.home_team.display_name if game.home_team else 'TBD'
             away = game.away_team.display_name if game.away_team else 'TBD'
             body_lines.append(f"  - {game_date} @ {field}")
@@ -134,7 +134,7 @@ def cron_check_new_games():
         for game in games:
             game_date = game.game_date.strftime('%a, %b %d') if game.game_date else 'TBD'
             game_time = game.game_date.strftime('%I:%M %p').lstrip('0') if game.game_date else ''
-            field = game.field_rel.location_title if game.field_rel else (game.location or 'TBD')
+            field = game.field_name or 'TBD'
             home = game.home_team.display_name if game.home_team else 'TBD'
             away = game.away_team.display_name if game.away_team else 'TBD'
 
@@ -324,7 +324,7 @@ def cron_unassigned_umpires():
         body_lines.append(f"{league_name} ({len(games)} game(s)):")
         for game, required, assigned, is_owned in games:
             game_date = game.game_date.strftime('%a, %b %d at %I:%M %p') if game.game_date else 'TBD'
-            field = game.field_rel.location_title if game.field_rel else (game.location or 'TBD')
+            field = game.field_name or 'TBD'
             home = game.home_team.display_name if game.home_team else 'TBD'
             away = game.away_team.display_name if game.away_team else 'TBD'
             owned_tag = "" if is_owned else " [AWAY-ONLY SLOT]"
@@ -352,7 +352,7 @@ def cron_unassigned_umpires():
         for game, required, assigned, is_owned in games:
             game_date = game.game_date.strftime('%a, %b %d') if game.game_date else 'TBD'
             game_time = game.game_date.strftime('%I:%M %p').lstrip('0') if game.game_date else ''
-            field = game.field_rel.location_title if game.field_rel else (game.location or 'TBD')
+            field = game.field_name or 'TBD'
             home = game.home_team.display_name if game.home_team else 'TBD'
             away = game.away_team.display_name if game.away_team else 'TBD'
 

@@ -292,7 +292,7 @@ class TestTierIBackToBackConstraint:
         # Create first game at 10:00 AM assigned to our test partner
         game1 = game_factory(
             game_date=datetime(2026, 4, 15, 10, 0),
-            location=field.location_title,
+            field_id=field.ID,
             league=league.display_name
         )
 
@@ -310,7 +310,7 @@ class TestTierIBackToBackConstraint:
         # Create second game at 12:00 PM at SAME field (back-to-back)
         game2 = game_factory(
             game_date=datetime(2026, 4, 15, 12, 0),
-            location=field.location_title,
+            field_id=field.ID,
             league=league.display_name
         )
 
@@ -343,7 +343,7 @@ class TestTierIBackToBackConstraint:
         # Game at 10:00 AM assigned to first partner
         game1 = game_factory(
             game_date=datetime(2026, 4, 15, 10, 0),
-            location=field.location_title,
+            field_id=field.ID,
             league='BB Majors'
         )
         game1_obj = db_session.get(Game, game1.ID)
@@ -355,7 +355,7 @@ class TestTierIBackToBackConstraint:
         # Game at 2:00 PM - NOT back-to-back (>30 min gap from ~12:00 end)
         game2 = game_factory(
             game_date=datetime(2026, 4, 15, 14, 0),
-            location=field.location_title,
+            field_id=field.ID,
             league='BB Majors'
         )
 
@@ -388,7 +388,7 @@ class TestTierIBackToBackConstraint:
         # Game at Field A, 10:00 AM assigned to first partner
         game1 = game_factory(
             game_date=datetime(2026, 4, 15, 10, 0),
-            location=field1.location_title,
+            field_id=field1.ID,
             league='BB Majors'
         )
         game1_obj = db_session.get(Game, game1.ID)
@@ -400,7 +400,7 @@ class TestTierIBackToBackConstraint:
         # Game at Field B, 12:00 PM - DIFFERENT field
         game2 = game_factory(
             game_date=datetime(2026, 4, 15, 12, 0),
-            location=field2.location_title,
+            field_id=field2.ID,
             league='BB Majors'
         )
 
@@ -443,7 +443,7 @@ class TestBatchDelegationTierI:
         for hour in [10, 12, 14]:
             game = game_factory(
                 game_date=datetime(2026, 4, 15, hour, 0),
-                location=field.location_title,
+                field_id=field.ID,
                 league=league_name,
                 year=2026,
                 is_spring=1
@@ -516,7 +516,7 @@ class TestDelegationAllocation:
             field = field_factory(f'Alloc Field {day} {uuid.uuid4().hex[:4]}')
             game = game_factory(
                 game_date=datetime(2026, 4, day + 1, 10, 0),
-                location=field.location_title,
+                field_id=field.ID,
                 league=league.display_name,
                 year=2026,
                 is_spring=1

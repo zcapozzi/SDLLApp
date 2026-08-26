@@ -208,7 +208,7 @@ Here's your upcoming schedule of {game_count} SDLL game{'s' if game_count != 1 e
 
                 for game in games_by_league[league]:
                     time_str = game.game_date.strftime('%I:%M %p').lstrip('0').lower()
-                    field_name = game.field_rel.location_title if game.field_rel else (game.location or 'TBD')
+                    field_name = game.field_name or 'TBD'
 
                     # Format matchup
                     home = game.home_team.display_name if game.home_team else 'TBD'

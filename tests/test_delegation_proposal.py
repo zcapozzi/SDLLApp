@@ -23,13 +23,13 @@ class TestBackToBackDetection:
 
         # Create mock games
         class MockGame:
-            def __init__(self, location, game_date, duration=120):
-                self.location = location
+            def __init__(self, field_id, game_date, duration=120):
+                self.field_id = field_id
                 self.game_date = game_date
                 self.duration_minutes = duration
 
-        game1 = MockGame('Field A', datetime(2026, 9, 15, 17, 0))  # 5:00 PM, 2 hour game
-        game2 = MockGame('Field A', datetime(2026, 9, 15, 19, 0))  # 7:00 PM (right after)
+        game1 = MockGame(1, datetime(2026, 9, 15, 17, 0))  # 5:00 PM, 2 hour game
+        game2 = MockGame(1, datetime(2026, 9, 15, 19, 0))  # 7:00 PM (right after)
 
         assert _is_back_to_back(game1, game2) is True
 
@@ -39,13 +39,13 @@ class TestBackToBackDetection:
         from app.services.delegation_proposal_service import _is_back_to_back
 
         class MockGame:
-            def __init__(self, location, game_date, duration=120):
-                self.location = location
+            def __init__(self, field_id, game_date, duration=120):
+                self.field_id = field_id
                 self.game_date = game_date
                 self.duration_minutes = duration
 
-        game1 = MockGame('Field A', datetime(2026, 9, 15, 17, 0))
-        game2 = MockGame('Field B', datetime(2026, 9, 15, 19, 0))
+        game1 = MockGame(1, datetime(2026, 9, 15, 17, 0))
+        game2 = MockGame(2, datetime(2026, 9, 15, 19, 0))
 
         assert _is_back_to_back(game1, game2) is False
 
@@ -55,13 +55,13 @@ class TestBackToBackDetection:
         from app.services.delegation_proposal_service import _is_back_to_back
 
         class MockGame:
-            def __init__(self, location, game_date, duration=120):
-                self.location = location
+            def __init__(self, field_id, game_date, duration=120):
+                self.field_id = field_id
                 self.game_date = game_date
                 self.duration_minutes = duration
 
-        game1 = MockGame('Field A', datetime(2026, 9, 15, 17, 0))  # 5:00 PM, 2 hour game
-        game2 = MockGame('Field A', datetime(2026, 9, 15, 20, 0))  # 8:00 PM (1 hour gap)
+        game1 = MockGame(1, datetime(2026, 9, 15, 17, 0))  # 5:00 PM, 2 hour game
+        game2 = MockGame(1, datetime(2026, 9, 15, 20, 0))  # 8:00 PM (1 hour gap)
 
         assert _is_back_to_back(game1, game2) is False
 
@@ -71,13 +71,13 @@ class TestBackToBackDetection:
         from app.services.delegation_proposal_service import _is_back_to_back
 
         class MockGame:
-            def __init__(self, location, game_date, duration=120):
-                self.location = location
+            def __init__(self, field_id, game_date, duration=120):
+                self.field_id = field_id
                 self.game_date = game_date
                 self.duration_minutes = duration
 
-        game1 = MockGame('Field A', datetime(2026, 9, 15, 17, 0))
-        game2 = MockGame('Field A', datetime(2026, 9, 16, 17, 0))  # Next day
+        game1 = MockGame(1, datetime(2026, 9, 15, 17, 0))
+        game2 = MockGame(1, datetime(2026, 9, 16, 17, 0))  # Next day
 
         assert _is_back_to_back(game1, game2) is False
 
@@ -87,9 +87,9 @@ class TestBackToBackDetection:
         from app.services.delegation_proposal_service import identify_back_to_back_sequences
 
         class MockGame:
-            def __init__(self, id, location, game_date, duration=120):
+            def __init__(self, id, field_id, game_date, duration=120):
                 self.ID = id
-                self.location = location
+                self.field_id = field_id
                 self.game_date = game_date
                 self.duration_minutes = duration
 
@@ -127,8 +127,8 @@ class TestTier1Validation:
             db_session.flush()
 
         field = field_factory('Tier1 Test Field')
-        game1 = game_factory(game_date=datetime(2026, 9, 15, 17, 0), location=field.location_title)
-        game2 = game_factory(game_date=datetime(2026, 9, 15, 19, 0), location=field.location_title)
+        game1 = game_factory(game_date=datetime(2026, 9, 15, 17, 0), field_id=field.ID)
+        game2 = game_factory(game_date=datetime(2026, 9, 15, 19, 0), field_id=field.ID)
 
         proposal = DelegationProposal(year=2026, is_spring=0, game_count=2)
         db_session.add(proposal)
@@ -166,8 +166,8 @@ class TestTier1Validation:
         db_session.flush()
 
         field = field_factory('Tier1 Fail Field')
-        game1 = game_factory(game_date=datetime(2026, 9, 15, 17, 0), location=field.location_title)
-        game2 = game_factory(game_date=datetime(2026, 9, 15, 19, 0), location=field.location_title)
+        game1 = game_factory(game_date=datetime(2026, 9, 15, 17, 0), field_id=field.ID)
+        game2 = game_factory(game_date=datetime(2026, 9, 15, 19, 0), field_id=field.ID)
 
         proposal = DelegationProposal(year=2026, is_spring=0, game_count=2)
         db_session.add(proposal)
@@ -299,7 +299,7 @@ class TestProposalAcceptance:
             db_session.flush()
 
         field = field_factory('Accept Test Field')
-        game_data = game_factory(game_date=datetime(2026, 9, 15, 17, 0), location=field.location_title)
+        game_data = game_factory(game_date=datetime(2026, 9, 15, 17, 0), field_id=field.ID)
 
         proposal = DelegationProposal(year=2026, is_spring=0, game_count=1, status='pending')
         db_session.add(proposal)
@@ -343,8 +343,8 @@ class TestProposalAcceptance:
         db_session.flush()
 
         field = field_factory('Reject Test Field')
-        game1 = game_factory(game_date=datetime(2026, 9, 15, 17, 0), location=field.location_title)
-        game2 = game_factory(game_date=datetime(2026, 9, 15, 19, 0), location=field.location_title)
+        game1 = game_factory(game_date=datetime(2026, 9, 15, 17, 0), field_id=field.ID)
+        game2 = game_factory(game_date=datetime(2026, 9, 15, 19, 0), field_id=field.ID)
 
         proposal = DelegationProposal(year=2026, is_spring=0, game_count=2, status='pending')
         db_session.add(proposal)
@@ -390,8 +390,8 @@ class TestUpdateGameAssignment:
         db_session.flush()
 
         field = field_factory('Update Seq Field')
-        game1 = game_factory(game_date=datetime(2026, 9, 15, 17, 0), location=field.location_title)
-        game2 = game_factory(game_date=datetime(2026, 9, 15, 19, 0), location=field.location_title)
+        game1 = game_factory(game_date=datetime(2026, 9, 15, 17, 0), field_id=field.ID)
+        game2 = game_factory(game_date=datetime(2026, 9, 15, 19, 0), field_id=field.ID)
 
         proposal = DelegationProposal(year=2026, is_spring=0, game_count=2, status='pending')
         db_session.add(proposal)

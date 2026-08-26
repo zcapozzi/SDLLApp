@@ -525,8 +525,8 @@ class ScheduleValidator:
             field = None
             if hasattr(p, 'field') and p.field:
                 field = p.field.ID if hasattr(p.field, 'ID') else p.field
-            elif hasattr(p, 'location'):
-                field = p.location
+            elif hasattr(p, 'field_id'):
+                field = p.field_id
 
             if team and field:
                 field_counts[team][field] += 1
@@ -561,8 +561,8 @@ class ScheduleValidator:
             field = None
             if hasattr(p, 'field') and p.field:
                 field = p.field.ID if hasattr(p.field, 'ID') else p.field
-            elif hasattr(p, 'location'):
-                field = p.location
+            elif hasattr(p, 'field_id'):
+                field = p.field_id
 
             if field:
                 key = (field, game_date.date(), game_date.hour)
@@ -777,8 +777,8 @@ class ScheduleValidator:
             field = None
             if hasattr(p, 'field') and p.field:
                 field = p.field.ID if hasattr(p.field, 'ID') else p.field
-            elif hasattr(p, 'location'):
-                field = p.location
+            elif hasattr(p, 'field_id'):
+                field = p.field_id
             if field:
                 fields_with_slots.add(field)
 
@@ -797,8 +797,8 @@ class ScheduleValidator:
             field = None
             if hasattr(p, 'field') and p.field:
                 field = p.field.ID if hasattr(p.field, 'ID') else p.field
-            elif hasattr(p, 'location'):
-                field = p.location
+            elif hasattr(p, 'field_id'):
+                field = p.field_id
             if field:
                 time_key = (game_date.weekday(), game_date.hour, game_date.minute)
                 fields_by_dow_time_slot[time_key].add(field)
@@ -812,8 +812,8 @@ class ScheduleValidator:
             field = None
             if hasattr(p, 'field') and p.field:
                 field = p.field.ID if hasattr(p.field, 'ID') else p.field
-            elif hasattr(p, 'location'):
-                field = p.location
+            elif hasattr(p, 'field_id'):
+                field = p.field_id
             if field:
                 key = (game_date.date(), game_date.hour, game_date.minute)
                 practices_by_datetime[key].append({
@@ -832,8 +832,8 @@ class ScheduleValidator:
             field = None
             if hasattr(activity, 'field') and activity.field:
                 field = activity.field.ID if hasattr(activity.field, 'ID') else activity.field
-            elif hasattr(activity, 'location'):
-                field = activity.location
+            elif hasattr(activity, 'field_id'):
+                field = activity.field_id
             if field:
                 # Store tuple of (start_time, duration) for accurate overlap checking
                 # Use game duration for games, practice duration for practices
@@ -1046,9 +1046,9 @@ class ScheduleValidator:
             if hasattr(game, 'field') and game.field:
                 field = game.field.ID if hasattr(game.field, 'ID') else game.field
                 field_name = game.field.location_title if hasattr(game.field, 'location_title') else str(field)
-            elif hasattr(game, 'location'):
-                field = game.location
-                field_name = str(field)
+            elif hasattr(game, 'field_id') and game.field_id:
+                field = game.field_id
+                field_name = game.field_name if hasattr(game, 'field_name') else str(field)
 
             if not field:
                 continue
@@ -1141,9 +1141,9 @@ class ScheduleValidator:
                 field_obj = game.field
                 field_id = game.field.ID if hasattr(game.field, 'ID') else game.field
                 field_name = game.field.location_title if hasattr(game.field, 'location_title') else str(field_id)
-            elif hasattr(game, 'location'):
-                field_id = game.location
-                field_name = str(field_id)
+            elif hasattr(game, 'field_id') and game.field_id:
+                field_id = game.field_id
+                field_name = game.field_name if hasattr(game, 'field_name') else str(field_id)
 
             if not field_id:
                 continue
@@ -1290,9 +1290,9 @@ class ScheduleValidator:
             if hasattr(game, 'field') and game.field:
                 field_id = game.field.ID if hasattr(game.field, 'ID') else None
                 field_name = game.field.location_title if hasattr(game.field, 'location_title') else str(field_id)
-            elif hasattr(game, 'location'):
-                field_id = game.location
-                field_name = str(field_id)
+            elif hasattr(game, 'field_id') and game.field_id:
+                field_id = game.field_id
+                field_name = game.field_name if hasattr(game, 'field_name') else str(field_id)
 
             if not field_id:
                 continue
@@ -4676,8 +4676,40 @@ class ScheduleGenerator:
                 decisions_by_date[d.date_str] = []
             decisions_by_date[d.date_str].append(d.to_dict())
 
+        # Build games list and validate field_id matches field_name
+        # (There's a bug where these can get out of sync during scheduling)
+        games_list = []
+        for g in self.proposed_games:
+            game_dict = g.to_dict()
+            # Validate and fix field_id if it doesn't match field_name
+            field_name = game_dict.get('field_name')
+            field_id = game_dict.get('field_id')
+            if field_name and field_id:
+                # Look up correct field_id from field_name
+                correct_field = self._fields_cache.get(field_id)
+                if correct_field and correct_field.location_title != field_name:
+                    # Mismatch! Find the correct field by name
+                    for fid, f in self._fields_cache.items():
+                        if f.location_title == field_name:
+                            game_dict['field_id'] = fid
+                            break
+            games_list.append(game_dict)
+
+        # Also validate assignments
+        for game_id, assignment in self._slot_assignments.items():
+            field_name = assignment.get('field_name')
+            field_id = assignment.get('field_id')
+            if field_name and field_id:
+                correct_field = self._fields_cache.get(field_id)
+                if correct_field and correct_field.location_title != field_name:
+                    # Mismatch! Find the correct field by name
+                    for fid, f in self._fields_cache.items():
+                        if f.location_title == field_name:
+                            assignment['field_id'] = fid
+                            break
+
         return {
-            'games': [g.to_dict() for g in self.proposed_games],
+            'games': games_list,
             'violations': [v.to_dict() for v in self.violations],
             'warnings': self.warnings,
             'assignments': self._slot_assignments,  # Maps existing game IDs to proposed values

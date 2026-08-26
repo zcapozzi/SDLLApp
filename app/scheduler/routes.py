@@ -829,7 +829,7 @@ def api_team_schedule(year, is_spring, team_id):
                     'type': game.game_type,
                     'home': home_name,
                     'away': away_name,
-                    'field': game.location or 'TBD',
+                    'field': game.field_name or 'TBD',
                     'league': game.league,
                     'is_home': team_id == home_id,
                     'day_abbrev': game.game_date.strftime('%a')[:3] if game.game_date else ''
@@ -935,6 +935,10 @@ def api_add_event(year, is_spring):
             actual_game_type = 'practice' if is_division_practice or game_type == 'practice' else game_type
             is_scrimmage = 1 if game_type == 'scrimmage' else 0
 
+            # Look up field_id from field_name
+            field_obj = Field.query.filter_by(location_title=field_name, active=1).first()
+            field_id = field_obj.ID if field_obj else None
+
             new_game = Game(
                 year=year,
                 is_spring=is_spring,
@@ -942,7 +946,7 @@ def api_add_event(year, is_spring):
                 home_ID=home_team_id,
                 away_ID=away_team_id,
                 league=league,
-                location=field_name,
+                field_id=field_id,
                 game_type=actual_game_type,
                 is_scrimmage=is_scrimmage,
                 is_league_practice=is_division_practice,

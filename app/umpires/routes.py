@@ -1100,7 +1100,7 @@ def umpire_calendar(year, is_spring):
     if league:
         week_query = week_query.filter(Game.league == league)
 
-    all_week_games = week_query.order_by(Game.game_date, Game.location).all()
+    all_week_games = week_query.order_by(Game.game_date, Game.field_id).all()
 
     # Pre-load all leagues to avoid N+1 queries for umpire_count
     from app.models.league import League
@@ -1124,10 +1124,7 @@ def umpire_calendar(year, is_spring):
                 game._cached_umpire_count = 1
 
         # Cache field name
-        if game.field_rel:
-            game._cached_field_name = game.field_rel.location_title
-        else:
-            game._cached_field_name = game.location or ''
+        game._cached_field_name = game.field_name
 
     # Group games by date
     games_by_date = {}

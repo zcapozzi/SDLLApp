@@ -15,7 +15,7 @@ def render_change_notification(change, game, recipient_type):
     """
     # Format game info
     game_date_str = game.game_date.strftime('%A, %B %d, %Y at %I:%M %p') if game.game_date else 'TBD'
-    field_str = game.location or 'TBD'
+    field_str = game.field_name or 'TBD'
     league_str = game.league or 'Unknown League'
 
     # Get team names
@@ -117,7 +117,7 @@ def render_cancellation_notification(game, reason=None):
     """
     # Format game info
     game_date_str = game.game_date.strftime('%A, %B %d, %Y at %I:%M %p') if game.game_date else 'TBD'
-    field_str = game.location or 'TBD'
+    field_str = game.field_name or 'TBD'
     league_str = game.league or 'Unknown League'
 
     # Get team names

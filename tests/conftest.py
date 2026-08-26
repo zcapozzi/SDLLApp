@@ -318,7 +318,7 @@ def game_factory(app, team_factory, field_factory):
                 'game_type': 'regular',
                 'status': 'scheduled',
                 'game_date': datetime(2026, 9, 15, 18, 0),
-                'location': field.location_title,
+                'field_id': field.ID,
                 'home_ID': home_team.team_ID,
                 'away_ID': away_team.team_ID
             }
@@ -337,7 +337,7 @@ def game_factory(app, team_factory, field_factory):
                 'ID': game_id,
                 'home_ID': defaults['home_ID'],
                 'away_ID': defaults['away_ID'],
-                'location': defaults['location'],
+                'field_id': defaults['field_id'],
                 'game_date': defaults['game_date'],
                 'league': defaults['league']
             })()

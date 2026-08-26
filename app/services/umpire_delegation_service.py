@@ -46,7 +46,9 @@ def is_back_to_back_same_field(game1, game2):
         bool: True if back-to-back at same field
     """
     # Must be same field
-    if game1.location != game2.location:
+    if not game1.field_id or not game2.field_id:
+        return False
+    if game1.field_id != game2.field_id:
         return False
 
     # Must be same date
@@ -83,14 +85,14 @@ def get_adjacent_partner_same_field(game):
     from app.models.game_umpire import GameUmpire
     from app.models.umpire_partner import UmpirePartner
 
-    if not game.location or not game.game_date:
+    if not game.field_id or not game.game_date:
         return None
 
     game_date = game.game_date.date()
 
     # Get all games at the same field on the same day
     same_field_games = Game.query.filter(
-        Game.location == game.location,
+        Game.field_id == game.field_id,
         Game.active == 1,
         Game.ID != game.ID,
         db.func.date(Game.game_date) == game_date
@@ -313,7 +315,7 @@ def identify_partner_sequences(games):
 
         if not current_sequence:
             current_sequence = [game]
-        elif (current_sequence[-1].location == game.location and
+        elif (current_sequence[-1].field_id == game.field_id and
               is_back_to_back_same_field(current_sequence[-1], game)):
             current_sequence.append(game)
         else:
@@ -435,7 +437,7 @@ def delegate_games_for_season(year, is_spring, org_id=1, assigned_by=None):
                 GameUmpire.status != 'cancelled'
             )
         )
-    ).order_by(Game.location, Game.game_date).all()
+    ).order_by(Game.field_id, Game.game_date).all()
 
     if not games:
         return {'assigned': 0, 'skipped': 0}

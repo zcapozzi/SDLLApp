@@ -1004,7 +1004,7 @@
 
     {# Build the counts matrix from ALL proposal games (not filtered) #}
     {% for game in proposal.games %}
-        {% set field = game.field_name or game.location or 'Unassigned' %}
+        {% set field = game.field_name or 'Unassigned' %}
         {% set league = game.league or 'Unknown' %}
 
         {# Track unique fields and leagues #}

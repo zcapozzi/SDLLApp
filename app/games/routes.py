@@ -229,7 +229,8 @@ def api_get_game(game_id):
             'id': game.ID,
             'date': game.game_date.strftime('%Y-%m-%d') if game.game_date else None,
             'time': game.game_date.strftime('%H:%M') if game.game_date else None,
-            'field': game.location,
+            'field': game.field_name,
+            'field_id': game.field_id,
             'league': game.league,
             'status': game.status,
             'game_type': game.game_type,
@@ -326,6 +327,11 @@ def api_add_event(year, is_spring):
             # No proposal - add directly to Game table
             game_dt = datetime.strptime(f'{game_date} {game_time}', '%Y-%m-%d %H:%M')
 
+            # Look up field_id from field_name
+            from app.models.field import Field
+            field_obj = Field.query.filter_by(location_title=field_name, active=1).first()
+            field_id = field_obj.ID if field_obj else None
+
             new_game = Game(
                 active=1,
                 year=year,
@@ -333,7 +339,7 @@ def api_add_event(year, is_spring):
                 league=league,
                 game_type='practice' if event_type in ['practice', 'division_practice'] else 'regular',
                 game_date=game_dt,
-                location=field_name,
+                field_id=field_id,
                 home_ID=int(home_team_id) if home_team_id else None,
                 away_ID=int(away_team_id) if away_team_id and event_type in ['game', 'scrimmage'] else None,
                 is_scrimmage=1 if event_type == 'scrimmage' else 0,
@@ -596,25 +602,18 @@ def manage(year, is_spring):
                     elif game_date_str:
                         game.game_date = datetime.strptime(game_date_str, '%Y-%m-%d')
 
-                    # Update field - use field_id (FK) instead of location string
+                    # Update field - use field_id (FK)
                     field_value = request.form.get('field_id') or request.form.get('location')
                     if field_value:
                         # Check if it's a numeric ID or a field name
                         if field_value.isdigit():
                             game.field_id = int(field_value)
-                            game.location = None  # Clear legacy string
                         else:
                             # Look up field by name and set field_id
                             field = Field.query.filter_by(location_title=field_value, active=1).first()
-                            if field:
-                                game.field_id = field.ID
-                                game.location = None  # Clear legacy string
-                            else:
-                                game.field_id = None
-                                game.location = field_value  # Fall back to string
+                            game.field_id = field.ID if field else None
                     else:
                         game.field_id = None
-                        game.location = None
 
                     # Update teams
                     home_id = request.form.get('home_id')
@@ -758,19 +757,11 @@ def manage(year, is_spring):
     elif game_mode == 'practices':
         query = query.filter(Game.away_ID.is_(None))
 
-    # Filter by field (using field_name property lookup)
+    # Filter by field
     if field_filter:
-        # Check both field_id FK and location string
         field_obj = Field.query.filter_by(location_title=field_filter, active=1).first()
         if field_obj:
-            query = query.filter(
-                db.or_(
-                    Game.field_id == field_obj.ID,
-                    Game.location == field_filter
-                )
-            )
-        else:
-            query = query.filter(Game.location == field_filter)
+            query = query.filter(Game.field_id == field_obj.ID)
 
     # Filter by date
     if date_filter:
@@ -789,7 +780,7 @@ def manage(year, is_spring):
             )
         )
 
-    games = query.order_by(Game.game_date, Game.location).all()
+    games = query.order_by(Game.game_date, Game.field_id).all()
 
     # Get leagues for filter dropdown
     leagues = db.session.query(Game.league).filter(
@@ -810,14 +801,15 @@ def manage(year, is_spring):
     fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
 
     # Get unique field names from games for the filter dropdown
-    field_names = db.session.query(Game.location).filter(
+    field_ids = db.session.query(Game.field_id).filter(
         Game.year == year,
         Game.is_spring == is_spring,
         Game.active == 1,
-        Game.location.isnot(None),
+        Game.field_id.isnot(None),
         Game.game_date.isnot(None)
     ).distinct().all()
-    field_names = sorted([f[0] for f in field_names if f[0]])
+    field_ids = [f[0] for f in field_ids if f[0]]
+    field_names = sorted([f.location_title for f in Field.query.filter(Field.ID.in_(field_ids)).all()])
 
     return render_template(
         'games/manage.html',
@@ -1079,7 +1071,7 @@ def calendar(year, is_spring):
             if league:
                 query = query.filter(Game.league == league)
 
-            day_games = query.order_by(Game.game_date, Game.location).all()
+            day_games = query.order_by(Game.game_date, Game.field_id).all()
 
         week_days.append({
             'date': day_date,
@@ -1240,14 +1232,13 @@ def day_view(year, is_spring, target_date):
             Game.year == year,
             Game.is_spring == is_spring,
             db.func.date(Game.game_date) == view_date
-        ).order_by(Game.game_date, Game.location).all()
+        ).order_by(Game.game_date, Game.field_id).all()
 
     # Get all fields that have games on this day
     fields_with_games = set()
     game_hours = set()
     for game in games:
-        # Use field_name property which resolves field_id FK to name
-        field_name = getattr(game, 'field_name', None) or game.location
+        field_name = game.field_name
         if field_name:
             fields_with_games.add(field_name)
         if game.game_date:
@@ -1342,8 +1333,7 @@ def day_view(year, is_spring, target_date):
 
     # Place games in grid
     for game in games:
-        # Use field_name property which resolves field_id FK to name
-        field_name = getattr(game, 'field_name', None) or game.location
+        field_name = game.field_name
         if game.game_date and field_name:
             time_key = game.game_date.strftime('%H:%M')
             # Round to nearest 30-minute slot
@@ -1467,7 +1457,9 @@ def rainout(year, is_spring):
 
                 # Update field if specified
                 if new_field:
-                    game.location = new_field
+                    # Look up field_id from name
+                    field_obj = Field.query.filter_by(location_title=new_field, active=1).first()
+                    game.field_id = field_obj.ID if field_obj else None
 
                 game.status = 'scheduled'
                 db.session.commit()
@@ -1480,7 +1472,7 @@ def rainout(year, is_spring):
                 if change:
                     GameChangeService.queue_notifications_for_change(change, game)
 
-                logger.info(f'Rescheduled game {game_id} to {game.game_date} at {game.location}')
+                logger.info(f'Rescheduled game {game_id} to {game.game_date} at {game.field_name}')
                 flash(f'Rescheduled game to {game.game_date.strftime("%B %d at %I:%M %p")}', 'success')
 
         elif action == 'swap_with_practice':
@@ -1535,7 +1527,8 @@ def rainout(year, is_spring):
 
                         # Update field if specified
                         if new_field:
-                            game.location = new_field
+                            field_obj = Field.query.filter_by(location_title=new_field, active=1).first()
+                            game.field_id = field_obj.ID if field_obj else None
 
                         game.status = 'scheduled'
                         count += 1
@@ -1688,7 +1681,7 @@ def league_practice(year, is_spring):
                 home_ID=team.team_ID,
                 away_ID=None,  # Practice = no away team
                 league=league,
-                location=field.location_title,
+                field_id=field.ID,
                 status='scheduled',
                 year=year,
                 is_spring=is_spring,

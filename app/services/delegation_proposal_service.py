@@ -53,7 +53,7 @@ def get_undelegated_games(year, is_spring):
         (Game.umpire_count_override.is_(None)) | (Game.umpire_count_override > 0),
         # Only SDLL-owned fields
         Field.is_owned == 1
-    ).order_by(Game.game_date, Game.location)
+    ).order_by(Game.game_date, Game.field_id)
 
     games = query.all()
 
@@ -90,8 +90,8 @@ def identify_back_to_back_sequences(games):
     if not games:
         return {}, set()
 
-    # Sort by field, then datetime
-    sorted_games = sorted(games, key=lambda g: (g.location or '', g.game_date or datetime.min))
+    # Sort by field_id, then datetime
+    sorted_games = sorted(games, key=lambda g: (g.field_id or 0, g.game_date or datetime.min))
 
     sequences = {}
     game_to_sequence = {}
@@ -137,9 +137,9 @@ def _is_back_to_back(game1, game2):
         bool: True if games are back-to-back
     """
     # Must be same field
-    if not game1.location or not game2.location:
+    if not game1.field_id or not game2.field_id:
         return False
-    if game1.location.strip().lower() != game2.location.strip().lower():
+    if game1.field_id != game2.field_id:
         return False
 
     # Must be same day
@@ -357,7 +357,7 @@ def validate_tier1(proposal):
 
         if len(partners_in_seq) > 1:
             # Get field name from first game in sequence
-            field = games[0].game.location if games and games[0].game else 'Unknown'
+            field = games[0].game.field_name if games and games[0].game else 'Unknown'
             violations.append({
                 'type': 'tier1_back_to_back',
                 'sequence_id': seq_id,

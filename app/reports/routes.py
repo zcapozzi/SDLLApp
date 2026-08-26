@@ -317,7 +317,7 @@ def download_league_schedule(year, is_spring, league):
             time_str = game.game_date.strftime('%I:%M %p')
             day_str = game.game_date.strftime('%A')
 
-            field_name = game.location or ''
+            field_name = game.field_name
 
             # Determine game type for display
             if game.is_scrimmage:

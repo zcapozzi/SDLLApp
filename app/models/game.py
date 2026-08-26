@@ -15,7 +15,6 @@ class Game(db.Model):
     away_ID = db.Column(db.BigInteger, db.ForeignKey('sdll_team_seasons.team_ID'))
     league = db.Column(db.String(30))
     field_id = db.Column(db.BigInteger, db.ForeignKey('sdll_fields.ID'))  # FK to fields table
-    location = db.Column(db.String(100))  # Legacy field name string (for backwards compat)
     status = db.Column(db.String(20), default='scheduled')  # scheduled, completed, postponed, cancelled
     assignr_id = db.Column(db.String(15))
     year = db.Column(db.Integer)
@@ -37,7 +36,7 @@ class Game(db.Model):
     field_rel = db.relationship('Field', foreign_keys=[field_id], lazy='joined')
 
     def __repr__(self):
-        return f'<Game {self.ID}: {self.league} at {self.location} on {self.game_date}>'
+        return f'<Game {self.ID}: {self.league} at {self.field_name} on {self.game_date}>'
 
     @property
     def season_name(self):
@@ -130,24 +129,12 @@ class Game(db.Model):
     def field(self):
         """Get the Field object for this game's location.
 
-        Uses field_id relationship if set, otherwise falls back to
-        location string lookup for backwards compatibility.
-
         Returns:
-            Field or None: The Field object if found.
+            Field or None: The Field object if found via field_id FK.
         """
-        # Prefer the FK relationship if field_id is set
-        try:
-            if self.field_id and self.field_rel:
-                return self.field_rel
-        except Exception:
-            # field_id column might not exist yet in DB
-            pass
-        # Fall back to string-based lookup for legacy data
-        if not self.location:
-            return None
-        from app.models.field import Field
-        return Field.get_by_name(self.location)
+        if self.field_id and self.field_rel:
+            return self.field_rel
+        return None
 
     @property
     def field_name(self):
@@ -156,12 +143,10 @@ class Game(db.Model):
         Returns:
             str: Field name or empty string.
         """
-        # First try to get field via FK or string lookup
         field = self.field
         if field:
             return field.location_title
-        # Fall back to location string directly (even if Field lookup failed)
-        return self.location or ''
+        return ''
 
     @property
     def directions_url(self):
@@ -268,8 +253,7 @@ class Game(db.Model):
                 home_ID=new_home_ID,
                 away_ID=new_away_ID,
                 league=game.league,
-                field_id=game.field_id,  # Copy FK reference
-                location=game.location,   # Also copy legacy string
+                field_id=game.field_id,
                 status='scheduled',
                 year=target_year,
                 date_added=datetime.utcnow(),
@@ -415,8 +399,7 @@ class Game(db.Model):
             game.home_ID = None
             game.away_ID = None
             game.game_date = None
-            game.field_id = None    # Clear FK reference
-            game.location = None    # Clear legacy string
+            game.field_id = None
 
         db.session.commit()
         return len(games)

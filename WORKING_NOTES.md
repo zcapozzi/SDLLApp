@@ -4,7 +4,172 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Implemented Week-Ahead Umpire Partner Email Digest System.
+Last session: Removed deprecated `location` column from `sdll_games` table. Games now exclusively use `field_id` (FK to `sdll_fields`) instead of the legacy `location` string.
+
+---
+
+## Session: August 26, 2026 - Remove Deprecated Location Column
+
+### Overview
+Removed the deprecated `location` VARCHAR column from `sdll_games` table. Games now exclusively use `field_id` (FK to `sdll_fields`) for field references, eliminating confusion and ensuring referential integrity.
+
+### Changes Made
+
+**Phase 1: Model Updates**
+- Removed `location` column definition from `app/models/game.py`
+- Updated `__repr__` to use `field_name` property
+- Simplified `field` property (removed location string fallback)
+- Updated `field_name` property (removed location fallback)
+- Updated `copy_to_new_season` to not copy location
+- Updated `clear_slot_assignments` to not clear location
+
+**Phase 2: Service Updates**
+- `delegation_proposal_service.py`: Changed ORDER BY from location to field_id, updated back-to-back detection to use field_id
+- `umpire_delegation_service.py`: Updated is_back_to_back_same_field and get_adjacent_partner_same_field to use field_id
+- `game_changes.py`: Removed location string assignments in move_game
+- `notification_templates.py`: Use game.field_name instead of game.location
+- `weekly_digest_service.py`: Use game.field_name
+
+**Phase 3: Routes Updates**
+- `games/routes.py`: ~20 changes to use field_id/field_name instead of location
+- `scheduler/routes.py`: Look up field_id from field_name when creating games
+- `umpires/routes.py`: Use field_id for ordering, field_name for caching
+- `public/routes.py`: Use game.field_name for display
+- `main/routes.py`: Use game.field_name for email templates
+- `reports/routes.py`: Use game.field_name
+
+**Phase 4: Scheduler Utility**
+- `utils/scheduler.py`: Updated all fallback patterns from `elif hasattr(p, 'location')` to `elif hasattr(p, 'field_id')`
+
+**Phase 5: Templates**
+- `umpires/delegation_proposal_review.html`: Use game.field_name
+- `scheduler/review.html`: Use game.field_name without fallback
+
+**Phase 6: Tests**
+- `conftest.py`: game_factory now uses field_id instead of location
+- `test_games.py`: Updated to use field_id in form data and assertions
+- `test_delegation_proposal.py`: MockGame classes now use field_id
+- `test_umpire_delegation.py`: All game creation uses field_id
+
+**Phase 7: Migration Script**
+- Created `scripts/migrations/remove_games_location.sql`
+- Migrates any remaining games with location but no field_id
+- Then drops the location column
+
+### Test Results
+- All 12 delegation_proposal tests pass
+- All 15 umpire_delegation tests pass
+- All 26 games tests pass
+
+### Migration Required
+Run `scripts/migrations/remove_games_location.sql` against production database after deployment.
+
+---
+
+## Session: August 26, 2026 - Delegation Proposal System
+
+### Overview
+Implemented a complete workflow for reviewing and accepting umpire delegations for new games. The system generates proposals that apply delegation rules to undelegated games, validates Tier I (back-to-back) and Tier II (allocation percentage) constraints, and allows admins to review, modify, and accept proposals.
+
+### Features Implemented
+
+1. **Proposal Generation**: Generate proposals for undelegated games based on delegation rules
+2. **Back-to-back Detection**: Automatically groups games at the same field within 30 minutes into sequences
+3. **Tier I Validation**: Enforces that back-to-back games use the same partner (hard constraint)
+4. **Tier II Validation**: Warns if allocations deviate >10% from target percentages (soft constraint)
+5. **Interactive Review**: View games grouped by partner, modify individual assignments
+6. **Sequence Updates**: Changing one game in a sequence updates all games in that sequence
+7. **Accept/Reject Workflow**: Accept updates all games, reject discards the proposal
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `scripts/migrations/add_delegation_proposals.sql` | Database migration for proposal tables |
+| `app/models/delegation_proposal.py` | DelegationProposal and DelegationProposalGame models |
+| `app/services/delegation_proposal_service.py` | Generation, validation, acceptance logic |
+| `app/templates/umpires/delegation_proposals.html` | List proposals with status/history |
+| `app/templates/umpires/delegation_proposal_review.html` | Review/edit proposal assignments |
+| `tests/test_delegation_proposal.py` | 12 comprehensive tests for back-to-back detection, Tier I/II validation |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `app/umpires/routes.py` | Added 6 proposal routes (list, generate, review, accept, reject, update-game API) |
+| `app/templates/umpires/delegation.html` | Added link to Delegation Proposals |
+| `app/models/__init__.py` | Import DelegationProposal, DelegationProposalGame models |
+
+### Database Schema
+
+```sql
+CREATE TABLE `sdll_delegation_proposals` (
+    `id` INT NOT NULL AUTO_INCREMENT,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `created_by` BIGINT DEFAULT NULL,
+    `year` INT NOT NULL,
+    `is_spring` SMALLINT NOT NULL,
+    `status` ENUM('pending', 'accepted', 'rejected') NOT NULL DEFAULT 'pending',
+    `accepted_at` DATETIME DEFAULT NULL,
+    `accepted_by` BIGINT DEFAULT NULL,
+    `game_count` INT NOT NULL DEFAULT 0,
+    `tier1_violations` INT NOT NULL DEFAULT 0,
+    `tier2_violations` INT NOT NULL DEFAULT 0,
+    `summary_json` TEXT,
+    PRIMARY KEY (`id`)
+);
+
+CREATE TABLE `sdll_delegation_proposal_games` (
+    `id` INT NOT NULL AUTO_INCREMENT,
+    `proposal_id` INT NOT NULL,
+    `game_id` BIGINT NOT NULL,
+    `suggested_partner_id` INT NOT NULL,
+    `final_partner_id` INT DEFAULT NULL,
+    `is_back_to_back` TINYINT DEFAULT 0,
+    `sequence_id` INT DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    FOREIGN KEY (`proposal_id`) REFERENCES `sdll_delegation_proposals`(`id`) ON DELETE CASCADE
+);
+```
+
+### Key Algorithms
+
+**Back-to-back Detection**: Games are back-to-back if:
+1. Same field (location)
+2. Second game starts within 30 min of first game's expected end (game duration = 2 hours)
+
+**Tier I Validation**: All games in a sequence must have the same assigned partner (final_partner_id or suggested_partner_id).
+
+**Tier II Validation**: For each league with delegation rules, compares:
+- Target percentages from allocation rules
+- Actual percentages after proposal is applied
+- Flags partners with deviation > 10%
+
+### Routes Added
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/umpires/delegation/proposals` | GET | List proposals for current season |
+| `/umpires/delegation/proposals/<year>/<is_spring>` | GET | List proposals for specific season |
+| `/umpires/delegation/proposals/generate` | POST | Generate new proposal |
+| `/umpires/delegation/proposals/<id>` | GET | Review/view specific proposal |
+| `/umpires/delegation/proposals/<id>/accept` | POST | Accept proposal and update games |
+| `/umpires/delegation/proposals/<id>/reject` | POST | Reject proposal |
+| `/api/delegation-proposals/<id>/update-game` | POST | Update game assignment (JSON) |
+
+### Testing
+
+All 27 delegation tests pass (12 proposal tests + 15 allocation tests):
+- Back-to-back detection (5 tests)
+- Tier I validation (2 tests)
+- Tier II validation (2 tests)
+- Proposal acceptance (2 tests)
+- Game assignment updates (1 test)
+
+### To Deploy
+
+1. Run migration: `mysql -u root -p sdll_database < scripts/migrations/add_delegation_proposals.sql`
+2. Access at: `/umpires/delegation/proposals`
 
 ---
 

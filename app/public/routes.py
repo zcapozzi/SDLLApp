@@ -545,10 +545,7 @@ def partner_schedule(token):
 
     for g in games:
         # Cache computed values on the game object to avoid repeated lookups
-        field_name = g.location or ''
-        if g.field_id and g.field_rel:
-            field_name = g.field_rel.location_title
-        g._cached_field_name = field_name
+        g._cached_field_name = g.field_name
 
         # Cache umpire count
         if g.umpire_count_override is not None:
@@ -717,9 +714,7 @@ def partner_schedule_csv(token):
         away_name = game.away_team.computed_display_name if game.away_team else 'TBD'
 
         # Get field name efficiently
-        field_name = game.location or ''
-        if game.field_id and game.field_rel:
-            field_name = game.field_rel.location_title
+        field_name = game.field_name
 
         # Get umpire count efficiently
         if game.umpire_count_override is not None:

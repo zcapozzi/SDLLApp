@@ -115,7 +115,7 @@
                 <tr id="game-{{ pg.game_id }}" {% if pg.is_overridden %}style="background: #fff3cd;"{% endif %}>
                     <td>{{ pg.game.game_date.strftime('%a %m/%d') if pg.game.game_date else '-' }}</td>
                     <td>{{ pg.game.game_date.strftime('%I:%M %p') if pg.game.game_date else '-' }}</td>
-                    <td>{{ pg.game.location or '-' }}</td>
+                    <td>{{ pg.game.field_name or '-' }}</td>
                     <td>
                         {{ pg.game.away_team.computed_display_name if pg.game.away_team else '?' }}
                         @
@@ -162,7 +162,7 @@
     <div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
         <strong>Sequence {{ seq_id }}</strong>
         <span style="color: var(--text-muted); margin-left: 10px;">
-            {{ first_game.game.location }} - {{ seq_games|length }} games
+            {{ first_game.game.field_name }} - {{ seq_games|length }} games
         </span>
         <ul style="margin: 5px 0 0 20px; padding: 0;">
             {% for pg in seq_games|sort(attribute='game.game_date') %}
