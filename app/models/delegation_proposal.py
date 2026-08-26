@@ -129,11 +129,11 @@ class DelegationProposalGame(db.Model):
     is_back_to_back = db.Column(db.Boolean, default=False)
     sequence_id = db.Column(db.Integer)
 
-    # Relationships
+    # Relationships - use lazy='joined' to avoid N+1 queries
     proposal = db.relationship('DelegationProposal', back_populates='games')
-    game = db.relationship('Game')
-    suggested_partner = db.relationship('UmpirePartner', foreign_keys=[suggested_partner_id])
-    final_partner = db.relationship('UmpirePartner', foreign_keys=[final_partner_id])
+    game = db.relationship('Game', lazy='joined')
+    suggested_partner = db.relationship('UmpirePartner', foreign_keys=[suggested_partner_id], lazy='joined')
+    final_partner = db.relationship('UmpirePartner', foreign_keys=[final_partner_id], lazy='joined')
 
     def __repr__(self):
         partner_id = self.final_partner_id or self.suggested_partner_id

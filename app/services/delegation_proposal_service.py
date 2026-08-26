@@ -12,6 +12,8 @@ import json
 from datetime import datetime, timedelta
 from collections import defaultdict
 
+from sqlalchemy.orm import joinedload
+
 from app.extensions import db
 from app.models.game import Game
 from app.models.delegation_proposal import DelegationProposal, DelegationProposalGame
@@ -57,6 +59,11 @@ def get_undelegated_games(year, is_spring):
 
     games = query.all()
 
+    # Pre-fetch all leagues in one query to avoid N+1
+    league_names = set(g.league for g in games if g.league)
+    leagues = League.query.filter(League.league_name.in_(league_names)).all() if league_names else []
+    league_lookup = {lg.league_name: lg for lg in leagues}
+
     # Filter out games where the league requires 0 umpires
     # (unless game has explicit override > 0)
     result = []
@@ -65,9 +72,15 @@ def get_undelegated_games(year, is_spring):
             # Explicit override > 0, include it
             result.append(game)
         elif game.umpire_count_override is None:
-            # Check league's umpire count via the game's umpire_count property
-            # which handles the league lookup internally
-            if game.umpire_count and game.umpire_count > 0:
+            # Check league's umpire count using pre-fetched lookup
+            league_obj = league_lookup.get(game.league)
+            if league_obj:
+                is_playoff = game.game_type == 'playoff'
+                umpire_count = league_obj.get_umpire_count(is_playoff=is_playoff)
+                if umpire_count and umpire_count > 0:
+                    result.append(game)
+            else:
+                # No league found, use default (include the game)
                 result.append(game)
 
     return result
