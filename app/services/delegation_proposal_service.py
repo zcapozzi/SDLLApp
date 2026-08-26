@@ -166,12 +166,12 @@ def generate_proposal(year, is_spring, created_by=None):
         created_by: User ID who generated the proposal
 
     Returns:
-        DelegationProposal object (already committed to database)
+        Tuple of (DelegationProposal, message) or (None, error_message)
     """
     # Get undelegated games
     games = get_undelegated_games(year, is_spring)
     if not games:
-        return None
+        return None, 'No undelegated games found'
 
     # Identify back-to-back sequences
     sequences, games_in_sequences = identify_back_to_back_sequences(games)
@@ -275,7 +275,7 @@ def generate_proposal(year, is_spring, created_by=None):
     proposal.summary = summary
 
     db.session.commit()
-    return proposal
+    return proposal, f'Generated proposal with {len(games)} games'
 
 
 def _find_best_partner_for_games(games, rule, current_stats, proposal_counts, partners):
