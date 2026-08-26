@@ -820,7 +820,9 @@ def record_game_start():
         data = request.get_json() or {}
         game_id = data.get('game_id')
         start_time_str = data.get('start_time')
-        allow_any_date = data.get('allowStartTimeRecord', False)
+        # Check for testing flag - accept boolean true, string 'true', or 1
+        allow_flag = data.get('allowStartTimeRecord')
+        allow_any_date = allow_flag in (True, 'true', '1', 1)
 
         if not game_id or not start_time_str:
             return jsonify({'error': 'Missing game_id or start_time'}), 400
