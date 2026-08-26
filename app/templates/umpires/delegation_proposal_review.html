@@ -80,7 +80,7 @@
     <strong>Tier II Warnings:</strong> Some allocations deviate more than 10% from target.
     <ul style="margin: 10px 0 0 20px;">
         {% for violation in tier2_violations %}
-        <li>{{ violation.partner }}: Target {{ violation.target }}%, Actual {{ violation.actual|round(1) }}% (deviation: {{ violation.deviation|round(1) }}%)</li>
+        <li>{{ violation.partner }}: Target {{ violation.target_pct }}%, Actual {{ violation.actual_pct }}% (deviation: {{ violation.deviation }}%)</li>
         {% endfor %}
     </ul>
 </div>
