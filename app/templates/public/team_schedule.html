@@ -891,16 +891,12 @@
             String(today.getDate()).padStart(2, '0');
         var startTime = dateStr + 'T' + timeInput.value + ':00';
 
-        // Build request body
+        // Build request body - always include testing flag value
         var requestBody = {
             game_id: gameId,
-            start_time: startTime
+            start_time: startTime,
+            allowStartTimeRecord: allowStartTimeRecord
         };
-
-        // Include testing flag if enabled
-        if (allowStartTimeRecord) {
-            requestBody.allowStartTimeRecord = true;
-        }
 
         // Send to API
         fetch('/s/api/game-start', {
