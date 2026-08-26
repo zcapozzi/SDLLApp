@@ -592,5 +592,78 @@ function updateCountBadge(gameId, effectiveCount, countOverride) {
         }
     }
 }
+
+// Auto-open game from URL parameter (e.g., ?game=123)
+document.addEventListener('DOMContentLoaded', function() {
+    var urlParams = new URLSearchParams(window.location.search);
+    var highlightGameId = urlParams.get('game');
+
+    if (highlightGameId) {
+        var gameCard = document.querySelector('.game-card[data-game-id="' + highlightGameId + '"]');
+        if (gameCard) {
+            // Scroll to game
+            gameCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            // Highlight the game with animation
+            gameCard.style.transition = 'box-shadow 0.3s, transform 0.3s';
+            gameCard.style.boxShadow = '0 0 0 3px #228B22, 0 4px 12px rgba(0,0,0,0.3)';
+            gameCard.style.transform = 'scale(1.02)';
+
+            // Auto-open context menu after a short delay
+            setTimeout(function() {
+                // Set context variables
+                contextGameId = highlightGameId;
+                contextSource = gameCard.dataset.source || '';
+
+                // Update source menu display
+                var sourceItems = document.querySelectorAll('#context-source-menu .source-item');
+                sourceItems.forEach(function(item) {
+                    item.classList.remove('active');
+                    if (item.dataset.source === contextSource) {
+                        item.classList.add('active');
+                    }
+                });
+
+                // Update count menu display
+                var umpireCount = parseInt(gameCard.dataset.umpireCount) || 0;
+                var countOverride = gameCard.dataset.umpireCountOverride;
+                var countItems = document.querySelectorAll('#context-count-menu .count-item');
+                countItems.forEach(function(item) {
+                    item.classList.remove('active');
+                    if (countOverride === '' && item.dataset.count === 'default') {
+                        item.classList.add('active');
+                    } else if (item.dataset.count === countOverride) {
+                        item.classList.add('active');
+                    }
+                });
+
+                // Position and show context menu next to game card
+                var rect = gameCard.getBoundingClientRect();
+                contextMenu.style.left = (rect.right + 10) + 'px';
+                contextMenu.style.top = rect.top + 'px';
+                contextMenu.classList.add('show');
+
+                // Ensure menu stays in viewport
+                var menuRect = contextMenu.getBoundingClientRect();
+                if (menuRect.right > window.innerWidth) {
+                    contextMenu.style.left = (rect.left - menuRect.width - 10) + 'px';
+                }
+                if (menuRect.bottom > window.innerHeight) {
+                    contextMenu.style.top = (window.innerHeight - menuRect.height - 10) + 'px';
+                }
+            }, 500);
+
+            // Remove highlight after interaction or timeout
+            setTimeout(function() {
+                gameCard.style.boxShadow = '';
+                gameCard.style.transform = '';
+            }, 10000);
+
+            // Clean URL without reloading (remove game param)
+            var cleanUrl = window.location.pathname + window.location.search.replace(/[?&]game=\d+/, '').replace(/^&/, '?').replace(/\?$/, '');
+            history.replaceState(null, '', cleanUrl || window.location.pathname);
+        }
+    }
+});
 </script>
 {% endblock %}

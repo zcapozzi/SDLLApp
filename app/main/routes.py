@@ -43,6 +43,7 @@ def cron_check_new_games():
     """
     import os
     from datetime import datetime, timedelta
+    from sqlalchemy.orm import joinedload
     from app.models.league import League
     from app.services.notification_service import GmailService
 
@@ -60,10 +61,14 @@ def cron_check_new_games():
     hours = request.args.get('hours', 2, type=int)
     recipient = request.args.get('recipient', 'umpires@sdll.org')
 
-    # Find games added in the last N hours that need umpires
+    # Find games added in the last N hours that need umpires (with eager loading)
     cutoff = datetime.utcnow() - timedelta(hours=hours)
 
-    recent_games = Game.query.filter(
+    recent_games = Game.query.options(
+        joinedload(Game.home_team),
+        joinedload(Game.away_team),
+        joinedload(Game.field_rel)
+    ).filter(
         Game.date_added >= cutoff,
         Game.active == 1,
         Game.game_type != 'practice'
@@ -88,6 +93,9 @@ def cron_check_new_games():
     if not gmail.is_configured:
         return jsonify({'error': 'Email service not configured'}), 500
 
+    # Base URL for links
+    base_url = os.environ.get('APP_URL', 'https://www.southdurhamlittleleague.org')
+
     # Group by league
     by_league = {}
     for game, league in games_needing_umpires:
@@ -99,31 +107,56 @@ def cron_check_new_games():
     count = len(games_needing_umpires)
     subject = f"SDLL Alert: {count} new game(s) added needing umpires"
 
-    # Build email body
+    # Build email body (plain text)
     body_lines = [f"{count} game(s) added in the last {hours} hour(s) for leagues requiring umpires:", ""]
     for league_name, games in sorted(by_league.items()):
         body_lines.append(f"{league_name} ({len(games)} game(s)):")
         for game in games:
             game_date = game.game_date.strftime('%a, %b %d at %I:%M %p') if game.game_date else 'TBD'
-            body_lines.append(f"  - {game_date}")
+            field = game.field_rel.location_title if game.field_rel else (game.location or 'TBD')
+            home = game.home_team.display_name if game.home_team else 'TBD'
+            away = game.away_team.display_name if game.away_team else 'TBD'
+            body_lines.append(f"  - {game_date} @ {field}")
+            body_lines.append(f"    {away} vs {home}")
         body_lines.append("")
     body_lines.extend(["Please review and ensure umpire assignments are in place.", "", "- SDLL Automated Alert"])
     body_text = '\n'.join(body_lines)
 
-    # HTML version
+    # HTML version with clickable links
     html_parts = [
         '<!DOCTYPE html><html><body style="font-family: Arial, sans-serif; color: #333;">',
-        f'<h2 style="color: #228B22;">{count} New Game(s) Need Umpires</h2>',
-        f'<p>Added in the last {hours} hour(s):</p>'
+        f'<h2 style="color: #228B22;">{count} New Game(s) Need Umpire Delegation</h2>',
+        f'<p>Added in the last {hours} hour(s). Click any game to assign umpires:</p>'
     ]
     for league_name, games in sorted(by_league.items()):
-        html_parts.append(f'<h3 style="color: #FF8C00;">{league_name}</h3><ul>')
+        html_parts.append(f'<h3 style="color: #FF8C00; margin-bottom: 10px;">{league_name}</h3>')
+        html_parts.append('<table style="border-collapse: collapse; width: 100%; margin-bottom: 15px;">')
         for game in games:
-            game_date = game.game_date.strftime('%a, %b %d at %I:%M %p') if game.game_date else 'TBD'
-            html_parts.append(f'<li>{game_date}</li>')
-        html_parts.append('</ul>')
-    html_parts.append('<p>Please review and ensure umpire assignments are in place.</p>')
-    html_parts.append('<hr><p style="color: #888; font-size: 12px;">SDLL Automated Alert</p></body></html>')
+            game_date = game.game_date.strftime('%a, %b %d') if game.game_date else 'TBD'
+            game_time = game.game_date.strftime('%I:%M %p').lstrip('0') if game.game_date else ''
+            field = game.field_rel.location_title if game.field_rel else (game.location or 'TBD')
+            home = game.home_team.display_name if game.home_team else 'TBD'
+            away = game.away_team.display_name if game.away_team else 'TBD'
+
+            # Build deep link to umpire calendar with game highlight
+            calendar_date = game.game_date.strftime('%Y-%m-%d') if game.game_date else ''
+            calendar_url = f"{base_url}/umpires/{game.year}/{1 if game.is_spring else 0}/calendar?week={calendar_date}&game={game.ID}"
+
+            html_parts.append(
+                f'<tr style="border-bottom: 1px solid #eee;">'
+                f'<td style="padding: 10px 0;">'
+                f'<strong>{game_date}</strong> {game_time} @ {field}<br>'
+                f'<span style="color: #555;">{away} vs {home}</span>'
+                f'</td>'
+                f'<td style="padding: 10px; text-align: right;">'
+                f'<a href="{calendar_url}" style="display: inline-block; padding: 8px 16px; '
+                f'background: #228B22; color: white; text-decoration: none; border-radius: 4px; '
+                f'font-weight: 500;">Assign Umpires</a>'
+                f'</td>'
+                f'</tr>'
+            )
+        html_parts.append('</table>')
+    html_parts.append('<hr style="margin-top: 20px;"><p style="color: #888; font-size: 12px;">SDLL Automated Alert</p></body></html>')
     body_html = '\n'.join(html_parts)
 
     try:
