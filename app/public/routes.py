@@ -519,7 +519,7 @@ def partner_schedule(token):
     all_leagues = {l.display_name: l for l in League.get_all_active()}
     all_fields = {f.location_title: f for f in Field.query.filter_by(active=1).all()}
 
-    # Get games with eager loading of relationships
+    # Get games with eager loading of relationships (exclude practices)
     partner_code = partner.short_code
     games = Game.query.options(
         joinedload(Game.home_team),
@@ -528,7 +528,8 @@ def partner_schedule(token):
         Game.active == 1,
         Game.year == year,
         Game.is_spring == (is_spring == 1),
-        Game.umpire_override == partner_code
+        Game.umpire_override == partner_code,
+        Game.game_type != 'practice'
     ).order_by(Game.game_date).all()
 
     # Pre-compute values that would otherwise trigger N+1 queries
@@ -655,7 +656,7 @@ def partner_schedule_csv(token):
     # Pre-load leagues for umpire count lookup
     all_leagues = {l.display_name: l for l in League.get_all_active()}
 
-    # Get games with eager loading
+    # Get games with eager loading (exclude practices)
     games = Game.query.options(
         joinedload(Game.home_team),
         joinedload(Game.away_team)
@@ -663,7 +664,8 @@ def partner_schedule_csv(token):
         Game.active == 1,
         Game.year == year,
         Game.is_spring == (is_spring == 1),
-        Game.umpire_override == partner_code
+        Game.umpire_override == partner_code,
+        Game.game_type != 'practice'
     ).order_by(Game.game_date).all()
 
     # Pre-load all umpire assignments for these games in ONE query
