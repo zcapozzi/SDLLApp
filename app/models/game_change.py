@@ -420,7 +420,32 @@ class GameChange(db.Model):
             if matches_current:
                 return None
 
-        return cls._format_original_values(original)
+        # Format the original values into a string
+        parts = []
+
+        if 'date' in original:
+            try:
+                from datetime import datetime
+                d = datetime.strptime(original['date'], '%Y-%m-%d')
+                parts.append(d.strftime('%b %d'))
+            except (ValueError, TypeError):
+                pass
+
+        if 'time' in original:
+            try:
+                from datetime import datetime
+                t = datetime.strptime(original['time'], '%H:%M')
+                parts.append(f"at {t.strftime('%I:%M %p').lstrip('0')}")
+            except (ValueError, TypeError):
+                pass
+
+        if 'field' in original:
+            parts.append(f"at {original['field']}")
+
+        if not parts:
+            return None
+
+        return "Originally " + " ".join(parts)
 
     @classmethod
     def acknowledge_all_for_season(cls, year, is_spring):
