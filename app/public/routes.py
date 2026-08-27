@@ -1072,6 +1072,24 @@ def division_schedule(token):
     # Get practice duration (display_name and league_obj already set above)
     practice_duration = league_obj.get_practice_duration() if league_obj else 90
 
+    # Find shared practices - practices at same field/time as another team
+    shared_practices = {}  # game_id -> partner team display name
+    try:
+        practice_games = [g for g in all_games if g.game_type == 'practice' and g.field_id and g.game_date]
+        if practice_games:
+            for practice in practice_games:
+                overlapping = Game.query.filter(
+                    Game.active == 1,
+                    Game.ID != practice.ID,
+                    Game.game_type == 'practice',
+                    Game.field_id == practice.field_id,
+                    Game.game_date == practice.game_date
+                ).first()
+                if overlapping and overlapping.home_team:
+                    shared_practices[practice.ID] = overlapping.home_team.computed_display_name
+    except Exception:
+        pass  # Don't fail page load if lookup fails
+
     return render_template(
         'public/division_schedule.html',
         league_season=league_season,
@@ -1082,6 +1100,7 @@ def division_schedule(token):
         upcoming_games=upcoming_games,
         past_games=past_games,
         game_originals=game_originals,
+        shared_practices=shared_practices,
         teams=teams,
         fields=fields,
         show_minimal_menu=not has_full_access,

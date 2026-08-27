@@ -89,6 +89,44 @@
             background: #17a2b8;
             color: white;
         }
+        .shared-practice-icon {
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 4px;
+            cursor: help;
+            position: relative;
+        }
+        .shared-practice-icon img {
+            width: 16px;
+            height: 16px;
+        }
+        .shared-practice-icon .tooltip {
+            visibility: hidden;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            z-index: 100;
+            margin-bottom: 5px;
+        }
+        .shared-practice-icon .tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-top-color: #333;
+        }
+        .shared-practice-icon:hover .tooltip {
+            visibility: visible;
+        }
         .badge-game {
             background: rgb(34, 139, 34);
             color: white;
@@ -444,6 +482,12 @@
                         <td>
                             {% if game.game_type == 'practice' %}
                             <span class="badge badge-practice">Practice</span>
+                            {% if shared_practices and shared_practices.get(game.ID) %}
+                            <span class="shared-practice-icon">
+                                <img src="{{ url_for('static', filename='img/sharedFieldIcon.png') }}" alt="Shared">
+                                <span class="tooltip">Shared with {{ shared_practices[game.ID] }}</span>
+                            </span>
+                            {% endif %}
                             {% elif game.is_scrimmage %}
                             <span class="badge badge-scrimmage">Scrimmage</span>
                             {% elif game.game_type == 'playoff' %}
@@ -533,6 +577,12 @@
                         <td>
                             {% if game.game_type == 'practice' %}
                             <span class="badge badge-practice">Practice</span>
+                            {% if shared_practices and shared_practices.get(game.ID) %}
+                            <span class="shared-practice-icon">
+                                <img src="{{ url_for('static', filename='img/sharedFieldIcon.png') }}" alt="Shared">
+                                <span class="tooltip">Shared with {{ shared_practices[game.ID] }}</span>
+                            </span>
+                            {% endif %}
                             {% elif game.is_scrimmage %}
                             <span class="badge badge-scrimmage">Scrimmage</span>
                             {% elif game.game_type == 'playoff' %}
