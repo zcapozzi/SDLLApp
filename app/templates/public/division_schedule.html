@@ -259,6 +259,13 @@
             font-size: 11px;
             margin: 0 4px;
         }
+        .team-link {
+            color: rgb(34, 139, 34);
+            text-decoration: none;
+        }
+        .team-link:hover {
+            text-decoration: underline;
+        }
         .cell-field {
             max-width: 150px;
         }
@@ -502,11 +509,23 @@
                         </td>
                         <td class="cell-teams">
                             {% if game.game_type == 'practice' %}
-                            {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                            {% if game.home_team and game.home_team.schedule_token %}
+                            <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
                             {% else %}
                             {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                            {% endif %}
+                            {% else %}
+                            {% if game.home_team and game.home_team.schedule_token %}
+                            <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
+                            {% else %}
+                            {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                            {% endif %}
                             <span class="team-vs">vs</span>
+                            {% if game.away_team and game.away_team.schedule_token %}
+                            <a href="{{ url_for('public.team_schedule', token=game.away_team.schedule_token) }}" class="team-link">{{ game.away_team.computed_display_name }}</a>
+                            {% else %}
                             {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                            {% endif %}
                             {% endif %}
                         </td>
                         <td class="cell-field">
@@ -597,11 +616,23 @@
                         </td>
                         <td class="cell-teams">
                             {% if game.game_type == 'practice' %}
-                            {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                            {% if game.home_team and game.home_team.schedule_token %}
+                            <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
                             {% else %}
                             {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                            {% endif %}
+                            {% else %}
+                            {% if game.home_team and game.home_team.schedule_token %}
+                            <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
+                            {% else %}
+                            {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                            {% endif %}
                             <span class="team-vs">vs</span>
+                            {% if game.away_team and game.away_team.schedule_token %}
+                            <a href="{{ url_for('public.team_schedule', token=game.away_team.schedule_token) }}" class="team-link">{{ game.away_team.computed_display_name }}</a>
+                            {% else %}
                             {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                            {% endif %}
                             {% endif %}
                         </td>
                         <td class="cell-field">
