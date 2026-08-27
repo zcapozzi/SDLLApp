@@ -1,5 +1,6 @@
 """League Season model - maps to sdll_league_seasons table"""
 
+import secrets
 from datetime import date
 from app.extensions import db
 
@@ -40,6 +41,9 @@ class LeagueSeason(db.Model):
     schedule_locked = db.Column(db.Boolean, default=False)
     schedule_locked_at = db.Column(db.DateTime, nullable=True)
     schedule_locked_by = db.Column(db.BigInteger, nullable=True)  # user ID who locked
+
+    # Division schedule token for public access
+    schedule_token = db.Column(db.String(32), unique=True, index=True)
 
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
     updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(),
@@ -483,3 +487,14 @@ class LeagueSeason(db.Model):
             cls.year.desc(),
             cls.is_spring.desc()
         ).first()
+
+    def generate_schedule_token(self):
+        """Generate unique schedule token for public division schedule access."""
+        self.schedule_token = secrets.token_urlsafe(16)
+        db.session.commit()
+        return self.schedule_token
+
+    @classmethod
+    def get_by_schedule_token(cls, token):
+        """Find league-season by schedule token."""
+        return cls.query.filter_by(schedule_token=token, active=1).first()

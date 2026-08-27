@@ -37,6 +37,7 @@
                 <th style="width: 120px; text-align: center;">Games Created</th>
                 <th style="width: 150px;">Playoff Format</th>
                 <th style="width: 60px; text-align: center;">Qualify</th>
+                <th style="width: 200px;">Schedule URL</th>
                 <th style="width: 220px;">Actions</th>
             </tr>
         </thead>
@@ -83,6 +84,29 @@
                     </span>
                 </td>
                 <td style="text-align: center;">{% if config.playoff_teams == 0 or config.playoff_teams is none %}All{% else %}{{ config.playoff_teams }}{% endif %}</td>
+                <td style="white-space: nowrap;">
+                    {% if config.schedule_token %}
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                        <input type="text" readonly
+                               id="schedule-url-{{ config.ID }}"
+                               value="{{ url_for('public.division_schedule', token=config.schedule_token, _external=True) }}"
+                               style="font-size: 11px; padding: 4px 6px; width: 110px; border: 1px solid #ddd; border-radius: 3px;">
+                        <button type="button" class="btn btn-outline btn-sm" style="padding: 3px 6px;"
+                                onclick="copyScheduleUrl({{ config.ID }})" title="Copy URL">
+                            Copy
+                        </button>
+                        <button type="button" class="btn btn-outline btn-sm" style="padding: 3px 6px; color: #999;"
+                                onclick="generateScheduleToken({{ config.ID }})" title="Regenerate URL">
+                            New
+                        </button>
+                    </div>
+                    {% else %}
+                    <button type="button" class="btn btn-outline btn-sm"
+                            onclick="generateScheduleToken({{ config.ID }})">
+                        Generate URL
+                    </button>
+                    {% endif %}
+                </td>
                 <td style="white-space: nowrap;">
                     <button type="button" class="btn btn-outline btn-sm"
                             onclick="editLeague({{ config.ID }}, '{{ config.league }}', '{{ config.playoff_format }}', {{ config.playoff_teams or 0 }}, {{ config.regular_season_games or 10 }}, '{{ config.notes or '' }}', {{ teams_by_league.get(config.league, 0) }})">
@@ -361,5 +385,52 @@ function closeEditModal() {
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeEditModal();
 });
+
+function copyScheduleUrl(leagueId) {
+    var input = document.getElementById('schedule-url-' + leagueId);
+    if (input) {
+        input.select();
+        input.setSelectionRange(0, 99999); // For mobile devices
+        navigator.clipboard.writeText(input.value).then(function() {
+            // Brief feedback
+            var btn = input.nextElementSibling;
+            var originalText = btn.textContent;
+            btn.textContent = 'Copied!';
+            btn.style.background = 'rgb(34, 139, 34)';
+            btn.style.color = 'white';
+            setTimeout(function() {
+                btn.textContent = originalText;
+                btn.style.background = '';
+                btn.style.color = '';
+            }, 1500);
+        });
+    }
+}
+
+function generateScheduleToken(leagueId) {
+    if (!confirm('Generate a new schedule URL for this division? (Any existing URL will stop working)')) {
+        return;
+    }
+
+    fetch('/seasons/api/league-season/' + leagueId + '/generate-schedule-token', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.status === 'ok') {
+            // Reload the page to show the new URL
+            window.location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to generate URL'));
+        }
+    })
+    .catch(function(err) {
+        alert('Error generating URL: ' + err);
+    });
+}
 </script>
 {% endblock %}

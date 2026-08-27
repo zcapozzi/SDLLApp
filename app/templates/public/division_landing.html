@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ league_season.league }} Schedule - SDLL</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, rgb(34, 139, 34) 0%, rgb(28, 112, 28) 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-width: 450px;
+            width: 100%;
+            padding: 40px;
+            text-align: center;
+        }
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: rgb(34, 139, 34);
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 32px;
+            font-weight: bold;
+        }
+        h1 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        .season {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 30px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .badge-spring {
+            background: rgb(34, 139, 34);
+            color: white;
+        }
+        .badge-fall {
+            background: rgb(255, 140, 0);
+            color: white;
+        }
+        .info-text {
+            color: #666;
+            font-size: 15px;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 14px 32px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background: rgb(34, 139, 34);
+            color: white;
+            width: 100%;
+        }
+        .btn-primary:hover {
+            background: rgb(28, 112, 28);
+            transform: translateY(-1px);
+        }
+        .forgot-link {
+            display: block;
+            margin-top: 20px;
+            color: #666;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .forgot-link:hover {
+            color: rgb(34, 139, 34);
+            text-decoration: underline;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #999;
+            font-size: 13px;
+        }
+        .footer a {
+            color: rgb(34, 139, 34);
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">SDLL</div>
+        <h1>{{ league_season.league }}</h1>
+        <div class="season">
+            <span class="badge badge-{{ 'spring' if league_season.is_spring else 'fall' }}">
+                {{ 'Spring' if league_season.is_spring else 'Fall' }} {{ league_season.year }}
+            </span>
+        </div>
+
+        <p class="info-text">
+            Please log in to view the division schedule including all games and practices.
+        </p>
+
+        <a href="{{ login_url }}" class="btn btn-primary">
+            Login to View Schedule
+        </a>
+
+        <a href="{{ url_for('auth.forgot_password') }}" class="forgot-link">
+            Forgot your password?
+        </a>
+
+        <div class="footer">
+            <p>South Durham Little League</p>
+            <p><a href="https://southdurhamlittleleague.org">southdurhamlittleleague.org</a></p>
+        </div>
+    </div>
+</body>
+</html>

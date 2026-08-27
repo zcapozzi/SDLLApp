@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ league_season.league }} Schedule - SDLL</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8f9fa;
+            color: #333;
+            line-height: 1.4;
+            font-size: 14px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Navbar */
+        .navbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px 20px;
+            background-color: rgb(34, 139, 34);
+            margin: -20px -20px 20px -20px;
+        }
+        .navbar-brand {
+            font-size: 20px;
+            font-weight: 700;
+            text-decoration: none;
+            color: white;
+        }
+        .navbar-nav {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .nav-link {
+            text-decoration: none;
+            font-weight: 500;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 4px;
+        }
+        .nav-link:hover {
+            background-color: rgba(255,255,255,0.15);
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        .header .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .badge-spring {
+            background: rgb(34, 139, 34);
+            color: white;
+        }
+        .badge-fall {
+            background: rgb(255, 140, 0);
+            color: white;
+        }
+        .badge-practice {
+            background: #17a2b8;
+            color: white;
+        }
+        .badge-game {
+            background: rgb(34, 139, 34);
+            color: white;
+        }
+        .badge-scrimmage {
+            background: #6c757d;
+            color: white;
+        }
+        .badge-playoff {
+            background: #7b1fa2;
+            color: white;
+        }
+        .badge-changed {
+            background: #e65100;
+            color: white;
+        }
+
+        /* Controls */
+        .controls {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .control-group label {
+            font-weight: 500;
+            color: #666;
+            font-size: 13px;
+        }
+        .control-group select,
+        .control-group input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            background: white;
+        }
+        .control-group select:focus,
+        .control-group input:focus {
+            border-color: rgb(34, 139, 34);
+            outline: none;
+        }
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 4px;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        .btn-outline {
+            background: white;
+            border: 1px solid #ddd;
+            color: #333;
+        }
+        .btn-outline:hover {
+            background: #f5f5f5;
+        }
+
+        /* Table Container */
+        .table-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        /* Schedule Table */
+        .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .schedule-table th {
+            background: #f1f3f4;
+            border: 1px solid #e0e0e0;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            position: sticky;
+            top: 0;
+            white-space: nowrap;
+        }
+        .schedule-table td {
+            border: 1px solid #e0e0e0;
+            padding: 10px 12px;
+            vertical-align: middle;
+        }
+        .schedule-table tr:hover td {
+            background: #f8f9fa;
+        }
+        .schedule-table tr.practice-row td {
+            background: rgba(23, 162, 184, 0.08);
+        }
+        .schedule-table tr.practice-row:hover td {
+            background: rgba(23, 162, 184, 0.12);
+        }
+        .schedule-table tr.past-game td {
+            opacity: 0.6;
+        }
+
+        /* Cell styling */
+        .cell-date {
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .cell-time {
+            white-space: nowrap;
+        }
+        .cell-teams {
+            min-width: 200px;
+        }
+        .team-vs {
+            color: #999;
+            font-size: 11px;
+            margin: 0 4px;
+        }
+        .cell-field {
+            max-width: 150px;
+        }
+        .directions-icon {
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 4px;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        .directions-icon:hover {
+            opacity: 1;
+        }
+        .directions-icon svg {
+            width: 14px;
+            height: 14px;
+            fill: #4285f4;
+        }
+        .game-originally {
+            font-size: 11px;
+            color: #e65100;
+            font-style: italic;
+        }
+
+        /* Game count */
+        .game-count {
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+
+        /* Section headers */
+        .section-header {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin: 25px 0 15px 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid rgb(34, 139, 34);
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+        .footer a {
+            color: rgb(34, 139, 34);
+            text-decoration: none;
+        }
+
+        /* Legend */
+        .legend {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            font-size: 13px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 14px;
+            border-radius: 3px;
+        }
+        .legend-color.practice {
+            background: rgba(23, 162, 184, 0.3);
+            border: 1px solid #17a2b8;
+        }
+        .legend-color.game {
+            background: white;
+            border: 1px solid #e0e0e0;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .navbar {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .control-group {
+                justify-content: space-between;
+            }
+            .table-container {
+                overflow-x: auto;
+            }
+        }
+
+        /* Print styles */
+        @media print {
+            .navbar, .controls, .footer, .legend {
+                display: none;
+            }
+            .schedule-table th {
+                background: #eee;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <a href="{{ url_for('main.dashboard') if not show_minimal_menu else '#' }}" class="navbar-brand">SDLL</a>
+            <div class="navbar-nav">
+                {% if not show_minimal_menu %}
+                <a href="{{ url_for('main.dashboard') }}" class="nav-link">Dashboard</a>
+                {% endif %}
+                <a href="{{ url_for('auth.logout') }}" class="nav-link">Logout</a>
+            </div>
+        </nav>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div style="padding: 12px 20px; margin-bottom: 15px; border-radius: 6px;
+                            {% if category == 'success' %}background: rgba(34, 139, 34, 0.1); border-left: 4px solid rgb(34, 139, 34);
+                            {% elif category == 'error' %}background: rgba(200, 50, 50, 0.1); border-left: 4px solid #c33;
+                            {% else %}background: rgba(255, 140, 0, 0.1); border-left: 4px solid rgb(255, 140, 0);{% endif %}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Header -->
+        <div class="header">
+            <h1>{{ league_season.league }} Schedule</h1>
+            <div class="subtitle">
+                <span class="badge badge-{{ 'spring' if league_season.is_spring else 'fall' }}">
+                    {{ 'Spring' if league_season.is_spring else 'Fall' }} {{ league_season.year }}
+                </span>
+                &nbsp; South Durham Little League
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <div class="control-group">
+                <label for="team">Team:</label>
+                <select id="team" onchange="applyFilters()">
+                    <option value="">All Teams</option>
+                    {% for team in teams %}
+                    <option value="{{ team.team_ID }}">{{ team.computed_display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="field">Field:</label>
+                <select id="field" onchange="applyFilters()">
+                    <option value="">All Fields</option>
+                    {% for f in fields %}
+                    <option value="{{ f }}">{{ f }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="game_type">Type:</label>
+                <select id="game_type" onchange="applyFilters()">
+                    <option value="">All</option>
+                    <option value="game">Games Only</option>
+                    <option value="practice">Practices Only</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="date">Date:</label>
+                <input type="date" id="date" onchange="applyFilters()">
+            </div>
+            <button id="clear-filters-btn" class="btn btn-outline" onclick="clearFilters()" style="display: none;">Clear Filters</button>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color practice"></div>
+                <span>Practice</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color game"></div>
+                <span>Game</span>
+            </div>
+        </div>
+
+        <!-- Game count -->
+        <div class="game-count">
+            {{ games|length }} total ({{ upcoming_games|length }} upcoming, {{ past_games|length }} past)
+        </div>
+
+        <!-- Upcoming Games -->
+        {% if upcoming_games %}
+        <h3 class="section-header">Upcoming</h3>
+        <div class="table-container">
+            <table class="schedule-table" id="upcoming-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Day</th>
+                        <th>Time</th>
+                        <th>Type</th>
+                        <th>Teams</th>
+                        <th>Field</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for game in upcoming_games %}
+                    <tr class="{{ 'practice-row' if game.game_type == 'practice' else '' }}"
+                        data-home="{{ game.home_ID or '' }}"
+                        data-away="{{ game.away_ID or '' }}"
+                        data-field="{{ game.field_name or '' }}"
+                        data-type="{{ 'practice' if game.game_type == 'practice' else 'game' }}"
+                        data-date="{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}">
+                        <td class="cell-date">
+                            {% if game.game_date %}
+                            {{ game.game_date.strftime('%m/%d/%Y') }}
+                            {% else %}
+                            TBD
+                            {% endif %}
+                        </td>
+                        <td>{{ game.game_date.strftime('%a') if game.game_date else '' }}</td>
+                        <td class="cell-time">
+                            {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
+                        </td>
+                        <td>
+                            {% if game.game_type == 'practice' %}
+                            <span class="badge badge-practice">Practice</span>
+                            {% elif game.is_scrimmage %}
+                            <span class="badge badge-scrimmage">Scrimmage</span>
+                            {% elif game.game_type == 'playoff' %}
+                            <span class="badge badge-playoff">Playoff</span>
+                            {% else %}
+                            <span class="badge badge-game">Game</span>
+                            {% endif %}
+                        </td>
+                        <td class="cell-teams">
+                            {% if game.game_type == 'practice' %}
+                            {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                            {% else %}
+                            {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                            <span class="team-vs">vs</span>
+                            {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                            {% endif %}
+                        </td>
+                        <td class="cell-field">
+                            {{ game.field_name or 'TBD' }}
+                            {% if game.directions_url %}
+                            <a href="{{ game.directions_url }}" target="_blank" rel="noopener" class="directions-icon" title="Get directions">
+                                <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                            </a>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if game_originals and game.ID in game_originals %}
+                            <span class="badge badge-changed">CHANGED</span>
+                            <div class="game-originally">{{ game_originals[game.ID] }}</div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- Past Games -->
+        {% if past_games %}
+        <h3 class="section-header">Past Games</h3>
+        <div class="table-container">
+            <table class="schedule-table" id="past-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Day</th>
+                        <th>Time</th>
+                        <th>Type</th>
+                        <th>Teams</th>
+                        <th>Field</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for game in past_games %}
+                    <tr class="{{ 'practice-row' if game.game_type == 'practice' else '' }} past-game"
+                        data-home="{{ game.home_ID or '' }}"
+                        data-away="{{ game.away_ID or '' }}"
+                        data-field="{{ game.field_name or '' }}"
+                        data-type="{{ 'practice' if game.game_type == 'practice' else 'game' }}"
+                        data-date="{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}">
+                        <td class="cell-date">
+                            {% if game.game_date %}
+                            {{ game.game_date.strftime('%m/%d/%Y') }}
+                            {% else %}
+                            TBD
+                            {% endif %}
+                        </td>
+                        <td>{{ game.game_date.strftime('%a') if game.game_date else '' }}</td>
+                        <td class="cell-time">
+                            {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
+                        </td>
+                        <td>
+                            {% if game.game_type == 'practice' %}
+                            <span class="badge badge-practice">Practice</span>
+                            {% elif game.is_scrimmage %}
+                            <span class="badge badge-scrimmage">Scrimmage</span>
+                            {% elif game.game_type == 'playoff' %}
+                            <span class="badge badge-playoff">Playoff</span>
+                            {% else %}
+                            <span class="badge badge-game">Game</span>
+                            {% endif %}
+                        </td>
+                        <td class="cell-teams">
+                            {% if game.game_type == 'practice' %}
+                            {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                            {% else %}
+                            {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                            <span class="team-vs">vs</span>
+                            {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                            {% endif %}
+                        </td>
+                        <td class="cell-field">
+                            {{ game.field_name or 'TBD' }}
+                            {% if game.directions_url %}
+                            <a href="{{ game.directions_url }}" target="_blank" rel="noopener" class="directions-icon" title="Get directions">
+                                <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                            </a>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if game_originals and game.ID in game_originals %}
+                            <span class="badge badge-changed">CHANGED</span>
+                            <div class="game-originally">{{ game_originals[game.ID] }}</div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        {% if not games %}
+        <div class="table-container">
+            <div class="empty-state">
+                <h3>No Schedule Available</h3>
+                <p>There are no games or practices scheduled for {{ league_season.league }} {{ 'Spring' if league_season.is_spring else 'Fall' }} {{ league_season.year }}.</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="footer">
+            <p>South Durham Little League</p>
+            <p><a href="https://southdurhamlittleleague.org">southdurhamlittleleague.org</a></p>
+        </div>
+    </div>
+
+    <script>
+        // CSS-based filtering (no page reload)
+        function applyFilters() {
+            var teamFilter = document.getElementById('team').value;
+            var fieldFilter = document.getElementById('field').value.toLowerCase();
+            var typeFilter = document.getElementById('game_type').value;
+            var dateFilter = document.getElementById('date').value;
+
+            var tables = document.querySelectorAll('.schedule-table tbody');
+            var totalVisible = 0;
+
+            tables.forEach(function(tbody) {
+                var rows = tbody.querySelectorAll('tr');
+                rows.forEach(function(row) {
+                    var rowHome = row.dataset.home || '';
+                    var rowAway = row.dataset.away || '';
+                    var rowField = (row.dataset.field || '').toLowerCase();
+                    var rowType = row.dataset.type || '';
+                    var rowDate = row.dataset.date || '';
+
+                    // Team filter: check if team is home or away
+                    var showTeam = !teamFilter || rowHome === teamFilter || rowAway === teamFilter;
+
+                    // Field filter
+                    var showField = !fieldFilter || rowField === fieldFilter;
+
+                    // Type filter
+                    var showType = !typeFilter || rowType === typeFilter;
+
+                    // Date filter
+                    var showDate = !dateFilter || rowDate === dateFilter;
+
+                    if (showTeam && showField && showType && showDate) {
+                        row.style.display = '';
+                        totalVisible++;
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            });
+
+            // Update game count display
+            updateGameCount(totalVisible);
+
+            // Show/hide clear filters button
+            var clearBtn = document.getElementById('clear-filters-btn');
+            if (clearBtn) {
+                clearBtn.style.display = (teamFilter || fieldFilter || typeFilter || dateFilter) ? 'inline-block' : 'none';
+            }
+
+            // Update URL for bookmarking (without reload)
+            var url = new URL(window.location.href);
+            if (teamFilter) url.searchParams.set('team', teamFilter);
+            else url.searchParams.delete('team');
+            if (fieldFilter) url.searchParams.set('field', fieldFilter);
+            else url.searchParams.delete('field');
+            if (typeFilter) url.searchParams.set('type', typeFilter);
+            else url.searchParams.delete('type');
+            if (dateFilter) url.searchParams.set('date', dateFilter);
+            else url.searchParams.delete('date');
+            history.replaceState(null, '', url.toString());
+        }
+
+        function updateGameCount(count) {
+            var countEl = document.querySelector('.game-count');
+            if (countEl) {
+                var totalGames = document.querySelectorAll('.schedule-table tbody tr').length;
+                if (count === totalGames) {
+                    countEl.innerHTML = '{{ games|length }} total ({{ upcoming_games|length }} upcoming, {{ past_games|length }} past)';
+                } else {
+                    countEl.innerHTML = 'Showing ' + count + ' of ' + totalGames;
+                }
+            }
+        }
+
+        function clearFilters() {
+            document.getElementById('team').value = '';
+            document.getElementById('field').value = '';
+            document.getElementById('game_type').value = '';
+            document.getElementById('date').value = '';
+            applyFilters();
+        }
+
+        // Restore filters from URL on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            var url = new URL(window.location.href);
+            var team = url.searchParams.get('team');
+            var field = url.searchParams.get('field');
+            var type = url.searchParams.get('type');
+            var date = url.searchParams.get('date');
+
+            if (team) document.getElementById('team').value = team;
+            if (field) document.getElementById('field').value = field;
+            if (type) document.getElementById('game_type').value = type;
+            if (date) document.getElementById('date').value = date;
+
+            if (team || field || type || date) {
+                applyFilters();
+            }
+        });
+    </script>
+</body>
+</html>

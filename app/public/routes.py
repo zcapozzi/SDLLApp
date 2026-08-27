@@ -11,9 +11,10 @@ ARCHITECTURE:
 5. Return the response regardless of any tracking success/failure
 """
 
-from flask import render_template, abort, request, make_response, jsonify, redirect, Response
+from flask import render_template, abort, request, make_response, jsonify, redirect, Response, url_for, flash
 from flask_login import current_user
 from datetime import datetime, date, timedelta
+from sqlalchemy.orm import joinedload
 from app.public import public_bp
 from app.models.team import TeamSeason
 from app.models.game import Game
@@ -954,3 +955,182 @@ def get_game_start(game_id):
     except Exception as e:
         _log_tracking_error("get_game_start", e)
         return jsonify({'has_record': False})
+
+
+def user_has_coach_access(user_id, year, is_spring, league):
+    """Check if user is an active coach in this specific league-season."""
+    from app.models.coach import CoachUser, CoachSeason
+
+    coach = CoachUser.get_by_user(user_id)
+    if not coach or coach.status != 'active':
+        return False
+
+    return CoachSeason.query.join(TeamSeason).filter(
+        CoachSeason.coach_id == coach.id,
+        TeamSeason.year == year,
+        TeamSeason.is_spring == is_spring,
+        TeamSeason.league == league,
+        TeamSeason.active == 1
+    ).count() > 0
+
+
+@public_bp.route('/division/<token>')
+def division_schedule(token):
+    """Public division schedule view with tiered access control."""
+    league_season = LeagueSeason.get_by_schedule_token(token)
+    if not league_season:
+        abort(404)
+
+    # Not logged in -> landing page
+    if not current_user.is_authenticated:
+        return render_template(
+            'public/division_landing.html',
+            league_season=league_season,
+            login_url=url_for('auth.login', next=request.url)
+        )
+
+    # Check access
+    has_full_access = current_user.has_role('admin', 'scheduler', 'umpire_coordinator')
+    has_coach_access = user_has_coach_access(
+        current_user.ID,
+        league_season.year,
+        league_season.is_spring,
+        league_season.league
+    )
+
+    if not has_full_access and not has_coach_access:
+        return render_template(
+            'public/division_request_access.html',
+            league_season=league_season,
+            token=token
+        )
+
+    # Load games (including practices) with eager loading
+    games = Game.query.options(
+        joinedload(Game.home_team),
+        joinedload(Game.away_team),
+        joinedload(Game.field_rel)
+    ).filter(
+        Game.active == 1,
+        Game.year == league_season.year,
+        Game.is_spring == league_season.is_spring,
+        Game.league == league_season.league
+    ).order_by(Game.game_date).all()
+
+    today = date.today()
+
+    # Separate upcoming and past games
+    upcoming_games = []
+    past_games = []
+    for game in games:
+        if game.game_date:
+            game_date = game.game_date.date() if hasattr(game.game_date, 'date') else game.game_date
+            if game_date >= today:
+                upcoming_games.append(game)
+            else:
+                past_games.append(game)
+        else:
+            upcoming_games.append(game)  # TBD dates go to upcoming
+
+    # Get "originally" display text for games that have been changed (batch query)
+    all_games = upcoming_games + past_games
+    try:
+        game_originals = GameChange.get_original_display_batch(all_games)
+    except Exception:
+        game_originals = {}
+
+    # Get teams for filter dropdown
+    teams = TeamSeason.query.filter_by(
+        year=league_season.year,
+        is_spring=league_season.is_spring,
+        league=league_season.league,
+        active=1,
+        is_placeholder=0
+    ).order_by(TeamSeason.display_name).all()
+
+    # Get fields for filter dropdown
+    fields_set = set()
+    for g in games:
+        if g.field_name:
+            fields_set.add(g.field_name)
+    fields = sorted(fields_set)
+
+    return render_template(
+        'public/division_schedule.html',
+        league_season=league_season,
+        games=games,
+        upcoming_games=upcoming_games,
+        past_games=past_games,
+        game_originals=game_originals,
+        teams=teams,
+        fields=fields,
+        show_minimal_menu=not has_full_access,
+        today=today,
+        token=token
+    )
+
+
+@public_bp.route('/division/<token>/request-access', methods=['POST'])
+def division_request_access(token):
+    """Handle access request form submission."""
+    league_season = LeagueSeason.get_by_schedule_token(token)
+    if not league_season:
+        abort(404)
+
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login', next=request.url))
+
+    message = request.form.get('message', '').strip()
+
+    # Send email to scheduling coordinator
+    try:
+        from app.services.notification_service import GmailService
+        email_service = GmailService()
+
+        season_name = f'{"Spring" if league_season.is_spring else "Fall"} {league_season.year}'
+        subject = f'SDLL Division Schedule Access Request - {league_season.league} {season_name}'
+
+        body_text = f"""Access Request for Division Schedule
+
+User: {current_user.name}
+Email: {current_user.email}
+League: {league_season.league}
+Season: {season_name}
+
+Message from user:
+{message if message else '(No message provided)'}
+
+---
+This request was submitted from the division schedule page.
+"""
+
+        body_html = f"""
+<h2>Access Request for Division Schedule</h2>
+<p><strong>User:</strong> {current_user.name}<br>
+<strong>Email:</strong> {current_user.email}<br>
+<strong>League:</strong> {league_season.league}<br>
+<strong>Season:</strong> {season_name}</p>
+
+<h3>Message from user:</h3>
+<p>{message if message else '<em>(No message provided)</em>'}</p>
+
+<hr>
+<p><small>This request was submitted from the division schedule page.</small></p>
+"""
+
+        # Send to scheduling coordinator
+        coordinator_email = 'scheduling@sdll.org'  # Default, could be configurable
+        email_service.send_email(
+            to=coordinator_email,
+            subject=subject,
+            body_text=body_text,
+            body_html=body_html,
+            reply_to=current_user.email
+        )
+
+        flash('Your access request has been sent. You will be contacted by email.', 'success')
+    except Exception as e:
+        _log_tracking_error("division_request_access", e)
+        flash('There was an error sending your request. Please try again or contact scheduling@sdll.org directly.', 'error')
+
+    return redirect(url_for('public.division_schedule', token=token))

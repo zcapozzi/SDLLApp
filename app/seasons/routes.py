@@ -1661,3 +1661,27 @@ def release_schedule(year, is_spring):
         pending_changes=pending_changes,
         pending_notifications=pending_notifications
     )
+
+
+@seasons_bp.route('/api/league-season/<int:league_id>/generate-schedule-token', methods=['POST'])
+@login_required
+def api_generate_schedule_token(league_id):
+    """Generate or regenerate schedule token for a league-season."""
+    if not current_user.can_edit_schedule():
+        return jsonify({'error': 'Permission denied'}), 403
+
+    league_season = LeagueSeason.query.get(league_id)
+    if not league_season:
+        return jsonify({'error': 'League season not found'}), 404
+
+    token = league_season.generate_schedule_token()
+    from flask import url_for
+    schedule_url = url_for('public.division_schedule', token=token, _external=True)
+
+    logger.info(f'Generated schedule token for {league_season.league} {league_season.season_name}')
+
+    return jsonify({
+        'status': 'ok',
+        'token': token,
+        'url': schedule_url
+    })

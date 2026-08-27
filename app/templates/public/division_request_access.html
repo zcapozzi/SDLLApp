@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Request Access - {{ league_season.league }} - SDLL</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8f9fa;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 500px;
+            margin: 40px auto;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            padding: 40px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        .header .league-name {
+            color: rgb(34, 139, 34);
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        .header .season {
+            color: #666;
+            font-size: 14px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .badge-spring {
+            background: rgb(34, 139, 34);
+            color: white;
+        }
+        .badge-fall {
+            background: rgb(255, 140, 0);
+            color: white;
+        }
+        .info-box {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        .info-box h3 {
+            color: #856404;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        .info-box p {
+            color: #856404;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            color: #333;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        .form-control {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            resize: vertical;
+        }
+        .form-control:focus {
+            border-color: rgb(34, 139, 34);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(34, 139, 34, 0.1);
+        }
+        .btn {
+            display: inline-block;
+            padding: 14px 28px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background: rgb(34, 139, 34);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: rgb(28, 112, 28);
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid #ddd;
+            color: #666;
+        }
+        .btn-outline:hover {
+            background: #f5f5f5;
+        }
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 25px;
+        }
+        .user-info {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+        .user-info strong {
+            color: #333;
+        }
+        .flash-message {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .flash-success {
+            background: rgba(34, 139, 34, 0.1);
+            border: 1px solid rgb(34, 139, 34);
+            color: rgb(28, 112, 28);
+        }
+        .flash-error {
+            background: rgba(200, 50, 50, 0.1);
+            border: 1px solid #c33;
+            color: #c33;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #999;
+            font-size: 13px;
+        }
+        .footer a {
+            color: rgb(34, 139, 34);
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="header">
+                <h1>Request Access</h1>
+                <div class="league-name">{{ league_season.league }}</div>
+                <div class="season">
+                    <span class="badge badge-{{ 'spring' if league_season.is_spring else 'fall' }}">
+                        {{ 'Spring' if league_season.is_spring else 'Fall' }} {{ league_season.year }}
+                    </span>
+                </div>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="flash-message flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <div class="info-box">
+                <h3>Access Restricted</h3>
+                <p>
+                    This division schedule is only available to coaches assigned to teams in this league.
+                    If you believe you should have access, please submit a request below.
+                </p>
+            </div>
+
+            <div class="user-info">
+                Requesting as: <strong>{{ current_user.name }}</strong> ({{ current_user.email }})
+            </div>
+
+            <form method="POST" action="{{ url_for('public.division_request_access', token=token) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div class="form-group">
+                    <label for="message">Message (optional)</label>
+                    <textarea id="message" name="message" class="form-control" rows="4"
+                              placeholder="Please explain why you need access (e.g., which team you coach, your role in the league)"></textarea>
+                </div>
+
+                <div class="btn-group">
+                    <button type="submit" class="btn btn-primary">Send Request</button>
+                    <a href="{{ url_for('auth.logout') }}" class="btn btn-outline">Logout</a>
+                </div>
+            </form>
+        </div>
+
+        <div class="footer">
+            <p>South Durham Little League</p>
+            <p><a href="https://southdurhamlittleleague.org">southdurhamlittleleague.org</a></p>
+        </div>
+    </div>
+</body>
+</html>

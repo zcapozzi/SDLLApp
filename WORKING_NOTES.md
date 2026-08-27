@@ -4,7 +4,115 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Added game start time recording feature to public team schedule pages. Users can record first pitch time for games on the day of the game. Added `umpire_was_unassigned` field for games mistakenly assigned to partners.
+Last session: Implemented Division Schedule feature - authenticated public schedule pages showing all games AND practices for a specific league-season. Access is tiered based on user role.
+
+---
+
+## Session: August 27, 2026 - Division Schedule Feature
+
+### Overview
+Implemented a public division/league schedule page showing all games AND practices. Access is tiered based on user role, with a landing page for non-authenticated users.
+
+### URL Structure
+`/s/division/<token>` - One token per league-season (e.g., "BB Majors Fall 2026")
+
+### Access Control Flow
+```
+User visits /s/division/<token>
+    |
+    v
+Token valid? --> No --> 404
+    |
+   Yes
+    v
+User logged in? --> No --> Landing page with:
+    |                       - Login link (redirects back after login)
+    |                       - Password reset link
+   Yes
+    v
+Check role:
+    |
+    +-- admin/scheduler/umpire_coordinator --> FULL ACCESS (full menu)
+    |
+    +-- Active coach in THIS league-season --> LIMITED ACCESS (logout-only menu)
+    |
+    +-- Other logged-in user --> "Request Access" page (sends email)
+```
+
+### Features Implemented
+
+1. **Model Enhancement** (`app/models/league_season.py`):
+   - Added `schedule_token` column (VARCHAR 32, unique, indexed)
+   - Added `generate_schedule_token()` method
+   - Added `get_by_schedule_token()` class method
+
+2. **Public Routes** (`app/public/routes.py`):
+   - Added `user_has_coach_access()` helper function
+   - Added `/division/<token>` route with tiered access
+   - Added `/division/<token>/request-access` POST route for access requests
+
+3. **Templates Created**:
+   - `division_landing.html` - Login landing page for non-authenticated users
+   - `division_schedule.html` - Main schedule view with client-side filtering
+   - `division_request_access.html` - Request access form for unauthorized users
+
+4. **Admin Token Management** (`app/seasons/routes.py`):
+   - Added API route to generate/regenerate schedule tokens
+
+5. **Template Updates** (`app/templates/seasons/manage_leagues.html`):
+   - Added "Schedule URL" column with copy button
+   - Added "Generate URL" / "New" buttons for token management
+   - Added JavaScript for copy and generate functionality
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `scripts/add_division_schedule_token.sql` | Database migration |
+| `app/templates/public/division_landing.html` | Login landing page |
+| `app/templates/public/division_schedule.html` | Main schedule display |
+| `app/templates/public/division_request_access.html` | Access request form |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `app/models/league_season.py` | Added schedule_token column and methods |
+| `app/public/routes.py` | Added division_schedule routes and helper |
+| `app/seasons/routes.py` | Added token generation API route |
+| `app/templates/seasons/manage_leagues.html` | Added Schedule URL column with UI |
+
+### Database Migration Required
+```sql
+ALTER TABLE sdll_league_seasons
+ADD COLUMN schedule_token VARCHAR(32) UNIQUE DEFAULT NULL;
+
+CREATE INDEX idx_league_seasons_schedule_token ON sdll_league_seasons(schedule_token);
+```
+
+### Schedule Display Features
+- Shows all games AND practices for the division
+- Color-coded rows (practices = light blue)
+- Client-side filters (no page reload): Team, Field, Type, Date
+- Filter state persists in URL for bookmarking
+- Separates Upcoming and Past games
+- Shows "Originally scheduled for..." for rescheduled games
+- Google Maps directions links for fields
+
+### Access Request Email
+When unauthorized user submits request:
+- Sends email to scheduling@sdll.org
+- Sets reply-to header to requester's email
+- Includes user name, email, league, season, and optional message
+
+### Usage
+
+1. Navigate to Seasons > Manage Leagues
+2. Click "Generate URL" for a league
+3. Copy the URL and share with coaches
+4. Coaches log in to view the schedule
+
+---
 
 ---
 
