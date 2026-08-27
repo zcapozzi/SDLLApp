@@ -357,12 +357,17 @@ def team_schedule(token):
         template_vars['game_originals'] = game_originals
 
         # Find shared practices - other teams practicing at same field/time
+        # Exclude cancelled practices from both the source and overlapping check
         shared_practices = {}  # game_id -> partner team display name
         try:
-            # Get all practice games for this team
-            practice_games = [g for g in all_games if g.game_type == 'practice' and g.field_id and g.game_date]
+            # Get all non-cancelled practice games for this team
+            practice_games = [g for g in all_games
+                              if g.game_type == 'practice'
+                              and g.field_id
+                              and g.game_date
+                              and g.status != 'cancelled']
             if practice_games:
-                # For each practice, find other practices at same field/time
+                # For each practice, find other non-cancelled practices at same field/time
                 for practice in practice_games:
                     overlapping = Game.query.filter(
                         Game.active == 1,
@@ -370,7 +375,8 @@ def team_schedule(token):
                         Game.game_type == 'practice',
                         Game.field_id == practice.field_id,
                         Game.game_date == practice.game_date,
-                        Game.home_ID != team.team_ID  # Different team
+                        Game.home_ID != team.team_ID,  # Different team
+                        Game.status != 'cancelled'  # Exclude cancelled practices
                     ).first()
                     if overlapping and overlapping.home_team:
                         shared_practices[practice.ID] = overlapping.home_team.computed_display_name
@@ -1073,9 +1079,14 @@ def division_schedule(token):
     practice_duration = league_obj.get_practice_duration() if league_obj else 90
 
     # Find shared practices - practices at same field/time as another team
+    # Exclude cancelled practices from both the source and overlapping check
     shared_practices = {}  # game_id -> partner team display name
     try:
-        practice_games = [g for g in all_games if g.game_type == 'practice' and g.field_id and g.game_date]
+        practice_games = [g for g in all_games
+                          if g.game_type == 'practice'
+                          and g.field_id
+                          and g.game_date
+                          and g.status != 'cancelled']
         if practice_games:
             for practice in practice_games:
                 overlapping = Game.query.filter(
@@ -1083,7 +1094,8 @@ def division_schedule(token):
                     Game.ID != practice.ID,
                     Game.game_type == 'practice',
                     Game.field_id == practice.field_id,
-                    Game.game_date == practice.game_date
+                    Game.game_date == practice.game_date,
+                    Game.status != 'cancelled'  # Exclude cancelled practices
                 ).first()
                 if overlapping and overlapping.home_team:
                     shared_practices[practice.ID] = overlapping.home_team.computed_display_name
