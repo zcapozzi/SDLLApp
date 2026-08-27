@@ -1,0 +1,438 @@
+{% extends "base.html" %}
+
+{% block title %}Team Setup - {{ season_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .season-selector {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    .season-selector select {
+        padding: 8px 12px;
+        font-size: 14px;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+    }
+    .team-grid {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+    .team-grid th {
+        background: #f5f5f5;
+        padding: 10px 8px;
+        text-align: left;
+        font-weight: 600;
+        border-bottom: 2px solid #ddd;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    .team-grid td {
+        padding: 8px;
+        border-bottom: 1px solid #eee;
+        vertical-align: middle;
+    }
+    .team-grid tr:hover {
+        background: #fafafa;
+    }
+    .team-grid input[type="text"],
+    .team-grid select {
+        width: 100%;
+        padding: 6px 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 13px;
+    }
+    .team-grid input[type="text"]:focus,
+    .team-grid select:focus {
+        outline: none;
+        border-color: rgb(34, 139, 34);
+        box-shadow: 0 0 0 2px rgba(34, 139, 34, 0.1);
+    }
+    .team-grid .saving {
+        background: #fffde7 !important;
+    }
+    .team-grid .saved {
+        background: #e8f5e9 !important;
+        transition: background 0.3s;
+    }
+    .team-grid .error {
+        background: #ffebee !important;
+    }
+    .league-header {
+        background: rgb(34, 139, 34) !important;
+        color: white;
+    }
+    .league-header td {
+        font-weight: bold;
+        padding: 12px 8px;
+    }
+    .col-display-name { width: 150px; }
+    .col-division { width: 120px; }
+    .col-coach { width: 180px; }
+    .col-nickname { width: 140px; }
+
+    /* Add Coach Role Panel */
+    .add-coach-panel {
+        background: #f8f9fa;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 25px;
+    }
+    .add-coach-panel h3 {
+        margin: 0 0 15px 0;
+        font-size: 16px;
+    }
+    .search-row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+    }
+    .search-input-wrapper {
+        flex: 1;
+        position: relative;
+    }
+    .search-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #ddd;
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 100;
+        display: none;
+    }
+    .search-results.show {
+        display: block;
+    }
+    .search-result-item {
+        padding: 10px 12px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .search-result-item:hover {
+        background: #f5f5f5;
+    }
+    .search-result-item .name {
+        font-weight: 500;
+    }
+    .search-result-item .email {
+        color: #666;
+        font-size: 12px;
+    }
+    .search-result-item .is-coach {
+        color: #666;
+        font-size: 11px;
+        background: #eee;
+        padding: 2px 6px;
+        border-radius: 3px;
+    }
+    .sport-select {
+        width: 120px;
+    }
+    .status-message {
+        margin-top: 10px;
+        padding: 8px 12px;
+        border-radius: 4px;
+        display: none;
+    }
+    .status-message.success {
+        display: block;
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+    .status-message.error {
+        display: block;
+        background: #ffebee;
+        color: #c62828;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Team Setup</h1>
+    <div>
+        <a href="{{ url_for('seasons.setup') }}" class="btn btn-outline">Back to Setup</a>
+    </div>
+</div>
+
+<!-- Season Selector -->
+<div class="season-selector">
+    <label for="season-select"><strong>Season:</strong></label>
+    <select id="season-select" onchange="changeSeason(this.value)">
+        {% for season in seasons %}
+        <option value="{{ season.year }}-{{ season.is_spring }}"
+                {% if season.year == year and season.is_spring == is_spring %}selected{% endif %}>
+            {{ season.name }} ({{ season.team_count }} teams)
+        </option>
+        {% endfor %}
+    </select>
+</div>
+
+<!-- Add Coach Role Panel -->
+<div class="add-coach-panel">
+    <h3>Add Coach Role to User</h3>
+    <p class="text-muted text-small" style="margin-bottom: 12px;">
+        Search for an existing user to add the Coach role. This allows them to be assigned as a team coach.
+    </p>
+    <div class="search-row">
+        <div class="search-input-wrapper">
+            <input type="text" id="user-search" class="form-control"
+                   placeholder="Search by name..." autocomplete="off"
+                   oninput="searchUsers(this.value)">
+            <div class="search-results" id="search-results"></div>
+        </div>
+        <select id="sport-select" class="sport-select">
+            <option value="both">Both</option>
+            <option value="baseball">Baseball</option>
+            <option value="softball">Softball</option>
+        </select>
+        <button type="button" class="btn btn-primary" id="add-coach-btn" onclick="addCoachRole()" disabled>
+            Add Coach Role
+        </button>
+    </div>
+    <div class="status-message" id="add-coach-status"></div>
+</div>
+
+{% if teams_by_league %}
+<div class="card" style="overflow-x: auto;">
+    <table class="team-grid">
+        <thead>
+            <tr>
+                <th class="col-display-name">Display Name</th>
+                <th class="col-division">Division</th>
+                <th class="col-coach">Head Coach</th>
+                <th class="col-coach">Assistant 1</th>
+                <th class="col-coach">Assistant 2</th>
+                <th class="col-coach">Assistant 3</th>
+                <th class="col-nickname">Team Nickname</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for league, teams in teams_by_league.items() %}
+            <tr class="league-header">
+                <td colspan="7">{{ league }} ({{ teams|length }} teams)</td>
+            </tr>
+            {% for team in teams %}
+            {% set head_coach = team.coaches|selectattr('role', 'equalto', 'head')|first %}
+            {% set assistants = team.coaches|selectattr('role', 'equalto', 'assistant')|list %}
+            <tr data-team-id="{{ team.team_ID }}">
+                <td>
+                    <input type="text" value="{{ team.display_name or '' }}"
+                           onchange="saveField({{ team.team_ID }}, 'display_name', this.value, this)">
+                </td>
+                <td style="color: #666;">{{ league }}</td>
+                <td>
+                    <select onchange="saveField({{ team.team_ID }}, 'head_coach', this.value, this)">
+                        <option value="">-- Select --</option>
+                        {% for coach in coaches %}
+                        <option value="{{ coach.id }}"
+                                {% if head_coach and head_coach.coach_id == coach.id %}selected{% endif %}>
+                            {{ coach.user.name if coach.user else '(Unknown)' }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td>
+                    <select onchange="saveField({{ team.team_ID }}, 'assistant_1', this.value, this)">
+                        <option value="">-- Select --</option>
+                        {% for coach in coaches %}
+                        <option value="{{ coach.id }}"
+                                {% if assistants|length >= 1 and assistants[0].coach_id == coach.id %}selected{% endif %}>
+                            {{ coach.user.name if coach.user else '(Unknown)' }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td>
+                    <select onchange="saveField({{ team.team_ID }}, 'assistant_2', this.value, this)">
+                        <option value="">-- Select --</option>
+                        {% for coach in coaches %}
+                        <option value="{{ coach.id }}"
+                                {% if assistants|length >= 2 and assistants[1].coach_id == coach.id %}selected{% endif %}>
+                            {{ coach.user.name if coach.user else '(Unknown)' }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td>
+                    <select onchange="saveField({{ team.team_ID }}, 'assistant_3', this.value, this)">
+                        <option value="">-- Select --</option>
+                        {% for coach in coaches %}
+                        <option value="{{ coach.id }}"
+                                {% if assistants|length >= 3 and assistants[2].coach_id == coach.id %}selected{% endif %}>
+                            {{ coach.user.name if coach.user else '(Unknown)' }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td>
+                    <input type="text" value="{{ team.team_name or '' }}"
+                           onchange="saveField({{ team.team_ID }}, 'team_name', this.value, this)">
+                </td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card">
+    <p class="text-muted" style="text-align: center; padding: 40px;">
+        No teams found for this season.
+    </p>
+</div>
+{% endif %}
+
+<script>
+function changeSeason(value) {
+    var parts = value.split('-');
+    var year = parts[0];
+    var is_spring = parts[1];
+    window.location.href = '/seasons/team-setup/' + year + '/' + is_spring;
+}
+
+function saveField(teamId, field, value, element) {
+    var row = element.closest('tr');
+    row.classList.add('saving');
+    row.classList.remove('saved', 'error');
+
+    fetch('/seasons/api/team-setup/update', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            team_id: teamId,
+            field: field,
+            value: value
+        })
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        row.classList.remove('saving');
+        if (data.error) {
+            row.classList.add('error');
+            alert('Error: ' + data.error);
+        } else {
+            row.classList.add('saved');
+            setTimeout(function() {
+                row.classList.remove('saved');
+            }, 2000);
+        }
+    })
+    .catch(function(err) {
+        row.classList.remove('saving');
+        row.classList.add('error');
+        console.error('Save error:', err);
+        alert('Failed to save. Please try again.');
+    });
+}
+
+// User search for adding coach role
+var searchTimeout;
+var selectedUserId = null;
+
+function searchUsers(query) {
+    clearTimeout(searchTimeout);
+    var resultsDiv = document.getElementById('search-results');
+    var addBtn = document.getElementById('add-coach-btn');
+
+    if (query.length < 2) {
+        resultsDiv.classList.remove('show');
+        selectedUserId = null;
+        addBtn.disabled = true;
+        return;
+    }
+
+    searchTimeout = setTimeout(function() {
+        fetch('/seasons/api/users/search?q=' + encodeURIComponent(query))
+        .then(function(response) {
+            return response.json();
+        })
+        .then(function(users) {
+            if (users.length === 0) {
+                resultsDiv.innerHTML = '<div class="search-result-item" style="color: #666;">No users found</div>';
+            } else {
+                resultsDiv.innerHTML = users.map(function(user) {
+                    return '<div class="search-result-item" onclick="selectUser(' + user.id + ', \'' + user.name.replace(/'/g, "\\'") + '\')">' +
+                        '<div><span class="name">' + user.name + '</span><br><span class="email">' + (user.email || '') + '</span></div>' +
+                        (user.is_coach ? '<span class="is-coach">Already Coach</span>' : '') +
+                        '</div>';
+                }).join('');
+            }
+            resultsDiv.classList.add('show');
+        })
+        .catch(function(err) {
+            console.error('Search error:', err);
+        });
+    }, 300);
+}
+
+function selectUser(userId, userName) {
+    selectedUserId = userId;
+    document.getElementById('user-search').value = userName;
+    document.getElementById('search-results').classList.remove('show');
+    document.getElementById('add-coach-btn').disabled = false;
+}
+
+function addCoachRole() {
+    if (!selectedUserId) return;
+
+    var sport = document.getElementById('sport-select').value;
+    var statusDiv = document.getElementById('add-coach-status');
+
+    fetch('/seasons/api/team-setup/add-coach-role', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            user_id: selectedUserId,
+            sport: sport
+        })
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.error) {
+            statusDiv.className = 'status-message error';
+            statusDiv.textContent = data.error;
+        } else {
+            statusDiv.className = 'status-message success';
+            statusDiv.textContent = 'Added coach role for ' + data.user_name + ' (' + data.sport + '). Refresh page to see them in dropdowns.';
+            document.getElementById('user-search').value = '';
+            selectedUserId = null;
+            document.getElementById('add-coach-btn').disabled = true;
+        }
+    })
+    .catch(function(err) {
+        statusDiv.className = 'status-message error';
+        statusDiv.textContent = 'Failed to add coach role. Please try again.';
+        console.error('Add coach error:', err);
+    });
+}
+
+// Close search results when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.search-input-wrapper')) {
+        document.getElementById('search-results').classList.remove('show');
+    }
+});
+</script>
+{% endblock %}

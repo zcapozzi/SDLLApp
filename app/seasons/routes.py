@@ -1275,6 +1275,283 @@ def practice_pairings(year, is_spring):
     )
 
 
+@seasons_bp.route('/team-setup')
+@seasons_bp.route('/team-setup/<int:year>/<int:is_spring>')
+@login_required
+def team_setup(year=None, is_spring=None):
+    """Team Setup page - edit display names, coaches, team nicknames with async save."""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to manage teams.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    from app.models.coach import CoachUser, CoachSeason
+    from sqlalchemy.orm import joinedload
+
+    # Get available seasons
+    seasons_query = db.session.query(
+        TeamSeason.year,
+        TeamSeason.is_spring,
+        db.func.count(TeamSeason.team_ID).label('team_count')
+    ).filter(
+        TeamSeason.active == 1
+    ).group_by(
+        TeamSeason.year,
+        TeamSeason.is_spring
+    ).order_by(
+        TeamSeason.year.desc(),
+        TeamSeason.is_spring.desc()
+    ).all()
+
+    seasons = [{
+        'year': y,
+        'is_spring': s,
+        'name': f'{"Spring" if s else "Fall"} {y}',
+        'team_count': c
+    } for y, s, c in seasons_query]
+
+    # Default to current/most recent season if not specified
+    if year is None or is_spring is None:
+        if seasons:
+            year = seasons[0]['year']
+            is_spring = seasons[0]['is_spring']
+        else:
+            return render_template(
+                'seasons/team_setup.html',
+                seasons=[],
+                teams_by_league={},
+                coaches=[],
+                year=None,
+                is_spring=None,
+                season_name='No seasons found'
+            )
+
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    # Get teams with eager-loaded coaches
+    teams = TeamSeason.query.filter_by(
+        year=year,
+        is_spring=is_spring,
+        active=1,
+        is_placeholder=0
+    ).options(
+        joinedload(TeamSeason.coaches).joinedload(CoachSeason.coach).joinedload(CoachUser.user)
+    ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+
+    # Group by league
+    teams_by_league = {}
+    for team in teams:
+        league = team.league or 'Unknown'
+        if league not in teams_by_league:
+            teams_by_league[league] = []
+        teams_by_league[league].append(team)
+
+    # Get available coaches for dropdowns - eager load user
+    coaches = CoachUser.query.filter_by(status='active').options(
+        joinedload(CoachUser.user)
+    ).all()
+
+    return render_template(
+        'seasons/team_setup.html',
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name,
+        seasons=seasons,
+        teams_by_league=teams_by_league,
+        coaches=coaches
+    )
+
+
+@seasons_bp.route('/api/team-setup/update', methods=['POST'])
+@login_required
+def api_team_setup_update():
+    """API endpoint for async team setup updates."""
+    if not current_user.can_edit_schedule():
+        return jsonify({'error': 'Permission denied'}), 403
+
+    from app.models.coach import CoachUser, CoachSeason
+
+    try:
+        data = request.get_json() or {}
+        team_id = data.get('team_id')
+        field = data.get('field')
+        value = data.get('value')
+
+        if not team_id or not field:
+            return jsonify({'error': 'Missing team_id or field'}), 400
+
+        team = TeamSeason.query.get(team_id)
+        if not team:
+            return jsonify({'error': 'Team not found'}), 404
+
+        if field == 'display_name':
+            team.display_name = value.strip() if value else None
+            db.session.commit()
+            return jsonify({'status': 'ok', 'value': team.display_name})
+
+        elif field == 'team_name':
+            team.team_name = value.strip() if value else None
+            db.session.commit()
+            return jsonify({'status': 'ok', 'value': team.team_name})
+
+        elif field in ('head_coach', 'assistant_1', 'assistant_2', 'assistant_3'):
+            # Determine role
+            role = 'head' if field == 'head_coach' else 'assistant'
+
+            # For assistants, determine the slot number
+            slot_num = None
+            if field.startswith('assistant_'):
+                slot_num = int(field.split('_')[1])
+
+            # Get current coaches for this team
+            current_coaches = CoachSeason.query.filter_by(team_id=team_id).all()
+            head_coaches = [c for c in current_coaches if c.role == 'head']
+            assistants = [c for c in current_coaches if c.role == 'assistant']
+
+            if field == 'head_coach':
+                # Remove existing head coach if any
+                for hc in head_coaches:
+                    db.session.delete(hc)
+
+                # Add new head coach if value provided
+                if value:
+                    coach_id = int(value)
+                    coach = CoachUser.query.get(coach_id)
+                    if coach and coach.user:
+                        cs = CoachSeason(
+                            team_id=team_id,
+                            coach_id=coach_id,
+                            role='head'
+                        )
+                        cs.name = coach.user.name
+                        cs.email = coach.user.email
+                        cs.phone = coach.user.phone
+                        db.session.add(cs)
+
+                        # Update team's coach_name field
+                        team.coach_name = coach.user.name
+            else:
+                # Handle assistant slots
+                # Keep only the first (slot_num - 1) assistants, then add/update at slot_num position
+                # Sort assistants by ID to maintain order
+                assistants.sort(key=lambda x: x.id)
+
+                # If clearing this slot
+                if not value:
+                    if slot_num <= len(assistants):
+                        db.session.delete(assistants[slot_num - 1])
+                else:
+                    coach_id = int(value)
+                    coach = CoachUser.query.get(coach_id)
+                    if coach and coach.user:
+                        if slot_num <= len(assistants):
+                            # Update existing slot
+                            assistants[slot_num - 1].coach_id = coach_id
+                            assistants[slot_num - 1].name = coach.user.name
+                            assistants[slot_num - 1].email = coach.user.email
+                            assistants[slot_num - 1].phone = coach.user.phone
+                        else:
+                            # Add new assistant
+                            cs = CoachSeason(
+                                team_id=team_id,
+                                coach_id=coach_id,
+                                role='assistant'
+                            )
+                            cs.name = coach.user.name
+                            cs.email = coach.user.email
+                            cs.phone = coach.user.phone
+                            db.session.add(cs)
+
+            db.session.commit()
+            return jsonify({'status': 'ok'})
+
+        else:
+            return jsonify({'error': f'Unknown field: {field}'}), 400
+
+    except Exception as e:
+        db.session.rollback()
+        logger.info(f'Team setup update error: {str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+
+@seasons_bp.route('/api/team-setup/add-coach-role', methods=['POST'])
+@login_required
+def api_add_coach_role():
+    """API endpoint to add Coach role to an existing user."""
+    if not current_user.can_edit_schedule():
+        return jsonify({'error': 'Permission denied'}), 403
+
+    from app.models.coach import CoachUser
+    from app.models.user import User
+
+    try:
+        data = request.get_json() or {}
+        user_id = data.get('user_id')
+        sport = data.get('sport', 'both')  # baseball, softball, or both
+
+        if not user_id:
+            return jsonify({'error': 'Missing user_id'}), 400
+
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        # Check if already a coach
+        existing = CoachUser.query.filter_by(user_id=user_id).first()
+        if existing:
+            return jsonify({'error': 'User is already a coach', 'coach_id': existing.id}), 400
+
+        # Create coach record
+        coach = CoachUser(
+            user_id=user_id,
+            sport=sport,
+            status='active'
+        )
+        db.session.add(coach)
+        db.session.commit()
+
+        return jsonify({
+            'status': 'ok',
+            'coach_id': coach.id,
+            'user_name': user.name,
+            'sport': sport
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logger.info(f'Add coach role error: {str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+
+@seasons_bp.route('/api/users/search')
+@login_required
+def api_users_search():
+    """API endpoint to search users (for adding coach role)."""
+    if not current_user.can_edit_schedule():
+        return jsonify({'error': 'Permission denied'}), 403
+
+    from app.models.user import User
+    from app.models.coach import CoachUser
+
+    query = request.args.get('q', '').strip()
+    if len(query) < 2:
+        return jsonify([])
+
+    # Search by name
+    users = User.query.filter(
+        User.name.ilike(f'%{query}%')
+    ).limit(20).all()
+
+    # Get existing coach user IDs
+    coach_user_ids = set(c.user_id for c in CoachUser.query.all())
+
+    return jsonify([{
+        'id': u.ID,
+        'name': u.name,
+        'email': u.email,
+        'is_coach': u.ID in coach_user_ids
+    } for u in users])
+
+
 @seasons_bp.route('/<int:year>/<int:is_spring>/release-schedule', methods=['GET', 'POST'])
 @login_required
 def release_schedule(year, is_spring):
