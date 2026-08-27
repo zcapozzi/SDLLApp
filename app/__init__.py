@@ -82,17 +82,39 @@ def create_app(config_name=None):
         Uses OrgSeason to determine the current season:
         1. First looks for a season explicitly marked as is_current=1
         2. Falls back to the season with the latest season_started_at
+        3. If no OrgSeason data, falls back to LeagueSeason query
         """
         from .models.org_season import OrgSeason
+        from .models.league_season import LeagueSeason
 
-        current_season = OrgSeason.get_current_season()
+        try:
+            current_season = OrgSeason.get_current_season()
 
-        if current_season:
+            if current_season:
+                return {
+                    'current_season_year': current_season.year,
+                    'current_season_is_spring': current_season.is_spring,
+                    'current_season_name': current_season.season_name
+                }
+        except Exception:
+            pass  # Fall through to LeagueSeason fallback
+
+        # Fallback: query LeagueSeason directly (for when OrgSeason table is empty)
+        fallback = db.session.query(
+            LeagueSeason.year,
+            LeagueSeason.is_spring
+        ).filter_by(active=1).order_by(
+            LeagueSeason.year.desc(),
+            LeagueSeason.is_spring.desc()
+        ).first()
+
+        if fallback:
             return {
-                'current_season_year': current_season.year,
-                'current_season_is_spring': current_season.is_spring,
-                'current_season_name': current_season.season_name
+                'current_season_year': fallback.year,
+                'current_season_is_spring': fallback.is_spring,
+                'current_season_name': f'{"Spring" if fallback.is_spring else "Fall"} {fallback.year}'
             }
+
         return {
             'current_season_year': None,
             'current_season_is_spring': None,
