@@ -7,7 +7,8 @@
     <div class="card">
         <h1 style="text-align: center; color: rgb(34, 139, 34); margin-bottom: 30px;">SDLL Login</h1>
 
-        <form method="POST" action="{{ url_for('auth.login') }}">
+        {% set next_url = request.args.get('next') %}
+        <form method="POST" action="{{ url_for('auth.login', next=next_url) if next_url else url_for('auth.login') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
             <div class="form-group">
