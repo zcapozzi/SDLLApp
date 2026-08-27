@@ -155,7 +155,7 @@
             {% set regular_count = game_counts.get('regular', 0) %}
             {% set playoff_count = game_counts.get('playoff', 0) %}
             {% set expected_regular = ((team_count * (config.regular_season_games or 10)) // 2) if team_count > 1 else 0 %}
-            {% set expected_playoff = config.playoff_game_count %}
+            {% set expected_playoff = playoff_game_counts.get(config.league, 0) %}
             <tr id="league-{{ config.ID }}">
                 <td><strong>{{ config.league }}</strong></td>
                 <td style="text-align: center;">{{ team_count }}</td>

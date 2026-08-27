@@ -958,6 +958,27 @@ def manage_leagues(year, is_spring):
     # Count games by type per league (single query for all leagues)
     games_by_league = Game.count_by_type_for_season(year, is_spring)
 
+    # Pre-compute playoff game counts to avoid N+1 queries in template
+    # (config.playoff_game_count calls actual_playoff_teams which queries DB)
+    playoff_game_counts = {}
+    for config in league_configs:
+        team_count = teams_by_league.get(config.league, 0)
+        # Determine actual playoff teams (0 means all teams qualify)
+        actual_teams = config.playoff_teams if config.playoff_teams and config.playoff_teams > 0 else team_count
+        # Calculate playoff games based on format
+        if config.playoff_format == 'none' or actual_teams < 2:
+            playoff_game_counts[config.league] = 0
+        elif config.playoff_format == 'single_elimination':
+            playoff_game_counts[config.league] = actual_teams - 1
+        elif config.playoff_format == 'double_elimination':
+            playoff_game_counts[config.league] = (2 * actual_teams) - 2
+        elif config.playoff_format == 'round_robin_knockout':
+            round_robin = (actual_teams * (actual_teams - 1)) // 2
+            knockout = min(actual_teams, 4) - 1
+            playoff_game_counts[config.league] = round_robin + knockout
+        else:
+            playoff_game_counts[config.league] = actual_teams - 1
+
     return render_template(
         'seasons/manage_leagues.html',
         year=year,
@@ -968,6 +989,7 @@ def manage_leagues(year, is_spring):
         teams_by_league=teams_by_league,
         placeholders_by_league=placeholders_by_league,
         games_by_league=games_by_league,
+        playoff_game_counts=playoff_game_counts,
         playoff_formats=LeagueSeason.PLAYOFF_FORMATS
     )
 
