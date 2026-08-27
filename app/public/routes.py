@@ -23,7 +23,6 @@ from app.models.field import Field
 from app.models.umpire_partner import UmpirePartner
 from app.models.game_change import GameChange
 from app.models.game_start_record import GameStartRecord
-from app.models.practice_pairing import PracticePairing
 from app.extensions import db
 import sys
 import csv
@@ -227,31 +226,8 @@ def team_schedule(token):
         'ad': None,
         'impression_token': None,
         'game_originals': {},  # "Originally scheduled for..." text per game
+        'shared_practices': {},  # game_id -> partner team name for shared practices
     }
-
-    # Get practice pairings for this team - maps day_of_week to partner team name
-    practice_partners = {}  # day_of_week -> partner team display name
-    try:
-        pairings = PracticePairing.query.filter(
-            PracticePairing.year == team.year,
-            PracticePairing.is_spring == team.is_spring,
-            PracticePairing.active == 1,
-            db.or_(
-                PracticePairing.team_one_id == team.team_ID,
-                PracticePairing.team_two_id == team.team_ID
-            )
-        ).all()
-        for p in pairings:
-            # Get the partner team (the other team in the pairing)
-            if p.team_one_id == team.team_ID:
-                partner = p.team_two
-            else:
-                partner = p.team_one
-            if partner:
-                practice_partners[p.day_of_week] = partner.computed_display_name
-    except Exception:
-        pass  # Don't fail page load if pairings lookup fails
-    template_vars['practice_partners'] = practice_partners
 
     # Determine what games/practices to show
     if not is_locked:
@@ -371,6 +347,28 @@ def team_schedule(token):
         except Exception:
             game_originals = {}  # Don't fail if change lookup fails
         template_vars['game_originals'] = game_originals
+
+        # Find shared practices - other teams practicing at same field/time
+        shared_practices = {}  # game_id -> partner team display name
+        try:
+            # Get all practice games for this team
+            practice_games = [g for g in all_games if g.game_type == 'practice' and g.field_id and g.game_date]
+            if practice_games:
+                # For each practice, find other practices at same field/time
+                for practice in practice_games:
+                    overlapping = Game.query.filter(
+                        Game.active == 1,
+                        Game.ID != practice.ID,
+                        Game.game_type == 'practice',
+                        Game.field_id == practice.field_id,
+                        Game.game_date == practice.game_date,
+                        Game.home_ID != team.team_ID  # Different team
+                    ).first()
+                    if overlapping and overlapping.home_team:
+                        shared_practices[practice.ID] = overlapping.home_team.computed_display_name
+        except Exception:
+            pass  # Don't fail page load if lookup fails
+        template_vars['shared_practices'] = shared_practices
 
     # =========================================================================
     # PHASE 1.5: GET GAME START RECORDS FOR TODAY'S GAMES
