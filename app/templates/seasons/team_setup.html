@@ -22,11 +22,12 @@
         font-size: 13px;
     }
     .team-grid th {
-        background: #f5f5f5;
+        background: rgb(34, 139, 34);
+        color: white;
         padding: 10px 8px;
         text-align: left;
         font-weight: 600;
-        border-bottom: 2px solid #ddd;
+        border-bottom: 2px solid rgb(34, 139, 34);
         position: sticky;
         top: 0;
         z-index: 10;
@@ -39,16 +40,14 @@
     .team-grid tr:hover {
         background: #fafafa;
     }
-    .team-grid input[type="text"],
-    .team-grid select {
+    .team-grid input[type="text"] {
         width: 100%;
         padding: 6px 8px;
         border: 1px solid #ddd;
         border-radius: 4px;
         font-size: 13px;
     }
-    .team-grid input[type="text"]:focus,
-    .team-grid select:focus {
+    .team-grid input[type="text"]:focus {
         outline: none;
         border-color: rgb(34, 139, 34);
         box-shadow: 0 0 0 2px rgba(34, 139, 34, 0.1);
@@ -72,9 +71,73 @@
         padding: 12px 8px;
     }
     .col-display-name { width: 150px; }
-    .col-division { width: 120px; }
-    .col-coach { width: 180px; }
-    .col-nickname { width: 140px; }
+    .col-division { width: 100px; }
+    .col-coach { width: 160px; }
+    .col-nickname { width: 130px; }
+
+    /* Autocomplete styles */
+    .autocomplete-wrapper {
+        position: relative;
+    }
+    .autocomplete-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #ddd;
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 1000;
+        display: none;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .autocomplete-results.show {
+        display: block;
+    }
+    .autocomplete-item {
+        padding: 8px 10px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .autocomplete-item:hover {
+        background: #f5f5f5;
+    }
+    .autocomplete-item .name {
+        font-weight: 500;
+    }
+    .autocomplete-item .sport {
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        color: white;
+    }
+    .autocomplete-item .sport.baseball { background: #228B22; }
+    .autocomplete-item .sport.softball { background: #FF8C00; }
+    .autocomplete-item .sport.both { background: #6c757d; }
+    .autocomplete-item.clear-option {
+        color: #999;
+        font-style: italic;
+    }
+    .coach-display {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .coach-display .clear-btn {
+        color: #c33;
+        cursor: pointer;
+        font-size: 16px;
+        line-height: 1;
+        padding: 0 4px;
+    }
+    .coach-display .clear-btn:hover {
+        color: #a00;
+    }
 
     /* Add Coach Role Panel */
     .add-coach-panel {
@@ -185,7 +248,7 @@
 <div class="add-coach-panel">
     <h3>Add Coach Role to User</h3>
     <p class="text-muted text-small" style="margin-bottom: 12px;">
-        Search for an existing user to add the Coach role. This allows them to be assigned as a team coach.
+        If a coach is not showing up in the list of options below, use the search below to find them and add the Coach role to their user profile.
     </p>
     <div class="search-row">
         <div class="search-input-wrapper">
@@ -231,56 +294,64 @@
             <tr data-team-id="{{ team.team_ID }}">
                 <td>
                     <input type="text" value="{{ team.display_name or '' }}"
-                           onchange="saveField({{ team.team_ID }}, 'display_name', this.value, this)">
+                           onchange="saveTextField({{ team.team_ID }}, 'display_name', this.value, this)">
                 </td>
                 <td style="color: #666;">{{ league }}</td>
                 <td>
-                    <select onchange="saveField({{ team.team_ID }}, 'head_coach', this.value, this)">
-                        <option value="">-- Select --</option>
-                        {% for coach in coaches %}
-                        <option value="{{ coach.id }}"
-                                {% if head_coach and head_coach.coach_id == coach.id %}selected{% endif %}>
-                            {{ coach.user.name if coach.user else '(Unknown)' }}
-                        </option>
-                        {% endfor %}
-                    </select>
+                    <div class="autocomplete-wrapper">
+                        <input type="text" class="coach-input"
+                               data-team-id="{{ team.team_ID }}"
+                               data-field="head_coach"
+                               data-coach-id="{{ head_coach.coach_id if head_coach else '' }}"
+                               value="{{ head_coach.name if head_coach else '' }}"
+                               placeholder="Type to search..."
+                               oninput="searchCoaches(this)"
+                               onfocus="searchCoaches(this)">
+                        <div class="autocomplete-results"></div>
+                    </div>
                 </td>
                 <td>
-                    <select onchange="saveField({{ team.team_ID }}, 'assistant_1', this.value, this)">
-                        <option value="">-- Select --</option>
-                        {% for coach in coaches %}
-                        <option value="{{ coach.id }}"
-                                {% if assistants|length >= 1 and assistants[0].coach_id == coach.id %}selected{% endif %}>
-                            {{ coach.user.name if coach.user else '(Unknown)' }}
-                        </option>
-                        {% endfor %}
-                    </select>
+                    <div class="autocomplete-wrapper">
+                        <input type="text" class="coach-input"
+                               data-team-id="{{ team.team_ID }}"
+                               data-field="assistant_1"
+                               data-coach-id="{{ assistants[0].coach_id if assistants|length >= 1 else '' }}"
+                               value="{{ assistants[0].name if assistants|length >= 1 else '' }}"
+                               placeholder="Type to search..."
+                               oninput="searchCoaches(this)"
+                               onfocus="searchCoaches(this)">
+                        <div class="autocomplete-results"></div>
+                    </div>
                 </td>
                 <td>
-                    <select onchange="saveField({{ team.team_ID }}, 'assistant_2', this.value, this)">
-                        <option value="">-- Select --</option>
-                        {% for coach in coaches %}
-                        <option value="{{ coach.id }}"
-                                {% if assistants|length >= 2 and assistants[1].coach_id == coach.id %}selected{% endif %}>
-                            {{ coach.user.name if coach.user else '(Unknown)' }}
-                        </option>
-                        {% endfor %}
-                    </select>
+                    <div class="autocomplete-wrapper">
+                        <input type="text" class="coach-input"
+                               data-team-id="{{ team.team_ID }}"
+                               data-field="assistant_2"
+                               data-coach-id="{{ assistants[1].coach_id if assistants|length >= 2 else '' }}"
+                               value="{{ assistants[1].name if assistants|length >= 2 else '' }}"
+                               placeholder="Type to search..."
+                               oninput="searchCoaches(this)"
+                               onfocus="searchCoaches(this)">
+                        <div class="autocomplete-results"></div>
+                    </div>
                 </td>
                 <td>
-                    <select onchange="saveField({{ team.team_ID }}, 'assistant_3', this.value, this)">
-                        <option value="">-- Select --</option>
-                        {% for coach in coaches %}
-                        <option value="{{ coach.id }}"
-                                {% if assistants|length >= 3 and assistants[2].coach_id == coach.id %}selected{% endif %}>
-                            {{ coach.user.name if coach.user else '(Unknown)' }}
-                        </option>
-                        {% endfor %}
-                    </select>
+                    <div class="autocomplete-wrapper">
+                        <input type="text" class="coach-input"
+                               data-team-id="{{ team.team_ID }}"
+                               data-field="assistant_3"
+                               data-coach-id="{{ assistants[2].coach_id if assistants|length >= 3 else '' }}"
+                               value="{{ assistants[2].name if assistants|length >= 3 else '' }}"
+                               placeholder="Type to search..."
+                               oninput="searchCoaches(this)"
+                               onfocus="searchCoaches(this)">
+                        <div class="autocomplete-results"></div>
+                    </div>
                 </td>
                 <td>
                     <input type="text" value="{{ team.team_name or '' }}"
-                           onchange="saveField({{ team.team_ID }}, 'team_name', this.value, this)">
+                           onchange="saveTextField({{ team.team_ID }}, 'team_name', this.value, this)">
                 </td>
             </tr>
             {% endfor %}
@@ -304,7 +375,7 @@ function changeSeason(value) {
     window.location.href = '/seasons/team-setup/' + year + '/' + is_spring;
 }
 
-function saveField(teamId, field, value, element) {
+function saveTextField(teamId, field, value, element) {
     var row = element.closest('tr');
     row.classList.add('saving');
     row.classList.remove('saved', 'error');
@@ -343,12 +414,138 @@ function saveField(teamId, field, value, element) {
     });
 }
 
+// Coach autocomplete
+var coachSearchTimeout;
+
+function searchCoaches(input) {
+    clearTimeout(coachSearchTimeout);
+    var wrapper = input.closest('.autocomplete-wrapper');
+    var resultsDiv = wrapper.querySelector('.autocomplete-results');
+    var query = input.value.trim();
+
+    // Show clear option if there's a current value
+    if (query.length < 1) {
+        if (input.dataset.coachId) {
+            resultsDiv.innerHTML = '<div class="autocomplete-item clear-option" onclick="clearCoach(this)">Clear selection</div>';
+            resultsDiv.classList.add('show');
+        } else {
+            resultsDiv.classList.remove('show');
+        }
+        return;
+    }
+
+    coachSearchTimeout = setTimeout(function() {
+        fetch('/seasons/api/coaches/search?q=' + encodeURIComponent(query))
+        .then(function(response) {
+            return response.json();
+        })
+        .then(function(coaches) {
+            var html = '';
+            if (input.dataset.coachId) {
+                html += '<div class="autocomplete-item clear-option" onclick="clearCoach(this)">Clear selection</div>';
+            }
+            if (coaches.length === 0) {
+                html += '<div class="autocomplete-item" style="color: #666; cursor: default;">No coaches found</div>';
+            } else {
+                coaches.forEach(function(coach) {
+                    html += '<div class="autocomplete-item" onclick="selectCoach(this, ' + coach.id + ', \'' + coach.name.replace(/'/g, "\\'") + '\')">' +
+                        '<span class="name">' + coach.name + '</span>' +
+                        '<span class="sport ' + coach.sport + '">' + coach.sport + '</span>' +
+                        '</div>';
+                });
+            }
+            resultsDiv.innerHTML = html;
+            resultsDiv.classList.add('show');
+        })
+        .catch(function(err) {
+            console.error('Coach search error:', err);
+        });
+    }, 200);
+}
+
+function selectCoach(item, coachId, coachName) {
+    var wrapper = item.closest('.autocomplete-wrapper');
+    var input = wrapper.querySelector('.coach-input');
+    var resultsDiv = wrapper.querySelector('.autocomplete-results');
+
+    input.value = coachName;
+    input.dataset.coachId = coachId;
+    resultsDiv.classList.remove('show');
+
+    // Save the selection
+    saveCoachField(input, coachId);
+}
+
+function clearCoach(item) {
+    var wrapper = item.closest('.autocomplete-wrapper');
+    var input = wrapper.querySelector('.coach-input');
+    var resultsDiv = wrapper.querySelector('.autocomplete-results');
+
+    input.value = '';
+    input.dataset.coachId = '';
+    resultsDiv.classList.remove('show');
+
+    // Save the clear
+    saveCoachField(input, '');
+}
+
+function saveCoachField(input, coachId) {
+    var teamId = input.dataset.teamId;
+    var field = input.dataset.field;
+    var row = input.closest('tr');
+
+    row.classList.add('saving');
+    row.classList.remove('saved', 'error');
+
+    fetch('/seasons/api/team-setup/update', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            team_id: parseInt(teamId),
+            field: field,
+            value: coachId ? coachId.toString() : ''
+        })
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        row.classList.remove('saving');
+        if (data.error) {
+            row.classList.add('error');
+            alert('Error: ' + data.error);
+        } else {
+            row.classList.add('saved');
+            setTimeout(function() {
+                row.classList.remove('saved');
+            }, 2000);
+        }
+    })
+    .catch(function(err) {
+        row.classList.remove('saving');
+        row.classList.add('error');
+        console.error('Save error:', err);
+        alert('Failed to save. Please try again.');
+    });
+}
+
+// Close autocomplete when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.autocomplete-wrapper')) {
+        document.querySelectorAll('.autocomplete-results').forEach(function(r) {
+            r.classList.remove('show');
+        });
+    }
+});
+
 // User search for adding coach role
-var searchTimeout;
+var userSearchTimeout;
 var selectedUserId = null;
 
 function searchUsers(query) {
-    clearTimeout(searchTimeout);
+    clearTimeout(userSearchTimeout);
     var resultsDiv = document.getElementById('search-results');
     var addBtn = document.getElementById('add-coach-btn');
 
@@ -359,19 +556,25 @@ function searchUsers(query) {
         return;
     }
 
-    searchTimeout = setTimeout(function() {
+    userSearchTimeout = setTimeout(function() {
         fetch('/seasons/api/users/search?q=' + encodeURIComponent(query))
         .then(function(response) {
             return response.json();
         })
         .then(function(users) {
-            if (users.length === 0) {
-                resultsDiv.innerHTML = '<div class="search-result-item" style="color: #666;">No users found</div>';
+            // Filter to only show users who are NOT already coaches
+            var nonCoachUsers = users.filter(function(u) { return !u.is_coach; });
+
+            if (nonCoachUsers.length === 0) {
+                if (users.length > 0) {
+                    resultsDiv.innerHTML = '<div class="search-result-item" style="color: #666;">All matching users are already coaches</div>';
+                } else {
+                    resultsDiv.innerHTML = '<div class="search-result-item" style="color: #666;">No users found</div>';
+                }
             } else {
-                resultsDiv.innerHTML = users.map(function(user) {
+                resultsDiv.innerHTML = nonCoachUsers.map(function(user) {
                     return '<div class="search-result-item" onclick="selectUser(' + user.id + ', \'' + user.name.replace(/'/g, "\\'") + '\')">' +
                         '<div><span class="name">' + user.name + '</span><br><span class="email">' + (user.email || '') + '</span></div>' +
-                        (user.is_coach ? '<span class="is-coach">Already Coach</span>' : '') +
                         '</div>';
                 }).join('');
             }
@@ -415,7 +618,7 @@ function addCoachRole() {
             statusDiv.textContent = data.error;
         } else {
             statusDiv.className = 'status-message success';
-            statusDiv.textContent = 'Added coach role for ' + data.user_name + ' (' + data.sport + '). Refresh page to see them in dropdowns.';
+            statusDiv.textContent = 'Added coach role for ' + data.user_name + ' (' + data.sport + '). They will now appear in coach search.';
             document.getElementById('user-search').value = '';
             selectedUserId = null;
             document.getElementById('add-coach-btn').disabled = true;
@@ -428,7 +631,7 @@ function addCoachRole() {
     });
 }
 
-// Close search results when clicking outside
+// Close user search results when clicking outside
 document.addEventListener('click', function(e) {
     if (!e.target.closest('.search-input-wrapper')) {
         document.getElementById('search-results').classList.remove('show');

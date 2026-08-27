@@ -1287,7 +1287,8 @@ def team_setup(year=None, is_spring=None):
     from app.models.coach import CoachUser, CoachSeason
     from sqlalchemy.orm import joinedload
 
-    # Get available seasons
+    # Get available seasons - order by year desc, then fall before spring (is_spring asc)
+    # This puts Fall 2026 before Spring 2026
     seasons_query = db.session.query(
         TeamSeason.year,
         TeamSeason.is_spring,
@@ -1299,7 +1300,7 @@ def team_setup(year=None, is_spring=None):
         TeamSeason.is_spring
     ).order_by(
         TeamSeason.year.desc(),
-        TeamSeason.is_spring.desc()
+        TeamSeason.is_spring.asc()  # 0 (Fall) before 1 (Spring)
     ).all()
 
     seasons = [{
@@ -1550,6 +1551,39 @@ def api_users_search():
         'email': u.email,
         'is_coach': u.ID in coach_user_ids
     } for u in users])
+
+
+@seasons_bp.route('/api/coaches/search')
+@login_required
+def api_coaches_search():
+    """API endpoint to search coaches (for team assignment dropdowns)."""
+    if not current_user.can_edit_schedule():
+        return jsonify({'error': 'Permission denied'}), 403
+
+    from app.models.coach import CoachUser
+    from sqlalchemy.orm import joinedload
+
+    query = request.args.get('q', '').strip()
+    if len(query) < 1:
+        return jsonify([])
+
+    # Get active coaches with user info
+    coaches = CoachUser.query.filter_by(status='active').options(
+        joinedload(CoachUser.user)
+    ).all()
+
+    # Filter by name
+    results = []
+    query_lower = query.lower()
+    for coach in coaches:
+        if coach.user and query_lower in coach.user.name.lower():
+            results.append({
+                'id': coach.id,
+                'name': coach.user.name,
+                'sport': coach.sport
+            })
+
+    return jsonify(results[:15])
 
 
 @seasons_bp.route('/<int:year>/<int:is_spring>/release-schedule', methods=['GET', 'POST'])
