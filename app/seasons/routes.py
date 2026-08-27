@@ -1537,20 +1537,27 @@ def api_users_search():
     if len(query) < 2:
         return jsonify([])
 
-    # Search by name
-    users = User.query.filter(
-        User.name.ilike(f'%{query}%')
-    ).limit(20).all()
-
     # Get existing coach user IDs
     coach_user_ids = set(c.user_id for c in CoachUser.query.all())
 
-    return jsonify([{
-        'id': u.ID,
-        'name': u.name,
-        'email': u.email,
-        'is_coach': u.ID in coach_user_ids
-    } for u in users])
+    # Get active users for this org - name is encrypted so we need to filter in Python
+    all_users = User.query.filter_by(active=1, org_ID=current_user.org_ID).all()
+
+    # Filter by name (decrypted via property) in Python
+    query_lower = query.lower()
+    results = []
+    for u in all_users:
+        if u.name and query_lower in u.name.lower():
+            results.append({
+                'id': u.ID,
+                'name': u.name,
+                'email': u.email,
+                'is_coach': u.ID in coach_user_ids
+            })
+            if len(results) >= 20:
+                break
+
+    return jsonify(results)
 
 
 @seasons_bp.route('/api/coaches/search')
