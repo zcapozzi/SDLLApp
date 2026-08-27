@@ -525,7 +525,18 @@
                 {{ next_game.game_date.strftime('%A, %B %d') if next_game.game_date else 'TBD' }}
             </div>
             <div class="next-game-time">
-                {{ next_game.game_date.strftime('%I:%M %p') if next_game.game_date else '' }}
+                {% if next_game.game_date %}
+                {% set start_hour = next_game.game_date.strftime('%I')|int %}
+                {% set start_time = '%d:%s %s'|format(start_hour, next_game.game_date.strftime('%M'), next_game.game_date.strftime('%p')) %}
+                {% if next_game.game_type == 'practice' %}
+                {% set end_dt = next_game.game_date + timedelta(minutes=practice_duration) %}
+                {% set end_hour = end_dt.strftime('%I')|int %}
+                {% set end_time = '%d:%s %s'|format(end_hour, end_dt.strftime('%M'), end_dt.strftime('%p')) %}
+                {{ start_time }} - {{ end_time }}
+                {% else %}
+                {{ start_time }}
+                {% endif %}
+                {% endif %}
             </div>
             <div class="next-game-details">
                 {{ next_game.field_name or 'Location TBD' }}
@@ -609,7 +620,20 @@
                 </div>
                 <div class="game-info">
                     <div class="game-time">
-                        {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
+                        {% if game.game_date %}
+                        {% set start_hour = game.game_date.strftime('%I')|int %}
+                        {% set start_time = '%d:%s %s'|format(start_hour, game.game_date.strftime('%M'), game.game_date.strftime('%p')) %}
+                        {% if game.game_type == 'practice' %}
+                        {% set end_dt = game.game_date + timedelta(minutes=practice_duration) %}
+                        {% set end_hour = end_dt.strftime('%I')|int %}
+                        {% set end_time = '%d:%s %s'|format(end_hour, end_dt.strftime('%M'), end_dt.strftime('%p')) %}
+                        {{ start_time }} - {{ end_time }}
+                        {% else %}
+                        {{ start_time }}
+                        {% endif %}
+                        {% else %}
+                        TBD
+                        {% endif %}
                         {% if game.game_type == 'practice' and game.is_league_practice %}
                             <span class="game-type-badge practice">Div. Practice</span>
                         {% elif game.game_type == 'practice' %}
@@ -683,7 +707,20 @@
                 </div>
                 <div class="game-info">
                     <div class="game-time">
-                        {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
+                        {% if game.game_date %}
+                        {% set start_hour = game.game_date.strftime('%I')|int %}
+                        {% set start_time = '%d:%s %s'|format(start_hour, game.game_date.strftime('%M'), game.game_date.strftime('%p')) %}
+                        {% if game.game_type == 'practice' %}
+                        {% set end_dt = game.game_date + timedelta(minutes=practice_duration) %}
+                        {% set end_hour = end_dt.strftime('%I')|int %}
+                        {% set end_time = '%d:%s %s'|format(end_hour, end_dt.strftime('%M'), end_dt.strftime('%p')) %}
+                        {{ start_time }} - {{ end_time }}
+                        {% else %}
+                        {{ start_time }}
+                        {% endif %}
+                        {% else %}
+                        TBD
+                        {% endif %}
                         {% if game.game_type == 'practice' and game.is_league_practice %}
                             <span class="game-type-badge practice">Div. Practice</span>
                         {% elif game.game_type == 'practice' %}

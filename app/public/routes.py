@@ -199,6 +199,11 @@ def team_schedule(token):
     season_name = f'{"Spring" if team.is_spring else "Fall"} {team.year}'
     is_locked = LeagueSeason.is_season_locked(team.year, team.is_spring)
 
+    # Get practice duration for this team's league
+    from app.models.league import League
+    league_obj = League.get_by_name(team.league)
+    practice_duration = league_obj.get_practice_duration() if league_obj else 90
+
     # Check for testing flag to allow start time recording on non-game days
     allow_start_time_record = request.args.get('allowStartTimeRecord', '0') == '1'
 
@@ -228,6 +233,8 @@ def team_schedule(token):
         'impression_token': None,
         'game_originals': {},  # "Originally scheduled for..." text per game
         'shared_practices': {},  # game_id -> partner team name for shared practices
+        'practice_duration': practice_duration,
+        'timedelta': timedelta,
     }
 
     # Determine what games/practices to show
