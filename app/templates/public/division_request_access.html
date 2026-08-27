@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Request Access - {{ league_season.league }} - SDLL</title>
+    <title>Request Access - {{ display_name }} - SDLL</title>
     <style>
         * {
             box-sizing: border-box;
@@ -174,7 +174,7 @@
         <div class="card">
             <div class="header">
                 <h1>Request Access</h1>
-                <div class="league-name">{{ league_season.league }}</div>
+                <div class="league-name">{{ display_name }}</div>
                 <div class="season">
                     <span class="badge badge-{{ 'spring' if league_season.is_spring else 'fall' }}">
                         {{ 'Spring' if league_season.is_spring else 'Fall' }} {{ league_season.year }}

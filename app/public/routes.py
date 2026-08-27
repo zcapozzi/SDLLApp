@@ -988,11 +988,17 @@ def division_schedule(token):
     if not league_season:
         abort(404)
 
+    # Get seasonal display name (fall leagues may have different names)
+    from app.models.league import League
+    league_obj = League.get_by_name(league_season.league)
+    display_name = league_obj.get_seasonal_name(league_season.is_spring) if league_obj else league_season.league
+
     # Not logged in -> landing page
     if not current_user.is_authenticated:
         return render_template(
             'public/division_landing.html',
             league_season=league_season,
+            display_name=display_name,
             login_url=url_for('auth.login', next=request.url)
         )
 
@@ -1009,6 +1015,7 @@ def division_schedule(token):
         return render_template(
             'public/division_request_access.html',
             league_season=league_season,
+            display_name=display_name,
             token=token
         )
 
@@ -1062,15 +1069,8 @@ def division_schedule(token):
             fields_set.add(g.field_name)
     fields = sorted(fields_set)
 
-    # Get seasonal display name and practice duration (fall leagues may have different names)
-    from app.models.league import League
-    league_obj = League.get_by_name(league_season.league)
-    if league_obj:
-        display_name = league_obj.get_seasonal_name(league_season.is_spring)
-        practice_duration = league_obj.get_practice_duration()
-    else:
-        display_name = league_season.league
-        practice_duration = 90  # Default
+    # Get practice duration (display_name and league_obj already set above)
+    practice_duration = league_obj.get_practice_duration() if league_obj else 90
 
     return render_template(
         'public/division_schedule.html',
