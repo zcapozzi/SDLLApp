@@ -424,9 +424,9 @@
                 <input type="date" id="date" onchange="applyFilters()">
             </div>
             <button id="clear-filters-btn" class="btn btn-outline" onclick="clearFilters()" style="display: none;">Clear Filters</button>
-            <a href="{{ url_for('public.division_schedule_csv', token=token) }}" class="btn btn-outline" style="margin-left: auto;">
+            <a href="{{ url_for('public.division_gamechanger', token=token) }}" class="btn btn-outline" style="margin-left: auto;">
                 <svg viewBox="0 0 24 24" width="14" height="14" style="vertical-align: middle; margin-right: 5px;"><path fill="currentColor" d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-                Download CSV
+                GameChanger Setup
             </a>
         </div>
 

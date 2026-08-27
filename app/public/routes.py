@@ -1109,9 +1109,206 @@ def division_schedule(token):
     )
 
 
+@public_bp.route('/division/<token>/gamechanger')
+def division_gamechanger(token):
+    """GameChanger setup and management page for a division."""
+    from app.models.league import League
+
+    league_season = LeagueSeason.get_by_schedule_token(token)
+    if not league_season:
+        abort(404)
+
+    # Get seasonal display name
+    league_obj = League.get_by_name(league_season.league)
+    display_name = league_obj.get_seasonal_name(league_season.is_spring) if league_obj else league_season.league
+
+    # Must be logged in
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login', next=request.url))
+
+    # Check access
+    has_full_access = current_user.has_role('admin', 'scheduler', 'umpire_coordinator')
+    has_coach_access = user_has_coach_access(
+        current_user.ID,
+        league_season.year,
+        league_season.is_spring,
+        league_season.league
+    )
+
+    if not has_full_access and not has_coach_access:
+        return redirect(url_for('public.division_schedule', token=token))
+
+    # Get teams for this specific division only (non-placeholder, active)
+    teams = TeamSeason.query.filter_by(
+        year=league_season.year,
+        is_spring=league_season.is_spring,
+        league=league_season.league,
+        active=1,
+        is_placeholder=0
+    ).order_by(TeamSeason.display_name).all()
+
+    # Count teams with GameChanger names
+    teams_with_gc_names = sum(1 for t in teams if t.gameChangerName)
+    total_teams = len(teams)
+    all_teams_have_gc_names = teams_with_gc_names == total_teams and total_teams > 0
+
+    return render_template(
+        'public/division_gamechanger.html',
+        league_season=league_season,
+        display_name=display_name,
+        teams=teams,
+        teams_with_gc_names=teams_with_gc_names,
+        total_teams=total_teams,
+        all_teams_have_gc_names=all_teams_have_gc_names,
+        show_minimal_menu=not has_full_access,
+        token=token
+    )
+
+
+@public_bp.route('/division/<token>/gamechanger/save-team', methods=['POST'])
+def division_gamechanger_save_team(token):
+    """API endpoint to save a team's GameChanger name."""
+    league_season = LeagueSeason.get_by_schedule_token(token)
+    if not league_season:
+        return jsonify({'error': 'Invalid token'}), 404
+
+    # Must be logged in with access
+    if not current_user.is_authenticated:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    has_full_access = current_user.has_role('admin', 'scheduler', 'umpire_coordinator')
+    has_coach_access = user_has_coach_access(
+        current_user.ID,
+        league_season.year,
+        league_season.is_spring,
+        league_season.league
+    )
+
+    if not has_full_access and not has_coach_access:
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    team_id = data.get('team_id')
+    gc_name = data.get('gamechanger_name', '').strip()
+
+    if not team_id:
+        return jsonify({'error': 'No team_id provided'}), 400
+
+    # Find the team and verify it belongs to this division
+    team = TeamSeason.query.filter_by(
+        team_ID=team_id,
+        year=league_season.year,
+        is_spring=league_season.is_spring,
+        league=league_season.league,
+        active=1
+    ).first()
+
+    if not team:
+        return jsonify({'error': 'Team not found in this division'}), 404
+
+    # Update the GameChanger name
+    team.gameChangerName = gc_name if gc_name else None
+    db.session.commit()
+
+    # Get updated counts for this division
+    teams = TeamSeason.query.filter_by(
+        year=league_season.year,
+        is_spring=league_season.is_spring,
+        league=league_season.league,
+        active=1,
+        is_placeholder=0
+    ).all()
+
+    teams_with_gc_names = sum(1 for t in teams if t.gameChangerName)
+    total_teams = len(teams)
+
+    return jsonify({
+        'success': True,
+        'teams_with_gc_names': teams_with_gc_names,
+        'total_teams': total_teams
+    })
+
+
+@public_bp.route('/division/<token>/gamechanger/help', methods=['POST'])
+def division_gamechanger_help(token):
+    """API endpoint to send help request for GameChanger setup."""
+    league_season = LeagueSeason.get_by_schedule_token(token)
+    if not league_season:
+        return jsonify({'error': 'Invalid token'}), 404
+
+    if not current_user.is_authenticated:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    data = request.get_json()
+    if not data or not data.get('message'):
+        return jsonify({'error': 'No message provided'}), 400
+
+    message = data.get('message', '').strip()
+
+    try:
+        from app.services.notification_service import GmailService
+        email_service = GmailService()
+
+        from app.models.league import League
+        league_obj = League.get_by_name(league_season.league)
+        display_name = league_obj.get_seasonal_name(league_season.is_spring) if league_obj else league_season.league
+        season_name = f'{"Spring" if league_season.is_spring else "Fall"} {league_season.year}'
+
+        subject = f'GameChanger Help Request - {display_name} {season_name}'
+
+        body_text = f"""GameChanger Help Request
+
+User: {current_user.name}
+Email: {current_user.email}
+Division: {display_name}
+Season: {season_name}
+
+Message:
+{message}
+
+---
+This request was submitted from the GameChanger Manager page.
+"""
+
+        body_html = f"""
+<h2>GameChanger Help Request</h2>
+<p><strong>User:</strong> {current_user.name}<br>
+<strong>Email:</strong> {current_user.email}<br>
+<strong>Division:</strong> {display_name}<br>
+<strong>Season:</strong> {season_name}</p>
+
+<h3>Message:</h3>
+<p>{message}</p>
+
+<hr>
+<p><small>This request was submitted from the GameChanger Manager page.</small></p>
+"""
+
+        coordinator_email = 'scheduling@sdll.org'
+        email_service.send_email(
+            to=coordinator_email,
+            subject=subject,
+            body_text=body_text,
+            body_html=body_html,
+            reply_to=current_user.email
+        )
+
+        return jsonify({'success': True})
+    except Exception as e:
+        _log_tracking_error("gamechanger_help", e)
+        return jsonify({'error': 'Failed to send help request'}), 500
+
+
 @public_bp.route('/division/<token>/csv')
 def division_schedule_csv(token):
-    """Download division schedule as CSV in GameChanger upload format."""
+    """Download division schedule as CSV in GameChanger upload format.
+
+    CRITICAL: Only uses gameChangerName field - no fallbacks.
+    Will not allow download if any team is missing a gameChangerName.
+    """
     from app.models.league import League
 
     league_season = LeagueSeason.get_by_schedule_token(token)
@@ -1132,6 +1329,23 @@ def division_schedule_csv(token):
 
     if not has_full_access and not has_coach_access:
         abort(403)
+
+    # Verify all teams in this division have GameChanger names
+    teams = TeamSeason.query.filter_by(
+        year=league_season.year,
+        is_spring=league_season.is_spring,
+        league=league_season.league,
+        active=1,
+        is_placeholder=0
+    ).all()
+
+    missing_teams = [t for t in teams if not t.gameChangerName]
+    if missing_teams:
+        flash('Cannot download CSV: Not all teams have GameChanger names configured.', 'error')
+        return redirect(url_for('public.division_gamechanger', token=token))
+
+    # Build team lookup by ID for fast access
+    team_gc_names = {t.team_ID: t.gameChangerName for t in teams}
 
     # Get league for duration lookup
     league_obj = League.get_by_name(league_season.league)
@@ -1178,9 +1392,10 @@ def division_schedule_csv(token):
         else:
             time_str = 'TBD'
 
-        # Team names: gameChangerName > team_name > display_name
-        home_name = game.home_team.gamechanger_name if game.home_team else 'TBD'
-        away_name = game.away_team.gamechanger_name if game.away_team else 'TBD'
+        # Team names: ONLY use gameChangerName - no fallbacks
+        # Use lookup table for efficiency
+        home_name = team_gc_names.get(game.home_ID, 'TBD')
+        away_name = team_gc_names.get(game.away_ID, 'TBD')
 
         # Location: "Field Name, Address, City, State"
         location = 'TBD'

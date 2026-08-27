@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GameChanger Setup - {{ display_name }} - SDLL</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8f9fa;
+            color: #333;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Navbar */
+        .navbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px 20px;
+            background-color: rgb(34, 139, 34);
+            margin: -20px -20px 20px -20px;
+        }
+        .navbar-brand {
+            font-size: 20px;
+            font-weight: 700;
+            text-decoration: none;
+            color: white;
+        }
+        .navbar-nav {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .nav-link {
+            text-decoration: none;
+            font-weight: 500;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 4px;
+        }
+        .nav-link:hover {
+            background-color: rgba(255,255,255,0.15);
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        .header .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .badge-spring {
+            background: rgb(34, 139, 34);
+            color: white;
+        }
+        .badge-fall {
+            background: rgb(255, 140, 0);
+            color: white;
+        }
+
+        /* Steps */
+        .step {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+        .step-number {
+            width: 32px;
+            height: 32px;
+            background: rgb(34, 139, 34);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .step-number.completed {
+            background: #28a745;
+        }
+        .step-number.pending {
+            background: #6c757d;
+        }
+        .step-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .step-content {
+            margin-left: 44px;
+        }
+        .step-content p {
+            margin-bottom: 12px;
+            color: #555;
+        }
+        .step-content ul {
+            margin-left: 20px;
+            margin-bottom: 12px;
+        }
+        .step-content li {
+            margin-bottom: 6px;
+            color: #555;
+        }
+
+        /* Team Grid */
+        .team-grid {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        .team-grid th {
+            background: #f1f3f4;
+            border: 1px solid #e0e0e0;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+        .team-grid td {
+            border: 1px solid #e0e0e0;
+            padding: 8px 12px;
+            vertical-align: middle;
+        }
+        .team-grid tr:hover td {
+            background: #f8f9fa;
+        }
+        .gc-name-input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .gc-name-input:focus {
+            border-color: rgb(34, 139, 34);
+            outline: none;
+        }
+        .gc-name-input.saving {
+            background: #fff3cd;
+        }
+        .gc-name-input.saved {
+            background: #d4edda;
+        }
+        .gc-name-input.error {
+            background: #f8d7da;
+            border-color: #dc3545;
+        }
+        .save-status {
+            font-size: 11px;
+            margin-top: 3px;
+            min-height: 14px;
+        }
+        .save-status.saving {
+            color: #856404;
+        }
+        .save-status.saved {
+            color: #155724;
+        }
+        .save-status.error {
+            color: #721c24;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            border-radius: 4px;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        .btn-primary {
+            background: rgb(34, 139, 34);
+            color: white;
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: rgb(28, 120, 28);
+        }
+        .btn-primary:disabled {
+            background: #94c794;
+            cursor: not-allowed;
+        }
+        .btn-outline {
+            background: white;
+            border: 1px solid #ddd;
+            color: #333;
+        }
+        .btn-outline:hover {
+            background: #f5f5f5;
+        }
+
+        /* Confirmation checkbox */
+        .confirm-section {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .confirm-section label {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            cursor: pointer;
+        }
+        .confirm-section input[type="checkbox"] {
+            margin-top: 3px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        /* Download section */
+        .download-section {
+            background: #e8f5e9;
+            border: 1px solid #c8e6c9;
+            border-radius: 6px;
+            padding: 20px;
+            text-align: center;
+        }
+        .download-section.disabled {
+            background: #f5f5f5;
+            border-color: #ddd;
+        }
+        .download-section h3 {
+            margin-bottom: 10px;
+        }
+        .download-section p {
+            color: #666;
+            margin-bottom: 15px;
+        }
+        .missing-warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+            color: #856404;
+        }
+        .missing-warning strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        /* Help section */
+        .help-section {
+            background: #e3f2fd;
+            border: 1px solid #90caf9;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+        .help-section h3 {
+            color: #1565c0;
+            margin-bottom: 10px;
+        }
+        .help-section p {
+            color: #555;
+            margin-bottom: 15px;
+        }
+        .help-form textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            min-height: 100px;
+            resize: vertical;
+            margin-bottom: 10px;
+        }
+
+        /* Status indicator */
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status-complete {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-incomplete {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .status-complete .status-dot {
+            background: #28a745;
+        }
+        .status-incomplete .status-dot {
+            background: #ffc107;
+        }
+
+        /* Back link */
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            color: rgb(34, 139, 34);
+            text-decoration: none;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Flash messages */
+        .flash-message {
+            padding: 12px 20px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+        }
+        .flash-success {
+            background: rgba(34, 139, 34, 0.1);
+            border-left: 4px solid rgb(34, 139, 34);
+        }
+        .flash-error {
+            background: rgba(200, 50, 50, 0.1);
+            border-left: 4px solid #c33;
+        }
+        .flash-info {
+            background: rgba(255, 140, 0, 0.1);
+            border-left: 4px solid rgb(255, 140, 0);
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+        .footer a {
+            color: rgb(34, 139, 34);
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <a href="{{ url_for('main.dashboard') if not show_minimal_menu else '#' }}" class="navbar-brand">SDLL</a>
+            <div class="navbar-nav">
+                {% if not show_minimal_menu %}
+                <a href="{{ url_for('main.dashboard') }}" class="nav-link">Dashboard</a>
+                {% endif %}
+                <a href="{{ url_for('auth.logout') }}" class="nav-link">Logout</a>
+            </div>
+        </nav>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="flash-message flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Back link -->
+        <a href="{{ url_for('public.division_schedule', token=token) }}" class="back-link">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+            Back to Schedule
+        </a>
+
+        <!-- Header -->
+        <div class="header">
+            <h1>GameChanger Setup</h1>
+            <div class="subtitle">
+                <span class="badge badge-{{ 'spring' if league_season.is_spring else 'fall' }}">
+                    {{ 'Spring' if league_season.is_spring else 'Fall' }} {{ league_season.year }}
+                </span>
+                &nbsp; {{ display_name }}
+                &nbsp;
+                <span class="status-indicator {{ 'status-complete' if all_teams_have_gc_names else 'status-incomplete' }}">
+                    <span class="status-dot"></span>
+                    {{ teams_with_gc_names }}/{{ total_teams }} teams configured
+                </span>
+            </div>
+        </div>
+
+        <!-- Introduction -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number" style="background: #1565c0;">i</div>
+                <h2 class="step-title">About This Tool</h2>
+            </div>
+            <div class="step-content">
+                <p>This tool helps you upload your division's game schedule to GameChanger. GameChanger requires that teams exist in the system before games can be imported, so we'll guide you through the process step by step.</p>
+                <p><strong>Important:</strong> You must complete each step in order. The CSV download will only be available once all teams have their GameChanger names configured.</p>
+            </div>
+        </div>
+
+        <!-- Step 1: Create League in GameChanger -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number">1</div>
+                <h2 class="step-title">Create League in GameChanger</h2>
+            </div>
+            <div class="step-content">
+                <p>First, you need to create a league in GameChanger and add your division's teams to it.</p>
+                <ul>
+                    <li>Open the GameChanger app on your device</li>
+                    <li>Create a new league for <strong>{{ display_name }}</strong></li>
+                    <li>Add each team in your division to the league</li>
+                    <li><strong>Important:</strong> Do NOT manually create teams. Search for existing GameChanger teams and add them to your league.</li>
+                </ul>
+                <p>If you need to manage your GameChanger account online, look for the "Manage Online" option in the app, which will send a link to your email.</p>
+            </div>
+        </div>
+
+        <!-- Step 2: Enter GameChanger Team Names -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number {{ 'completed' if all_teams_have_gc_names else '' }}">2</div>
+                <h2 class="step-title">Enter GameChanger Team Names</h2>
+            </div>
+            <div class="step-content">
+                <p>Enter the <strong>exact</strong> team names as they appear in GameChanger. These names must match exactly for the schedule import to work.</p>
+                <p>For example, a team might be listed in SDLL as "Brown" but in GameChanger as "SDLL Cactus Brown Orange Fall 2026".</p>
+
+                <table class="team-grid">
+                    <thead>
+                        <tr>
+                            <th style="width: 25%;">SDLL Team Name</th>
+                            <th style="width: 20%;">Head Coach</th>
+                            <th style="width: 55%;">GameChanger Name</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for team in teams %}
+                        <tr data-team-id="{{ team.team_ID }}">
+                            <td>{{ team.computed_display_name }}</td>
+                            <td>{{ team.coach_name or '-' }}</td>
+                            <td>
+                                <input type="text"
+                                       class="gc-name-input"
+                                       id="gc-name-{{ team.team_ID }}"
+                                       value="{{ team.gameChangerName or '' }}"
+                                       placeholder="Enter exact GameChanger team name..."
+                                       data-team-id="{{ team.team_ID }}"
+                                       data-original="{{ team.gameChangerName or '' }}">
+                                <div class="save-status" id="status-{{ team.team_ID }}"></div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                <p style="font-size: 12px; color: #666; margin-top: 10px;">
+                    <em>Changes are saved automatically as you type.</em>
+                </p>
+            </div>
+        </div>
+
+        <!-- Step 3: Confirm Teams Created -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number">3</div>
+                <h2 class="step-title">Confirm Teams Are Set Up</h2>
+            </div>
+            <div class="step-content">
+                <p>Before proceeding, verify that:</p>
+                <ul>
+                    <li>All teams listed above exist in your GameChanger league</li>
+                    <li>The GameChanger names you entered match exactly (including capitalization and spacing)</li>
+                    <li>Each team has been added to your league (not just created)</li>
+                </ul>
+
+                <div class="confirm-section">
+                    <label>
+                        <input type="checkbox" id="teams-confirmed" {{ 'disabled' if not all_teams_have_gc_names }}>
+                        <span>I confirm that all teams have been created in GameChanger and added to my league, and the names above match exactly.</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: Download CSV -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number {{ 'pending' if not all_teams_have_gc_names else '' }}">4</div>
+                <h2 class="step-title">Download Schedule CSV</h2>
+            </div>
+            <div class="step-content">
+                {% if not all_teams_have_gc_names %}
+                <div class="missing-warning">
+                    <strong>Cannot download yet</strong>
+                    The following teams are missing GameChanger names:
+                    <ul style="margin-top: 8px; margin-bottom: 0;">
+                        {% for team in teams %}
+                            {% if not team.gameChangerName %}
+                            <li>{{ team.computed_display_name }}</li>
+                            {% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <div class="download-section {{ 'disabled' if not all_teams_have_gc_names else '' }}">
+                    <h3>Schedule CSV</h3>
+                    <p>Download the formatted CSV file ready for GameChanger import.</p>
+                    <button id="download-btn" class="btn btn-primary" {{ 'disabled' if not all_teams_have_gc_names else '' }}>
+                        <svg viewBox="0 0 24 24" width="16" height="16" style="vertical-align: middle; margin-right: 6px;"><path fill="currentColor" d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                        Download CSV for GameChanger
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 5: Upload to GameChanger -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number {{ 'pending' if not all_teams_have_gc_names else '' }}">5</div>
+                <h2 class="step-title">Upload to GameChanger</h2>
+            </div>
+            <div class="step-content">
+                <p>Once you have the CSV file:</p>
+                <ol style="margin-left: 20px;">
+                    <li>Go to your GameChanger league online (use the "Manage Online" link from the app)</li>
+                    <li>Navigate to <strong>Schedule</strong></li>
+                    <li>Click <strong>Add Games</strong> and select <strong>Import schedule from template</strong></li>
+                    <li>Click <strong>Select CSV</strong> and choose the file you downloaded</li>
+                    <li>Review the games - they should appear in green if valid</li>
+                    <li>Click <strong>Import Schedule</strong></li>
+                </ol>
+                <p style="margin-top: 15px;"><strong>Troubleshooting:</strong> If you see errors, the most common issues are:</p>
+                <ul>
+                    <li><strong>Team name mismatch:</strong> The GameChanger name doesn't match exactly. Go back to Step 2 and correct it.</li>
+                    <li><strong>Date format:</strong> Should be in M/D/YYYY format (the CSV handles this automatically).</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Help Section -->
+        <div class="help-section">
+            <h3>Need Help?</h3>
+            <p>If you're having trouble with the GameChanger setup process, send us a message and we'll help you out.</p>
+            <form id="help-form" class="help-form">
+                <textarea id="help-message" placeholder="Describe your issue or question..." required></textarea>
+                <button type="submit" class="btn btn-primary">Send Help Request</button>
+            </form>
+            <div id="help-status" style="margin-top: 10px;"></div>
+        </div>
+
+        <div class="footer">
+            <p>South Durham Little League</p>
+            <p><a href="https://southdurhamlittleleague.org">southdurhamlittleleague.org</a></p>
+        </div>
+    </div>
+
+    <script>
+        // Debounce function for auto-save
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Save GameChanger name for a team
+        async function saveGcName(teamId, name) {
+            const input = document.getElementById('gc-name-' + teamId);
+            const status = document.getElementById('status-' + teamId);
+
+            input.classList.remove('saved', 'error');
+            input.classList.add('saving');
+            status.textContent = 'Saving...';
+            status.className = 'save-status saving';
+
+            try {
+                const response = await fetch('{{ url_for("public.division_gamechanger_save_team", token=token) }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        team_id: teamId,
+                        gamechanger_name: name.trim()
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    input.classList.remove('saving');
+                    input.classList.add('saved');
+                    input.dataset.original = name.trim();
+                    status.textContent = 'Saved';
+                    status.className = 'save-status saved';
+
+                    // Update the status indicator
+                    updateStatusIndicator(data.teams_with_gc_names, data.total_teams);
+
+                    // Clear saved indicator after 2 seconds
+                    setTimeout(() => {
+                        input.classList.remove('saved');
+                        status.textContent = '';
+                    }, 2000);
+                } else {
+                    throw new Error(data.error || 'Failed to save');
+                }
+            } catch (error) {
+                input.classList.remove('saving');
+                input.classList.add('error');
+                status.textContent = 'Error: ' + error.message;
+                status.className = 'save-status error';
+            }
+        }
+
+        // Update status indicator and download button
+        function updateStatusIndicator(withNames, total) {
+            const indicator = document.querySelector('.status-indicator');
+            const allComplete = withNames === total;
+
+            indicator.className = 'status-indicator ' + (allComplete ? 'status-complete' : 'status-incomplete');
+            indicator.innerHTML = '<span class="status-dot"></span>' + withNames + '/' + total + ' teams configured';
+
+            // Update download button
+            const downloadBtn = document.getElementById('download-btn');
+            const downloadSection = document.querySelector('.download-section');
+            const confirmCheckbox = document.getElementById('teams-confirmed');
+            const missingWarning = document.querySelector('.missing-warning');
+
+            if (allComplete) {
+                downloadBtn.disabled = false;
+                downloadSection.classList.remove('disabled');
+                confirmCheckbox.disabled = false;
+                if (missingWarning) {
+                    missingWarning.style.display = 'none';
+                }
+                // Update step numbers
+                document.querySelectorAll('.step-number.pending').forEach(el => {
+                    el.classList.remove('pending');
+                });
+            } else {
+                downloadBtn.disabled = true;
+                downloadSection.classList.add('disabled');
+                confirmCheckbox.disabled = true;
+                confirmCheckbox.checked = false;
+            }
+        }
+
+        // Debounced save function
+        const debouncedSave = debounce(saveGcName, 500);
+
+        // Attach event listeners to all inputs
+        document.querySelectorAll('.gc-name-input').forEach(input => {
+            input.addEventListener('input', function() {
+                const teamId = this.dataset.teamId;
+                const name = this.value;
+                debouncedSave(teamId, name);
+            });
+        });
+
+        // Download button handler
+        document.getElementById('download-btn').addEventListener('click', function(e) {
+            const confirmed = document.getElementById('teams-confirmed').checked;
+            if (!confirmed) {
+                e.preventDefault();
+                alert('Please confirm that all teams have been set up in GameChanger before downloading the CSV.');
+                return;
+            }
+
+            // Trigger download
+            window.location.href = '{{ url_for("public.division_schedule_csv", token=token) }}';
+        });
+
+        // Help form handler
+        document.getElementById('help-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const message = document.getElementById('help-message').value;
+            const statusDiv = document.getElementById('help-status');
+            const submitBtn = this.querySelector('button[type="submit"]');
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Sending...';
+
+            try {
+                const response = await fetch('{{ url_for("public.division_gamechanger_help", token=token) }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    statusDiv.innerHTML = '<span style="color: #155724;">Your help request has been sent. We\'ll get back to you soon!</span>';
+                    document.getElementById('help-message').value = '';
+                } else {
+                    throw new Error(data.error || 'Failed to send');
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<span style="color: #721c24;">Error sending request: ' + error.message + '</span>';
+            }
+
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Send Help Request';
+        });
+    </script>
+</body>
+</html>
