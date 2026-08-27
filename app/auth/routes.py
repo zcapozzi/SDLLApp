@@ -62,10 +62,49 @@ def forgot_password():
 
         if user:
             token = user.generate_reset_token()
-            # TODO: Send email with reset link
-            # For now, just log it
             logger.info(f'Password reset requested for user ID: {user.ID}')
-            logger.detail(f'Reset token generated: {token[:8]}...')
+
+            # Send email with reset link
+            try:
+                from app.services.notification_service import GmailService
+                email_service = GmailService()
+
+                reset_url = url_for('auth.reset_password', token=token, _external=True)
+
+                subject = 'SDLL - Set Your Password'
+                body_text = f"""You requested to set or reset your password for South Durham Little League.
+
+Click the link below to set your password:
+{reset_url}
+
+This link will expire in 24 hours.
+
+If you did not request this, you can safely ignore this email.
+
+- South Durham Little League
+"""
+                body_html = f"""
+<p>You requested to set or reset your password for South Durham Little League.</p>
+
+<p><a href="{reset_url}" style="display: inline-block; padding: 12px 24px; background-color: rgb(34, 139, 34); color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">Set Your Password</a></p>
+
+<p>Or copy this link: {reset_url}</p>
+
+<p>This link will expire in 24 hours.</p>
+
+<p>If you did not request this, you can safely ignore this email.</p>
+
+<p>- South Durham Little League</p>
+"""
+                email_service.send_email(
+                    to=user.email,
+                    subject=subject,
+                    body_text=body_text,
+                    body_html=body_html
+                )
+                logger.info(f'Password reset email sent to user ID: {user.ID}')
+            except Exception as e:
+                logger.error(f'Failed to send password reset email: {e}')
 
         # Always show success message to prevent email enumeration
         flash('If an account exists with that email, a reset link has been sent.', 'info')
