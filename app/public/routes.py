@@ -1109,6 +1109,131 @@ def division_schedule(token):
     )
 
 
+@public_bp.route('/division/<token>/csv')
+def division_schedule_csv(token):
+    """Download division schedule as CSV in GameChanger upload format."""
+    from app.models.league import League
+
+    league_season = LeagueSeason.get_by_schedule_token(token)
+    if not league_season:
+        abort(404)
+
+    # Must be logged in with access
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login', next=request.url))
+
+    has_full_access = current_user.has_role('admin', 'scheduler', 'umpire_coordinator')
+    has_coach_access = user_has_coach_access(
+        current_user.ID,
+        league_season.year,
+        league_season.is_spring,
+        league_season.league
+    )
+
+    if not has_full_access and not has_coach_access:
+        abort(403)
+
+    # Get league for duration lookup
+    league_obj = League.get_by_name(league_season.league)
+
+    # Pre-load fields for address lookup
+    all_fields = {f.ID: f for f in Field.query.filter_by(active=1).all()}
+
+    # Get games (exclude practices) with eager loading
+    games = Game.query.options(
+        joinedload(Game.home_team),
+        joinedload(Game.away_team),
+        joinedload(Game.field_rel)
+    ).filter(
+        Game.active == 1,
+        Game.year == league_season.year,
+        Game.is_spring == league_season.is_spring,
+        Game.league == league_season.league,
+        Game.game_type != 'practice'  # Exclude practices from CSV
+    ).order_by(Game.game_date).all()
+
+    # Build CSV
+    output = StringIO()
+    writer = csv.writer(output)
+
+    # Header row - must match GameChanger format exactly
+    writer.writerow(['date', 'time', 'home', 'away', 'location', 'duration'])
+
+    for game in games:
+        # Date: M/D/YYYY (no leading zeros)
+        if game.game_date:
+            date_str = f'{game.game_date.month}/{game.game_date.day}/{game.game_date.year}'
+        else:
+            date_str = 'TBD'
+
+        # Time: H:MM PM (no leading zeros)
+        if game.game_date:
+            hour = game.game_date.hour
+            minute = game.game_date.minute
+            am_pm = 'AM' if hour < 12 else 'PM'
+            hour_12 = hour % 12
+            if hour_12 == 0:
+                hour_12 = 12
+            time_str = f'{hour_12}:{minute:02d} {am_pm}'
+        else:
+            time_str = 'TBD'
+
+        # Team names: gameChangerName > team_name > display_name
+        home_name = game.home_team.gamechanger_name if game.home_team else 'TBD'
+        away_name = game.away_team.gamechanger_name if game.away_team else 'TBD'
+
+        # Location: "Field Name, Address, City, State"
+        location = 'TBD'
+        if game.field_id and game.field_id in all_fields:
+            field = all_fields[game.field_id]
+            # Build location string: Field Name, Address
+            location_parts = [field.location_title]
+            if field.address:
+                location_parts.append(field.address)
+            if field.city:
+                if field.state:
+                    location_parts.append(f'{field.city}, {field.state}')
+                else:
+                    location_parts.append(field.city)
+            elif field.state:
+                location_parts.append(field.state)
+            location = ', '.join(location_parts)
+        elif game.field_rel:
+            field = game.field_rel
+            location_parts = [field.location_title]
+            if field.address:
+                location_parts.append(field.address)
+            if field.city:
+                if field.state:
+                    location_parts.append(f'{field.city}, {field.state}')
+                else:
+                    location_parts.append(field.city)
+            elif field.state:
+                location_parts.append(field.state)
+            location = ', '.join(location_parts)
+
+        # Duration: game_duration_minutes from league, default 120, 180 for no_time_limit
+        if game.no_time_limit:
+            duration = 180
+        elif league_obj and league_obj.game_duration_minutes:
+            duration = league_obj.game_duration_minutes
+        else:
+            duration = 120  # Default
+
+        writer.writerow([date_str, time_str, home_name, away_name, location, duration])
+
+    output.seek(0)
+    season_suffix = 'Spring' if league_season.is_spring else 'Fall'
+    league_safe = league_season.league.replace(' ', '_')
+    filename = f'SDLL_{league_safe}_{season_suffix}{league_season.year}_GameChanger.csv'
+
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
+    )
+
+
 @public_bp.route('/division/<token>/request-access', methods=['POST'])
 def division_request_access(token):
     """Handle access request form submission."""

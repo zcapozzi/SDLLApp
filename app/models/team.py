@@ -38,6 +38,9 @@ class TeamSeason(db.Model):
     # Public schedule URL token - unique per team for sharing schedules
     schedule_token = db.Column(db.String(32), unique=True, nullable=True, index=True)
 
+    # GameChanger integration - official team name for GameChanger uploads
+    gameChangerName = db.Column(db.String(100), nullable=True)
+
     # Future: coach_id will link to sdll_coach_seasons
     # coach_id = db.Column(db.BigInteger, db.ForeignKey('sdll_coach_seasons.ID'))
 
@@ -79,6 +82,18 @@ class TeamSeason(db.Model):
 
     # Class-level cache for team name lookups
     _team_name_cache = {}
+
+    @property
+    def gamechanger_name(self):
+        """
+        Get the team name for GameChanger CSV exports.
+        Priority: gameChangerName > team_name > display_name
+        """
+        if self.gameChangerName:
+            return self.gameChangerName
+        if self.team_name:
+            return self.team_name
+        return self.display_name
 
     @property
     def computed_display_name(self):
