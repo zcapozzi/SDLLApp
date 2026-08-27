@@ -429,6 +429,11 @@
             </div>
         </div>
 
+        <!-- Last Updated Notice -->
+        <div style="background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 10px 15px; margin-bottom: 20px; font-size: 12px; color: #666;">
+            <strong>Instructions last updated:</strong> August 27, 2026. GameChanger may have changed their interface since then - if these steps don't match what you see, please let us know using the <a href="#help-section" style="color: rgb(34, 139, 34);">help form below</a>.
+        </div>
+
         <!-- Introduction -->
         <div class="step">
             <div class="step-header">
@@ -438,6 +443,7 @@
             <div class="step-content">
                 <p>This tool helps you upload your division's game schedule to GameChanger. GameChanger requires that teams exist in the system before games can be imported, so we'll guide you through the process step by step.</p>
                 <p><strong>Important:</strong> You must complete each step in order. The CSV download will only be available once all teams have their GameChanger names configured.</p>
+                <p style="margin-top: 10px;"><strong>Need help?</strong> If you get stuck at any point, there's a <a href="#help-section" style="color: rgb(34, 139, 34);">help form at the bottom of this page</a> where you can send us a message.</p>
             </div>
         </div>
 
@@ -480,7 +486,7 @@
                     <tbody>
                         {% for team in teams %}
                         <tr data-team-id="{{ team.team_ID }}">
-                            <td>{{ team.computed_display_name }}</td>
+                            <td>{{ team.organization.short_code if team.organization else 'SDLL' }} {{ team.computed_display_name }}</td>
                             <td>{{ team.coach_name or '-' }}</td>
                             <td>
                                 <input type="text"
@@ -536,11 +542,11 @@
                 {% if not all_teams_have_gc_names %}
                 <div class="missing-warning">
                     <strong>Cannot download yet</strong>
-                    The following teams are missing GameChanger names:
+                    The following teams are missing GameChanger names. Use the inputs above under "GameChanger Name" (where it says "Enter exact GameChanger team name...") to enter the correct name for each team:
                     <ul style="margin-top: 8px; margin-bottom: 0;">
                         {% for team in teams %}
                             {% if not team.gameChangerName %}
-                            <li>{{ team.computed_display_name }}</li>
+                            <li>{{ team.organization.short_code if team.organization else 'SDLL' }} {{ team.computed_display_name }}</li>
                             {% endif %}
                         {% endfor %}
                     </ul>
@@ -574,16 +580,15 @@
                     <li>Review the games - they should appear in green if valid</li>
                     <li>Click <strong>Import Schedule</strong></li>
                 </ol>
-                <p style="margin-top: 15px;"><strong>Troubleshooting:</strong> If you see errors, the most common issues are:</p>
+                <p style="margin-top: 15px;"><strong>Troubleshooting:</strong> If you see errors, the most common issue is:</p>
                 <ul>
-                    <li><strong>Team name mismatch:</strong> The GameChanger name doesn't match exactly. Go back to Step 2 and correct it.</li>
-                    <li><strong>Date format:</strong> Should be in M/D/YYYY format (the CSV handles this automatically).</li>
+                    <li><strong>Team name mismatch:</strong> The GameChanger name doesn't match exactly. Go back to Step 2 and correct it. Names must match exactly, including capitalization and spacing.</li>
                 </ul>
             </div>
         </div>
 
         <!-- Help Section -->
-        <div class="help-section">
+        <div class="help-section" id="help-section">
             <h3>Need Help?</h3>
             <p>If you're having trouble with the GameChanger setup process, send us a message and we'll help you out.</p>
             <form id="help-form" class="help-form">
