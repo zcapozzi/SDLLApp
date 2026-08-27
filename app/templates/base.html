@@ -225,6 +225,7 @@
                 <div class="dropdown-menu">
                     <a href="{{ url_for('leagues.index') }}">All Leagues</a>
                     {% if current_user.can_edit_schedule() %}
+                    <a href="{{ url_for('seasons.manage_leagues', year=current_season_year, is_spring=current_season_is_spring) }}">League Settings</a>
                     <a href="{{ url_for('seasons.team_setup') }}">Team Setup</a>
                     <div class="dropdown-divider"></div>
                     <a href="{{ url_for('leagues.field_rules') }}">Div. Field Pref.</a>
