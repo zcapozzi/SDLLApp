@@ -135,7 +135,7 @@ def reset_password(token):
             user.set_password(password)
             user.clear_reset_token()
             logger.info(f'Password reset completed for user ID: {user.ID}')
-            flash('Your password has been reset. Please log in.', 'success')
+            flash('Your password has been saved. Please log in.', 'success')
             return redirect(url_for('auth.login'))
 
     return render_template('auth/reset_password.html', token=token)
