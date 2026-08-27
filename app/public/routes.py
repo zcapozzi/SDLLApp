@@ -1363,7 +1363,9 @@ def division_schedule_csv(token):
         Game.year == league_season.year,
         Game.is_spring == league_season.is_spring,
         Game.league == league_season.league,
-        Game.game_type != 'practice'  # Exclude practices from CSV
+        Game.game_type != 'practice',  # Exclude practices from CSV
+        Game.home_ID.isnot(None),  # Must have home team (exclude placeholders)
+        Game.away_ID.isnot(None)   # Must have away team (exclude placeholders)
     ).order_by(Game.game_date).all()
 
     # Build CSV
