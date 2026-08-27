@@ -71,7 +71,6 @@
         padding: 12px 8px;
     }
     .col-display-name { width: 150px; }
-    .col-division { width: 100px; }
     .col-coach { width: 160px; }
     .col-nickname { width: 130px; }
 
@@ -275,7 +274,6 @@
         <thead>
             <tr>
                 <th class="col-display-name">Display Name</th>
-                <th class="col-division">Division</th>
                 <th class="col-coach">Head Coach</th>
                 <th class="col-coach">Assistant 1</th>
                 <th class="col-coach">Assistant 2</th>
@@ -286,7 +284,7 @@
         <tbody>
             {% for league, teams in teams_by_league.items() %}
             <tr class="league-header">
-                <td colspan="7">{{ league }} ({{ teams|length }} teams)</td>
+                <td colspan="6">{{ league }} ({{ teams|length }} teams)</td>
             </tr>
             {% for team in teams %}
             {% set head_coach = team.coaches|selectattr('role', 'equalto', 'head')|first %}
@@ -296,7 +294,6 @@
                     <input type="text" value="{{ team.display_name or '' }}"
                            onchange="saveTextField({{ team.team_ID }}, 'display_name', this.value, this)">
                 </td>
-                <td style="color: #666;">{{ league }}</td>
                 <td>
                     <div class="autocomplete-wrapper">
                         <input type="text" class="coach-input"
