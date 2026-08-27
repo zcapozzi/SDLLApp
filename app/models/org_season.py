@@ -59,6 +59,7 @@ class OrgSeason(db.Model):
             return current
 
         # Fall back to latest started season
+        # MySQL doesn't support NULLS LAST, so use CASE to sort NULLs last
         query = cls.query
         if org_id is not None:
             query = query.filter_by(org_id=org_id)
@@ -66,7 +67,8 @@ class OrgSeason(db.Model):
             query = query.filter(cls.org_id.is_(None))
 
         return query.order_by(
-            cls.season_started_at.desc().nullslast(),
+            db.case((cls.season_started_at.is_(None), 1), else_=0),  # NULLs last
+            cls.season_started_at.desc(),
             cls.year.desc(),
             cls.is_spring.desc()
         ).first()
