@@ -259,6 +259,46 @@
             border-radius: 4px;
             margin-top: 4px;
         }
+
+        /* Shared practice icon */
+        .shared-practice-icon {
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 6px;
+            cursor: help;
+            position: relative;
+        }
+        .shared-practice-icon img {
+            width: 20px;
+            height: 20px;
+        }
+        .shared-practice-icon .tooltip {
+            visibility: hidden;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            z-index: 100;
+            margin-bottom: 5px;
+        }
+        .shared-practice-icon .tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-top-color: #333;
+        }
+        .shared-practice-icon:hover .tooltip {
+            visibility: visible;
+        }
         .game-card.practice {
             border-left: 4px solid #9c27b0;
         }
@@ -574,6 +614,12 @@
                             <span class="game-type-badge practice">Div. Practice</span>
                         {% elif game.game_type == 'practice' %}
                             <span class="game-type-badge practice">Practice</span>
+                            {% if game.game_date and practice_partners.get(game.game_date.weekday()) %}
+                            <span class="shared-practice-icon">
+                                <img src="{{ url_for('static', filename='img/sharedFieldIcon.png') }}" alt="Shared practice">
+                                <span class="tooltip">Shared with {{ practice_partners[game.game_date.weekday()] }}</span>
+                            </span>
+                            {% endif %}
                         {% elif game.is_scrimmage %}
                             <span class="game-type-badge scrimmage">Scrimmage</span>
                         {% elif game.home_ID == team.team_ID %}
@@ -642,6 +688,12 @@
                             <span class="game-type-badge practice">Div. Practice</span>
                         {% elif game.game_type == 'practice' %}
                             <span class="game-type-badge practice">Practice</span>
+                            {% if game.game_date and practice_partners.get(game.game_date.weekday()) %}
+                            <span class="shared-practice-icon">
+                                <img src="{{ url_for('static', filename='img/sharedFieldIcon.png') }}" alt="Shared practice">
+                                <span class="tooltip">Shared with {{ practice_partners[game.game_date.weekday()] }}</span>
+                            </span>
+                            {% endif %}
                         {% elif game.is_scrimmage %}
                             <span class="game-type-badge scrimmage">Scrimmage</span>
                         {% elif game.home_ID == team.team_ID %}

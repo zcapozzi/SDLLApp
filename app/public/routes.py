@@ -23,6 +23,7 @@ from app.models.field import Field
 from app.models.umpire_partner import UmpirePartner
 from app.models.game_change import GameChange
 from app.models.game_start_record import GameStartRecord
+from app.models.practice_pairing import PracticePairing
 from app.extensions import db
 import sys
 import csv
@@ -227,6 +228,30 @@ def team_schedule(token):
         'impression_token': None,
         'game_originals': {},  # "Originally scheduled for..." text per game
     }
+
+    # Get practice pairings for this team - maps day_of_week to partner team name
+    practice_partners = {}  # day_of_week -> partner team display name
+    try:
+        pairings = PracticePairing.query.filter(
+            PracticePairing.year == team.year,
+            PracticePairing.is_spring == team.is_spring,
+            PracticePairing.active == 1,
+            db.or_(
+                PracticePairing.team_one_id == team.team_ID,
+                PracticePairing.team_two_id == team.team_ID
+            )
+        ).all()
+        for p in pairings:
+            # Get the partner team (the other team in the pairing)
+            if p.team_one_id == team.team_ID:
+                partner = p.team_two
+            else:
+                partner = p.team_one
+            if partner:
+                practice_partners[p.day_of_week] = partner.computed_display_name
+    except Exception:
+        pass  # Don't fail page load if pairings lookup fails
+    template_vars['practice_partners'] = practice_partners
 
     # Determine what games/practices to show
     if not is_locked:
