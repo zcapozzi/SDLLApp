@@ -457,7 +457,7 @@
                 <p>First, you need to create a league in GameChanger (or find a previously created league for your division's season) and add your division's teams to it.</p>
                 <ul>
                     <li>Open the GameChanger app on your device</li>
-                    <li>Create a new league for <strong>{{ display_name }}</strong>, or find the existing league if one was already created for this season</li>
+                    <li>Create a new league for <strong>SDLL {{ display_name }} {{ 'Spring' if league_season.is_spring else 'Fall' }} {{ league_season.year }}</strong>, or find the existing league if one was already created for this season</li>
                     <li>Add each team in your division to the league</li>
                     <li><strong>Important:</strong> Do NOT manually create teams. Search for existing GameChanger teams and add them to your league.</li>
                 </ul>
@@ -503,7 +503,7 @@
                     <tbody>
                         {% for team in teams %}
                         <tr data-team-id="{{ team.team_ID }}">
-                            <td>{{ team.organization.short_code if team.organization else 'SDLL' }} {{ team.computed_display_name }} {{ 'Spring' if league_season.is_spring else 'Fall' }} {{ league_season.year }}</td>
+                            <td>{{ team.team_name or team.display_name }}</td>
                             <td>{{ team.coach_name or '-' }}</td>
                             <td>
                                 <input type="text"
@@ -563,7 +563,7 @@
                     <ul style="margin-top: 8px; margin-bottom: 0;">
                         {% for team in teams %}
                             {% if not team.gameChangerName %}
-                            <li>{{ team.organization.short_code if team.organization else 'SDLL' }} {{ team.computed_display_name }} {{ 'Spring' if league_season.is_spring else 'Fall' }} {{ league_season.year }}</li>
+                            <li>{{ team.team_name or team.display_name }}</li>
                             {% endif %}
                         {% endfor %}
                     </ul>
