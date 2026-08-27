@@ -955,10 +955,8 @@ def manage_leagues(year, is_spring):
             else:
                 teams_by_league[team.league] = teams_by_league.get(team.league, 0) + 1
 
-    # Count games by type per league
-    games_by_league = {}
-    for config in league_configs:
-        games_by_league[config.league] = Game.count_by_type(year, is_spring, config.league)
+    # Count games by type per league (single query for all leagues)
+    games_by_league = Game.count_by_type_for_season(year, is_spring)
 
     return render_template(
         'seasons/manage_leagues.html',

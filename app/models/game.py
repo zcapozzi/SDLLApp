@@ -658,3 +658,27 @@ class Game(db.Model):
             active=1
         ).group_by(cls.game_type).all()
         return {game_type: count for game_type, count in results}
+
+    @classmethod
+    def count_by_type_for_season(cls, year, is_spring):
+        """Count games by type for ALL leagues in a season (single query).
+
+        Returns dict: {league_name: {'regular': N, 'playoff': M, ...}}
+        """
+        from sqlalchemy import func
+        results = db.session.query(
+            cls.league,
+            cls.game_type,
+            func.count(cls.ID)
+        ).filter_by(
+            year=year,
+            is_spring=is_spring,
+            active=1
+        ).group_by(cls.league, cls.game_type).all()
+
+        games_by_league = {}
+        for league, game_type, count in results:
+            if league not in games_by_league:
+                games_by_league[league] = {}
+            games_by_league[league][game_type] = count
+        return games_by_league
