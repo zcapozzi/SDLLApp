@@ -1055,18 +1055,22 @@ def division_schedule(token):
             fields_set.add(g.field_name)
     fields = sorted(fields_set)
 
-    # Get seasonal display name (fall leagues may have different names)
+    # Get seasonal display name and practice duration (fall leagues may have different names)
     from app.models.league import League
     league_obj = League.get_by_name(league_season.league)
     if league_obj:
         display_name = league_obj.get_seasonal_name(league_season.is_spring)
+        practice_duration = league_obj.get_practice_duration()
     else:
         display_name = league_season.league
+        practice_duration = 90  # Default
 
     return render_template(
         'public/division_schedule.html',
         league_season=league_season,
         display_name=display_name,
+        practice_duration=practice_duration,
+        timedelta=timedelta,
         games=games,
         upcoming_games=upcoming_games,
         past_games=past_games,
