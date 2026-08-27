@@ -77,24 +77,21 @@ def create_app(config_name=None):
     # Context processor for current season (used in navbar)
     @app.context_processor
     def inject_current_season():
-        """Make current season available to all templates."""
-        from .models.league_season import LeagueSeason
-        from datetime import date
+        """Make current season available to all templates.
 
-        # Get the most recent season with league configs
-        current_season = db.session.query(
-            LeagueSeason.year,
-            LeagueSeason.is_spring
-        ).filter_by(active=1).order_by(
-            LeagueSeason.year.desc(),
-            LeagueSeason.is_spring.desc()
-        ).first()
+        Uses OrgSeason to determine the current season:
+        1. First looks for a season explicitly marked as is_current=1
+        2. Falls back to the season with the latest season_started_at
+        """
+        from .models.org_season import OrgSeason
+
+        current_season = OrgSeason.get_current_season()
 
         if current_season:
             return {
                 'current_season_year': current_season.year,
                 'current_season_is_spring': current_season.is_spring,
-                'current_season_name': f'{"Spring" if current_season.is_spring else "Fall"} {current_season.year}'
+                'current_season_name': current_season.season_name
             }
         return {
             'current_season_year': None,
