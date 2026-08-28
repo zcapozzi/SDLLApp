@@ -1358,6 +1358,14 @@ def team_setup(year=None, is_spring=None):
         joinedload(TeamSeason.coaches).joinedload(CoachSeason.coach).joinedload(CoachUser.user)
     ).order_by(TeamSeason.league, TeamSeason.display_name).all()
 
+    # Get league age_ranks for sorting
+    from app.models.league import League
+    league_ranks = {lg.display_name: (lg.age_rank or 999) for lg in League.get_all_active()}
+    # Also add fall_display_name mappings
+    for lg in League.get_all_active():
+        if lg.fall_display_name:
+            league_ranks[lg.fall_display_name] = lg.age_rank or 999
+
     # Group by league
     teams_by_league = {}
     for team in teams:
@@ -1365,6 +1373,12 @@ def team_setup(year=None, is_spring=None):
         if league not in teams_by_league:
             teams_by_league[league] = []
         teams_by_league[league].append(team)
+
+    # Sort leagues by age_rank ascending (youngest first)
+    teams_by_league = dict(sorted(
+        teams_by_league.items(),
+        key=lambda x: league_ranks.get(x[0], 999)
+    ))
 
     # Get available coaches for dropdowns - eager load user
     coaches = CoachUser.query.filter_by(status='active').options(
