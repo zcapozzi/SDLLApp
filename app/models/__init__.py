@@ -14,6 +14,7 @@ from .notification_queue import NotificationQueue
 from .umpire_assignment import UmpireAssignment
 from .season_blackout import SeasonBlackout
 from .field_blackout import FieldBlackout
+from .field_allocation_specific import FieldAllocationSpecific
 from .practice_pairing import PracticePairing
 from .analytics import PageView, Ad, AdImpression, AdClick, generate_session_id
 from .app_error import AppError

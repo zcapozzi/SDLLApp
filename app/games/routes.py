@@ -1249,16 +1249,21 @@ def day_view(year, is_spring, target_date):
     field_lookup = {f.location_title: f for f in all_fields}
     field_id_lookup = {f.ID: f for f in all_fields}
 
-    # Get field slots (allocations) for this day of week
+    # Get field slots (recurring allocations) for this day of week
     day_of_week = view_date.weekday()  # 0=Monday, 6=Sunday
     from app.models.field_slot import FieldSlot
     from app.models.field_blackout import FieldBlackout
-    allocations = FieldSlot.query.filter_by(
+    from app.models.field_allocation_specific import FieldAllocationSpecific
+
+    recurring_allocations = FieldSlot.query.filter_by(
         year=year,
         is_spring=is_spring,
         day_of_week=day_of_week,
         active=1
     ).all()
+
+    # Get specific-date allocations for this exact date
+    specific_allocations = FieldAllocationSpecific.get_by_date(year, is_spring, view_date)
 
     # Get blackouts for this date (to show fields as blacked out, not hide them)
     blackouts_today = FieldBlackout.query.filter_by(
@@ -1274,16 +1279,15 @@ def day_view(year, is_spring, target_date):
     fields_with_allocations = set()
     fields_with_owned_allocations = set()  # Only SDLL-owned fields
     allocation_times = set()
-    allocation_info = {}  # (field_name, time_key) -> {'is_owned': bool, 'slot': FieldSlot}
+    allocation_info = {}  # (field_name, time_key) -> {'is_owned': bool, 'slot': obj, 'is_specific': bool}
 
-    for alloc in allocations:
+    # Process recurring allocations first
+    for alloc in recurring_allocations:
         field = field_id_lookup.get(alloc.field_ID)
         if field:
             fields_with_allocations.add(field.location_title)
-            # Track SDLL-owned fields separately
             if alloc.is_owned == 1:
                 fields_with_owned_allocations.add(field.location_title)
-            # Track time slots covered by this allocation
             start_hour = alloc.start_time.hour
             end_hour = alloc.end_time.hour
             for h in range(start_hour, end_hour + 1):
@@ -1292,7 +1296,28 @@ def day_view(year, is_spring, target_date):
                     allocation_times.add(time_key)
                     allocation_info[(field.location_title, time_key)] = {
                         'is_owned': alloc.is_owned == 1,
-                        'slot': alloc
+                        'slot': alloc,
+                        'is_specific': False
+                    }
+
+    # Process specific-date allocations (these override recurring for specific dates)
+    for alloc in specific_allocations:
+        field = field_id_lookup.get(alloc.field_ID)
+        if field:
+            fields_with_allocations.add(field.location_title)
+            if alloc.is_owned == 1:
+                fields_with_owned_allocations.add(field.location_title)
+            start_hour = alloc.start_time.hour
+            end_hour = alloc.end_time.hour
+            for h in range(start_hour, end_hour + 1):
+                for m in [0, 30]:
+                    time_key = f'{h:02d}:{m:02d}'
+                    allocation_times.add(time_key)
+                    # Specific allocations override recurring
+                    allocation_info[(field.location_title, time_key)] = {
+                        'is_owned': alloc.is_owned == 1,
+                        'slot': alloc,
+                        'is_specific': True
                     }
 
     # Build display_fields from SDLL-owned fields only

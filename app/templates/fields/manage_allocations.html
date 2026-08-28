@@ -80,7 +80,69 @@
                        placeholder="e.g., Parks & Rec allocation">
             </div>
 
-            <button type="submit" class="btn btn-primary" style="width: 100%;">Add Slot</button>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Add Recurring Slot</button>
+        </form>
+
+        <hr style="margin: 25px 0; border-color: #e0e0e0;">
+
+        <!-- Add Specific Date Allocation -->
+        <h3 style="margin-bottom: 15px;">Add Specific Date</h3>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="add_specific">
+
+            <div class="form-group">
+                <label for="specific_field_id">Field</label>
+                <select id="specific_field_id" name="field_id" class="form-control" required>
+                    {% for field in fields %}
+                    <option value="{{ field.ID }}">{{ field.location_title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="allocation_date">Date</label>
+                <input type="date" id="allocation_date" name="allocation_date" class="form-control" required>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div class="form-group">
+                    <label for="specific_start_time">Start Time</label>
+                    <input type="time" id="specific_start_time" name="start_time" class="form-control"
+                           value="09:00" required>
+                </div>
+                <div class="form-group">
+                    <label for="specific_end_time">End Time</label>
+                    <input type="time" id="specific_end_time" name="end_time" class="form-control"
+                           value="12:00" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="specific_league">League (optional)</label>
+                <select id="specific_league" name="league" class="form-control">
+                    <option value="">Any League</option>
+                    {% for league in leagues %}
+                    <option value="{{ league.display_name }}">{{ league.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" name="is_owned" value="1" checked
+                           style="width: 18px; height: 18px;">
+                    <span>SDLL Owned</span>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label for="specific_notes">Notes (optional)</label>
+                <input type="text" id="specific_notes" name="notes" class="form-control"
+                       placeholder="e.g., Tournament day, Make-up games">
+            </div>
+
+            <button type="submit" class="btn btn-secondary" style="width: 100%;">Add Specific Date</button>
         </form>
     </div>
 
@@ -260,6 +322,74 @@
             </p>
             {% endif %}
         {% endif %}
+
+        <!-- Specific Date Allocations Section -->
+        <div id="specific-allocations" style="margin-top: 40px; border-top: 3px solid #ff9800; padding-top: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="color: #ff9800; margin: 0;">
+                    <span style="font-size: 14px; margin-right: 8px;">SPECIFIC DATES</span>
+                    ({{ specific_count }})
+                </h2>
+            </div>
+
+            {% if specific_allocations %}
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 100px;">Date</th>
+                        <th>Field</th>
+                        <th style="width: 140px;">Time</th>
+                        <th style="width: 70px;">Owner</th>
+                        <th>League</th>
+                        <th>Notes</th>
+                        <th style="width: 120px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for alloc in specific_allocations %}
+                    <tr{% if not alloc.is_owned %} style="background-color: #fff8e1;"{% endif %}>
+                        <td>{{ alloc.allocation_date.strftime('%a %m/%d') }}</td>
+                        <td>{{ alloc.field.location_title if alloc.field else 'Unknown' }}</td>
+                        <td>{{ alloc.time_display }}</td>
+                        <td>
+                            {% if alloc.is_owned %}
+                            <span class="badge badge-spring">SDLL</span>
+                            {% else %}
+                            <span class="badge" style="background: #f5f5f5; color: #666;">Away</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if alloc.league %}
+                            <span class="badge" style="background: rgb(34, 139, 34); color: white;">{{ alloc.league }}</span>
+                            {% else %}
+                            <span class="text-muted">Any</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if alloc.notes %}
+                            <span class="text-muted">{{ alloc.notes }}</span>
+                            {% endif %}
+                        </td>
+                        <td style="white-space: nowrap;">
+                            <button type="button" class="btn btn-outline btn-sm"
+                                    onclick="editSpecific({{ alloc.ID }}, '{{ alloc.allocation_date.strftime('%Y-%m-%d') }}', '{{ alloc.start_time.strftime('%H:%M') }}', '{{ alloc.end_time.strftime('%H:%M') }}', '{{ alloc.league or '' }}', {{ alloc.is_owned }}, '{{ alloc.notes or '' }}')">
+                                Edit
+                            </button>
+                            <button type="button" class="btn btn-sm" style="background: #c33; color: white;"
+                                    onclick="confirmDeleteSpecific({{ alloc.ID }}, '{{ alloc.field.location_title }}', '{{ alloc.allocation_date.strftime('%m/%d') }}', '{{ alloc.time_display }}')">
+                                X
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-muted" style="text-align: center; padding: 30px;">
+                No specific-date allocations. Use the form on the left to add one-off slots for tournaments, make-up games, etc.
+            </p>
+            {% endif %}
+        </div>
     </div>
 </div>
 
@@ -342,6 +472,81 @@
     </div>
 </div>
 
+<!-- Edit Specific Date Modal -->
+<div id="edit-specific-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+     background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+    <div class="card" style="max-width: 400px; margin: auto;">
+        <h3 style="margin-bottom: 20px;">Edit Specific Date Allocation</h3>
+        <form method="POST" id="edit-specific-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="update_specific">
+            <input type="hidden" name="alloc_id" id="edit-specific-id">
+
+            <div class="form-group">
+                <label for="edit-specific-date">Date</label>
+                <input type="date" id="edit-specific-date" name="allocation_date" class="form-control" required>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div class="form-group">
+                    <label for="edit-specific-start">Start Time</label>
+                    <input type="time" id="edit-specific-start" name="start_time" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-specific-end">End Time</label>
+                    <input type="time" id="edit-specific-end" name="end_time" class="form-control" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="edit-specific-league">League</label>
+                <select id="edit-specific-league" name="league" class="form-control">
+                    <option value="">Any League</option>
+                    {% for league in leagues %}
+                    <option value="{{ league.display_name }}">{{ league.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="edit-specific-is-owned" name="is_owned" value="1"
+                           style="width: 18px; height: 18px;">
+                    <span>SDLL Owned</span>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label for="edit-specific-notes">Notes</label>
+                <input type="text" id="edit-specific-notes" name="notes" class="form-control">
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="button" class="btn btn-outline" onclick="closeEditSpecificModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete Specific Confirmation Modal -->
+<div id="delete-specific-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+     background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+    <div class="card" style="max-width: 400px; margin: auto;">
+        <h3 style="margin-bottom: 20px;">Remove Specific Date Allocation?</h3>
+        <p id="delete-specific-description" style="margin-bottom: 20px;"></p>
+        <form method="POST" id="delete-specific-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="delete_specific">
+            <input type="hidden" name="alloc_id" id="delete-specific-id">
+            <div style="display: flex; gap: 10px;">
+                <button type="submit" class="btn" style="background: #c33; color: white;">Remove</button>
+                <button type="button" class="btn btn-outline" onclick="closeDeleteSpecificModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 function editSlot(slotId, day, startTime, endTime, league, isOwned, notes) {
     document.getElementById('edit-slot-id').value = slotId;
@@ -369,10 +574,39 @@ function closeDeleteModal() {
     document.getElementById('delete-modal').style.display = 'none';
 }
 
+// Specific date allocation functions
+function editSpecific(allocId, allocDate, startTime, endTime, league, isOwned, notes) {
+    document.getElementById('edit-specific-id').value = allocId;
+    document.getElementById('edit-specific-date').value = allocDate;
+    document.getElementById('edit-specific-start').value = startTime;
+    document.getElementById('edit-specific-end').value = endTime;
+    document.getElementById('edit-specific-league').value = league;
+    document.getElementById('edit-specific-is-owned').checked = isOwned == 1;
+    document.getElementById('edit-specific-notes').value = notes;
+    document.getElementById('edit-specific-modal').style.display = 'flex';
+}
+
+function closeEditSpecificModal() {
+    document.getElementById('edit-specific-modal').style.display = 'none';
+}
+
+function confirmDeleteSpecific(allocId, fieldName, date, time) {
+    document.getElementById('delete-specific-id').value = allocId;
+    document.getElementById('delete-specific-description').textContent =
+        'Are you sure you want to remove the allocation at ' + fieldName + ' on ' + date + ' ' + time + '?';
+    document.getElementById('delete-specific-modal').style.display = 'flex';
+}
+
+function closeDeleteSpecificModal() {
+    document.getElementById('delete-specific-modal').style.display = 'none';
+}
+
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         closeEditModal();
         closeDeleteModal();
+        closeEditSpecificModal();
+        closeDeleteSpecificModal();
     }
 });
 </script>

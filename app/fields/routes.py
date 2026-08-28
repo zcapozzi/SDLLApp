@@ -2,9 +2,10 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
-from datetime import time
+from datetime import time, date, datetime
 from app.models.field import Field
 from app.models.field_slot import FieldSlot
+from app.models.field_allocation_specific import FieldAllocationSpecific
 from app.models.league import League
 from app.models.team import TeamSeason
 from app.extensions import db
@@ -276,6 +277,69 @@ def manage_allocations(year, is_spring):
             flash(f'Set {count} slots at {field_name} to {status}', 'success')
             anchor = f'field-{field_id}'
 
+        # Specific-date allocation handlers
+        elif action == 'add_specific':
+            field_id = int(request.form.get('field_id'))
+            allocation_date_str = request.form.get('allocation_date')
+            start_time_str = request.form.get('start_time')
+            end_time_str = request.form.get('end_time')
+            league = request.form.get('league') or None
+            is_owned = 1 if request.form.get('is_owned') else 0
+            notes = request.form.get('notes') or None
+
+            # Parse date and times
+            allocation_date = datetime.strptime(allocation_date_str, '%Y-%m-%d').date()
+            start_time = time.fromisoformat(start_time_str)
+            end_time = time.fromisoformat(end_time_str)
+
+            alloc = FieldAllocationSpecific(
+                active=1,
+                field_ID=field_id,
+                year=year,
+                is_spring=is_spring,
+                allocation_date=allocation_date,
+                start_time=start_time,
+                end_time=end_time,
+                league=league,
+                is_owned=is_owned,
+                notes=notes
+            )
+            field = Field.query.get(field_id)
+            field_name = field.location_title if field else f'Field {field_id}'
+
+            db.session.add(alloc)
+            db.session.commit()
+
+            logger.info(f'Added specific allocation: {field_name} {allocation_date_str} {start_time_str}')
+            flash(f'Added specific date allocation: {field_name} {allocation_date_str}', 'success')
+            anchor = 'specific-allocations'
+
+        elif action == 'delete_specific':
+            alloc_id = int(request.form.get('alloc_id'))
+            alloc = FieldAllocationSpecific.query.get(alloc_id)
+            if alloc and alloc.year == year and alloc.is_spring == is_spring:
+                alloc.active = 0
+                db.session.commit()
+                logger.info(f'Deleted specific allocation {alloc_id}')
+                flash('Specific date allocation removed', 'success')
+            anchor = 'specific-allocations'
+
+        elif action == 'update_specific':
+            alloc_id = int(request.form.get('alloc_id'))
+            alloc = FieldAllocationSpecific.query.get(alloc_id)
+            if alloc and alloc.year == year and alloc.is_spring == is_spring:
+                allocation_date_str = request.form.get('allocation_date')
+                alloc.allocation_date = datetime.strptime(allocation_date_str, '%Y-%m-%d').date()
+                alloc.start_time = time.fromisoformat(request.form.get('start_time'))
+                alloc.end_time = time.fromisoformat(request.form.get('end_time'))
+                alloc.league = request.form.get('league') or None
+                alloc.is_owned = 1 if request.form.get('is_owned') else 0
+                alloc.notes = request.form.get('notes') or None
+                db.session.commit()
+                logger.info(f'Updated specific allocation {alloc_id}')
+                flash('Specific date allocation updated', 'success')
+            anchor = 'specific-allocations'
+
         # Preserve filter/group settings on redirect, scroll to edited element
         redirect_url = url_for(
             'fields.manage_allocations',
@@ -320,6 +384,14 @@ def manage_allocations(year, is_spring):
     fields = Field.get_all_active()
     leagues = League.get_all_active()
 
+    # Get specific-date allocations
+    specific_allocations = FieldAllocationSpecific.get_by_season(year, is_spring)
+    # Filter by ownership
+    if ownership == 'owned':
+        specific_allocations = [a for a in specific_allocations if a.is_owned]
+    elif ownership == 'away':
+        specific_allocations = [a for a in specific_allocations if not a.is_owned]
+
     return render_template(
         'fields/manage_allocations.html',
         year=year,
@@ -330,6 +402,8 @@ def manage_allocations(year, is_spring):
         group_by=group_by,
         ownership=ownership,
         slot_count=len(slots),
+        specific_allocations=specific_allocations,
+        specific_count=len(specific_allocations),
         fields=fields,
         leagues=leagues,
         days=FieldSlot.DAY_NAMES
