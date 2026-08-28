@@ -136,6 +136,43 @@
         color: #bbb;
         font-size: 10px;
     }
+    /* Blacked out slots - red/gray diagonal stripes */
+    .day-grid td.field-cell.slot-blacked-out {
+        background: repeating-linear-gradient(
+            -45deg,
+            #ffe0e0,
+            #ffe0e0 8px,
+            #ffcfcf 8px,
+            #ffcfcf 16px
+        );
+        cursor: not-allowed;
+    }
+    .day-grid td.field-cell.slot-blacked-out:hover {
+        background: repeating-linear-gradient(
+            -45deg,
+            #ffd0d0,
+            #ffd0d0 8px,
+            #ffbfbf 8px,
+            #ffbfbf 16px
+        );
+    }
+    .day-grid th.field-header.blacked-out {
+        text-decoration: line-through;
+        opacity: 0.7;
+    }
+    .blackout-marker {
+        color: #c33;
+        font-size: 10px;
+        font-weight: 500;
+        text-align: center;
+        padding: 10px 4px;
+    }
+    .blackout-reason {
+        font-size: 9px;
+        color: #999;
+        font-style: italic;
+        margin-top: 2px;
+    }
     .game-slot {
         padding: 8px;
         margin-bottom: 6px;
@@ -438,10 +475,11 @@
                 <th class="time-header">Time</th>
                 {% for field in display_fields %}
                 {% set has_games = field.location_title in fields_with_games %}
-                <th class="field-header {% if not has_games %}empty-field{% endif %}"
+                {% set is_blacked_out = field.location_title in blacked_out_fields %}
+                <th class="field-header {% if not has_games %}empty-field{% endif %}{% if is_blacked_out %} blacked-out{% endif %}"
                     data-field="{{ field.location_title }}"
                     data-has-games="{{ 'true' if has_games else 'false' }}"
-                    title="{{ field.location_title }}">{{ field.location_title }}</th>
+                    title="{{ field.location_title }}{% if is_blacked_out %} (BLACKED OUT: {{ blacked_out_fields[field.location_title] }}){% endif %}">{{ field.location_title }}</th>
                 {% endfor %}
             </tr>
         </thead>
@@ -460,11 +498,13 @@
                 {% set has_alloc = alloc is not none %}
                 {% set is_owned = alloc.is_owned if alloc else false %}
                 {% set field_has_games = field.location_title in fields_with_games %}
-                <td class="field-cell {% if not has_alloc %}slot-no-allocation{% elif is_owned %}slot-sdll-owned{% else %}slot-away-only{% endif %}{% if not field_has_games %} field-col-empty{% endif %}"
+                {% set is_blacked_out = field.location_title in blacked_out_fields %}
+                <td class="field-cell {% if is_blacked_out %}slot-blacked-out{% elif not has_alloc %}slot-no-allocation{% elif is_owned %}slot-sdll-owned{% else %}slot-away-only{% endif %}{% if not field_has_games %} field-col-empty{% endif %}"
                     data-field="{{ field.location_title }}"
                     data-time="{{ time_slot }}"
                     data-allocated="{{ 'true' if has_alloc else 'false' }}"
-                    data-owned="{{ 'true' if is_owned else 'false' }}">
+                    data-owned="{{ 'true' if is_owned else 'false' }}"
+                    data-blacked-out="{{ 'true' if is_blacked_out else 'false' }}">
                     {% set cell_games = grid.get(time_slot, {}).get(field.location_title, []) %}
                     {% if cell_games %}
                         {% for game in cell_games %}
@@ -485,6 +525,11 @@
                             </div>
                         </div>
                         {% endfor %}
+                    {% elif is_blacked_out %}
+                        <div class="blackout-marker">
+                            BLACKED OUT
+                            <div class="blackout-reason">{{ blacked_out_fields[field.location_title] }}</div>
+                        </div>
                     {% elif not has_alloc %}
                         <span class="empty-marker">No allocation</span>
                     {% endif %}
@@ -523,6 +568,7 @@
         <span style="margin-left: 15px; padding: 2px 8px; background: #f0fff0; border: 1px solid #c0e0c0; border-radius: 4px;">SDLL Owned</span>
         <span style="margin-left: 10px; padding: 2px 8px; background: #f0f8ff; border: 1px solid #c0d8f0; border-radius: 4px;">Away Only</span>
         <span style="margin-left: 10px; padding: 2px 8px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; color: #999;">No Allocation</span>
+        <span style="margin-left: 10px; padding: 2px 8px; background: repeating-linear-gradient(-45deg, #ffe0e0, #ffe0e0 4px, #ffcfcf 4px, #ffcfcf 8px); border: 1px solid #e0a0a0; border-radius: 4px; color: #c33;">Blacked Out</span>
     </div>
 </div>
 

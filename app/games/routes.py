@@ -1260,13 +1260,15 @@ def day_view(year, is_spring, target_date):
         active=1
     ).all()
 
-    # Filter out allocations for fields that are blacked out on this date
-    blacked_out_field_ids = {
-        bo.field_ID for bo in FieldBlackout.query.filter_by(
-            blackout_date=view_date, active=1
-        ).all()
-    }
-    allocations = [a for a in allocations if a.field_ID not in blacked_out_field_ids]
+    # Get blackouts for this date (to show fields as blacked out, not hide them)
+    blackouts_today = FieldBlackout.query.filter_by(
+        blackout_date=view_date, active=1
+    ).all()
+    blacked_out_fields = {}  # field_name -> reason
+    for bo in blackouts_today:
+        field = field_id_lookup.get(bo.field_ID)
+        if field:
+            blacked_out_fields[field.location_title] = bo.reason or 'Unavailable'
 
     # Track fields with allocations and their time slots
     fields_with_allocations = set()
@@ -1389,7 +1391,8 @@ def day_view(year, is_spring, target_date):
         teams=teams,
         allocation_info=allocation_info,
         leagues=leagues,
-        fields_with_games=fields_with_games
+        fields_with_games=fields_with_games,
+        blacked_out_fields=blacked_out_fields
     )
 
 
