@@ -1252,12 +1252,21 @@ def day_view(year, is_spring, target_date):
     # Get field slots (allocations) for this day of week
     day_of_week = view_date.weekday()  # 0=Monday, 6=Sunday
     from app.models.field_slot import FieldSlot
+    from app.models.field_blackout import FieldBlackout
     allocations = FieldSlot.query.filter_by(
         year=year,
         is_spring=is_spring,
         day_of_week=day_of_week,
         active=1
     ).all()
+
+    # Filter out allocations for fields that are blacked out on this date
+    blacked_out_field_ids = {
+        bo.field_ID for bo in FieldBlackout.query.filter_by(
+            blackout_date=view_date, active=1
+        ).all()
+    }
+    allocations = [a for a in allocations if a.field_ID not in blacked_out_field_ids]
 
     # Track fields with allocations and their time slots
     fields_with_allocations = set()
