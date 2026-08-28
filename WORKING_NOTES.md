@@ -4,7 +4,91 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Implemented Division Schedule feature - authenticated public schedule pages showing all games AND practices for a specific league-season. Access is tiered based on user role.
+Last session: Added umpire calendar day view and fixed umpire source change notifications.
+
+---
+
+## Session: August 28, 2026 - Umpire Calendar Day View & Notifications Fix
+
+### Features Added
+
+1. **Umpire Calendar Day View**
+   - New route: `/umpires/<year>/<is_spring>/day/<date>`
+   - Also accessible via: `/umpires/<year>/<is_spring>/calendar?date=YYYY-MM-DD`
+   - Features:
+     - Single day focused view with larger game cards
+     - Games grouped by time slot
+     - Date picker for jumping to any date
+     - "Today" button for quick access
+     - Previous/Next day navigation
+     - League filter (client-side, no page reload)
+     - Right-click context menu for umpire assignments (same as week view)
+   - Files:
+     - `app/umpires/routes.py` - Added `umpire_day_view()` route
+     - `app/templates/umpires/day_view.html` - New template
+
+2. **Week View Calendar Updates**
+   - Added "Day View" button in header
+   - Day headers are now clickable to navigate to day view for that date
+   - Calendar redirects to day view if `?date=` param is present
+
+3. **Umpire Source Change Notifications**
+   - Fixed: When changing umpire source from one partner to another (e.g., DYN → DIA), the system now queues notifications to BOTH partners:
+     - Old partner receives "game removed from your assignment" notification
+     - New partner receives "game assigned to you" notification
+   - Added new notification template function: `render_umpire_reassignment_notification()`
+   - Files:
+     - `app/umpires/routes.py` - Updated `api_set_umpire_source()`
+     - `app/services/notification_templates.py` - Added new template function
+
+### Testing Notes
+- Navigate to `/umpires/2026/1/calendar` (week view)
+- Click any day header to go to day view
+- Use date picker to jump to specific dates
+- Test umpire source changes to verify notifications are queued
+- Check `/notifications/queue` to see both notifications for a partner change
+
+---
+
+## Session: August 27, 2026 - ThingsWeCanDoNow.md Documentation
+
+### Overview
+Created a comprehensive inventory of every capability in the SDLL web application, documenting all routes, required access levels, actions available, and navigation paths.
+
+### File Created
+`ThingsWeCanDoNow.md` - 700+ line documentation covering:
+
+1. **Access Levels**: Documented all roles (public, authenticated, coach, umpire, umpire_coordinator, scheduler, admin, treasurer)
+
+2. **Feature Categories**:
+   - Authentication (login, logout, password reset)
+   - Dashboard & Main Pages
+   - Season Management (leagues, teams, playoffs, schedule settings)
+   - Field Management (properties, allocations, time restrictions, blackouts)
+   - Game Management (calendar, list, add/edit/cancel games)
+   - Schedule Generation (generate, review, accept, lock)
+   - League Settings (pitch types, field rules, umpire patterns)
+   - Umpire Coordinator Functions (calendar, assignments, pay)
+   - Umpire Portal (self-service: claim, release, history, pay)
+   - Public Schedules (team, division, partner with tiered access)
+   - Reports (recent changes, game history, schedule downloads)
+   - Admin/User Management
+   - Notification Queue
+
+3. **Feature Matrix**: Quick reference table showing which roles can access which features
+
+4. **Navigation Paths**: How to reach each feature from the dashboard
+
+### CLAUDE.md Updated
+Added a new "Documentation Reference" section explaining the purpose of ThingsWeCanDoNow.md and how to maintain it when adding new features.
+
+### Purpose
+- Feature reference for developers
+- Access control documentation
+- Navigation guide for users
+- Onboarding resource for new administrators
+
+---
 
 ---
 

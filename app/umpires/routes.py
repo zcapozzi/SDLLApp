@@ -958,8 +958,17 @@ def api_unassign():
 @login_required
 @umpire_coordinator_required
 def api_set_umpire_source():
-    """Set the umpire source for a game via right-click menu."""
+    """Set the umpire source for a game via right-click menu.
+
+    When changing from one partner to another, this queues notifications
+    to BOTH partners:
+    - The old partner receives "game removed from your assignment"
+    - The new partner receives "game assigned to you"
+    """
     from app.services.game_changes import GameChangeService
+    from app.models.notification_queue import NotificationQueue
+    from app.models.partner_contact import PartnerContact
+    from app.services.notification_templates import render_umpire_reassignment_notification
 
     data = request.get_json()
     game_id = data.get('game_id')
@@ -968,6 +977,7 @@ def api_set_umpire_source():
     # Valid short codes (stored in DB) - get from active partners plus SDL
     valid_sources = ['SDL']  # SDLL Academy is always valid
     partners = UmpirePartner.get_active()
+    partner_lookup = {p.short_code.upper(): p for p in partners}
     for p in partners:
         valid_sources.append(p.short_code.upper())
 
@@ -987,25 +997,89 @@ def api_set_umpire_source():
     # Track if this is a change (not initial assignment)
     old_source = game.umpire_override
     is_change = old_source is not None and old_source != source
+    is_new_assignment = old_source is None and source is not None
 
     game.umpire_override = source
     db.session.commit()
 
-    # Log change if this is a subsequent assignment (not initial)
+    notifications_queued = 0
+
+    # Queue notifications when changing from one partner to another
     if is_change:
         try:
-            GameChangeService.log_change(
+            # Log the change
+            change = GameChangeService.log_change(
                 game_id=game_id,
                 user_id=current_user.ID,
                 change_type='update',
                 changes_dict={'umpire_source': {'old': old_source, 'new': source}},
                 reason=f'Umpire source changed from {old_source or "none"} to {source or "none"}'
             )
+
+            # Notify OLD partner (game removed from their assignment)
+            old_partner = partner_lookup.get(old_source.upper()) if old_source else None
+            if old_partner:
+                contacts = old_partner.get_contacts_for_message_type(PartnerContact.MSG_RECENT_CHANGES)
+                for contact in contacts:
+                    try:
+                        subject, body_text, body_html = render_umpire_reassignment_notification(
+                            game=game,
+                            action='removed',
+                            partner_name=old_partner.name,
+                            new_partner_name=partner_lookup.get(source.upper()).name if source and partner_lookup.get(source.upper()) else (source or 'Unassigned')
+                        )
+                        notification = NotificationQueue(
+                            change_id=change.id if change else None,
+                            game_id=game.ID,
+                            recipient_type='partner',
+                            recipient_id=contact.user_id,
+                            recipient_email=contact.display_email,
+                            recipient_name=contact.display_name or old_partner.name,
+                            subject=subject,
+                            body_text=body_text,
+                            body_html=body_html,
+                            status='pending'
+                        )
+                        db.session.add(notification)
+                        notifications_queued += 1
+                    except Exception as e:
+                        logger.warning(f'Failed to queue notification to old partner: {e}')
+
+            # Notify NEW partner (game assigned to them)
+            new_partner = partner_lookup.get(source.upper()) if source else None
+            if new_partner:
+                contacts = new_partner.get_contacts_for_message_type(PartnerContact.MSG_RECENT_CHANGES)
+                for contact in contacts:
+                    try:
+                        subject, body_text, body_html = render_umpire_reassignment_notification(
+                            game=game,
+                            action='assigned',
+                            partner_name=new_partner.name,
+                            old_partner_name=old_partner.name if old_partner else (old_source or 'Unassigned')
+                        )
+                        notification = NotificationQueue(
+                            change_id=change.id if change else None,
+                            game_id=game.ID,
+                            recipient_type='partner',
+                            recipient_id=contact.user_id,
+                            recipient_email=contact.display_email,
+                            recipient_name=contact.display_name or new_partner.name,
+                            subject=subject,
+                            body_text=body_text,
+                            body_html=body_html,
+                            status='pending'
+                        )
+                        db.session.add(notification)
+                        notifications_queued += 1
+                    except Exception as e:
+                        logger.warning(f'Failed to queue notification to new partner: {e}')
+
+            db.session.commit()
         except Exception as e:
             logger.warning(f'Failed to log umpire source change: {e}')
 
-    logger.info(f'Set umpire source for game {game_id} to {source}')
-    return jsonify({'success': True, 'source': source})
+    logger.info(f'Set umpire source for game {game_id} to {source} (notifications queued: {notifications_queued})')
+    return jsonify({'success': True, 'source': source, 'notifications_queued': notifications_queued})
 
 
 @umpires_bp.route('/api/set-umpire-count', methods=['POST'])
@@ -1088,6 +1162,11 @@ def api_mark_no_umpire_required():
 def umpire_calendar(year, is_spring):
     """Calendar view for umpire coordination - assign umpire sources to games."""
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    # Check for date param - redirect to day view if present
+    date_param = request.args.get('date')
+    if date_param:
+        return redirect(url_for('umpires.umpire_day_view', year=year, is_spring=is_spring, date=date_param))
 
     # Get week parameter (ISO week number) or default to current week
     week_param = request.args.get('week')
@@ -1243,6 +1322,137 @@ def umpire_calendar(year, is_spring):
         fields=fields,
         current_league=league,
         today=today,
+        partners=partners,
+        seasons=seasons
+    )
+
+
+# =============================================================================
+# Umpire Day View
+# =============================================================================
+
+@umpires_bp.route('/<int:year>/<int:is_spring>/day')
+@umpires_bp.route('/<int:year>/<int:is_spring>/day/<date>')
+@login_required
+@umpire_coordinator_required
+def umpire_day_view(year, is_spring, date=None):
+    """Day view for umpire coordination - single day focus for game assignments."""
+    from sqlalchemy.orm import joinedload
+
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    # Parse date parameter or use today
+    if date:
+        try:
+            if isinstance(date, str):
+                view_date = datetime.strptime(date, '%Y-%m-%d').date()
+            else:
+                view_date = date
+        except ValueError:
+            view_date = datetime.today().date()
+    else:
+        # Check URL query param
+        date_param = request.args.get('date')
+        if date_param:
+            try:
+                view_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+            except ValueError:
+                view_date = datetime.today().date()
+        else:
+            view_date = datetime.today().date()
+
+    # Get league filter
+    league = request.args.get('league')
+
+    # Query all games for the day with eager loading
+    day_query = Game.query.options(
+        joinedload(Game.home_team),
+        joinedload(Game.away_team),
+        joinedload(Game.field_rel)
+    ).filter(
+        Game.active == 1,
+        Game.year == year,
+        Game.is_spring == is_spring,
+        db.func.date(Game.game_date) == view_date,
+        Game.game_type.in_(['regular', 'playoff'])
+    )
+    if league:
+        day_query = day_query.filter(Game.league == league)
+
+    games = day_query.order_by(Game.game_date, Game.field_id).all()
+
+    # Pre-load all leagues to avoid N+1 queries for umpire_count
+    all_leagues = {lg.display_name: lg for lg in League.get_all_active()}
+    for lg in League.get_all_active():
+        if lg.fall_display_name:
+            all_leagues[lg.fall_display_name] = lg
+
+    # Pre-compute umpire counts and field names
+    for game in games:
+        if game.umpire_count_override is not None:
+            game._cached_umpire_count = game.umpire_count_override
+        else:
+            league_obj = all_leagues.get(game.league)
+            if league_obj:
+                is_playoff = game.game_type == 'playoff'
+                game._cached_umpire_count = league_obj.get_umpire_count(is_playoff=is_playoff)
+            else:
+                game._cached_umpire_count = 1
+        game._cached_field_name = game.field_name
+
+    # Group games by time slot for easier viewing
+    games_by_time = {}
+    for game in games:
+        if game.game_date:
+            time_key = game.game_date.strftime('%I:%M %p')
+            if time_key not in games_by_time:
+                games_by_time[time_key] = []
+            games_by_time[time_key].append(game)
+
+    # Calculate prev/next day
+    prev_date = view_date - timedelta(days=1)
+    next_date = view_date + timedelta(days=1)
+
+    # Get leagues for filter
+    leagues = db.session.query(Game.league).filter(
+        Game.year == year,
+        Game.is_spring == is_spring,
+        Game.league.isnot(None),
+        Game.game_type.in_(['regular', 'playoff'])
+    ).distinct().all()
+    leagues = [l[0] for l in leagues if l[0]]
+    leagues.sort()
+
+    # Get umpire partners for legend
+    partners = UmpirePartner.get_active()
+
+    # Get available seasons
+    available_seasons = db.session.query(
+        Game.year,
+        Game.is_spring
+    ).filter(
+        Game.active == 1,
+        Game.game_type.in_(['regular', 'playoff'])
+    ).distinct().order_by(Game.year.desc(), Game.is_spring.desc()).all()
+
+    seasons = [
+        {'year': y, 'is_spring': s, 'name': f'{"Spring" if s else "Fall"} {y}'}
+        for y, s in available_seasons
+    ]
+
+    return render_template(
+        'umpires/day_view.html',
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name,
+        view_date=view_date,
+        games=games,
+        games_by_time=games_by_time,
+        prev_date=prev_date,
+        next_date=next_date,
+        leagues=leagues,
+        current_league=league,
+        today=datetime.today().date(),
         partners=partners,
         seasons=seasons
     )

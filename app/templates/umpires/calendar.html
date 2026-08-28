@@ -45,6 +45,11 @@
         text-align: center;
         background: #f5f5f5;
         border-bottom: 1px solid #eee;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    .day-header:hover {
+        background: #e8e8e8;
     }
     .calendar-day.today .day-header {
         background: rgb(34, 139, 34);
@@ -243,6 +248,7 @@
         Umpire Calendar
     </h1>
     <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('umpires.umpire_day_view', year=year, is_spring=is_spring) }}" class="btn btn-outline">Day View</a>
         <a href="{{ url_for('umpires.schedule') }}" class="btn btn-outline">List View</a>
         <a href="{{ url_for('umpires.delegation') }}" class="btn btn-secondary">Delegation Rules</a>
     </div>
@@ -281,7 +287,7 @@
 <div class="calendar-grid">
     {% for day in week_days %}
     <div class="calendar-day {{ 'today' if day.is_today else '' }} {{ 'empty-day' if not day.games else '' }}" data-date="{{ day.date.strftime('%Y-%m-%d') }}">
-        <div class="day-header">
+        <div class="day-header" onclick="goToDayView('{{ day.date.strftime('%Y-%m-%d') }}')" title="Click for day view">
             {{ day.date.strftime('%a') }}<br>
             {{ day.date.strftime('%m/%d') }}
         </div>
@@ -382,6 +388,18 @@ function changeSeason() {
     var year = parts[0];
     var isSpring = parts[1];
     window.location.href = '/umpires/' + year + '/' + isSpring + '/calendar';
+}
+
+// Navigate to day view for a specific date
+function goToDayView(dateStr) {
+    var year = document.getElementById('season-year').value;
+    var isSpring = document.getElementById('season-is-spring').value;
+    var league = document.getElementById('filter-league').value;
+    var url = '/umpires/' + year + '/' + isSpring + '/day/' + dateStr;
+    if (league) {
+        url += '?league=' + encodeURIComponent(league);
+    }
+    window.location.href = url;
 }
 
 // CSS-based filtering (no page reload)

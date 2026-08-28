@@ -19,6 +19,23 @@ When starting work in this repo:
 
 This project is to build a web-application that I can deploy to manage our Little League.
 
+# Documentation Reference
+
+## ThingsWeCanDoNow.md
+
+The `ThingsWeCanDoNow.md` file is a comprehensive inventory of every capability in the SDLL web application. It serves as:
+
+1. **Feature Reference** - Lists every route and action available in the system
+2. **Access Control Documentation** - Tags each feature with required roles (admin, scheduler, coach, umpire, etc.)
+3. **Navigation Guide** - Documents how to reach each feature from the dashboard
+4. **Onboarding Resource** - Helps new administrators understand what the system can do
+
+**Maintenance:** When adding new routes or features, update ThingsWeCanDoNow.md with:
+- Access level (which roles can use it)
+- Path (URL pattern)
+- Actions (what users can do)
+- Navigation (how to get there from the UI)
+
 # High-Level Criteria
 
 I want to use Green/Red TDD for this project; our color palette is orange and forest green; i would like a python script that I can run to verify that the project is working as expected and that all tasks are being executed successfully. 
