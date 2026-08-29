@@ -359,12 +359,13 @@ def edit(id):
     profile = UmpireProfile.query.get_or_404(id)
 
     if request.method == 'POST':
-        # Update name - different handling for managed vs regular umpires
-        if profile.is_managed:
-            profile.first_name = request.form.get('first_name', '').strip()
-            profile.last_name = request.form.get('last_name', '').strip()
-        else:
-            profile.user.name = request.form.get('name', '').strip()
+        # Update name - store first/last on profile for all umpires
+        profile.first_name = request.form.get('first_name', '').strip()
+        profile.last_name = request.form.get('last_name', '').strip()
+
+        # For regular umpires, also sync to user.name and handle phone
+        if not profile.is_managed and profile.user:
+            profile.user.name = f"{profile.first_name} {profile.last_name}".strip()
             profile.user.phone = request.form.get('phone', '').strip() or None
 
         # Update profile
