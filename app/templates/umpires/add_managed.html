@@ -18,10 +18,17 @@
 
         <h4 style="margin-bottom: 15px; color: var(--primary-color);">Umpire Information</h4>
 
-        <div class="form-group">
-            <label for="name">Umpire Name *</label>
-            <input type="text" id="name" name="name" class="form-control" required
-                   placeholder="e.g., Johnny Smith">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div class="form-group">
+                <label for="first_name">First Name *</label>
+                <input type="text" id="first_name" name="first_name" class="form-control" required
+                       placeholder="e.g., Johnny">
+            </div>
+            <div class="form-group">
+                <label for="last_name">Last Name *</label>
+                <input type="text" id="last_name" name="last_name" class="form-control" required
+                       placeholder="e.g., Smith">
+            </div>
         </div>
 
         <div class="form-group">

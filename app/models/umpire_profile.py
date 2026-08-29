@@ -19,7 +19,9 @@ class UmpireProfile(db.Model):
                         nullable=True)  # NULL for managed umpires
 
     # Name for managed umpires (those without their own User account)
-    _name = db.Column('_name', db.String(500))
+    # Stored separately like sdll_users for consistency
+    _first_name = db.Column('_first_name', db.String(500))
+    _last_name = db.Column('_last_name', db.String(500))
 
     # Age tracking (important for youth umpires)
     birth_date = db.Column(db.Date)
@@ -97,18 +99,40 @@ class UmpireProfile(db.Model):
     def parent_phone(self, value):
         self._parent_phone = encrypt_value(value) if value else None
 
-    # Name property for managed umpires (encrypted)
+    # First name property for managed umpires (encrypted)
+    @property
+    def first_name(self):
+        """Get first name - from profile field or linked user."""
+        if self._first_name:
+            return decrypt_value(self._first_name)
+        return self.user.first_name if self.user else None
+
+    @first_name.setter
+    def first_name(self, value):
+        """Set first name directly on profile (for managed umpires)."""
+        self._first_name = encrypt_value(value) if value else None
+
+    # Last name property for managed umpires (encrypted)
+    @property
+    def last_name(self):
+        """Get last name - from profile field or linked user."""
+        if self._last_name:
+            return decrypt_value(self._last_name)
+        return self.user.last_name if self.user else None
+
+    @last_name.setter
+    def last_name(self, value):
+        """Set last name directly on profile (for managed umpires)."""
+        self._last_name = encrypt_value(value) if value else None
+
     @property
     def name(self):
-        """Get name - from profile field or linked user."""
-        if self._name:
-            return decrypt_value(self._name)
-        return self.user.name if self.user else None
-
-    @name.setter
-    def name(self, value):
-        """Set name directly on profile (for managed umpires)."""
-        self._name = encrypt_value(value) if value else None
+        """Get full name - combines first and last name."""
+        first = self.first_name
+        last = self.last_name
+        if first and last:
+            return f"{first} {last}"
+        return first or last or (self.user.name if self.user else None)
 
     @property
     def is_managed(self):
@@ -336,13 +360,14 @@ class UmpireProfile(db.Model):
         return profiles
 
     @classmethod
-    def create_managed_profile(cls, name, guardian_user_id, birth_date=None,
+    def create_managed_profile(cls, first_name, last_name, guardian_user_id, birth_date=None,
                                 max_baseball_age_rank=None, max_softball_age_rank=None,
                                 relationship='parent'):
         """Create a managed umpire profile (for youth without their own account).
 
         Args:
-            name: The umpire's name
+            first_name: The umpire's first name
+            last_name: The umpire's last name
             guardian_user_id: User ID of the guardian (parent)
             birth_date: Optional birth date
             max_baseball_age_rank: Baseball eligibility level
@@ -361,7 +386,8 @@ class UmpireProfile(db.Model):
             max_baseball_age_rank=max_baseball_age_rank,
             max_softball_age_rank=max_softball_age_rank
         )
-        profile.name = name
+        profile.first_name = first_name
+        profile.last_name = last_name
 
         db.session.add(profile)
         db.session.flush()  # Get the profile ID
@@ -395,15 +421,17 @@ class UmpireProfile(db.Model):
             raise ValueError("Profile is already linked to a user account")
 
         # Copy name to user if user doesn't have one
+        # User model has single 'name' field, so combine first + last
         if not user.name and self.name:
             user.name = self.name
 
         # Link profile to user
         self.user_id = user.ID
 
-        # Clear the profile's standalone name (now uses user's name)
-        # Keep it as backup in case we need it
-        # self._name = None
+        # Clear the profile's standalone name fields (now uses user's name)
+        # Keep them as backup in case we need them
+        # self._first_name = None
+        # self._last_name = None
 
         db.session.commit()
         return True

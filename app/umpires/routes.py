@@ -163,7 +163,8 @@ def add():
 def add_managed():
     """Add a managed umpire (youth without their own email, managed by a parent)."""
     if request.method == 'POST':
-        name = request.form.get('name', '').strip()
+        first_name = request.form.get('first_name', '').strip()
+        last_name = request.form.get('last_name', '').strip()
         guardian_email = request.form.get('guardian_email', '').strip()
         birth_date_str = request.form.get('birth_date', '').strip()
         relationship = request.form.get('relationship', 'parent')
@@ -172,8 +173,8 @@ def add_managed():
         max_bb = request.form.get('max_baseball_age_rank')
         max_sb = request.form.get('max_softball_age_rank')
 
-        if not name or not guardian_email:
-            flash('Umpire name and guardian email are required.', 'error')
+        if not first_name or not last_name or not guardian_email:
+            flash('First name, last name, and guardian email are required.', 'error')
             return render_template('umpires/add_managed.html')
 
         # Find or create guardian user
@@ -193,7 +194,8 @@ def add_managed():
 
             # Create managed profile
             profile = UmpireProfile.create_managed_profile(
-                name=name,
+                first_name=first_name,
+                last_name=last_name,
                 guardian_user_id=guardian.ID,
                 birth_date=birth_date,
                 max_baseball_age_rank=int(max_bb) if max_bb else None,
@@ -201,8 +203,9 @@ def add_managed():
                 relationship=relationship
             )
 
-            logger.info(f'Added managed umpire: {name} (ID: {profile.id}), guardian: {guardian.email}')
-            flash(f'Added managed umpire: {name} (managed by {guardian.name or guardian.email})', 'success')
+            full_name = f"{first_name} {last_name}"
+            logger.info(f'Added managed umpire: {full_name} (ID: {profile.id}), guardian: {guardian.email}')
+            flash(f'Added managed umpire: {full_name} (managed by {guardian.name or guardian.email})', 'success')
 
             return redirect(url_for('umpires.view', id=profile.id))
 
