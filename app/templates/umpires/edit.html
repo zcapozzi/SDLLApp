@@ -14,6 +14,31 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <h3 style="margin-top: 0;">Basic Information</h3>
 
+        {% if profile.is_managed %}
+        {# Managed umpire - editable first/last name #}
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="form-group">
+                <label for="first_name">First Name</label>
+                <input type="text" name="first_name" id="first_name" class="form-control"
+                       value="{{ profile.first_name or '' }}" required>
+            </div>
+            <div class="form-group">
+                <label for="last_name">Last Name</label>
+                <input type="text" name="last_name" id="last_name" class="form-control"
+                       value="{{ profile.last_name or '' }}" required>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Contact Email</label>
+            <input type="email" class="form-control" disabled
+                   value="{{ profile.contact_email or 'Via guardian' }}">
+            <p style="font-size: 12px; color: var(--text-muted);">
+                Managed umpire - contact goes through guardian
+            </p>
+        </div>
+        {% else %}
+        {# Regular umpire with user account #}
         <div class="form-group">
             <label for="name">Full Name</label>
             <input type="text" name="name" id="name" class="form-control"
@@ -29,18 +54,17 @@
             </p>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-            <div class="form-group">
-                <label for="phone">Phone</label>
-                <input type="tel" name="phone" id="phone" class="form-control"
-                       value="{{ profile.user.phone or '' }}">
-            </div>
+        <div class="form-group">
+            <label for="phone">Phone</label>
+            <input type="tel" name="phone" id="phone" class="form-control"
+                   value="{{ profile.user.phone or '' }}">
+        </div>
+        {% endif %}
 
-            <div class="form-group">
-                <label for="birth_date">Birth Date</label>
-                <input type="date" name="birth_date" id="birth_date" class="form-control"
-                       value="{{ profile.birth_date.isoformat() if profile.birth_date else '' }}">
-            </div>
+        <div class="form-group">
+            <label for="birth_date">Birth Date</label>
+            <input type="date" name="birth_date" id="birth_date" class="form-control"
+                   value="{{ profile.birth_date.isoformat() if profile.birth_date else '' }}">
         </div>
 
         <div class="form-group">
@@ -117,6 +141,30 @@
 
         <hr style="margin: 20px 0;">
 
+        {% if profile.is_managed %}
+        <h3>Guardian</h3>
+        <p style="color: var(--text-muted); margin-bottom: 15px;">
+            This is a managed umpire profile. The guardian manages their assignments.
+        </p>
+        {% set guardians = profile.guardians.all() %}
+        {% if guardians %}
+        <div style="background: #f5f5f5; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+            <strong>Current Guardians:</strong>
+            <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+                {% for g in guardians %}
+                <li>
+                    {{ g.guardian.name or g.guardian.email }}
+                    ({{ g.relationship }})
+                    {% if g.is_primary %}<span style="color: var(--primary-color);">- Primary</span>{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        <p style="font-size: 12px; color: var(--text-muted);">
+            To convert this to an independent account, use the <a href="{{ url_for('umpires.hive_off', id=profile.id) }}">Hive Off</a> feature.
+        </p>
+        {% else %}
         <h3>Parent/Guardian Contacts</h3>
         <p style="color: var(--text-muted); margin-bottom: 15px;">
             Required for umpires under 18.
@@ -142,6 +190,7 @@
                        value="{{ profile.parent_phone or '' }}">
             </div>
         </div>
+        {% endif %}
 
         <hr style="margin: 20px 0;">
 

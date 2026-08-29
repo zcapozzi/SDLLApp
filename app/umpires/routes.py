@@ -66,11 +66,20 @@ def index():
     # Get partners for quick reference
     partners = UmpirePartner.get_active()
 
+    # Find users with umpire role who don't have profiles yet
+    profile_user_ids = [p.user_id for p in profiles if p.user_id]
+    users_without_profiles = User.query.filter(
+        User.active == 1,
+        User.role.like('%umpire%'),
+        ~User.ID.in_(profile_user_ids) if profile_user_ids else True
+    ).all()
+
     return render_template(
         'umpires/index.html',
         profiles=profiles,
         partners=partners,
-        status_filter=status_filter
+        status_filter=status_filter,
+        users_without_profiles=users_without_profiles
     )
 
 
@@ -155,6 +164,38 @@ def add():
             flash(f'Error adding umpire: {str(e)}', 'error')
 
     return render_template('umpires/add.html')
+
+
+@umpires_bp.route('/create-profile/<int:user_id>', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def create_profile_for_user(user_id):
+    """Create an umpire profile for an existing user with umpire role."""
+    user = User.query.get_or_404(user_id)
+
+    # Check if profile already exists
+    existing = UmpireProfile.get_by_user_id(user_id)
+    if existing:
+        flash(f'{user.name or user.email} already has an umpire profile.', 'warning')
+        return redirect(url_for('umpires.view', id=existing.id))
+
+    try:
+        profile = UmpireProfile(
+            user_id=user_id,
+            status=UmpireProfile.STATUS_ACTIVE
+        )
+        db.session.add(profile)
+        db.session.commit()
+
+        logger.info(f'Created umpire profile for user {user_id}: {user.name or user.email}')
+        flash(f'Created umpire profile for {user.name or user.email}', 'success')
+        return redirect(url_for('umpires.edit', id=profile.id))
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f'Error creating profile for user {user_id}: {e}')
+        flash(f'Error creating profile: {str(e)}', 'error')
+        return redirect(url_for('umpires.index'))
 
 
 @umpires_bp.route('/add-managed', methods=['GET', 'POST'])
@@ -318,9 +359,13 @@ def edit(id):
     profile = UmpireProfile.query.get_or_404(id)
 
     if request.method == 'POST':
-        # Update user info
-        profile.user.name = request.form.get('name', '').strip()
-        profile.user.phone = request.form.get('phone', '').strip() or None
+        # Update name - different handling for managed vs regular umpires
+        if profile.is_managed:
+            profile.first_name = request.form.get('first_name', '').strip()
+            profile.last_name = request.form.get('last_name', '').strip()
+        else:
+            profile.user.name = request.form.get('name', '').strip()
+            profile.user.phone = request.form.get('phone', '').strip() or None
 
         # Update profile
         birth_date_str = request.form.get('birth_date', '').strip()
@@ -346,10 +391,11 @@ def edit(id):
         excluded_ids = request.form.getlist('excluded_leagues')
         profile.excluded_league_ids = [int(x) for x in excluded_ids if x]
 
-        # Parent contacts
-        profile.parent_name = request.form.get('parent_name', '').strip() or None
-        profile.parent_email = request.form.get('parent_email', '').strip() or None
-        profile.parent_phone = request.form.get('parent_phone', '').strip() or None
+        # Parent contacts (only for regular umpires - managed use guardians)
+        if not profile.is_managed:
+            profile.parent_name = request.form.get('parent_name', '').strip() or None
+            profile.parent_email = request.form.get('parent_email', '').strip() or None
+            profile.parent_phone = request.form.get('parent_phone', '').strip() or None
 
         try:
             db.session.commit()

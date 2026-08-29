@@ -93,6 +93,40 @@
     {% endif %}
 </div>
 
+{% if users_without_profiles %}
+<div class="card" style="margin-top: 20px; border-left: 4px solid var(--warning-color);">
+    <h3 style="margin-top: 0; color: var(--warning-color);">Users Needing Umpire Profiles</h3>
+    <p style="color: var(--text-muted); margin-bottom: 15px;">
+        These users have the umpire role but no umpire profile. Create profiles to enable scheduling.
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th style="width: 150px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users_without_profiles %}
+            <tr>
+                <td>{{ user.name or 'Unknown' }}</td>
+                <td>{{ user.email }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('umpires.create_profile_for_user', user_id=user.ID) }}" style="margin: 0;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-primary" style="padding: 3px 10px;">
+                            Create Profile
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 {% if partners %}
 <div class="card" style="margin-top: 20px;">
     <h3 style="margin-top: 0;">Partner Organizations</h3>

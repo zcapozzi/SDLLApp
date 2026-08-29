@@ -49,7 +49,38 @@
         </table>
     </div>
 
-    {% if profile.is_minor %}
+    {% if profile.is_managed %}
+    <div class="card">
+        <h3 style="margin-top: 0;">
+            Guardian
+            <span class="badge" style="background: #ff9800; color: white; margin-left: 8px; font-size: 10px;">Managed</span>
+        </h3>
+        {% set guardians = profile.guardians.all() %}
+        {% if guardians %}
+        <table style="width: 100%;">
+            {% for g in guardians %}
+            <tr>
+                <td style="color: var(--text-muted); width: 40%;">
+                    {{ g.relationship|title }}
+                    {% if g.is_primary %}<span style="color: var(--primary-color);">(Primary)</span>{% endif %}
+                </td>
+                <td>
+                    {{ g.guardian.name or 'Unknown' }}<br>
+                    <small style="color: var(--text-muted);">{{ g.guardian.email }}</small>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% else %}
+        <p style="color: var(--text-muted);">No guardian linked</p>
+        {% endif %}
+        <div style="margin-top: 15px;">
+            <a href="{{ url_for('umpires.hive_off', id=profile.id) }}" class="btn btn-outline" style="padding: 5px 15px;">
+                Create Independent Account
+            </a>
+        </div>
+    </div>
+    {% elif profile.is_minor %}
     <div class="card">
         <h3 style="margin-top: 0;">Parent/Guardian</h3>
         <table style="width: 100%;">
