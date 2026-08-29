@@ -1,0 +1,440 @@
+{% extends 'base.html' %}
+
+{% block title %}Import Users{% endblock %}
+
+{% block extra_css %}
+<style>
+    .import-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 30px;
+    }
+    .paste-section {
+        position: sticky;
+        top: 20px;
+    }
+    .paste-area {
+        width: 100%;
+        min-height: 300px;
+        font-family: monospace;
+        font-size: 13px;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        resize: vertical;
+    }
+    .paste-area:focus {
+        border-color: #228b22;
+        outline: none;
+    }
+    .format-help {
+        background: #f9f9f9;
+        padding: 15px;
+        border-radius: 4px;
+        margin-top: 15px;
+        font-size: 13px;
+    }
+    .format-help code {
+        background: #e0e0e0;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 12px;
+    }
+    .preview-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+    .preview-table th, .preview-table td {
+        padding: 8px 10px;
+        border: 1px solid #e0e0e0;
+        text-align: left;
+    }
+    .preview-table th {
+        background: rgb(34, 139, 34);
+        color: white;
+        font-weight: 500;
+    }
+    .preview-table tr:nth-child(even) {
+        background: #f9f9f9;
+    }
+    .preview-table .role-select {
+        padding: 4px;
+        font-size: 12px;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+    }
+    .preview-table .remove-btn {
+        background: none;
+        border: none;
+        color: #c33;
+        cursor: pointer;
+        font-size: 16px;
+        padding: 2px 6px;
+    }
+    .preview-table .remove-btn:hover {
+        background: #ffebee;
+        border-radius: 3px;
+    }
+    .error-list {
+        background: #ffebee;
+        border: 1px solid #ffcdd2;
+        border-radius: 4px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    .error-list h4 {
+        color: #c33;
+        margin: 0 0 10px 0;
+        font-size: 14px;
+    }
+    .error-list ul {
+        margin: 0;
+        padding-left: 20px;
+        font-size: 13px;
+    }
+    .success-summary {
+        background: #e8f5e9;
+        border: 1px solid #c8e6c9;
+        border-radius: 4px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    .success-summary h4 {
+        color: #2e7d32;
+        margin: 0 0 10px 0;
+    }
+    .btn-row {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+    }
+    .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 15px 0;
+        padding: 12px;
+        background-color: #f9f9f9;
+        border-radius: 4px;
+    }
+    .checkbox-group input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+    }
+    .preview-count {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 15px;
+    }
+    .preview-count strong {
+        color: #228b22;
+    }
+    #preview-section {
+        display: none;
+    }
+    #result-section {
+        display: none;
+    }
+    .loading {
+        opacity: 0.6;
+        pointer-events: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Import Users</h1>
+    <a href="{{ url_for('admin.users') }}" class="btn btn-outline">Back to Users</a>
+</div>
+
+<div class="import-container">
+    <!-- Left: Paste Section -->
+    <div class="card paste-section">
+        <h3>Paste Spreadsheet Data</h3>
+        <p class="text-muted">Copy rows from Excel or Google Sheets and paste below.</p>
+
+        <div class="form-group">
+            <label for="default-role">Default Role for All Users</label>
+            <select id="default-role" class="form-control">
+                {% for role in roles %}
+                <option value="{{ role }}" {% if role == 'viewer' %}selected{% endif %}>
+                    {{ role|replace('_', ' ')|title }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="paste-area">Paste Data</label>
+            <textarea id="paste-area" class="paste-area" placeholder="Paste your spreadsheet data here...
+
+Example formats:
+John	Doe	john@example.com	555-1234
+Jane Smith	jane@example.com	umpire
+Bob	Wilson	bob@example.com"></textarea>
+        </div>
+
+        <button type="button" class="btn btn-primary" onclick="parseData()" id="parse-btn">
+            Preview Import
+        </button>
+
+        <div class="format-help">
+            <strong>Accepted formats:</strong>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+                <li><code>First</code> <code>Last</code> <code>Email</code> [<code>Phone</code>] [<code>Role</code>]</li>
+                <li><code>Full Name</code> <code>Email</code> [<code>Phone</code>] [<code>Role</code>]</li>
+            </ul>
+            <p style="margin: 0;">Columns can be tab or comma separated. Role overrides the default if specified.</p>
+        </div>
+    </div>
+
+    <!-- Right: Preview/Results Section -->
+    <div>
+        <div class="card" id="preview-section">
+            <h3>Preview</h3>
+            <div id="parse-errors"></div>
+            <p class="preview-count" id="preview-count"></p>
+
+            <div style="max-height: 400px; overflow-y: auto;">
+                <table class="preview-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 30px;">#</th>
+                            <th>First Name</th>
+                            <th>Last Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th style="width: 140px;">Role</th>
+                            <th style="width: 40px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="preview-body">
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="send-welcome" checked>
+                <label for="send-welcome">Send welcome email with password creation link</label>
+            </div>
+
+            <div class="btn-row">
+                <button type="button" class="btn btn-primary" onclick="confirmImport()" id="confirm-btn">
+                    Import Users
+                </button>
+                <button type="button" class="btn btn-outline" onclick="clearPreview()">
+                    Clear
+                </button>
+            </div>
+        </div>
+
+        <div class="card" id="result-section">
+            <h3>Import Complete</h3>
+            <div id="result-content"></div>
+            <div class="btn-row">
+                <button type="button" class="btn btn-primary" onclick="resetForm()">
+                    Import More
+                </button>
+                <a href="{{ url_for('admin.users') }}" class="btn btn-outline">
+                    View All Users
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+var parsedUsers = [];
+var csrfToken = '{{ csrf_token() }}';
+var allRoles = {{ roles|tojson }};
+
+function parseData() {
+    var text = document.getElementById('paste-area').value;
+    var defaultRole = document.getElementById('default-role').value;
+
+    if (!text.trim()) {
+        alert('Please paste some data first.');
+        return;
+    }
+
+    document.getElementById('parse-btn').disabled = true;
+    document.getElementById('parse-btn').textContent = 'Parsing...';
+
+    fetch('{{ url_for("admin.parse_import_data") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            text: text,
+            default_role: defaultRole
+        })
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        document.getElementById('parse-btn').disabled = false;
+        document.getElementById('parse-btn').textContent = 'Preview Import';
+
+        if (data.success) {
+            parsedUsers = data.rows;
+            renderPreview(data.rows, data.errors);
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(function(err) {
+        document.getElementById('parse-btn').disabled = false;
+        document.getElementById('parse-btn').textContent = 'Preview Import';
+        alert('Error parsing data: ' + err);
+    });
+}
+
+function renderPreview(rows, errors) {
+    document.getElementById('preview-section').style.display = 'block';
+    document.getElementById('result-section').style.display = 'none';
+
+    // Show errors if any
+    var errorsDiv = document.getElementById('parse-errors');
+    if (errors && errors.length > 0) {
+        var html = '<div class="error-list"><h4>Skipped Rows:</h4><ul>';
+        errors.forEach(function(err) {
+            html += '<li>' + err + '</li>';
+        });
+        html += '</ul></div>';
+        errorsDiv.innerHTML = html;
+    } else {
+        errorsDiv.innerHTML = '';
+    }
+
+    // Update count
+    document.getElementById('preview-count').innerHTML =
+        '<strong>' + rows.length + '</strong> users ready to import';
+
+    // Build table
+    var tbody = document.getElementById('preview-body');
+    var html = '';
+
+    rows.forEach(function(row, index) {
+        html += '<tr data-index="' + index + '">';
+        html += '<td>' + row.row + '</td>';
+        html += '<td><input type="text" value="' + escapeHtml(row.first_name) + '" class="form-control" style="padding:4px;font-size:13px;" onchange="updateUser(' + index + ', \'first_name\', this.value)"></td>';
+        html += '<td><input type="text" value="' + escapeHtml(row.last_name) + '" class="form-control" style="padding:4px;font-size:13px;" onchange="updateUser(' + index + ', \'last_name\', this.value)"></td>';
+        html += '<td>' + escapeHtml(row.email) + '</td>';
+        html += '<td><input type="text" value="' + escapeHtml(row.phone || '') + '" class="form-control" style="padding:4px;font-size:13px;" onchange="updateUser(' + index + ', \'phone\', this.value)"></td>';
+        html += '<td><select class="role-select" onchange="updateUser(' + index + ', \'role\', this.value)">';
+        allRoles.forEach(function(role) {
+            var selected = role === row.role ? ' selected' : '';
+            html += '<option value="' + role + '"' + selected + '>' + role.replace(/_/g, ' ') + '</option>';
+        });
+        html += '</select></td>';
+        html += '<td><button type="button" class="remove-btn" onclick="removeUser(' + index + ')" title="Remove">X</button></td>';
+        html += '</tr>';
+    });
+
+    tbody.innerHTML = html;
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function updateUser(index, field, value) {
+    if (parsedUsers[index]) {
+        parsedUsers[index][field] = value;
+    }
+}
+
+function removeUser(index) {
+    parsedUsers.splice(index, 1);
+    renderPreview(parsedUsers, []);
+}
+
+function clearPreview() {
+    parsedUsers = [];
+    document.getElementById('preview-section').style.display = 'none';
+    document.getElementById('paste-area').value = '';
+}
+
+function confirmImport() {
+    if (parsedUsers.length === 0) {
+        alert('No users to import.');
+        return;
+    }
+
+    var sendWelcome = document.getElementById('send-welcome').checked;
+
+    if (!confirm('Import ' + parsedUsers.length + ' users?')) {
+        return;
+    }
+
+    document.getElementById('confirm-btn').disabled = true;
+    document.getElementById('confirm-btn').textContent = 'Importing...';
+
+    fetch('{{ url_for("admin.confirm_import") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            users: parsedUsers,
+            send_welcome: sendWelcome
+        })
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        document.getElementById('confirm-btn').disabled = false;
+        document.getElementById('confirm-btn').textContent = 'Import Users';
+
+        showResults(data);
+    })
+    .catch(function(err) {
+        document.getElementById('confirm-btn').disabled = false;
+        document.getElementById('confirm-btn').textContent = 'Import Users';
+        alert('Error importing: ' + err);
+    });
+}
+
+function showResults(data) {
+    document.getElementById('preview-section').style.display = 'none';
+    document.getElementById('result-section').style.display = 'block';
+
+    var html = '';
+
+    if (data.created_count > 0) {
+        html += '<div class="success-summary">';
+        html += '<h4>Successfully Created ' + data.created_count + ' Users</h4>';
+        html += '<ul style="margin:0;padding-left:20px;">';
+        data.created.forEach(function(u) {
+            html += '<li>' + escapeHtml(u.name) + ' (' + escapeHtml(u.email) + ') - ' + u.role + '</li>';
+        });
+        html += '</ul></div>';
+    }
+
+    if (data.error_count > 0) {
+        html += '<div class="error-list">';
+        html += '<h4>Errors (' + data.error_count + ')</h4>';
+        html += '<ul>';
+        data.errors.forEach(function(err) {
+            html += '<li>' + escapeHtml(err) + '</li>';
+        });
+        html += '</ul></div>';
+    }
+
+    document.getElementById('result-content').innerHTML = html;
+}
+
+function resetForm() {
+    parsedUsers = [];
+    document.getElementById('paste-area').value = '';
+    document.getElementById('preview-section').style.display = 'none';
+    document.getElementById('result-section').style.display = 'none';
+}
+</script>
+{% endblock %}

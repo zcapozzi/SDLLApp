@@ -99,7 +99,10 @@
 <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h1 style="margin: 0;">User Management</h1>
-        <a href="{{ url_for('admin.add_user') }}" class="btn btn-primary">Add User</a>
+        <div style="display: flex; gap: 10px;">
+            <a href="{{ url_for('admin.import_users') }}" class="btn btn-secondary">Import Users</a>
+            <a href="{{ url_for('admin.add_user') }}" class="btn btn-primary">Add User</a>
+        </div>
     </div>
 
     <div class="filter-bar">

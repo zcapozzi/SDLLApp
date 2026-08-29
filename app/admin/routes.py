@@ -1,8 +1,9 @@
 """Admin routes for user management"""
 
 import secrets
+import json
 from functools import wraps
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 
 from app.extensions import db
@@ -391,3 +392,188 @@ If you didn't request this, please ignore it.
     except Exception as e:
         logger.error(f'Failed to send reset email: {str(e)}')
         return False
+
+
+@admin_bp.route('/users/import', methods=['GET'])
+@login_required
+@admin_required
+def import_users():
+    """Display bulk user import page"""
+    return render_template('admin/import_users.html', roles=User.ROLES)
+
+
+@admin_bp.route('/users/import/parse', methods=['POST'])
+@login_required
+@admin_required
+def parse_import_data():
+    """Parse pasted spreadsheet data and return preview"""
+    data = request.json
+    raw_text = data.get('text', '')
+    default_role = data.get('default_role', 'viewer')
+
+    if not raw_text.strip():
+        return jsonify({'success': False, 'message': 'No data provided'})
+
+    rows = []
+    errors = []
+    lines = raw_text.strip().split('\n')
+
+    for i, line in enumerate(lines):
+        line = line.strip()
+        if not line:
+            continue
+
+        # Try tab-separated first, then comma
+        if '\t' in line:
+            parts = line.split('\t')
+        else:
+            parts = line.split(',')
+
+        # Clean up parts
+        parts = [p.strip().strip('"').strip("'") for p in parts]
+
+        # Expected format: First Name, Last Name, Email, [Phone], [Role]
+        # Or: Name, Email, [Phone], [Role]
+        if len(parts) < 2:
+            errors.append(f'Row {i+1}: Not enough columns (need at least name and email)')
+            continue
+
+        # Detect format based on whether there's an @ in the second or third column
+        first_name = ''
+        last_name = ''
+        email = ''
+        phone = ''
+        role = default_role
+
+        if len(parts) >= 3 and '@' in parts[2]:
+            # Format: First, Last, Email, [Phone], [Role]
+            first_name = parts[0]
+            last_name = parts[1]
+            email = parts[2].lower()
+            if len(parts) >= 4:
+                # Could be phone or role
+                if parts[3] in User.ROLES:
+                    role = parts[3]
+                else:
+                    phone = parts[3]
+            if len(parts) >= 5 and parts[4] in User.ROLES:
+                role = parts[4]
+        elif len(parts) >= 2 and '@' in parts[1]:
+            # Format: Full Name, Email, [Phone], [Role]
+            name_parts = parts[0].split()
+            if len(name_parts) >= 2:
+                first_name = name_parts[0]
+                last_name = ' '.join(name_parts[1:])
+            else:
+                first_name = parts[0]
+                last_name = ''
+            email = parts[1].lower()
+            if len(parts) >= 3:
+                if parts[2] in User.ROLES:
+                    role = parts[2]
+                else:
+                    phone = parts[2]
+            if len(parts) >= 4 and parts[3] in User.ROLES:
+                role = parts[3]
+        else:
+            errors.append(f'Row {i+1}: Could not find email address')
+            continue
+
+        # Validate email format
+        if '@' not in email or '.' not in email:
+            errors.append(f'Row {i+1}: Invalid email format: {email}')
+            continue
+
+        # Check for duplicates in the import data
+        existing_emails = [r['email'] for r in rows]
+        if email in existing_emails:
+            errors.append(f'Row {i+1}: Duplicate email in import: {email}')
+            continue
+
+        # Check if user already exists
+        existing_user = User.get_by_email(email)
+        if existing_user:
+            errors.append(f'Row {i+1}: User already exists: {email}')
+            continue
+
+        rows.append({
+            'row': i + 1,
+            'first_name': first_name,
+            'last_name': last_name,
+            'email': email,
+            'phone': phone,
+            'role': role
+        })
+
+    return jsonify({
+        'success': True,
+        'rows': rows,
+        'errors': errors,
+        'count': len(rows)
+    })
+
+
+@admin_bp.route('/users/import/confirm', methods=['POST'])
+@login_required
+@admin_required
+def confirm_import():
+    """Create users from confirmed import data"""
+    data = request.json
+    users_data = data.get('users', [])
+    send_welcome = data.get('send_welcome', False)
+
+    if not users_data:
+        return jsonify({'success': False, 'message': 'No users to import'})
+
+    created = []
+    errors = []
+
+    for user_data in users_data:
+        email = user_data.get('email', '').lower().strip()
+        first_name = user_data.get('first_name', '').strip()
+        last_name = user_data.get('last_name', '').strip()
+        phone = user_data.get('phone', '').strip()
+        role = user_data.get('role', 'viewer')
+
+        # Double-check user doesn't exist
+        if User.get_by_email(email):
+            errors.append(f'{email}: User already exists')
+            continue
+
+        if role not in User.ROLES:
+            role = 'viewer'
+
+        # Create user with random temp password
+        temp_password = secrets.token_urlsafe(16)
+        try:
+            user = User.create_user(
+                email=email,
+                password=temp_password,
+                name=f'{first_name} {last_name}'.strip(),
+                phone=phone if phone else None,
+                role=role
+            )
+            logger.info(f'Bulk import: Admin {current_user.ID} created user {user.ID} ({email}) with role {role}')
+
+            if send_welcome:
+                token = user.generate_reset_token()
+                send_welcome_email(user, token)
+
+            created.append({
+                'email': email,
+                'name': f'{first_name} {last_name}'.strip(),
+                'role': role
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            errors.append(f'{email}: {str(e)}')
+            logger.error(f'Bulk import failed for {email}: {str(e)}')
+
+    return jsonify({
+        'success': True,
+        'created': created,
+        'created_count': len(created),
+        'errors': errors,
+        'error_count': len(errors)
+    })
