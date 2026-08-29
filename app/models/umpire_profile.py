@@ -6,17 +6,20 @@ from app.utils.encryption import encrypt_value, decrypt_value, hash_for_lookup
 
 
 class UmpireProfile(db.Model):
-    """Umpire-specific data linked to a user account.
+    """Umpire-specific data, optionally linked to a user account.
 
-    This is a profile table - the User handles authentication,
-    and this table holds umpire-specific attributes like eligibility,
-    parent contacts (for youth umpires), and pay scale.
+    This is a profile table - if user_id is set, the User handles authentication.
+    For managed umpires (youth without their own email), user_id is NULL and
+    a guardian manages the profile via the UmpireGuardian relationship.
     """
     __tablename__ = 'sdll_umpire_profiles'
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.BigInteger, db.ForeignKey('sdll_users.ID', ondelete='CASCADE'),
-                        unique=True, nullable=False)
+                        nullable=True)  # NULL for managed umpires
+
+    # Name for managed umpires (those without their own User account)
+    _name = db.Column('_name', db.String(500))
 
     # Age tracking (important for youth umpires)
     birth_date = db.Column(db.Date)
@@ -94,6 +97,24 @@ class UmpireProfile(db.Model):
     def parent_phone(self, value):
         self._parent_phone = encrypt_value(value) if value else None
 
+    # Name property for managed umpires (encrypted)
+    @property
+    def name(self):
+        """Get name - from profile field or linked user."""
+        if self._name:
+            return decrypt_value(self._name)
+        return self.user.name if self.user else None
+
+    @name.setter
+    def name(self, value):
+        """Set name directly on profile (for managed umpires)."""
+        self._name = encrypt_value(value) if value else None
+
+    @property
+    def is_managed(self):
+        """Check if this is a managed profile (no direct user account)."""
+        return self.user_id is None
+
     @property
     def age(self):
         """Calculate age from birth_date.
@@ -110,18 +131,41 @@ class UmpireProfile(db.Model):
 
     @property
     def full_name(self):
-        """Get the umpire's full name from the linked User."""
-        return self.user.name if self.user else None
+        """Get the umpire's full name."""
+        # Use profile name if set, otherwise user name
+        return self.name
 
     @property
     def email(self):
-        """Get the umpire's email from the linked User."""
+        """Get the umpire's email from the linked User (or None for managed)."""
         return self.user.email if self.user else None
 
     @property
     def phone(self):
-        """Get the umpire's phone from the linked User."""
+        """Get the umpire's phone from the linked User (or None for managed)."""
         return self.user.phone if self.user else None
+
+    @property
+    def contact_email(self):
+        """Get contact email - umpire's own or primary guardian's."""
+        if self.user:
+            return self.user.email
+        # For managed umpires, get primary guardian's email
+        primary_guardian = self.guardians.filter_by(is_primary=1).first()
+        if primary_guardian and primary_guardian.guardian:
+            return primary_guardian.guardian.email
+        # Fallback to parent_email field
+        return self.parent_email
+
+    @property
+    def contact_phone(self):
+        """Get contact phone - umpire's own or primary guardian's."""
+        if self.user:
+            return self.user.phone
+        primary_guardian = self.guardians.filter_by(is_primary=1).first()
+        if primary_guardian and primary_guardian.guardian:
+            return primary_guardian.guardian.phone
+        return self.parent_phone
 
     @property
     def is_minor(self):
@@ -259,3 +303,125 @@ class UmpireProfile(db.Model):
     def get_by_assignr_id(cls, assignr_id):
         """Get umpire profile by Assignr ID (for imports)."""
         return cls.query.filter_by(assignr_id=assignr_id).first()
+
+    @classmethod
+    def get_accessible_profiles(cls, user_id):
+        """Get all umpire profiles a user can access.
+
+        This includes:
+        - Their own profile (if they have one)
+        - Any profiles they manage as a guardian
+
+        Args:
+            user_id: The user's ID
+
+        Returns:
+            List of UmpireProfile objects
+        """
+        from app.models.umpire_guardian import UmpireGuardian
+
+        profiles = []
+
+        # Get their own profile
+        own_profile = cls.query.filter_by(user_id=user_id).first()
+        if own_profile:
+            profiles.append(own_profile)
+
+        # Get managed profiles
+        managed = UmpireGuardian.get_managed_profiles(user_id)
+        for profile in managed:
+            if profile not in profiles:
+                profiles.append(profile)
+
+        return profiles
+
+    @classmethod
+    def create_managed_profile(cls, name, guardian_user_id, birth_date=None,
+                                max_baseball_age_rank=None, max_softball_age_rank=None,
+                                relationship='parent'):
+        """Create a managed umpire profile (for youth without their own account).
+
+        Args:
+            name: The umpire's name
+            guardian_user_id: User ID of the guardian (parent)
+            birth_date: Optional birth date
+            max_baseball_age_rank: Baseball eligibility level
+            max_softball_age_rank: Softball eligibility level
+            relationship: Relationship type (parent, guardian, other)
+
+        Returns:
+            The created UmpireProfile
+        """
+        from app.models.umpire_guardian import UmpireGuardian
+
+        profile = cls(
+            user_id=None,  # Managed profile - no direct user
+            status=cls.STATUS_ACTIVE,
+            birth_date=birth_date,
+            max_baseball_age_rank=max_baseball_age_rank,
+            max_softball_age_rank=max_softball_age_rank
+        )
+        profile.name = name
+
+        db.session.add(profile)
+        db.session.flush()  # Get the profile ID
+
+        # Link to guardian
+        UmpireGuardian.add_guardian(
+            user_id=guardian_user_id,
+            profile_id=profile.id,
+            relationship=relationship,
+            is_primary=True
+        )
+
+        db.session.commit()
+        return profile
+
+    def hive_off_to_user(self, user):
+        """Transfer this managed profile to an independent user account.
+
+        This is used when a youth umpire gets their own email address
+        and needs their own login.
+
+        Args:
+            user: The User object to link this profile to
+
+        Returns:
+            True if successful
+        """
+        from app.models.umpire_guardian import UmpireGuardian
+
+        if self.user_id is not None:
+            raise ValueError("Profile is already linked to a user account")
+
+        # Copy name to user if user doesn't have one
+        if not user.name and self.name:
+            user.name = self.name
+
+        # Link profile to user
+        self.user_id = user.ID
+
+        # Clear the profile's standalone name (now uses user's name)
+        # Keep it as backup in case we need it
+        # self._name = None
+
+        db.session.commit()
+        return True
+
+    def can_be_accessed_by(self, user_id):
+        """Check if a user can access this profile.
+
+        Args:
+            user_id: The user ID to check
+
+        Returns:
+            True if user owns this profile or is a guardian
+        """
+        from app.models.umpire_guardian import UmpireGuardian
+
+        # User owns this profile directly
+        if self.user_id == user_id:
+            return True
+
+        # User is a guardian
+        return UmpireGuardian.is_guardian_of(user_id, self.id)

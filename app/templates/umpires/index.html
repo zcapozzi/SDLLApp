@@ -9,6 +9,7 @@
         <a href="{{ url_for('umpires.partners') }}" class="btn btn-outline">Partners</a>
         <a href="{{ url_for('umpires.delegation') }}" class="btn btn-outline">Delegation Rules</a>
         <a href="{{ url_for('umpires.schedule') }}" class="btn btn-outline">Schedule</a>
+        <a href="{{ url_for('umpires.add_managed') }}" class="btn btn-secondary">Add Managed</a>
         <a href="{{ url_for('umpires.add') }}" class="btn btn-primary">Add Umpire</a>
     </div>
 </div>
@@ -47,8 +48,21 @@
         <tbody>
             {% for profile in profiles %}
             <tr id="umpire-{{ profile.id }}">
-                <td><strong>{{ profile.full_name or 'Unknown' }}</strong></td>
-                <td>{{ profile.email or '-' }}</td>
+                <td>
+                    <strong>{{ profile.full_name or 'Unknown' }}</strong>
+                    {% if profile.is_managed %}
+                    <span class="badge" style="background: #ff9800; color: white; margin-left: 5px; font-size: 10px;">Managed</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if profile.is_managed %}
+                    <span style="color: var(--text-muted); font-style: italic;">
+                        via {{ profile.contact_email or 'guardian' }}
+                    </span>
+                    {% else %}
+                    {{ profile.email or '-' }}
+                    {% endif %}
+                </td>
                 <td>{{ profile.age or '-' }}</td>
                 <td>
                     {% if profile.is_kid_pitch_eligible %}

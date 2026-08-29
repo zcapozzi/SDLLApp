@@ -3,6 +3,28 @@
 {% block title %}Umpire Portal{% endblock %}
 
 {% block content %}
+{% if has_multiple_profiles %}
+<div class="card" style="margin-bottom: 20px; padding: 15px; background: #f0f8ff; border-left: 4px solid #1976d2;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div>
+            <strong>Managing:</strong> {{ profile.full_name }}
+            {% if profile.is_managed %}<span class="badge" style="background: #ff9800; color: white; margin-left: 8px;">Managed</span>{% endif %}
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <span style="color: #666;">Switch to:</span>
+            {% for p in accessible_profiles %}
+                {% if p.id != profile.id %}
+                <a href="{{ url_for('umpire_portal.switch_profile', profile_id=p.id) }}"
+                   class="btn btn-sm btn-outline">
+                    {{ p.full_name }}
+                </a>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <h1 style="margin-bottom: 30px;">Welcome, {{ profile.full_name }}</h1>
 
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px;">

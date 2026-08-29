@@ -8,13 +8,14 @@ This is the Assignr replacement - umpires can:
 - View pay history
 """
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_login import login_required, current_user
 from functools import wraps
 from datetime import datetime, date, timedelta
 
 from app.extensions import db
 from app.models.umpire_profile import UmpireProfile
+from app.models.umpire_guardian import UmpireGuardian
 from app.models.game_umpire import GameUmpire
 from app.models.game import Game
 from app.models.league import League
@@ -26,22 +27,100 @@ umpire_portal_bp = Blueprint('umpire_portal', __name__)
 logger = SDLLLogger('umpire_portal')
 
 
+def get_accessible_profiles():
+    """Get all umpire profiles the current user can access."""
+    return UmpireProfile.get_accessible_profiles(current_user.ID)
+
+
 def umpire_required(f):
-    """Decorator to require umpire role with profile."""
+    """Decorator to require access to at least one umpire profile."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated:
             return redirect(url_for('auth.login'))
-        if not current_user.has_umpire_profile():
+
+        # Check if user has any accessible profiles (own or managed)
+        profiles = get_accessible_profiles()
+        if not profiles:
             flash('You do not have an umpire profile. Please contact the coordinator.', 'error')
             return redirect(url_for('main.dashboard'))
+
         return f(*args, **kwargs)
     return decorated_function
 
 
 def get_current_profile():
-    """Get the current user's umpire profile."""
-    return UmpireProfile.get_by_user_id(current_user.ID)
+    """Get the currently selected umpire profile.
+
+    Supports both:
+    - Users with their own profile
+    - Users managing other profiles (parents managing kids)
+
+    Uses session to track which profile is selected when user has multiple.
+    """
+    profiles = get_accessible_profiles()
+
+    if not profiles:
+        return None
+
+    # If only one profile, use it
+    if len(profiles) == 1:
+        return profiles[0]
+
+    # Multiple profiles - check session for selection
+    selected_id = session.get('selected_umpire_profile_id')
+    if selected_id:
+        for profile in profiles:
+            if profile.id == selected_id:
+                return profile
+
+    # Default to first profile
+    return profiles[0]
+
+
+def get_profile_context():
+    """Get context for templates regarding profile selection.
+
+    Returns dict with:
+    - current_profile: The selected profile
+    - accessible_profiles: All profiles user can access
+    - has_multiple_profiles: Whether user manages multiple
+    """
+    profiles = get_accessible_profiles()
+    current = get_current_profile()
+
+    return {
+        'current_profile': current,
+        'accessible_profiles': profiles,
+        'has_multiple_profiles': len(profiles) > 1
+    }
+
+
+# =============================================================================
+# Profile Selection (for users managing multiple umpires)
+# =============================================================================
+
+@umpire_portal_bp.route('/switch-profile/<int:profile_id>')
+@login_required
+@umpire_required
+def switch_profile(profile_id):
+    """Switch to a different umpire profile (for parents managing multiple kids)."""
+    profile = db.session.get(UmpireProfile, profile_id)
+
+    if not profile:
+        flash('Profile not found.', 'error')
+        return redirect(url_for('umpire_portal.dashboard'))
+
+    # Verify user can access this profile
+    if not profile.can_be_accessed_by(current_user.ID):
+        flash('You do not have access to that profile.', 'error')
+        return redirect(url_for('umpire_portal.dashboard'))
+
+    # Store selection in session
+    session['selected_umpire_profile_id'] = profile_id
+    flash(f'Switched to {profile.full_name or "umpire"}.', 'success')
+
+    return redirect(url_for('umpire_portal.dashboard'))
 
 
 # =============================================================================
@@ -53,7 +132,8 @@ def get_current_profile():
 @umpire_required
 def dashboard():
     """Umpire dashboard - overview of available and claimed games."""
-    profile = get_current_profile()
+    profile_ctx = get_profile_context()
+    profile = profile_ctx['current_profile']
 
     # Get upcoming claimed games
     my_games = GameUmpire.query.filter_by(
@@ -79,7 +159,9 @@ def dashboard():
         profile=profile,
         my_games=my_games,
         available_count=available_count,
-        pending_payment=pending_payment
+        pending_payment=pending_payment,
+        accessible_profiles=profile_ctx['accessible_profiles'],
+        has_multiple_profiles=profile_ctx['has_multiple_profiles']
     )
 
 

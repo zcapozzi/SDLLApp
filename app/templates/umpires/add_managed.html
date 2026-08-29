@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Add Managed Umpire{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.index') }}">&larr; Back to Umpires</a>
+</div>
+
+<h1>Add Managed Umpire</h1>
+<p class="text-muted" style="margin-bottom: 20px;">
+    For youth umpires who don't have their own email address. A parent/guardian will manage their account.
+</p>
+
+<div class="card" style="max-width: 600px;">
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <h4 style="margin-bottom: 15px; color: var(--primary-color);">Umpire Information</h4>
+
+        <div class="form-group">
+            <label for="name">Umpire Name *</label>
+            <input type="text" id="name" name="name" class="form-control" required
+                   placeholder="e.g., Johnny Smith">
+        </div>
+
+        <div class="form-group">
+            <label for="birth_date">Birth Date</label>
+            <input type="date" id="birth_date" name="birth_date" class="form-control">
+            <small style="color: var(--text-muted);">Used to determine age eligibility</small>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div class="form-group">
+                <label for="max_baseball_age_rank">Max Baseball Level</label>
+                <select id="max_baseball_age_rank" name="max_baseball_age_rank" class="form-control">
+                    <option value="">Not eligible</option>
+                    <option value="1">Tee Ball (1)</option>
+                    <option value="2">Coach Pitch (2)</option>
+                    <option value="3">Machine Pitch (3)</option>
+                    <option value="4">AA (4)</option>
+                    <option value="5">AAA (5)</option>
+                    <option value="6">Majors (6)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="max_softball_age_rank">Max Softball Level</label>
+                <select id="max_softball_age_rank" name="max_softball_age_rank" class="form-control">
+                    <option value="">Not eligible</option>
+                    <option value="1">6U (1)</option>
+                    <option value="2">8U (2)</option>
+                    <option value="3">10U (3)</option>
+                    <option value="4">12U (4)</option>
+                    <option value="5">14U (5)</option>
+                </select>
+            </div>
+        </div>
+
+        <hr style="margin: 25px 0;">
+        <h4 style="margin-bottom: 15px; color: var(--primary-color);">Parent/Guardian</h4>
+        <p class="text-muted" style="margin-bottom: 15px;">
+            The guardian will be able to view and manage this umpire's assignments from their account.
+        </p>
+
+        <div class="form-group">
+            <label for="guardian_email">Guardian's Email *</label>
+            <input type="email" id="guardian_email" name="guardian_email" class="form-control" required
+                   placeholder="parent@example.com">
+            <small style="color: var(--text-muted);">
+                Must be an existing user account. If not, <a href="{{ url_for('admin.add_user') }}">create it first</a>.
+            </small>
+        </div>
+
+        <div class="form-group">
+            <label for="relationship">Relationship</label>
+            <select id="relationship" name="relationship" class="form-control">
+                <option value="parent">Parent</option>
+                <option value="guardian">Guardian</option>
+                <option value="other">Other</option>
+            </select>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 25px;">
+            <button type="submit" class="btn btn-primary">Add Managed Umpire</button>
+            <a href="{{ url_for('umpires.index') }}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<div class="card" style="max-width: 600px; margin-top: 20px; background: #f9f9f9;">
+    <h4 style="margin-top: 0;">How Managed Umpires Work</h4>
+    <ul style="margin: 0; padding-left: 20px; color: var(--text-muted);">
+        <li>The youth umpire doesn't need their own email or login</li>
+        <li>Their guardian logs in and sees all their managed umpires</li>
+        <li>Guardian can accept/release games on their behalf</li>
+        <li>When the umpire gets their own email, use "Hive Off" to give them their own account</li>
+    </ul>
+</div>
+{% endblock %}

@@ -17,6 +17,7 @@ from app.models.user import User
 from app.models.field import Field
 from app.models.team import TeamSeason
 from app.models.umpire_profile import UmpireProfile
+from app.models.umpire_guardian import UmpireGuardian
 from app.models.umpire_partner import UmpirePartner
 from app.models.game_umpire import GameUmpire
 from app.models.umpire_delegation import UmpireDelegationRule, UmpireDelegationOverride
@@ -53,9 +54,14 @@ def index():
     status_filter = request.args.get('status', 'active')
 
     if status_filter == 'all':
-        profiles = UmpireProfile.query.join(User).filter(User.active == 1).all()
+        # Include both profiles with users and managed profiles (no user)
+        profiles = UmpireProfile.query.outerjoin(User).filter(
+            db.or_(User.active == 1, UmpireProfile.user_id.is_(None))
+        ).all()
     else:
-        profiles = UmpireProfile.query.filter_by(status=status_filter).join(User).filter(User.active == 1).all()
+        profiles = UmpireProfile.query.filter_by(status=status_filter).outerjoin(User).filter(
+            db.or_(User.active == 1, UmpireProfile.user_id.is_(None))
+        ).all()
 
     # Get partners for quick reference
     partners = UmpirePartner.get_active()
@@ -149,6 +155,123 @@ def add():
             flash(f'Error adding umpire: {str(e)}', 'error')
 
     return render_template('umpires/add.html')
+
+
+@umpires_bp.route('/add-managed', methods=['GET', 'POST'])
+@login_required
+@umpire_coordinator_required
+def add_managed():
+    """Add a managed umpire (youth without their own email, managed by a parent)."""
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        guardian_email = request.form.get('guardian_email', '').strip()
+        birth_date_str = request.form.get('birth_date', '').strip()
+        relationship = request.form.get('relationship', 'parent')
+
+        # Get eligibility settings
+        max_bb = request.form.get('max_baseball_age_rank')
+        max_sb = request.form.get('max_softball_age_rank')
+
+        if not name or not guardian_email:
+            flash('Umpire name and guardian email are required.', 'error')
+            return render_template('umpires/add_managed.html')
+
+        # Find or create guardian user
+        guardian = User.get_by_email(guardian_email)
+        if not guardian:
+            flash(f'No user found with email {guardian_email}. Please create the parent/guardian account first.', 'error')
+            return render_template('umpires/add_managed.html')
+
+        try:
+            # Parse birth date
+            birth_date = None
+            if birth_date_str:
+                try:
+                    birth_date = datetime.strptime(birth_date_str, '%Y-%m-%d').date()
+                except ValueError:
+                    pass
+
+            # Create managed profile
+            profile = UmpireProfile.create_managed_profile(
+                name=name,
+                guardian_user_id=guardian.ID,
+                birth_date=birth_date,
+                max_baseball_age_rank=int(max_bb) if max_bb else None,
+                max_softball_age_rank=int(max_sb) if max_sb else None,
+                relationship=relationship
+            )
+
+            logger.info(f'Added managed umpire: {name} (ID: {profile.id}), guardian: {guardian.email}')
+            flash(f'Added managed umpire: {name} (managed by {guardian.name or guardian.email})', 'success')
+
+            return redirect(url_for('umpires.view', id=profile.id))
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f'Error adding managed umpire: {e}')
+            flash(f'Error adding managed umpire: {str(e)}', 'error')
+
+    return render_template('umpires/add_managed.html')
+
+
+@umpires_bp.route('/<int:id>/hive-off', methods=['GET', 'POST'])
+@login_required
+@umpire_coordinator_required
+def hive_off(id):
+    """Convert a managed umpire to their own independent account."""
+    profile = UmpireProfile.query.get_or_404(id)
+
+    if not profile.is_managed:
+        flash('This umpire already has their own account.', 'error')
+        return redirect(url_for('umpires.view', id=id))
+
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        send_welcome = request.form.get('send_welcome') == 'on'
+
+        if not email:
+            flash('Email is required.', 'error')
+            return render_template('umpires/hive_off.html', profile=profile)
+
+        # Check if email already exists
+        existing = User.get_by_email(email)
+        if existing:
+            flash(f'A user with email {email} already exists.', 'error')
+            return render_template('umpires/hive_off.html', profile=profile)
+
+        try:
+            import secrets
+            temp_password = secrets.token_urlsafe(12)
+
+            # Create user account
+            user = User.create_user(
+                email=email,
+                password=temp_password,
+                name=profile.full_name,
+                role='umpire'
+            )
+
+            # Link profile to new user
+            profile.hive_off_to_user(user)
+
+            logger.info(f'Hived off umpire {profile.id} to user {user.ID}')
+            flash(f'{profile.full_name} now has their own account: {email}', 'success')
+
+            if send_welcome:
+                # Import here to avoid circular import
+                from app.admin.routes import send_welcome_email
+                token = user.generate_reset_token()
+                send_welcome_email(user, token)
+                flash('Welcome email sent.', 'success')
+
+            return redirect(url_for('umpires.view', id=id))
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f'Error hiving off umpire: {e}')
+            flash(f'Error: {str(e)}', 'error')
+
+    return render_template('umpires/hive_off.html', profile=profile)
 
 
 @umpires_bp.route('/<int:id>')

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Create Independent Account - {{ profile.full_name }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.view', id=profile.id) }}">&larr; Back to Profile</a>
+</div>
+
+<h1>Create Independent Account</h1>
+<p class="text-muted" style="margin-bottom: 20px;">
+    Give <strong>{{ profile.full_name }}</strong> their own login credentials.
+</p>
+
+<div class="card" style="max-width: 500px;">
+    <div style="background: #e8f5e9; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+        <strong>Current Status:</strong> Managed Umpire
+        <br>
+        <small>
+            {% set guardians = profile.guardians.all() %}
+            {% if guardians %}
+            Managed by:
+                {% for g in guardians %}
+                    {{ g.guardian.name or g.guardian.email }}{% if not loop.last %}, {% endif %}
+                {% endfor %}
+            {% else %}
+            No guardian linked
+            {% endif %}
+        </small>
+    </div>
+
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="form-group">
+            <label for="email">New Email Address *</label>
+            <input type="email" id="email" name="email" class="form-control" required
+                   placeholder="{{ profile.full_name|lower|replace(' ', '.') }}@example.com">
+            <small style="color: var(--text-muted);">
+                This will be their login email
+            </small>
+        </div>
+
+        <div class="form-group" style="margin-top: 20px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" name="send_welcome" checked style="width: 18px; height: 18px;">
+                Send welcome email with password setup link
+            </label>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 25px;">
+            <button type="submit" class="btn btn-primary">Create Account</button>
+            <a href="{{ url_for('umpires.view', id=profile.id) }}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<div class="card" style="max-width: 500px; margin-top: 20px; background: #fff8e1;">
+    <h4 style="margin-top: 0; color: #f57c00;">What Happens Next</h4>
+    <ul style="margin: 0; padding-left: 20px;">
+        <li>A new user account will be created with this email</li>
+        <li>The umpire profile will be linked to the new account</li>
+        <li>{{ profile.full_name }} can now log in independently</li>
+        <li>All game history and assignments are preserved</li>
+        <li>Guardians can still view (but not manage) the profile</li>
+    </ul>
+</div>
+{% endblock %}

@@ -21,6 +21,7 @@ from .app_error import AppError
 
 # Umpire system models
 from .umpire_profile import UmpireProfile
+from .umpire_guardian import UmpireGuardian
 from .umpire_partner import UmpirePartner
 from .partner_contact import PartnerContact
 from .game_umpire import GameUmpire
