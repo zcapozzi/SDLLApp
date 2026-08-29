@@ -169,12 +169,14 @@ class GameUmpire(db.Model):
         """
         from app.models.game import Game
 
-        query = cls.query.filter_by(umpire_profile_id=umpire_profile_id)
+        query = cls.query.join(Game).filter(
+            cls.umpire_profile_id == umpire_profile_id
+        )
 
         if future_only:
-            query = query.join(Game).filter(Game.game_date > datetime.utcnow())
+            query = query.filter(Game.game_date > datetime.utcnow())
 
-        return query.join(Game).order_by(Game.game_date).all()
+        return query.order_by(Game.game_date).all()
 
     @classmethod
     def get_for_partner(cls, partner_id, future_only=False):
@@ -189,12 +191,14 @@ class GameUmpire(db.Model):
         """
         from app.models.game import Game
 
-        query = cls.query.filter_by(partner_id=partner_id)
+        query = cls.query.join(Game).filter(
+            cls.partner_id == partner_id
+        )
 
         if future_only:
-            query = query.join(Game).filter(Game.game_date > datetime.utcnow())
+            query = query.filter(Game.game_date > datetime.utcnow())
 
-        return query.join(Game).order_by(Game.game_date).all()
+        return query.order_by(Game.game_date).all()
 
     @classmethod
     def assign_umpire(cls, game_id, umpire_profile_id, role='umpire',
