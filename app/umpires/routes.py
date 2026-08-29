@@ -162,6 +162,10 @@ def add():
 @umpire_coordinator_required
 def add_managed():
     """Add a managed umpire (youth without their own email, managed by a parent)."""
+    # Get leagues for eligibility dropdowns
+    baseball_leagues = League.get_baseball_leagues()
+    softball_leagues = League.get_softball_leagues()
+
     if request.method == 'POST':
         first_name = request.form.get('first_name', '').strip()
         last_name = request.form.get('last_name', '').strip()
@@ -175,13 +179,17 @@ def add_managed():
 
         if not first_name or not last_name or not guardian_email:
             flash('First name, last name, and guardian email are required.', 'error')
-            return render_template('umpires/add_managed.html')
+            return render_template('umpires/add_managed.html',
+                                   baseball_leagues=baseball_leagues,
+                                   softball_leagues=softball_leagues)
 
         # Find or create guardian user
         guardian = User.get_by_email(guardian_email)
         if not guardian:
             flash(f'No user found with email {guardian_email}. Please create the parent/guardian account first.', 'error')
-            return render_template('umpires/add_managed.html')
+            return render_template('umpires/add_managed.html',
+                                   baseball_leagues=baseball_leagues,
+                                   softball_leagues=softball_leagues)
 
         try:
             # Parse birth date
@@ -214,7 +222,9 @@ def add_managed():
             logger.error(f'Error adding managed umpire: {e}')
             flash(f'Error adding managed umpire: {str(e)}', 'error')
 
-    return render_template('umpires/add_managed.html')
+    return render_template('umpires/add_managed.html',
+                           baseball_leagues=baseball_leagues,
+                           softball_leagues=softball_leagues)
 
 
 @umpires_bp.route('/<int:id>/hive-off', methods=['GET', 'POST'])

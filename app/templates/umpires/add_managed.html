@@ -42,23 +42,22 @@
                 <label for="max_baseball_age_rank">Max Baseball Level</label>
                 <select id="max_baseball_age_rank" name="max_baseball_age_rank" class="form-control">
                     <option value="">Not eligible</option>
-                    <option value="1">Tee Ball (1)</option>
-                    <option value="2">Coach Pitch (2)</option>
-                    <option value="3">Machine Pitch (3)</option>
-                    <option value="4">AA (4)</option>
-                    <option value="5">AAA (5)</option>
-                    <option value="6">Majors (6)</option>
+                    {% for league in baseball_leagues %}
+                    {% if league.age_rank %}
+                    <option value="{{ league.age_rank }}">{{ league.display_name }} ({{ league.age_rank }})</option>
+                    {% endif %}
+                    {% endfor %}
                 </select>
             </div>
             <div class="form-group">
                 <label for="max_softball_age_rank">Max Softball Level</label>
                 <select id="max_softball_age_rank" name="max_softball_age_rank" class="form-control">
                     <option value="">Not eligible</option>
-                    <option value="1">6U (1)</option>
-                    <option value="2">8U (2)</option>
-                    <option value="3">10U (3)</option>
-                    <option value="4">12U (4)</option>
-                    <option value="5">14U (5)</option>
+                    {% for league in softball_leagues %}
+                    {% if league.age_rank %}
+                    <option value="{{ league.age_rank }}">{{ league.display_name }} ({{ league.age_rank }})</option>
+                    {% endif %}
+                    {% endfor %}
                 </select>
             </div>
         </div>
