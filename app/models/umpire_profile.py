@@ -102,10 +102,11 @@ class UmpireProfile(db.Model):
     # First name property for managed umpires (encrypted)
     @property
     def first_name(self):
-        """Get first name - from profile field or linked user."""
+        """Get first name - from profile field (managed umpires only)."""
         if self._first_name:
             return decrypt_value(self._first_name)
-        return self.user.first_name if self.user else None
+        # User model doesn't have first_name, so return None for regular umpires
+        return None
 
     @first_name.setter
     def first_name(self, value):
@@ -115,10 +116,11 @@ class UmpireProfile(db.Model):
     # Last name property for managed umpires (encrypted)
     @property
     def last_name(self):
-        """Get last name - from profile field or linked user."""
+        """Get last name - from profile field (managed umpires only)."""
         if self._last_name:
             return decrypt_value(self._last_name)
-        return self.user.last_name if self.user else None
+        # User model doesn't have last_name, so return None for regular umpires
+        return None
 
     @last_name.setter
     def last_name(self, value):
