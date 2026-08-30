@@ -121,7 +121,7 @@ def field_schedules():
     games = []
     if field_ids:
         games = Game.query.filter(
-            Game.field_ID.in_(field_ids),
+            Game.field_id.in_(field_ids),
             Game.game_date >= datetime.combine(start_date, datetime.min.time()),
             Game.game_date <= datetime.combine(end_date, datetime.max.time()),
             Game.active == 1
@@ -141,8 +141,8 @@ def field_schedules():
     # Organize games by field
     games_by_field = {f.ID: [] for f in fields}
     for game in games:
-        if game.field_ID in games_by_field:
-            games_by_field[game.field_ID].append(game)
+        if game.field_id in games_by_field:
+            games_by_field[game.field_id].append(game)
 
     return render_template(
         'facilities/field_schedules.html',
