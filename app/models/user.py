@@ -133,6 +133,22 @@ class User(UserMixin, db.Model):
         user_roles = self.roles_list
         return any(r in user_roles for r in check_roles)
 
+    def add_role(self, new_role):
+        """Add a role to the user (if not already present)."""
+        if new_role not in self.ROLES:
+            raise ValueError(f'Invalid role: {new_role}')
+        current_roles = self.roles_list
+        if new_role not in current_roles:
+            current_roles.append(new_role)
+            self.role = '|'.join(current_roles)
+
+    def remove_role(self, role_to_remove):
+        """Remove a role from the user."""
+        current_roles = self.roles_list
+        if role_to_remove in current_roles:
+            current_roles.remove(role_to_remove)
+            self.role = '|'.join(current_roles) if current_roles else 'viewer'
+
     def is_admin(self):
         return self.has_role('admin')
 
