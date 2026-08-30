@@ -168,10 +168,10 @@ def report_field_issue():
         flash('Field not found.', 'error')
         return redirect(url_for('facilities.field_schedules'))
 
-    # Send email to scheduler
+    # Send email to scheduler and facilities coordinator
     try:
         gmail = GmailService()
-        scheduler_email = 'scheduling@sdll.org'
+        recipients = ['scheduling@sdll.org', 'facilities@sdll.org']
 
         subject = f'Field Issue Report: {field.name}'
         body_text = f"""A field issue has been reported by {current_user.name or current_user.email}.
@@ -185,6 +185,7 @@ Issue Description:
 
 ---
 This report was submitted via the SDLL Field Schedules page.
+This email was sent to both the scheduler and facilities coordinator.
 """
         body_html = f"""
 <h2>Field Issue Report</h2>
@@ -209,16 +210,19 @@ This report was submitted via the SDLL Field Schedules page.
 <p style="background: #f5f5f5; padding: 15px; border-radius: 4px; white-space: pre-wrap;">{issue_description}</p>
 
 <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
-<p style="color: #666; font-size: 13px;">This report was submitted via the SDLL Field Schedules page.</p>
+<p style="color: #666; font-size: 13px;">This report was submitted via the SDLL Field Schedules page.<br>
+This email was sent to both the scheduler and facilities coordinator.</p>
 """
-        gmail.send_email(scheduler_email, subject, body_text, body_html, reply_to=current_user.email)
+        # Send to both scheduler and facilities coordinator
+        for recipient in recipients:
+            gmail.send_email(recipient, subject, body_text, body_html, reply_to=current_user.email)
 
         logger.info(f'Field issue reported for {field.name} by {current_user.email}')
-        flash(f'Issue reported for {field.name}. The scheduler has been notified.', 'success')
+        flash(f'Issue reported for {field.name}. The scheduler and facilities coordinator have been notified.', 'success')
 
     except Exception as e:
         logger.error(f'Failed to send field issue report: {e}')
-        flash('Failed to send issue report. Please try again or contact scheduling@sdll.org directly.', 'error')
+        flash('Failed to send issue report. Please try again or contact scheduling@sdll.org or facilities@sdll.org directly.', 'error')
 
     return redirect(url_for('facilities.field_schedules') + f'#field-{field_id}')
 
