@@ -550,7 +550,8 @@ def dashboard():
     has_full_access = (
         current_user.can_edit_schedule() or
         current_user.is_umpire() or
-        current_user.can_manage_umpires()
+        current_user.can_manage_umpires() or
+        current_user.can_manage_facilities()
     )
 
     if not has_full_access:

@@ -98,4 +98,18 @@
     </div>
 </div>
 {% endif %}
+
+<!-- Facilities Quick Actions -->
+{% if current_user.can_manage_facilities() %}
+<div class="card" style="margin-top: 20px;">
+    <h2 style="margin-bottom: 20px;">Facilities</h2>
+    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+        <a href="{{ url_for('facilities.field_schedules') }}" class="btn btn-primary">Field Schedules</a>
+        <a href="{{ url_for('facilities.index') }}" class="btn btn-secondary">Facilities Dashboard</a>
+        {% if current_user.has_role('admin', 'facilities') %}
+        <a href="{{ url_for('facilities.captains') }}" class="btn btn-secondary">Field Captains</a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
 {% endblock %}

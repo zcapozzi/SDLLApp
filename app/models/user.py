@@ -188,6 +188,10 @@ class User(UserMixin, db.Model):
         """Check if user is a partner organization contact."""
         return self.has_role('partner_contact')
 
+    def can_manage_facilities(self):
+        """Check if user can access facilities management."""
+        return self.has_role('admin', 'facilities', 'fieldCaptain')
+
     def get_highest_role(self):
         """Return highest privilege role for dashboard routing.
 
