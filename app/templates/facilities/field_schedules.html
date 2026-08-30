@@ -20,9 +20,9 @@
                    value="{{ start_date.strftime('%Y-%m-%d') }}" style="width: auto;">
         </div>
         <div class="form-group" style="margin: 0;">
-            <label for="end_date" style="font-size: 14px;">End Date</label>
+            <label for="end_date" style="font-size: 14px;">End Date <small style="color: var(--text-muted);">(optional)</small></label>
             <input type="date" id="end_date" name="end_date" class="form-control"
-                   value="{{ end_date.strftime('%Y-%m-%d') }}" style="width: auto;">
+                   value="{{ end_date.strftime('%Y-%m-%d') if end_date else '' }}" style="width: auto;">
         </div>
         <button type="submit" class="btn btn-primary" style="margin-top: 20px;">Filter Dates</button>
         <a href="{{ url_for('facilities.field_schedules') }}" class="btn btn-outline" style="margin-top: 20px;">Reset</a>
@@ -63,63 +63,20 @@
 </div>
 {% else %}
 
-{# Add Blackout Form #}
-<div class="card" style="margin-bottom: 20px; background: #fff3e0;">
-    <h4 style="margin-top: 0; color: #e65100;">Add Field Blackout</h4>
-    <form method="POST" action="{{ url_for('facilities.add_field_blackout') }}" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="form-group" style="margin: 0;">
-            <label for="field_id">Field</label>
-            <select id="field_id" name="field_id" class="form-control" required style="width: auto; min-width: 200px;">
-                {% for field in fields %}
-                <option value="{{ field.ID }}">{{ field.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="form-group" style="margin: 0;">
-            <label for="blackout_date">Date</label>
-            <input type="date" id="blackout_date" name="blackout_date" class="form-control" required
-                   value="{{ start_date.strftime('%Y-%m-%d') }}" style="width: auto;">
-        </div>
-        <div class="form-group" style="margin: 0; flex: 1; min-width: 150px;">
-            <label for="reason">Reason (optional)</label>
-            <input type="text" id="reason" name="reason" class="form-control"
-                   placeholder="e.g., Maintenance, Rain damage">
-        </div>
-        <button type="submit" class="btn btn-warning">Add Blackout</button>
-    </form>
-</div>
-
 {# Field Schedule Cards #}
 {% for field in fields %}
 <div class="card field-card" style="margin-bottom: 20px;" id="field-{{ field.ID }}" data-field-id="{{ field.ID }}">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-        <h3 style="margin: 0;">{{ field.name }}</h3>
-        {% if field.location %}
-        <span style="color: var(--text-muted);">{{ field.location }}</span>
-        {% endif %}
-    </div>
-
-    {# Existing Blackouts #}
-    {% set field_blackouts = blackouts_by_field.get(field.ID, []) %}
-    {% if field_blackouts %}
-    <div style="margin-bottom: 15px; padding: 10px; background: #ffebee; border-radius: 4px;">
-        <strong style="color: #c62828;">Blackout Dates:</strong>
-        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">
-            {% for blackout in field_blackouts %}
-            <span style="display: inline-flex; align-items: center; gap: 5px; background: #ffcdd2; padding: 4px 10px; border-radius: 15px; font-size: 13px;">
-                {{ blackout.blackout_date.strftime('%b %d') }}
-                {% if blackout.reason %}<small style="color: #666;">({{ blackout.reason }})</small>{% endif %}
-                <form method="POST" action="{{ url_for('facilities.remove_field_blackout') }}" style="margin: 0; display: inline;">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="blackout_id" value="{{ blackout.ID }}">
-                    <button type="submit" style="background: none; border: none; color: #c62828; cursor: pointer; padding: 0; font-size: 14px;" title="Remove blackout">×</button>
-                </form>
-            </span>
-            {% endfor %}
+        <div>
+            <h3 style="margin: 0;">{{ field.name }}</h3>
+            {% if field.full_address %}
+            <small style="color: var(--text-muted);">{{ field.full_address }}</small>
+            {% endif %}
         </div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="showReportIssueForm({{ field.ID }}, '{{ field.name|e }}')">
+            Report Issue
+        </button>
     </div>
-    {% endif %}
 
     {# Games Table #}
     {% set field_games = games_by_field.get(field.ID, []) %}
@@ -164,13 +121,34 @@
     </table>
     {% else %}
     <p style="color: var(--text-muted); text-align: center; padding: 20px;">
-        No games or practices scheduled for this date range.
+        No games or practices scheduled{% if end_date %} for this date range{% endif %}.
     </p>
     {% endif %}
 </div>
 {% endfor %}
 
 {% endif %}
+
+{# Report Issue Modal #}
+<div id="report-issue-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div style="background: white; border-radius: 8px; max-width: 500px; width: 90%; padding: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+        <h3 style="margin-top: 0;">Report Field Issue</h3>
+        <p id="report-field-name" style="color: var(--text-muted);"></p>
+        <form method="POST" action="{{ url_for('facilities.report_field_issue') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" id="report-field-id" name="field_id" value="">
+            <div class="form-group">
+                <label for="issue_description">Describe the issue</label>
+                <textarea id="issue_description" name="issue_description" class="form-control" rows="4" required
+                          placeholder="e.g., Standing water in outfield, broken fence, maintenance needed..."></textarea>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button type="button" class="btn btn-outline" onclick="hideReportIssueForm()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Send Report</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <style>
 .card table {
@@ -186,6 +164,31 @@ label:has(.field-filter-checkbox:not(:checked)) {
 </style>
 
 <script>
+function showReportIssueForm(fieldId, fieldName) {
+    document.getElementById('report-field-id').value = fieldId;
+    document.getElementById('report-field-name').textContent = 'Field: ' + fieldName;
+    document.getElementById('issue_description').value = '';
+    document.getElementById('report-issue-modal').style.display = 'flex';
+}
+
+function hideReportIssueForm() {
+    document.getElementById('report-issue-modal').style.display = 'none';
+}
+
+// Close modal on backdrop click
+document.getElementById('report-issue-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        hideReportIssueForm();
+    }
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        hideReportIssueForm();
+    }
+});
+
 function applyFieldFilters() {
     var checkboxes = document.querySelectorAll('.field-filter-checkbox');
     var selectedFieldIds = [];

@@ -15,9 +15,9 @@ from app.extensions import db
 from app.models.user import User
 from app.models.field import Field
 from app.models.field_captain import FieldCaptain
-from app.models.field_blackout import FieldBlackout
 from app.models.game import Game
 from app.utils.logging import SDLLLogger
+from app.services.notification_service import GmailService
 
 from . import facilities_bp
 
@@ -83,7 +83,7 @@ def field_schedules():
         flash('You do not have permission to access field schedules.', 'error')
         return redirect(url_for('main.dashboard'))
 
-    # Get date range from query params (default to next 14 days)
+    # Get date range from query params (default: start=today, no end date)
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
 
@@ -96,13 +96,13 @@ def field_schedules():
     else:
         start_date = today
 
+    # End date is optional - None means show all future games
+    end_date = None
     if end_date_str:
         try:
             end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
         except ValueError:
-            end_date = start_date + timedelta(days=14)
-    else:
-        end_date = start_date + timedelta(days=14)
+            pass
 
     # Determine which fields to show
     is_admin = current_user.has_role('admin', 'facilities')
@@ -120,23 +120,14 @@ def field_schedules():
     # Get games for these fields in the date range
     games = []
     if field_ids:
-        games = Game.query.filter(
+        query = Game.query.filter(
             Game.field_id.in_(field_ids),
             Game.game_date >= datetime.combine(start_date, datetime.min.time()),
-            Game.game_date <= datetime.combine(end_date, datetime.max.time()),
             Game.active == 1
-        ).order_by(Game.game_date).all()
-
-    # Get blackouts for these fields in the date range
-    blackouts_by_field = {}
-    for field in fields:
-        blackouts = FieldBlackout.query.filter(
-            FieldBlackout.field_ID == field.ID,
-            FieldBlackout.blackout_date >= start_date,
-            FieldBlackout.blackout_date <= end_date,
-            FieldBlackout.active == 1
-        ).order_by(FieldBlackout.blackout_date).all()
-        blackouts_by_field[field.ID] = blackouts
+        )
+        if end_date:
+            query = query.filter(Game.game_date <= datetime.combine(end_date, datetime.max.time()))
+        games = query.order_by(Game.game_date).all()
 
     # Organize games by field
     games_by_field = {f.ID: [] for f in fields}
@@ -148,80 +139,88 @@ def field_schedules():
         'facilities/field_schedules.html',
         fields=fields,
         games_by_field=games_by_field,
-        blackouts_by_field=blackouts_by_field,
         start_date=start_date,
         end_date=end_date,
         is_admin=is_admin
     )
 
 
-@facilities_bp.route('/field-schedules/blackout', methods=['POST'])
+@facilities_bp.route('/field-schedules/report-issue', methods=['POST'])
 @login_required
 @facilities_required
-def add_field_blackout():
-    """Add a blackout date for a field."""
+def report_field_issue():
+    """Report a field issue to the scheduler."""
     field_id = request.form.get('field_id', type=int)
-    blackout_date_str = request.form.get('blackout_date')
-    reason = request.form.get('reason', '').strip()
+    issue_description = request.form.get('issue_description', '').strip()
 
-    if not field_id or not blackout_date_str:
-        flash('Field and date are required.', 'error')
+    if not field_id or not issue_description:
+        flash('Field and issue description are required.', 'error')
         return redirect(url_for('facilities.field_schedules'))
 
-    # Verify user can manage this field
+    # Verify user can report on this field
     is_admin = current_user.has_role('admin', 'facilities')
     if not is_admin and not FieldCaptain.is_captain_of(current_user.ID, field_id):
-        flash('You do not have permission to manage this field.', 'error')
-        return redirect(url_for('facilities.field_schedules'))
-
-    try:
-        blackout_date = datetime.strptime(blackout_date_str, '%Y-%m-%d').date()
-    except ValueError:
-        flash('Invalid date format.', 'error')
+        flash('You do not have permission to report issues for this field.', 'error')
         return redirect(url_for('facilities.field_schedules'))
 
     field = Field.query.get(field_id)
-    blackout = FieldBlackout.add_blackout(field_id, blackout_date, reason or 'Field unavailable')
-
-    if blackout:
-        logger.info(f'Added blackout for {field.name} on {blackout_date} by {current_user.email}')
-        flash(f'Added blackout for {field.name} on {blackout_date.strftime("%b %d, %Y")}', 'success')
-    else:
-        flash(f'{field.name} is already blacked out on {blackout_date.strftime("%b %d, %Y")}', 'warning')
-
-    return redirect(url_for('facilities.field_schedules', start_date=blackout_date_str))
-
-
-@facilities_bp.route('/field-schedules/blackout/remove', methods=['POST'])
-@login_required
-@facilities_required
-def remove_field_blackout():
-    """Remove a blackout date for a field."""
-    blackout_id = request.form.get('blackout_id', type=int)
-
-    if not blackout_id:
-        flash('Blackout ID required.', 'error')
+    if not field:
+        flash('Field not found.', 'error')
         return redirect(url_for('facilities.field_schedules'))
 
-    blackout = FieldBlackout.query.get(blackout_id)
-    if not blackout:
-        flash('Blackout not found.', 'error')
-        return redirect(url_for('facilities.field_schedules'))
+    # Send email to scheduler
+    try:
+        gmail = GmailService()
+        scheduler_email = 'scheduling@sdll.org'
 
-    # Verify user can manage this field
-    is_admin = current_user.has_role('admin', 'facilities')
-    if not is_admin and not FieldCaptain.is_captain_of(current_user.ID, blackout.field_ID):
-        flash('You do not have permission to manage this field.', 'error')
-        return redirect(url_for('facilities.field_schedules'))
+        subject = f'Field Issue Report: {field.name}'
+        body_text = f"""A field issue has been reported by {current_user.name or current_user.email}.
 
-    field_name = blackout.field.name if blackout.field else 'Field'
-    blackout_date = blackout.blackout_date
-    blackout.delete()
+Field: {field.name}
+Reporter: {current_user.name or 'Unknown'} ({current_user.email})
+Date Reported: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
 
-    logger.info(f'Removed blackout for field {blackout.field_ID} on {blackout_date} by {current_user.email}')
-    flash(f'Removed blackout for {field_name} on {blackout_date.strftime("%b %d, %Y")}', 'success')
+Issue Description:
+{issue_description}
 
-    return redirect(url_for('facilities.field_schedules', start_date=blackout_date.strftime('%Y-%m-%d')))
+---
+This report was submitted via the SDLL Field Schedules page.
+"""
+        body_html = f"""
+<h2>Field Issue Report</h2>
+<p>A field issue has been reported by <strong>{current_user.name or current_user.email}</strong>.</p>
+
+<table style="border-collapse: collapse; margin: 20px 0;">
+    <tr>
+        <td style="padding: 8px 15px 8px 0; font-weight: bold;">Field:</td>
+        <td style="padding: 8px 0;">{field.name}</td>
+    </tr>
+    <tr>
+        <td style="padding: 8px 15px 8px 0; font-weight: bold;">Reporter:</td>
+        <td style="padding: 8px 0;">{current_user.name or 'Unknown'} ({current_user.email})</td>
+    </tr>
+    <tr>
+        <td style="padding: 8px 15px 8px 0; font-weight: bold;">Date Reported:</td>
+        <td style="padding: 8px 0;">{datetime.now().strftime('%B %d, %Y at %I:%M %p')}</td>
+    </tr>
+</table>
+
+<h3>Issue Description:</h3>
+<p style="background: #f5f5f5; padding: 15px; border-radius: 4px; white-space: pre-wrap;">{issue_description}</p>
+
+<hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+<p style="color: #666; font-size: 13px;">This report was submitted via the SDLL Field Schedules page.</p>
+"""
+        gmail.send_email(scheduler_email, subject, body_text, body_html, reply_to=current_user.email)
+
+        logger.info(f'Field issue reported for {field.name} by {current_user.email}')
+        flash(f'Issue reported for {field.name}. The scheduler has been notified.', 'success')
+
+    except Exception as e:
+        logger.error(f'Failed to send field issue report: {e}')
+        flash('Failed to send issue report. Please try again or contact scheduling@sdll.org directly.', 'error')
+
+    return redirect(url_for('facilities.field_schedules') + f'#field-{field_id}')
 
 
 @facilities_bp.route('/captains')
