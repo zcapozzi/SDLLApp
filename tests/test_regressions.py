@@ -181,3 +181,33 @@ class TestProductionRegressions:
         assert len(issues) == 0, \
             f"Found invalid ORDER BY using Field.name (a @property, not a Column): {issues}. " \
             "Use Field.location_title instead (the actual database column)."
+
+    @pytest.mark.quick
+    def test_regression_error_87_fields_view_endpoint_missing(self):
+        """
+        Production Error: #87
+        Context: Facilities index page showing "My Fields" for field captains
+        Error: BuildError: Could not build url for endpoint 'fields.view' with values ['id'].
+               Did you mean 'fields.index' instead?
+        Path: /facilities/
+        Root cause: The facilities/index.html template used url_for('fields.view', id=field.id)
+                    but no 'fields.view' route exists in the fields blueprint.
+
+        Fix: Change the template to use url_for('facilities.field_schedules') instead,
+             which is the appropriate page for field captains to view their field schedules.
+        """
+        import re
+        from pathlib import Path
+
+        # Read the facilities index template
+        template_path = Path(__file__).parent.parent / 'app' / 'templates' / 'facilities' / 'index.html'
+        content = template_path.read_text(encoding='utf-8')
+
+        # Check for any references to fields.view endpoint
+        # This would match: url_for('fields.view' or url_for("fields.view"
+        fields_view_pattern = r"url_for\s*\(\s*['\"]fields\.view['\"]"
+        matches = re.findall(fields_view_pattern, content)
+
+        assert len(matches) == 0, \
+            f"Template uses non-existent 'fields.view' endpoint ({len(matches)} occurrence(s)). " \
+            "The fields blueprint has no 'view' route. Use a valid endpoint like 'facilities.field_schedules'."
