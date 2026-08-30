@@ -7,13 +7,264 @@
     <a href="{{ url_for('facilities.index') }}">&larr; Back to Facilities</a>
 </div>
 
-<h1>Field Schedules</h1>
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Field Schedules</h1>
+</div>
 
-<div class="card" style="text-align: center; padding: 60px;">
-    <div style="font-size: 64px; margin-bottom: 20px;">🚧</div>
-    <h2 style="margin-bottom: 10px;">Coming Soon</h2>
+{# Date Filter #}
+<div class="card" style="margin-bottom: 20px;">
+    <form method="GET" style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+        <div class="form-group" style="margin: 0;">
+            <label for="start_date" style="font-size: 14px;">Start Date</label>
+            <input type="date" id="start_date" name="start_date" class="form-control"
+                   value="{{ start_date.strftime('%Y-%m-%d') }}" style="width: auto;">
+        </div>
+        <div class="form-group" style="margin: 0;">
+            <label for="end_date" style="font-size: 14px;">End Date</label>
+            <input type="date" id="end_date" name="end_date" class="form-control"
+                   value="{{ end_date.strftime('%Y-%m-%d') }}" style="width: auto;">
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top: 20px;">Filter Dates</button>
+        <a href="{{ url_for('facilities.field_schedules') }}" class="btn btn-outline" style="margin-top: 20px;">Reset</a>
+    </form>
+</div>
+
+{# Field Filter - Client-side filtering #}
+{% if fields|length > 1 %}
+<div class="card" style="margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <h4 style="margin: 0;">Filter Fields</h4>
+        <div style="display: flex; gap: 10px;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="selectAllFields()">Select All</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="deselectAllFields()">Deselect All</button>
+        </div>
+    </div>
+    <div id="field-filters" style="display: flex; flex-wrap: wrap; gap: 10px;">
+        {% for field in fields %}
+        <label style="display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; background: #f5f5f5; border-radius: 20px; cursor: pointer; user-select: none;">
+            <input type="checkbox" class="field-filter-checkbox" data-field-id="{{ field.ID }}" checked onchange="applyFieldFilters()">
+            <span>{{ field.name }}</span>
+            <span style="color: var(--text-muted); font-size: 12px;">({{ games_by_field.get(field.ID, [])|length }})</span>
+        </label>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if not fields %}
+<div class="card" style="text-align: center; padding: 40px;">
     <p style="color: var(--text-muted);">
-        Field schedule views will be available here.
+        {% if is_admin %}
+        No active fields found.
+        {% else %}
+        You are not assigned as captain of any fields.
+        {% endif %}
     </p>
 </div>
+{% else %}
+
+{# Add Blackout Form #}
+<div class="card" style="margin-bottom: 20px; background: #fff3e0;">
+    <h4 style="margin-top: 0; color: #e65100;">Add Field Blackout</h4>
+    <form method="POST" action="{{ url_for('facilities.add_field_blackout') }}" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group" style="margin: 0;">
+            <label for="field_id">Field</label>
+            <select id="field_id" name="field_id" class="form-control" required style="width: auto; min-width: 200px;">
+                {% for field in fields %}
+                <option value="{{ field.ID }}">{{ field.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group" style="margin: 0;">
+            <label for="blackout_date">Date</label>
+            <input type="date" id="blackout_date" name="blackout_date" class="form-control" required
+                   value="{{ start_date.strftime('%Y-%m-%d') }}" style="width: auto;">
+        </div>
+        <div class="form-group" style="margin: 0; flex: 1; min-width: 150px;">
+            <label for="reason">Reason (optional)</label>
+            <input type="text" id="reason" name="reason" class="form-control"
+                   placeholder="e.g., Maintenance, Rain damage">
+        </div>
+        <button type="submit" class="btn btn-warning">Add Blackout</button>
+    </form>
+</div>
+
+{# Field Schedule Cards #}
+{% for field in fields %}
+<div class="card field-card" style="margin-bottom: 20px;" id="field-{{ field.ID }}" data-field-id="{{ field.ID }}">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h3 style="margin: 0;">{{ field.name }}</h3>
+        {% if field.location %}
+        <span style="color: var(--text-muted);">{{ field.location }}</span>
+        {% endif %}
+    </div>
+
+    {# Existing Blackouts #}
+    {% set field_blackouts = blackouts_by_field.get(field.ID, []) %}
+    {% if field_blackouts %}
+    <div style="margin-bottom: 15px; padding: 10px; background: #ffebee; border-radius: 4px;">
+        <strong style="color: #c62828;">Blackout Dates:</strong>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">
+            {% for blackout in field_blackouts %}
+            <span style="display: inline-flex; align-items: center; gap: 5px; background: #ffcdd2; padding: 4px 10px; border-radius: 15px; font-size: 13px;">
+                {{ blackout.blackout_date.strftime('%b %d') }}
+                {% if blackout.reason %}<small style="color: #666;">({{ blackout.reason }})</small>{% endif %}
+                <form method="POST" action="{{ url_for('facilities.remove_field_blackout') }}" style="margin: 0; display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="blackout_id" value="{{ blackout.ID }}">
+                    <button type="submit" style="background: none; border: none; color: #c62828; cursor: pointer; padding: 0; font-size: 14px;" title="Remove blackout">×</button>
+                </form>
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# Games Table #}
+    {% set field_games = games_by_field.get(field.ID, []) %}
+    {% if field_games %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Type</th>
+                <th>Teams / Event</th>
+                <th>League</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in field_games %}
+            <tr>
+                <td>{{ game.game_date.strftime('%a, %b %d') }}</td>
+                <td>{{ game.game_date.strftime('%I:%M %p') }}</td>
+                <td>
+                    {% if game.game_type == 'practice' %}
+                    <span style="color: #1976d2;">Practice</span>
+                    {% elif game.game_type == 'scrimmage' %}
+                    <span style="color: #7b1fa2;">Scrimmage</span>
+                    {% elif game.game_type == 'playoff' %}
+                    <span style="color: #c62828;">Playoff</span>
+                    {% else %}
+                    <span>Game</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if game.game_type == 'practice' %}
+                    {{ game.home_team_name or 'TBD' }}
+                    {% else %}
+                    {{ game.home_team_name or 'TBD' }} vs {{ game.away_team_name or 'TBD' }}
+                    {% endif %}
+                </td>
+                <td>{{ game.league or '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: var(--text-muted); text-align: center; padding: 20px;">
+        No games or practices scheduled for this date range.
+    </p>
+    {% endif %}
+</div>
+{% endfor %}
+
+{% endif %}
+
+<style>
+.card table {
+    margin: 0;
+}
+.field-filter-checkbox:checked + span {
+    font-weight: 600;
+}
+label:has(.field-filter-checkbox:not(:checked)) {
+    background: #e0e0e0;
+    opacity: 0.7;
+}
+</style>
+
+<script>
+function applyFieldFilters() {
+    var checkboxes = document.querySelectorAll('.field-filter-checkbox');
+    var selectedFieldIds = [];
+
+    checkboxes.forEach(function(checkbox) {
+        if (checkbox.checked) {
+            selectedFieldIds.push(checkbox.dataset.fieldId);
+        }
+    });
+
+    // Show/hide field cards based on selection
+    var fieldCards = document.querySelectorAll('.field-card');
+    fieldCards.forEach(function(card) {
+        var fieldId = card.dataset.fieldId;
+        card.style.display = selectedFieldIds.includes(fieldId) ? '' : 'none';
+    });
+
+    // Update URL for bookmarking (without reload)
+    var url = new URL(window.location.href);
+    if (selectedFieldIds.length > 0 && selectedFieldIds.length < checkboxes.length) {
+        url.searchParams.set('fields', selectedFieldIds.join(','));
+    } else {
+        url.searchParams.delete('fields');
+    }
+    history.replaceState(null, '', url.toString());
+
+    // Update "no fields selected" message
+    updateNoFieldsMessage(selectedFieldIds.length === 0);
+}
+
+function selectAllFields() {
+    var checkboxes = document.querySelectorAll('.field-filter-checkbox');
+    checkboxes.forEach(function(checkbox) {
+        checkbox.checked = true;
+    });
+    applyFieldFilters();
+}
+
+function deselectAllFields() {
+    var checkboxes = document.querySelectorAll('.field-filter-checkbox');
+    checkboxes.forEach(function(checkbox) {
+        checkbox.checked = false;
+    });
+    applyFieldFilters();
+}
+
+function updateNoFieldsMessage(show) {
+    var existingMsg = document.getElementById('no-fields-selected-msg');
+    if (show && !existingMsg) {
+        var msg = document.createElement('div');
+        msg.id = 'no-fields-selected-msg';
+        msg.className = 'card';
+        msg.style.textAlign = 'center';
+        msg.style.padding = '40px';
+        msg.innerHTML = '<p style="color: var(--text-muted);">No fields selected. Use the checkboxes above to select fields to view.</p>';
+        var firstCard = document.querySelector('.field-card');
+        if (firstCard) {
+            firstCard.parentNode.insertBefore(msg, firstCard);
+        }
+    } else if (!show && existingMsg) {
+        existingMsg.remove();
+    }
+}
+
+// Restore field filters from URL on page load
+document.addEventListener('DOMContentLoaded', function() {
+    var url = new URL(window.location.href);
+    var fieldsParam = url.searchParams.get('fields');
+
+    if (fieldsParam) {
+        var selectedFieldIds = fieldsParam.split(',');
+        var checkboxes = document.querySelectorAll('.field-filter-checkbox');
+
+        checkboxes.forEach(function(checkbox) {
+            checkbox.checked = selectedFieldIds.includes(checkbox.dataset.fieldId);
+        });
+
+        applyFieldFilters();
+    }
+});
+</script>
 {% endblock %}
