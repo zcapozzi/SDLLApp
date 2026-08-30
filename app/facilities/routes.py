@@ -9,11 +9,14 @@ Provides interfaces for:
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from functools import wraps
+from datetime import datetime, date, timedelta
 
 from app.extensions import db
 from app.models.user import User
 from app.models.field import Field
 from app.models.field_captain import FieldCaptain
+from app.models.field_blackout import FieldBlackout
+from app.models.game import Game
 from app.utils.logging import SDLLLogger
 
 from . import facilities_bp
@@ -68,11 +71,157 @@ def index():
 
 
 @facilities_bp.route('/field-schedules')
+def field_schedules():
+    """Field schedules for field captains and facilities managers."""
+    # Check authentication - show landing page if not logged in
+    if not current_user.is_authenticated:
+        login_url = url_for('auth.login', next=request.url)
+        return render_template('facilities/field_schedules_landing.html', login_url=login_url)
+
+    # Check authorization - must have facilities role
+    if not current_user.has_role('admin', 'facilities', 'fieldCaptain'):
+        flash('You do not have permission to access field schedules.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    # Get date range from query params (default to next 14 days)
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+
+    today = date.today()
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            start_date = today
+    else:
+        start_date = today
+
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            end_date = start_date + timedelta(days=14)
+    else:
+        end_date = start_date + timedelta(days=14)
+
+    # Determine which fields to show
+    is_admin = current_user.has_role('admin', 'facilities')
+
+    if is_admin:
+        # Admin/facilities see all active fields
+        fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
+    else:
+        # Field captains see only their assigned fields
+        fields = FieldCaptain.get_fields_for_user(current_user.ID)
+
+    # Get field IDs for query
+    field_ids = [f.ID for f in fields]
+
+    # Get games for these fields in the date range
+    games = []
+    if field_ids:
+        games = Game.query.filter(
+            Game.field_ID.in_(field_ids),
+            Game.game_date >= datetime.combine(start_date, datetime.min.time()),
+            Game.game_date <= datetime.combine(end_date, datetime.max.time()),
+            Game.active == 1
+        ).order_by(Game.game_date).all()
+
+    # Get blackouts for these fields in the date range
+    blackouts_by_field = {}
+    for field in fields:
+        blackouts = FieldBlackout.query.filter(
+            FieldBlackout.field_ID == field.ID,
+            FieldBlackout.blackout_date >= start_date,
+            FieldBlackout.blackout_date <= end_date,
+            FieldBlackout.active == 1
+        ).order_by(FieldBlackout.blackout_date).all()
+        blackouts_by_field[field.ID] = blackouts
+
+    # Organize games by field
+    games_by_field = {f.ID: [] for f in fields}
+    for game in games:
+        if game.field_ID in games_by_field:
+            games_by_field[game.field_ID].append(game)
+
+    return render_template(
+        'facilities/field_schedules.html',
+        fields=fields,
+        games_by_field=games_by_field,
+        blackouts_by_field=blackouts_by_field,
+        start_date=start_date,
+        end_date=end_date,
+        is_admin=is_admin
+    )
+
+
+@facilities_bp.route('/field-schedules/blackout', methods=['POST'])
 @login_required
 @facilities_required
-def field_schedules():
-    """Field schedules - placeholder."""
-    return render_template('facilities/field_schedules.html')
+def add_field_blackout():
+    """Add a blackout date for a field."""
+    field_id = request.form.get('field_id', type=int)
+    blackout_date_str = request.form.get('blackout_date')
+    reason = request.form.get('reason', '').strip()
+
+    if not field_id or not blackout_date_str:
+        flash('Field and date are required.', 'error')
+        return redirect(url_for('facilities.field_schedules'))
+
+    # Verify user can manage this field
+    is_admin = current_user.has_role('admin', 'facilities')
+    if not is_admin and not FieldCaptain.is_captain_of(current_user.ID, field_id):
+        flash('You do not have permission to manage this field.', 'error')
+        return redirect(url_for('facilities.field_schedules'))
+
+    try:
+        blackout_date = datetime.strptime(blackout_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        flash('Invalid date format.', 'error')
+        return redirect(url_for('facilities.field_schedules'))
+
+    field = Field.query.get(field_id)
+    blackout = FieldBlackout.add_blackout(field_id, blackout_date, reason or 'Field unavailable')
+
+    if blackout:
+        logger.info(f'Added blackout for {field.name} on {blackout_date} by {current_user.email}')
+        flash(f'Added blackout for {field.name} on {blackout_date.strftime("%b %d, %Y")}', 'success')
+    else:
+        flash(f'{field.name} is already blacked out on {blackout_date.strftime("%b %d, %Y")}', 'warning')
+
+    return redirect(url_for('facilities.field_schedules', start_date=blackout_date_str))
+
+
+@facilities_bp.route('/field-schedules/blackout/remove', methods=['POST'])
+@login_required
+@facilities_required
+def remove_field_blackout():
+    """Remove a blackout date for a field."""
+    blackout_id = request.form.get('blackout_id', type=int)
+
+    if not blackout_id:
+        flash('Blackout ID required.', 'error')
+        return redirect(url_for('facilities.field_schedules'))
+
+    blackout = FieldBlackout.query.get(blackout_id)
+    if not blackout:
+        flash('Blackout not found.', 'error')
+        return redirect(url_for('facilities.field_schedules'))
+
+    # Verify user can manage this field
+    is_admin = current_user.has_role('admin', 'facilities')
+    if not is_admin and not FieldCaptain.is_captain_of(current_user.ID, blackout.field_ID):
+        flash('You do not have permission to manage this field.', 'error')
+        return redirect(url_for('facilities.field_schedules'))
+
+    field_name = blackout.field.name if blackout.field else 'Field'
+    blackout_date = blackout.blackout_date
+    blackout.delete()
+
+    logger.info(f'Removed blackout for field {blackout.field_ID} on {blackout_date} by {current_user.email}')
+    flash(f'Removed blackout for {field_name} on {blackout_date.strftime("%b %d, %Y")}', 'success')
+
+    return redirect(url_for('facilities.field_schedules', start_date=blackout_date.strftime('%Y-%m-%d')))
 
 
 @facilities_bp.route('/captains')
