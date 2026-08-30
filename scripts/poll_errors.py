@@ -324,6 +324,21 @@ def should_diagnose_dict(error):
     return True, ""
 
 
+def get_user_email(user_id):
+    """Look up user email by ID. Returns None if not found."""
+    if not user_id:
+        return None
+    try:
+        from app import create_app
+        from app.models.user import User
+        app = create_app()
+        with app.app_context():
+            user = User.query.get(user_id)
+            return user.email if user else None
+    except Exception:
+        return None
+
+
 def export_error_dict(error):
     """
     Export an error dict to markdown/JSON files for Claude Code analysis.
@@ -341,6 +356,9 @@ def export_error_dict(error):
     if hasattr(created_at, 'isoformat'):
         created_at = created_at.isoformat()
 
+    # Look up user email if user_id is available
+    user_email = get_user_email(error.get('user_id'))
+
     # Create markdown file
     md_file = PENDING_DIR / f"error_{error_id}.md"
     content = f"""# Production Error #{error_id}
@@ -355,6 +373,7 @@ def export_error_dict(error):
 - **Method**: {error.get('request_method') or 'N/A'}
 - **Path**: {error.get('request_path') or 'N/A'}
 - **User ID**: {error.get('user_id') or 'Anonymous'}
+- **User Email**: {user_email or 'Unknown'}
 
 ## Traceback
 ```
@@ -394,6 +413,7 @@ python scripts/diagnose_error.py {error_id}
         'request_method': error.get('request_method'),
         'request_path': error.get('request_path'),
         'user_id': error.get('user_id'),
+        'user_email': user_email,
         'created_at': created_at,
         'error_hash': error.get('error_hash'),
     }
@@ -472,15 +492,20 @@ def _send_telegram_alert(error_id):
         # Get error details for the message
         error_file = PENDING_DIR / f"error_{error_id}.json"
         error_info = ""
+        user_info = ""
         if error_file.exists():
             try:
                 data = json.loads(error_file.read_text())
                 error_info = f"<BR>Type: {data.get('error_type', 'Unknown')}<BR>Path: {data.get('request_path', 'Unknown')}"
+                # Include user email if available (for bug resolution follow-up)
+                user_email = data.get('user_email')
+                if user_email:
+                    user_info = f"<BR>User: {user_email}"
             except:
                 pass
 
         message = f"🔧 Claude Code Diagnosis Started<BR><BR>"
-        message += f"Error #{error_id} detected in production.{error_info}<BR><BR>"
+        message += f"Error #{error_id} detected in production.{error_info}{user_info}<BR><BR>"
         message += f"A Claude Code window has been opened on your machine.<BR>"
         message += f"Check your taskbar to interact with the diagnosis."
 
@@ -668,8 +693,9 @@ def invoke_claude_diagnosis(error_id):
 
 The error has been exported to errors/pending/error_{error_id}.md - read it first.
 
-Follow the TDD workflow:
+Follow the TDD workflow (CI_CD.md):
 1. Read the error file and affected source code
+1a. Check the recent git commits to make sure that the issue has not already been fixed (if it has and the code changes reflect that, you can mark it resolved and notify admins)
 2. Create a regression test in tests/test_regressions.py that reproduces the bug
 3. Run the test to verify it FAILS (confirming the bug)
 4. Implement a minimal fix
