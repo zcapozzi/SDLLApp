@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}Field Captains{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('facilities.index') }}">&larr; Back to Facilities</a>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Field Captains</h1>
+</div>
+
+{% if fields_without_captains %}
+<div class="card" style="margin-bottom: 20px; border-left: 4px solid var(--warning-color);">
+    <h3 style="margin-top: 0; color: var(--warning-color);">Fields Without Captains</h3>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+        {% for field in fields_without_captains %}
+        <a href="#field-{{ field.id }}" class="btn btn-outline" style="padding: 5px 15px;">
+            {{ field.name }}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Field</th>
+                <th>Captains</th>
+                <th style="width: 300px;">Assign Captain</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for field in fields %}
+            <tr id="field-{{ field.id }}">
+                <td>
+                    <strong>{{ field.name }}</strong>
+                    {% if field.location %}
+                    <br><small style="color: var(--text-muted);">{{ field.location }}</small>
+                    {% endif %}
+                </td>
+                <td>
+                    {% set captains = field.captains.all() %}
+                    {% if captains %}
+                    <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                        {% for assignment in captains %}
+                        <span style="display: inline-flex; align-items: center; gap: 5px; background: #e3f2fd; padding: 3px 10px; border-radius: 15px; font-size: 13px;">
+                            {{ assignment.user.name or assignment.user.email }}
+                            <form method="POST" action="{{ url_for('facilities.remove_captain') }}" style="margin: 0; display: inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="field_id" value="{{ field.id }}">
+                                <input type="hidden" name="user_id" value="{{ assignment.user_id }}">
+                                <button type="submit" style="background: none; border: none; color: #d32f2f; cursor: pointer; padding: 0; font-size: 16px;" title="Remove">×</button>
+                            </form>
+                        </span>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <span style="color: var(--text-muted); font-style: italic;">No captain assigned</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <form method="POST" action="{{ url_for('facilities.assign_captain') }}" style="display: flex; gap: 5px;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="field_id" value="{{ field.id }}">
+                        <div style="flex: 1; position: relative;">
+                            <input type="text"
+                                   class="form-control user-search"
+                                   placeholder="Search for user..."
+                                   data-field-id="{{ field.id }}"
+                                   autocomplete="off"
+                                   style="width: 100%;">
+                            <input type="hidden" name="user_id" class="user-id-input" data-field-id="{{ field.id }}">
+                            <div class="search-results" data-field-id="{{ field.id }}" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="padding: 5px 15px;">Assign</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var searchInputs = document.querySelectorAll('.user-search');
+    var searchTimeout;
+
+    searchInputs.forEach(function(input) {
+        var fieldId = input.dataset.fieldId;
+        var resultsDiv = document.querySelector('.search-results[data-field-id="' + fieldId + '"]');
+        var hiddenInput = document.querySelector('.user-id-input[data-field-id="' + fieldId + '"]');
+
+        input.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            var query = this.value.trim();
+
+            if (query.length < 2) {
+                resultsDiv.style.display = 'none';
+                return;
+            }
+
+            searchTimeout = setTimeout(function() {
+                fetch('/facilities/api/search-users?q=' + encodeURIComponent(query))
+                    .then(function(response) { return response.json(); })
+                    .then(function(users) {
+                        if (users.length === 0) {
+                            resultsDiv.innerHTML = '<div style="padding: 10px; color: var(--text-muted);">No users found</div>';
+                        } else {
+                            resultsDiv.innerHTML = users.map(function(user) {
+                                var roleTag = user.has_role ?
+                                    '<span style="background: #4caf50; color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 5px;">Field Captain</span>' :
+                                    '<span style="background: #ff9800; color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 5px;">Will add role</span>';
+                                return '<div class="search-result" data-user-id="' + user.id + '" data-user-name="' + (user.name || user.email) + '" style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee;">' +
+                                    '<strong>' + (user.name || 'No name') + '</strong>' + roleTag + '<br>' +
+                                    '<small style="color: var(--text-muted);">' + user.email + '</small>' +
+                                    '</div>';
+                            }).join('');
+                        }
+                        resultsDiv.style.display = 'block';
+                    });
+            }, 300);
+        });
+
+        resultsDiv.addEventListener('click', function(e) {
+            var result = e.target.closest('.search-result');
+            if (result) {
+                input.value = result.dataset.userName;
+                hiddenInput.value = result.dataset.userId;
+                resultsDiv.style.display = 'none';
+            }
+        });
+
+        // Hide results when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!input.contains(e.target) && !resultsDiv.contains(e.target)) {
+                resultsDiv.style.display = 'none';
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

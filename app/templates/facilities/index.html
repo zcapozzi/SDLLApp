@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Facilities{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Facilities</h1>
+    {% if is_admin %}
+    <a href="{{ url_for('facilities.captains') }}" class="btn btn-primary">Manage Field Captains</a>
+    {% endif %}
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px;">
+    <a href="{{ url_for('facilities.field_schedules') }}" class="card" style="text-decoration: none; color: inherit; text-align: center; padding: 30px;">
+        <div style="font-size: 48px; margin-bottom: 10px;">📅</div>
+        <h3 style="margin: 0;">Field Schedules</h3>
+        <p style="color: var(--text-muted); margin-top: 10px;">View field usage schedules</p>
+    </a>
+
+    {% if is_admin %}
+    <a href="{{ url_for('facilities.captains') }}" class="card" style="text-decoration: none; color: inherit; text-align: center; padding: 30px;">
+        <div style="font-size: 48px; margin-bottom: 10px;">👷</div>
+        <h3 style="margin: 0;">Field Captains</h3>
+        <p style="color: var(--text-muted); margin-top: 10px;">Assign captains to fields</p>
+    </a>
+    {% endif %}
+</div>
+
+{% if my_fields %}
+<div class="card">
+    <h3 style="margin-top: 0;">My Fields</h3>
+    <p style="color: var(--text-muted); margin-bottom: 15px;">
+        Fields you are assigned as captain:
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>Field</th>
+                <th>Location</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for field in my_fields %}
+            <tr>
+                <td><strong>{{ field.name }}</strong></td>
+                <td>{{ field.location or '-' }}</td>
+                <td>
+                    <a href="{{ url_for('fields.view', id=field.id) }}" class="btn btn-outline" style="padding: 3px 10px;">
+                        View Details
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% elif not is_admin %}
+<div class="card" style="text-align: center; padding: 40px;">
+    <p style="color: var(--text-muted);">
+        You are not currently assigned as captain of any fields.
+    </p>
+</div>
+{% endif %}
+{% endblock %}

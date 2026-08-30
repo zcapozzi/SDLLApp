@@ -33,3 +33,4 @@ from .coach import CoachSeason
 from .scheduled_email import ScheduledEmail
 from .weekly_digest import WeeklyDigest
 from .game_start_record import GameStartRecord
+from .field_captain import FieldCaptain

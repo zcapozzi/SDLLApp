@@ -63,6 +63,16 @@ class Field(db.Model):
     def __repr__(self):
         return f'<Field {self.ID}: {self.location_title}>'
 
+    @property
+    def name(self):
+        """Alias for location_title for convenience."""
+        return self.location_title
+
+    @property
+    def id(self):
+        """Alias for ID for consistency with other models."""
+        return self.ID
+
     @classmethod
     def get_all_active(cls):
         """Get all active fields"""

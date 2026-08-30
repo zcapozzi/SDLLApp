@@ -46,6 +46,7 @@ class User(UserMixin, db.Model):
     # Valid roles - ordered by typical privilege level
     ROLES = ['admin', 'scheduler', 'umpire_coordinator', 'treasurer',
              'BBPlayerAgent', 'SBPlayerAgent', 'coaching_coordinator',
+             'facilities', 'fieldCaptain',
              'umpire', 'coach', 'parent', 'partner_contact', 'viewer']
 
     def __repr__(self):

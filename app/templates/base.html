@@ -268,6 +268,20 @@
             </div>
             {% endif %}
 
+            {% if current_user.has_role('admin', 'facilities', 'fieldCaptain') %}
+            <div class="nav-item">
+                <a href="#" class="nav-link">Facilities ▾</a>
+                <div class="dropdown-menu">
+                    <a href="{{ url_for('facilities.index') }}">Dashboard</a>
+                    <a href="{{ url_for('facilities.field_schedules') }}">Field Schedules</a>
+                    {% if current_user.has_role('admin', 'facilities') %}
+                    <div class="dropdown-divider"></div>
+                    <a href="{{ url_for('facilities.captains') }}">Field Captains</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
             {% if current_user.is_admin() or current_user.can_edit_schedule() %}
             <div class="nav-item">
                 <a href="#" class="nav-link">Admin ▾</a>
