@@ -14,6 +14,8 @@ This document enumerates every capability available in the South Durham Little L
 | `scheduler` | Users who can edit schedules and league settings |
 | `admin` | Full administrative access |
 | `treasurer` | Financial/pay-related access |
+| `facilities` | Board member responsible for fields/structures |
+| `fieldCaptain` | Users responsible for specific fields |
 
 Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` which supports pipe-delimited role strings.
 
@@ -242,6 +244,16 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
   - Set reason (weather, maintenance, event)
   - Remove blackout dates
 - **Navigation:** Fields → "Blackout Dates"
+
+### 4.9 Specific-Date Field Allocations
+- **Access:** `scheduler`, `admin`
+- **Path:** `/fields/allocations/<year>/<is_spring>/manage`
+- **Actions:**
+  - Create one-off field allocations for specific dates (inverse of blackouts)
+  - Use for tournaments, make-up games, special events
+  - Override normal weekly allocation patterns for a single date
+  - Set league, time slot, and date for specific allocation
+- **Navigation:** Field Allocations → "Manage" → "Specific Date Allocations" section
 
 ---
 
@@ -518,6 +530,36 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
   - Copy schedule URLs
 - **Navigation:** Umpires → "Partner Schedules"
 
+### 8.7 Add Managed Umpire
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** `/umpires/add-managed`
+- **Actions:**
+  - Create umpire profile for youth without their own email
+  - Link to a parent/guardian account who manages them
+  - Set first name, last name, birth date
+  - Set baseball/softball eligibility levels
+  - Specify guardian relationship (parent, guardian, other)
+- **Navigation:** Umpires → "Add Managed"
+
+### 8.8 Hive Off Managed Umpire
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** `/umpires/<id>/hive-off`
+- **Actions:**
+  - Convert managed umpire to independent account
+  - Create new user account with their own email
+  - Transfer profile to new account (preserves history)
+  - Option to send welcome email with password setup
+- **Navigation:** Umpire Profile → "Create Independent Account"
+
+### 8.9 Umpire Guardian Management
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** Via umpire edit page
+- **Actions:**
+  - View guardians linked to managed umpires
+  - Parents can manage multiple children's umpire profiles
+  - Switch between managed profiles in umpire portal
+- **Navigation:** Umpire Profile → Edit → Guardian section
+
 ---
 
 ## 9. Umpire Portal (Self-Service)
@@ -789,6 +831,18 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
   - Enables coach functionality
 - **Navigation:** Users → Click user → "Add as Coach"
 
+### 12.7 Bulk Import Users
+- **Access:** `admin`
+- **Path:** `/admin/users/import`
+- **Actions:**
+  - Paste data from spreadsheet (tab or comma separated)
+  - Preview parsed data before import
+  - Edit roles for all or individual users
+  - Set default role for batch (e.g., umpire, coach)
+  - Validates email uniqueness (case-insensitive)
+  - Creates accounts and optionally sends welcome emails
+- **Navigation:** Users → "Import Users"
+
 ---
 
 ## 13. Notification Queue
@@ -848,6 +902,54 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
 
 ---
 
+## 15. Facilities Management
+
+### 15.1 Facilities Dashboard
+- **Access:** `facilities`, `fieldCaptain`, `admin`
+- **Path:** `/facilities/`
+- **Actions:**
+  - View facilities overview
+  - Access field schedules and captain management
+  - Field captains see their assigned fields
+- **Navigation:** Dashboard → "Facilities"
+
+### 15.2 Field Schedules
+- **Access:** `facilities`, `fieldCaptain`, `admin`
+- **Path:** `/facilities/field-schedules`
+- **Actions:**
+  - View field usage schedules (placeholder)
+- **Navigation:** Facilities → "Field Schedules"
+
+### 15.3 Manage Field Captains
+- **Access:** `facilities`, `admin`
+- **Path:** `/facilities/captains`
+- **Actions:**
+  - View all fields with assigned captains
+  - See which fields don't have captains (highlighted)
+  - Search for users to assign as captains
+  - Auto-add fieldCaptain role when assigning
+  - Remove captain assignments
+- **Navigation:** Facilities → "Field Captains"
+
+### 15.4 Assign Field Captain
+- **Access:** `facilities`, `admin`
+- **Path:** POST `/facilities/captains/assign`
+- **Actions:**
+  - Assign a user as captain of a specific field
+  - Automatically adds fieldCaptain role if user doesn't have it
+  - Multiple captains can be assigned to one field
+- **Navigation:** Field Captains → Search user → "Assign"
+
+### 15.5 Remove Field Captain
+- **Access:** `facilities`, `admin`
+- **Path:** POST `/facilities/captains/remove`
+- **Actions:**
+  - Remove a captain from a field
+  - Does not remove the fieldCaptain role from user
+- **Navigation:** Field Captains → Click × next to captain name
+
+---
+
 ## Quick Reference: Navigation Paths
 
 | Feature | Role | Navigation Path |
@@ -862,26 +964,34 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
 | Umpire Portal | Umpire | Dashboard → "Umpire Portal" |
 | Reports | Any | Dashboard → "Reports" |
 | User Management | Admin | Dashboard → "Admin" → "Users" |
+| Bulk Import Users | Admin | Dashboard → "Admin" → "Users" → "Import Users" |
 | Notifications | Scheduler+ | Dashboard → "Notifications" |
 | League Settings | Scheduler+ | Dashboard → "Leagues" |
+| Facilities | Facilities/FieldCaptain | Dashboard → "Facilities" |
+| Field Captains | Facilities/Admin | Facilities → "Field Captains" |
+| Managed Umpires | Ump Coord+ | Umpires → "Add Managed" |
 
 ---
 
 ## Feature Matrix by Role
 
-| Feature | Public | Coach | Umpire | Ump Coord | Scheduler | Admin |
-|---------|--------|-------|--------|-----------|-----------|-------|
-| View Team Schedule | ✓* | ✓* | - | - | ✓ | ✓ |
-| View Division Schedule | ✓** | ✓*** | - | ✓ | ✓ | ✓ |
-| Umpire Portal | - | - | ✓ | - | - | - |
-| Manage Umpire Assignments | - | - | - | ✓ | ✓ | ✓ |
-| Edit Games | - | - | - | - | ✓ | ✓ |
-| Generate Schedule | - | - | - | - | ✓ | ✓ |
-| Manage Teams | - | - | - | - | ✓ | ✓ |
-| Manage Fields | - | - | - | - | ✓ | ✓ |
-| Manage Users | - | - | - | - | - | ✓ |
-| Send Notifications | - | - | - | - | ✓ | ✓ |
-| View Reports | - | - | - | - | ✓ | ✓ |
+| Feature | Public | Coach | Umpire | Ump Coord | Scheduler | Facilities | FieldCaptain | Admin |
+|---------|--------|-------|--------|-----------|-----------|------------|--------------|-------|
+| View Team Schedule | ✓* | ✓* | - | - | ✓ | - | - | ✓ |
+| View Division Schedule | ✓** | ✓*** | - | ✓ | ✓ | - | - | ✓ |
+| Umpire Portal | - | - | ✓ | - | - | - | - | - |
+| Manage Umpire Assignments | - | - | - | ✓ | ✓ | - | - | ✓ |
+| Manage Managed Umpires | - | - | - | ✓ | - | - | - | ✓ |
+| Edit Games | - | - | - | - | ✓ | - | - | ✓ |
+| Generate Schedule | - | - | - | - | ✓ | - | - | ✓ |
+| Manage Teams | - | - | - | - | ✓ | - | - | ✓ |
+| Manage Fields | - | - | - | - | ✓ | - | - | ✓ |
+| Manage Users | - | - | - | - | - | - | - | ✓ |
+| Bulk Import Users | - | - | - | - | - | - | - | ✓ |
+| Send Notifications | - | - | - | - | ✓ | - | - | ✓ |
+| View Reports | - | - | - | - | ✓ | - | - | ✓ |
+| Facilities Dashboard | - | - | - | - | - | ✓ | ✓ | ✓ |
+| Manage Field Captains | - | - | - | - | - | ✓ | - | ✓ |
 
 \* With valid token
 \** Landing page only
@@ -897,4 +1007,4 @@ When adding new routes or features:
 3. Update feature matrix if needed
 4. Update quick reference navigation paths
 
-Last updated: August 2026
+Last updated: August 30, 2026
