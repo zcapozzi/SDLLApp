@@ -141,3 +141,43 @@ class TestProductionRegressions:
             f"Found local import of 'Field' at line(s) {local_field_imports} in day_view(). " \
             "This causes UnboundLocalError when has_proposal is False. " \
             "Remove the local import and use the module-level import instead."
+
+    @pytest.mark.quick
+    def test_regression_error_82_order_by_property_not_column(self):
+        """
+        Production Error: #82
+        Context: Facilities captains page
+        Error: ArgumentError: ORDER BY expression expected, got <property object>
+        Path: /facilities/captains
+        Root cause: Field.name is a @property (alias for location_title), not a Column.
+                    SQLAlchemy ORDER BY requires Column objects, not Python properties.
+
+        Fix: Change Field.name to Field.location_title in the ORDER BY clause.
+        """
+        import ast
+        from pathlib import Path
+
+        # Read the facilities routes file
+        routes_path = Path(__file__).parent.parent / 'app' / 'facilities' / 'routes.py'
+        source = routes_path.read_text(encoding='utf-8')
+        tree = ast.parse(source)
+
+        # Find all order_by calls that use Field.name
+        issues = []
+
+        for node in ast.walk(tree):
+            # Look for attribute access chains like: X.order_by(Field.name)
+            if isinstance(node, ast.Call):
+                # Check if it's a call to .order_by()
+                if isinstance(node.func, ast.Attribute) and node.func.attr == 'order_by':
+                    # Check each argument to order_by
+                    for arg in node.args:
+                        # Look for Field.name pattern
+                        if isinstance(arg, ast.Attribute):
+                            if isinstance(arg.value, ast.Name):
+                                if arg.value.id == 'Field' and arg.attr == 'name':
+                                    issues.append(f"line {node.lineno}: order_by(Field.name)")
+
+        assert len(issues) == 0, \
+            f"Found invalid ORDER BY using Field.name (a @property, not a Column): {issues}. " \
+            "Use Field.location_title instead (the actual database column)."

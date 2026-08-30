@@ -81,7 +81,7 @@ def field_schedules():
 def captains():
     """Manage field captain assignments."""
     # Get all active fields with their captains
-    fields = Field.query.filter_by(active=1).order_by(Field.name).all()
+    fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
 
     # Get fields without captains
     fields_without_captains = FieldCaptain.get_fields_without_captains()
