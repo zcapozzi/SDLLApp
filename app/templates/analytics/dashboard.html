@@ -162,10 +162,20 @@
 {% block content %}
 <div class="analytics-header">
     <h1 style="margin: 0;">Usage Analytics</h1>
-    <div class="period-selector">
-        <a href="{{ url_for('analytics.dashboard', days=7) }}" class="period-btn {{ 'active' if days == 7 else '' }}">7 Days</a>
-        <a href="{{ url_for('analytics.dashboard', days=30) }}" class="period-btn {{ 'active' if days == 30 else '' }}">30 Days</a>
-        <a href="{{ url_for('analytics.dashboard', days=90) }}" class="period-btn {{ 'active' if days == 90 else '' }}">90 Days</a>
+    <div style="display: flex; gap: 20px; align-items: center;">
+        <div class="route-filter">
+            <select id="route-filter" onchange="applyRouteFilter()" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; min-width: 160px;">
+                <option value="">All Routes</option>
+                {% for route in available_routes %}
+                <option value="{{ route }}" {{ 'selected' if route_filter == route else '' }}>{{ route }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="period-selector">
+            <a href="{{ url_for('analytics.dashboard', days=7, route=route_filter or '') }}" class="period-btn {{ 'active' if days == 7 else '' }}">7 Days</a>
+            <a href="{{ url_for('analytics.dashboard', days=30, route=route_filter or '') }}" class="period-btn {{ 'active' if days == 30 else '' }}">30 Days</a>
+            <a href="{{ url_for('analytics.dashboard', days=90, route=route_filter or '') }}" class="period-btn {{ 'active' if days == 90 else '' }}">90 Days</a>
+        </div>
     </div>
 </div>
 
@@ -310,6 +320,17 @@
 
 {% block extra_js %}
 <script>
+function applyRouteFilter() {
+    var route = document.getElementById('route-filter').value;
+    var url = new URL(window.location.href);
+    if (route) {
+        url.searchParams.set('route', route);
+    } else {
+        url.searchParams.delete('route');
+    }
+    window.location.href = url.toString();
+}
+
 // Simple line chart rendering
 (function() {
     var data = {{ daily_traffic | tojson | safe }};
