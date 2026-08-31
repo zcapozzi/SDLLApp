@@ -138,9 +138,9 @@ def cron_check_new_games():
             home = game.home_team.display_name if game.home_team else 'TBD'
             away = game.away_team.display_name if game.away_team else 'TBD'
 
-            # Build deep link to umpire calendar with game highlight
-            calendar_week = game.game_date.strftime('%Y-%W') if game.game_date else ''
-            calendar_url = f"{base_url}/umpires/{game.year}/{1 if game.is_spring else 0}/calendar?week={calendar_week}&game={game.ID}"
+            # Build deep link to umpire day view
+            game_date_str = game.game_date.strftime('%Y-%m-%d') if game.game_date else ''
+            calendar_url = f"{base_url}/umpires/{game.year}/{1 if game.is_spring else 0}/day/{game_date_str}?game={game.ID}"
 
             html_parts.append(
                 f'<tr style="border-bottom: 1px solid #eee;">'
@@ -356,9 +356,9 @@ def cron_unassigned_umpires():
             home = game.home_team.display_name if game.home_team else 'TBD'
             away = game.away_team.display_name if game.away_team else 'TBD'
 
-            # Build links - calendar expects year-weeknumber format (e.g., 2026-42)
-            calendar_week = game.game_date.strftime('%Y-%W') if game.game_date else ''
-            calendar_url = f"{base_url}/umpires/{game.year}/{1 if game.is_spring else 0}/calendar?week={calendar_week}"
+            # Build link to day view
+            game_date_str = game.game_date.strftime('%Y-%m-%d') if game.game_date else ''
+            calendar_url = f"{base_url}/umpires/{game.year}/{1 if game.is_spring else 0}/day/{game_date_str}"
 
             # Slot ownership badge
             if is_owned:
@@ -374,7 +374,7 @@ def cron_unassigned_umpires():
                 f'<span style="color: #c33; font-size: 12px;">Need {required}, have {assigned}</span>'
                 f'</td>'
                 f'<td style="padding: 8px; text-align: right; vertical-align: top;">'
-                f'<a href="{calendar_url}" style="color: #1976d2; text-decoration: none; font-size: 13px;">View in Calendar</a>'
+                f'<a href="{calendar_url}" style="color: #1976d2; text-decoration: none; font-size: 13px;">View Day</a>'
                 f'</td>'
                 f'</tr>'
             )
