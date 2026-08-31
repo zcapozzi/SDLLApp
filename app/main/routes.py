@@ -546,6 +546,9 @@ def index():
 @login_required
 def dashboard():
     """Main dashboard view"""
+    from app.utils.tracking import log_authenticated_view
+    log_authenticated_view('dashboard')
+
     # Check if user has access to full dashboard
     has_full_access = (
         current_user.can_edit_schedule() or

@@ -1,0 +1,411 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .analytics-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .period-selector {
+        display: flex;
+        gap: 8px;
+    }
+    .period-btn {
+        padding: 8px 16px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: white;
+        cursor: pointer;
+        text-decoration: none;
+        color: #333;
+    }
+    .period-btn:hover {
+        border-color: rgb(34, 139, 34);
+        color: rgb(34, 139, 34);
+    }
+    .period-btn.active {
+        background: rgb(34, 139, 34);
+        color: white;
+        border-color: rgb(34, 139, 34);
+    }
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    .summary-card {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .summary-card h3 {
+        margin: 0 0 10px 0;
+        font-size: 14px;
+        color: #666;
+        text-transform: uppercase;
+    }
+    .summary-value {
+        font-size: 32px;
+        font-weight: bold;
+        color: rgb(34, 139, 34);
+    }
+    .summary-change {
+        font-size: 13px;
+        margin-top: 5px;
+    }
+    .change-positive { color: rgb(34, 139, 34); }
+    .change-negative { color: #c33; }
+    .change-neutral { color: #666; }
+
+    .chart-container {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 30px;
+    }
+    .chart-container h2 {
+        margin: 0 0 20px 0;
+        font-size: 18px;
+        color: #333;
+    }
+
+    /* Simple line chart using SVG */
+    .line-chart {
+        width: 100%;
+        height: 200px;
+    }
+
+    /* Bar chart for devices */
+    .device-bars {
+        display: flex;
+        gap: 20px;
+        align-items: flex-end;
+        height: 120px;
+        padding-top: 20px;
+    }
+    .device-bar-group {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .device-bar {
+        width: 60px;
+        border-radius: 4px 4px 0 0;
+        transition: height 0.3s;
+    }
+    .device-bar.mobile { background: rgb(34, 139, 34); }
+    .device-bar.tablet { background: rgb(255, 140, 0); }
+    .device-bar.desktop { background: #1976d2; }
+    .device-label {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #666;
+    }
+    .device-count {
+        font-weight: bold;
+        margin-top: 4px;
+    }
+
+    .two-col-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+        gap: 20px;
+    }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .data-table th {
+        background: transparent;
+        color: #666;
+        font-weight: 600;
+        font-size: 12px;
+        text-transform: uppercase;
+        padding: 8px 12px;
+        text-align: left;
+        border-bottom: 2px solid #eee;
+    }
+    .data-table td {
+        padding: 12px;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .data-table tr:hover {
+        background: rgba(34, 139, 34, 0.03);
+    }
+    .trend-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    .trend-up { background: rgba(34, 139, 34, 0.1); color: rgb(34, 139, 34); }
+    .trend-down { background: rgba(200, 50, 50, 0.1); color: #c33; }
+    .trend-neutral { background: #f0f0f0; color: #666; }
+
+    .time-badge {
+        font-size: 12px;
+        color: #888;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="analytics-header">
+    <h1 style="margin: 0;">Usage Analytics</h1>
+    <div class="period-selector">
+        <a href="{{ url_for('analytics.dashboard', days=7) }}" class="period-btn {{ 'active' if days == 7 else '' }}">7 Days</a>
+        <a href="{{ url_for('analytics.dashboard', days=30) }}" class="period-btn {{ 'active' if days == 30 else '' }}">30 Days</a>
+        <a href="{{ url_for('analytics.dashboard', days=90) }}" class="period-btn {{ 'active' if days == 90 else '' }}">90 Days</a>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="summary-grid">
+    <div class="summary-card">
+        <h3>Total Page Views</h3>
+        <div class="summary-value">{{ summary.views | default(0) | int }}</div>
+        <div class="summary-change {% if summary.views_change > 0 %}change-positive{% elif summary.views_change < 0 %}change-negative{% else %}change-neutral{% endif %}">
+            {% if summary.views_change > 0 %}+{% endif %}{{ summary.views_change }}% vs prior {{ days }} days
+        </div>
+    </div>
+    <div class="summary-card">
+        <h3>Unique Sessions</h3>
+        <div class="summary-value">{{ summary.sessions | default(0) | int }}</div>
+        <div class="summary-change {% if summary.sessions_change > 0 %}change-positive{% elif summary.sessions_change < 0 %}change-negative{% else %}change-neutral{% endif %}">
+            {% if summary.sessions_change > 0 %}+{% endif %}{{ summary.sessions_change }}% vs prior {{ days }} days
+        </div>
+    </div>
+    <div class="summary-card">
+        <h3>Active Users</h3>
+        <div class="summary-value">{{ summary.active_users | default(0) | int }}</div>
+        <div class="summary-change {% if summary.users_change > 0 %}change-positive{% elif summary.users_change < 0 %}change-negative{% else %}change-neutral{% endif %}">
+            {% if summary.users_change > 0 %}+{% endif %}{{ summary.users_change }}% vs prior {{ days }} days
+        </div>
+    </div>
+    <div class="summary-card">
+        <h3>Avg Time on Page</h3>
+        <div class="summary-value">{{ summary.avg_time | default(0) }}s</div>
+        <div class="summary-change change-neutral">
+            Across all page views
+        </div>
+    </div>
+</div>
+
+<!-- Traffic Trend Chart -->
+<div class="chart-container">
+    <h2>Daily Traffic (Last {{ days }} Days)</h2>
+    <div id="traffic-chart" class="line-chart">
+        <svg width="100%" height="200" id="traffic-svg"></svg>
+    </div>
+</div>
+
+<!-- Two Column Layout: Routes & Users -->
+<div class="two-col-grid">
+    <!-- Top Routes -->
+    <div class="chart-container">
+        <h2>Top Routes</h2>
+        {% if top_routes %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Page Type</th>
+                    <th>Views</th>
+                    <th>Sessions</th>
+                    <th>Avg Time</th>
+                    <th>Trend</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for route in top_routes %}
+                <tr>
+                    <td><strong>{{ route.page_type }}</strong></td>
+                    <td>{{ route.views }}</td>
+                    <td>{{ route.sessions }}</td>
+                    <td>{{ route.avg_time }}s</td>
+                    <td>
+                        <span class="trend-badge {% if route.trend > 0 %}trend-up{% elif route.trend < 0 %}trend-down{% else %}trend-neutral{% endif %}">
+                            {% if route.trend > 0 %}+{% endif %}{{ route.trend }}%
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color: #666;">No page view data available for this period.</p>
+        {% endif %}
+    </div>
+
+    <!-- Top Users -->
+    <div class="chart-container">
+        <h2>Top Users (Authenticated)</h2>
+        {% if top_users %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Views</th>
+                    <th>Last Active</th>
+                    <th>Trend</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in top_users %}
+                <tr>
+                    <td><strong>{{ user.name }}</strong></td>
+                    <td>{{ user.views }}</td>
+                    <td><span class="time-badge">{{ user.last_active_display }}</span></td>
+                    <td>
+                        <span class="trend-badge {% if user.trend > 0 %}trend-up{% elif user.trend < 0 %}trend-down{% else %}trend-neutral{% endif %}">
+                            {% if user.trend > 0 %}+{% endif %}{{ user.trend }}%
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color: #666;">No authenticated user data available for this period.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Device Breakdown -->
+<div class="chart-container">
+    <h2>Device Breakdown</h2>
+    {% set total_devices = devices.mobile + devices.tablet + devices.desktop %}
+    {% if total_devices > 0 %}
+    <div class="device-bars">
+        <div class="device-bar-group">
+            <div class="device-bar mobile" style="height: {{ (devices.mobile / total_devices * 100) | int }}px;"></div>
+            <div class="device-label">Mobile</div>
+            <div class="device-count">{{ devices.mobile }} ({{ ((devices.mobile / total_devices) * 100) | round(1) }}%)</div>
+        </div>
+        <div class="device-bar-group">
+            <div class="device-bar tablet" style="height: {{ (devices.tablet / total_devices * 100) | int }}px;"></div>
+            <div class="device-label">Tablet</div>
+            <div class="device-count">{{ devices.tablet }} ({{ ((devices.tablet / total_devices) * 100) | round(1) }}%)</div>
+        </div>
+        <div class="device-bar-group">
+            <div class="device-bar desktop" style="height: {{ (devices.desktop / total_devices * 100) | int }}px;"></div>
+            <div class="device-label">Desktop</div>
+            <div class="device-count">{{ devices.desktop }} ({{ ((devices.desktop / total_devices) * 100) | round(1) }}%)</div>
+        </div>
+    </div>
+    {% else %}
+    <p style="color: #666;">No device data available for this period.</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Simple line chart rendering
+(function() {
+    var data = {{ daily_traffic | tojson | safe }};
+    if (!data || data.length === 0) return;
+
+    var svg = document.getElementById('traffic-svg');
+    var width = svg.clientWidth || 800;
+    var height = 200;
+    var padding = { top: 20, right: 20, bottom: 30, left: 50 };
+    var chartWidth = width - padding.left - padding.right;
+    var chartHeight = height - padding.top - padding.bottom;
+
+    // Find max value
+    var maxViews = Math.max.apply(null, data.map(function(d) { return d.views; }));
+    if (maxViews === 0) maxViews = 1;
+
+    // Create scales
+    var xScale = function(i) {
+        return padding.left + (i / (data.length - 1 || 1)) * chartWidth;
+    };
+    var yScale = function(v) {
+        return padding.top + chartHeight - (v / maxViews) * chartHeight;
+    };
+
+    // Build path
+    var pathData = data.map(function(d, i) {
+        var x = xScale(i);
+        var y = yScale(d.views);
+        return (i === 0 ? 'M' : 'L') + x + ',' + y;
+    }).join(' ');
+
+    // Sessions path
+    var maxSessions = Math.max.apply(null, data.map(function(d) { return d.sessions; }));
+    if (maxSessions === 0) maxSessions = 1;
+    var yScaleSessions = function(v) {
+        return padding.top + chartHeight - (v / maxSessions) * chartHeight;
+    };
+    var sessionsPath = data.map(function(d, i) {
+        var x = xScale(i);
+        var y = yScaleSessions(d.sessions);
+        return (i === 0 ? 'M' : 'L') + x + ',' + y;
+    }).join(' ');
+
+    // Clear and draw
+    svg.innerHTML = '';
+
+    // Grid lines
+    for (var i = 0; i <= 4; i++) {
+        var y = padding.top + (i / 4) * chartHeight;
+        var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', padding.left);
+        line.setAttribute('y1', y);
+        line.setAttribute('x2', width - padding.right);
+        line.setAttribute('y2', y);
+        line.setAttribute('stroke', '#eee');
+        line.setAttribute('stroke-width', '1');
+        svg.appendChild(line);
+    }
+
+    // Views line
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', pathData);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', 'rgb(34, 139, 34)');
+    path.setAttribute('stroke-width', '2');
+    svg.appendChild(path);
+
+    // Sessions line
+    var sessPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    sessPath.setAttribute('d', sessionsPath);
+    sessPath.setAttribute('fill', 'none');
+    sessPath.setAttribute('stroke', 'rgb(255, 140, 0)');
+    sessPath.setAttribute('stroke-width', '2');
+    sessPath.setAttribute('stroke-dasharray', '5,3');
+    svg.appendChild(sessPath);
+
+    // Legend
+    var legend = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+    var viewsLegend = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    viewsLegend.setAttribute('x', padding.left);
+    viewsLegend.setAttribute('y', height - 5);
+    viewsLegend.setAttribute('fill', 'rgb(34, 139, 34)');
+    viewsLegend.setAttribute('font-size', '12');
+    viewsLegend.textContent = 'Views';
+    legend.appendChild(viewsLegend);
+
+    var sessionsLegend = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    sessionsLegend.setAttribute('x', padding.left + 60);
+    sessionsLegend.setAttribute('y', height - 5);
+    sessionsLegend.setAttribute('fill', 'rgb(255, 140, 0)');
+    sessionsLegend.setAttribute('font-size', '12');
+    sessionsLegend.textContent = 'Sessions';
+    legend.appendChild(sessionsLegend);
+
+    svg.appendChild(legend);
+})();
+</script>
+{% endblock %}

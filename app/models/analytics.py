@@ -15,12 +15,13 @@ from app.extensions import db
 
 
 class PageView(db.Model):
-    """Tracks anonymous page views on public pages.
+    """Tracks page views on public and authenticated pages.
 
     Privacy notes:
     - ip_hash is SHA-256 of IP, cannot be reversed
     - session_id is random UUID from cookie, not linked to identity
-    - No PII is collected
+    - user_id is optional - only populated for authenticated users
+    - No PII is collected (user_id links to User table for analytics only)
     """
     __tablename__ = 'sdll_page_views'
 
@@ -28,6 +29,7 @@ class PageView(db.Model):
     page_type = db.Column(db.String(50), nullable=False)  # 'team_schedule', 'calendar', 'privacy'
     page_context = db.Column(db.String(100))  # team token, year/season, etc.
     session_id = db.Column(db.String(64), index=True)  # Anonymous cookie-based
+    user_id = db.Column(db.BigInteger, index=True)  # Optional - only for logged-in users
     ip_hash = db.Column(db.String(64))  # SHA256 of IP (privacy-safe)
     user_agent = db.Column(db.String(500))
     device_type = db.Column(db.String(20))  # 'mobile', 'tablet', 'desktop'
@@ -38,7 +40,7 @@ class PageView(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     @classmethod
-    def log_view(cls, page_type, page_context, request, session_id):
+    def log_view(cls, page_type, page_context, request, session_id, user_id=None):
         """Log a page view from a request.
 
         Args:
@@ -46,6 +48,7 @@ class PageView(db.Model):
             page_context: Context info (team token, etc.)
             request: Flask request object
             session_id: Anonymous session ID from cookie
+            user_id: Optional user ID for authenticated users
         """
         # Hash the IP address for privacy
         ip_hash = None
@@ -60,6 +63,7 @@ class PageView(db.Model):
             page_type=page_type,
             page_context=page_context,
             session_id=session_id,
+            user_id=user_id,
             ip_hash=ip_hash,
             user_agent=user_agent,
             device_type=device_type,

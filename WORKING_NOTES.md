@@ -4,7 +4,89 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Added umpire calendar day view and fixed umpire source change notifications.
+Last session: Implemented Product Admin Usage Analytics Dashboard.
+
+---
+
+## Session: August 31, 2026 - Product Admin Usage Analytics Dashboard
+
+### Overview
+Implemented a product-admin-only analytics dashboard showing usage patterns by route, by user, and overall trends. Access is controlled via environment variable whitelist.
+
+### Features Implemented
+
+1. **Access Control**: Environment-variable-based email whitelist (`PRODUCT_ADMIN_EMAILS`)
+   - New decorator: `product_admin_required` in `app/utils/auth.py`
+   - Non-whitelisted users redirected to dashboard with error message
+
+2. **PageView Model Enhancement**: Added `user_id` column for tracking authenticated users
+   - Anonymous users still tracked via `session_id`
+   - Migration script: `scripts/add_pageview_user_id.sql`
+
+3. **Analytics Dashboard** (`/analytics/`):
+   - Summary cards: Total Views, Unique Sessions, Active Users, Avg Time on Page
+   - Period comparison (vs prior 7/30/90 days) with % change
+   - Daily traffic trend chart (line chart with Views and Sessions)
+   - Top Routes table with views, sessions, avg time, trend
+   - Top Users table (authenticated only) with views, last active, trend
+   - Device breakdown (stacked bar: Mobile/Tablet/Desktop)
+
+4. **Tracking Helper**: `log_authenticated_view()` in `app/utils/tracking.py`
+   - Fails silently to never break user experience
+   - Auto-detects session ID and device type
+   - Added tracking to main dashboard route as example
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `app/analytics/__init__.py` | Blueprint definition |
+| `app/analytics/routes.py` | Dashboard route with query functions |
+| `app/utils/auth.py` | `product_admin_required` decorator |
+| `app/utils/tracking.py` | `log_authenticated_view()` helper |
+| `app/templates/analytics/dashboard.html` | Dashboard template with charts |
+| `scripts/add_pageview_user_id.sql` | Database migration |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `app/models/analytics.py` | Added `user_id` column to PageView model |
+| `app/__init__.py` | Registered analytics blueprint |
+| `app/main/routes.py` | Added tracking to dashboard route |
+| `.env.example` | Added `PRODUCT_ADMIN_EMAILS` |
+
+### Database Migration Required
+
+```sql
+ALTER TABLE sdll_page_views ADD COLUMN user_id BIGINT DEFAULT NULL;
+CREATE INDEX idx_pageview_user_id ON sdll_page_views(user_id);
+```
+
+### Usage
+
+1. Add your email to `PRODUCT_ADMIN_EMAILS` in `.env`:
+   ```
+   PRODUCT_ADMIN_EMAILS=your.email@example.com
+   ```
+
+2. Run migration on database
+
+3. Navigate to `/analytics/` while logged in
+
+4. Non-product-admin users will be redirected with error message
+
+### Adding Tracking to More Routes
+
+```python
+from app.utils.tracking import log_authenticated_view
+
+@app.route('/some-route')
+@login_required
+def some_route():
+    log_authenticated_view('some_route')
+    # ... rest of route
+```
 
 ---
 
