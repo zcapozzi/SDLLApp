@@ -599,6 +599,15 @@ def partner_schedule(token):
     field_filter = request.args.get('field', '')
     league_filter = request.args.get('league', '')
     date_filter = request.args.get('date', '')
+    changes_since = request.args.get('changes_since', '')
+
+    # Parse changes_since date
+    changes_since_date = None
+    if changes_since:
+        try:
+            changes_since_date = datetime.strptime(changes_since, '%Y-%m-%d')
+        except ValueError:
+            pass
 
     # Default to current/upcoming season
     if year is None:
@@ -679,6 +688,20 @@ def partner_schedule(token):
     # Build game_originals for rescheduled games (batch query to avoid N+1)
     game_originals = GameChange.get_original_display_batch(games)
 
+    # Get games changed since a specific date (for filtering)
+    changed_game_ids = set()
+    changes_count = 0
+    if changes_since_date:
+        game_ids = [g.ID for g in games]
+        if game_ids:
+            changed_records = GameChange.query.filter(
+                GameChange.game_id.in_(game_ids),
+                GameChange.changed_at >= changes_since_date,
+                GameChange.change_type.in_(['update', 'reschedule', 'cancel'])
+            ).all()
+            changed_game_ids = set(r.game_id for r in changed_records)
+            changes_count = len(changed_game_ids)
+
     # Apply filters (using cached field_name)
     if field_filter:
         games = [g for g in games if g._cached_field_name and field_filter.lower() in g._cached_field_name.lower()]
@@ -690,6 +713,8 @@ def partner_schedule(token):
             games = [g for g in games if g.game_date and g.game_date.date() == filter_date]
         except ValueError:
             pass
+    if changes_since_date:
+        games = [g for g in games if g.ID in changed_game_ids]
 
     fields = sorted(fields_set)
     leagues = sorted(leagues_set)
@@ -715,6 +740,9 @@ def partner_schedule(token):
         field_filter=field_filter,
         league_filter=league_filter,
         date_filter=date_filter,
+        changes_since=changes_since,
+        changes_since_date=changes_since_date,
+        changes_count=changes_count,
         token=token,
         new_game_ids=new_game_ids,
         has_ntl_games=has_ntl_games,

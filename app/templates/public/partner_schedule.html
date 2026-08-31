@@ -377,12 +377,24 @@
                 <label for="date">Date:</label>
                 <input type="date" id="date" value="{{ date_filter }}" onchange="applyFilters()">
             </div>
+            <div class="control-group">
+                <label for="changes_since">Changes Since:</label>
+                <input type="date" id="changes_since" value="{{ changes_since }}" onchange="applyFilters()">
+            </div>
             <button id="clear-filters-btn" class="btn btn-outline" onclick="clearFilters()" style="display: none;">Clear Filters</button>
         </div>
 
+        {% if changes_since_date %}
+        <div class="changes-notice" style="background: #fff3e0; border: 1px solid #ffb74d; border-radius: 6px; padding: 12px 16px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+            <span style="color: #e65100; font-weight: 600;">{{ changes_count }} change{{ 's' if changes_count != 1 else '' }}</span>
+            <span>made since {{ changes_since_date.strftime('%b %d, %Y') }}</span>
+            <a href="{{ url_for('public.partner_schedule', token=token, year=year, is_spring=is_spring) }}" style="margin-left: auto; color: #1976d2; text-decoration: none; font-size: 13px;">Clear filter</a>
+        </div>
+        {% endif %}
+
         <div class="game-count">
-            {{ games|length }} game{{ 's' if games|length != 1 else '' }} assigned
-            {% if new_game_ids %}<span style="color: rgb(255, 140, 0);">({{ new_game_ids|length }} new this week)</span>{% endif %}
+            {{ games|length }} game{{ 's' if games|length != 1 else '' }} {% if changes_since_date %}with changes{% else %}assigned{% endif %}
+            {% if new_game_ids and not changes_since_date %}<span style="color: rgb(255, 140, 0);">({{ new_game_ids|length }} new this week)</span>{% endif %}
         </div>
 
         <div class="table-container">
@@ -515,6 +527,27 @@
             var fieldFilter = document.getElementById('field').value.toLowerCase();
             var leagueFilter = document.getElementById('league').value.toLowerCase();
             var dateFilter = document.getElementById('date').value;
+            var changesSince = document.getElementById('changes_since').value;
+
+            // changes_since requires server-side filtering - reload page
+            var currentChangesSince = '{{ changes_since }}';
+            if (changesSince !== currentChangesSince) {
+                var url = new URL(window.location.href);
+                if (changesSince) {
+                    url.searchParams.set('changes_since', changesSince);
+                } else {
+                    url.searchParams.delete('changes_since');
+                }
+                // Preserve other filters
+                if (fieldFilter) url.searchParams.set('field', document.getElementById('field').value);
+                else url.searchParams.delete('field');
+                if (leagueFilter) url.searchParams.set('league', document.getElementById('league').value);
+                else url.searchParams.delete('league');
+                if (dateFilter) url.searchParams.set('date', dateFilter);
+                else url.searchParams.delete('date');
+                window.location.href = url.toString();
+                return;
+            }
 
             var rows = document.querySelectorAll('.schedule-table tbody tr');
             var visibleCount = 0;
@@ -542,7 +575,7 @@
             // Show/hide clear filters button
             var clearBtn = document.getElementById('clear-filters-btn');
             if (clearBtn) {
-                clearBtn.style.display = (fieldFilter || leagueFilter || dateFilter) ? 'inline-block' : 'none';
+                clearBtn.style.display = (fieldFilter || leagueFilter || dateFilter || changesSince) ? 'inline-block' : 'none';
             }
         }
 
@@ -562,6 +595,17 @@
             document.getElementById('field').value = '';
             document.getElementById('league').value = '';
             document.getElementById('date').value = '';
+            document.getElementById('changes_since').value = '';
+            // If changes_since was set, need to reload
+            if ('{{ changes_since }}') {
+                var url = new URL(window.location.href);
+                url.searchParams.delete('field');
+                url.searchParams.delete('league');
+                url.searchParams.delete('date');
+                url.searchParams.delete('changes_since');
+                window.location.href = url.toString();
+                return;
+            }
             applyFilters();
         }
 
