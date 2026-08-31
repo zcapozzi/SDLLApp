@@ -689,6 +689,7 @@ def partner_schedule(token):
     game_originals = GameChange.get_original_display_batch(games)
 
     # Get games changed since a specific date (for filtering)
+    # Only include changes to date/time/field - team changes don't matter to umpires
     changed_game_ids = set()
     changes_count = 0
     if changes_since_date:
@@ -699,7 +700,17 @@ def partner_schedule(token):
                 GameChange.changed_at >= changes_since_date,
                 GameChange.change_type.in_(['update', 'reschedule', 'cancel'])
             ).all()
-            changed_game_ids = set(r.game_id for r in changed_records)
+            # Filter to only include changes that affect date/time/field
+            relevant_fields = {'date', 'time', 'field', 'location', 'status'}
+            for record in changed_records:
+                # Cancel changes always relevant
+                if record.change_type == 'cancel':
+                    changed_game_ids.add(record.game_id)
+                    continue
+                # For updates/reschedules, check if any relevant field changed
+                changes_dict = record.changes_dict or {}
+                if any(field in changes_dict for field in relevant_fields):
+                    changed_game_ids.add(record.game_id)
             changes_count = len(changed_game_ids)
 
     # Apply filters (using cached field_name)
