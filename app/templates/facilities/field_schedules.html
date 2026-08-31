@@ -29,27 +29,34 @@
     </form>
 </div>
 
-{# Field Filter - Client-side filtering #}
-{% if fields|length > 1 %}
+{# Filters - Client-side filtering #}
 <div class="card" style="margin-bottom: 20px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <h4 style="margin: 0;">Filter Fields</h4>
-        <div style="display: flex; gap: 10px;">
-            <button type="button" class="btn btn-outline btn-sm" onclick="selectAllFields()">Select All</button>
+        <h4 style="margin: 0;">Filters</h4>
+        <div style="display: flex; gap: 15px; align-items: center;">
+            <label style="display: inline-flex; align-items: center; gap: 5px; cursor: pointer; user-select: none;">
+                <input type="checkbox" id="show-cancellations" onchange="applyCancellationFilter()">
+                <span>Show Cancellations</span>
+            </label>
+            {% if fields|length > 1 %}
+            <div style="border-left: 1px solid #ddd; height: 20px;"></div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="selectAllFields()">Select All Fields</button>
             <button type="button" class="btn btn-outline btn-sm" onclick="deselectAllFields()">Deselect All</button>
+            {% endif %}
         </div>
     </div>
+    {% if fields|length > 1 %}
     <div id="field-filters" style="display: flex; flex-wrap: wrap; gap: 10px;">
         {% for field in fields %}
         <label style="display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; background: #f5f5f5; border-radius: 20px; cursor: pointer; user-select: none;">
             <input type="checkbox" class="field-filter-checkbox" data-field-id="{{ field.ID }}" checked onchange="applyFieldFilters()">
             <span>{{ field.name }}</span>
-            <span style="color: var(--text-muted); font-size: 12px;">({{ games_by_field.get(field.ID, [])|length }})</span>
+            <span style="color: var(--text-muted); font-size: 12px;">({{ games_by_field.get(field.ID, [])|selectattr('status', 'ne', 'cancelled')|list|length }})</span>
         </label>
         {% endfor %}
     </div>
+    {% endif %}
 </div>
-{% endif %}
 
 {% if not fields %}
 <div class="card" style="text-align: center; padding: 40px;">
@@ -93,11 +100,13 @@
         </thead>
         <tbody>
             {% for game in field_games %}
-            <tr>
+            <tr class="game-row {% if game.status == 'cancelled' %}cancelled-row{% endif %}" data-status="{{ game.status or 'scheduled' }}">
                 <td>{{ game.game_date.strftime('%a, %b %d') }}</td>
                 <td>{{ game.game_date.strftime('%I:%M %p') }}</td>
                 <td>
-                    {% if game.game_type == 'practice' %}
+                    {% if game.status == 'cancelled' %}
+                    <span style="color: #999;">Cancelled</span>
+                    {% elif game.game_type == 'practice' %}
                     <span style="color: #1976d2;">Practice</span>
                     {% elif game.game_type == 'scrimmage' %}
                     <span style="color: #7b1fa2;">Scrimmage</span>
@@ -177,9 +186,46 @@ label:has(.field-filter-checkbox:not(:checked)) {
     background: #e0e0e0;
     opacity: 0.7;
 }
+/* Cancelled game styling */
+.cancelled-row {
+    display: none;
+}
+.cancelled-row.show {
+    display: table-row;
+}
+.cancelled-row td {
+    color: #999 !important;
+    text-decoration: line-through;
+    background: #fafafa;
+}
+.cancelled-row td:nth-child(3) span {
+    text-decoration: none;
+}
 </style>
 
 <script>
+function applyCancellationFilter() {
+    var showCancellations = document.getElementById('show-cancellations').checked;
+    var cancelledRows = document.querySelectorAll('.cancelled-row');
+
+    cancelledRows.forEach(function(row) {
+        if (showCancellations) {
+            row.classList.add('show');
+        } else {
+            row.classList.remove('show');
+        }
+    });
+
+    // Update URL for bookmarking
+    var url = new URL(window.location.href);
+    if (showCancellations) {
+        url.searchParams.set('showCancelled', '1');
+    } else {
+        url.searchParams.delete('showCancelled');
+    }
+    history.replaceState(null, '', url.toString());
+}
+
 function showReportIssueForm(fieldId, fieldName) {
     document.getElementById('report-field-id').value = fieldId;
     document.getElementById('report-field-name').textContent = 'Field: ' + fieldName;
@@ -269,11 +315,12 @@ function updateNoFieldsMessage(show) {
     }
 }
 
-// Restore field filters from URL on page load
+// Restore filters from URL on page load
 document.addEventListener('DOMContentLoaded', function() {
     var url = new URL(window.location.href);
-    var fieldsParam = url.searchParams.get('fields');
 
+    // Restore field filters
+    var fieldsParam = url.searchParams.get('fields');
     if (fieldsParam) {
         var selectedFieldIds = fieldsParam.split(',');
         var checkboxes = document.querySelectorAll('.field-filter-checkbox');
@@ -283,6 +330,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         applyFieldFilters();
+    }
+
+    // Restore cancellation filter
+    var showCancelled = url.searchParams.get('showCancelled') === '1';
+    if (showCancelled) {
+        document.getElementById('show-cancellations').checked = true;
+        applyCancellationFilter();
     }
 });
 </script>
