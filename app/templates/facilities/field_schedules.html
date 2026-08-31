@@ -118,9 +118,9 @@
                 </td>
                 <td>
                     {% if game.game_type == 'practice' %}
-                    {{ game.home_team_name or 'TBD' }}
+                    {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
                     {% else %}
-                    {{ game.home_team_name or 'TBD' }} vs {{ game.away_team_name or 'TBD' }}
+                    {{ game.home_team.computed_display_name if game.home_team else 'TBD' }} vs {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
                     {% endif %}
                 </td>
                 <td>{{ game.league or '-' }}</td>

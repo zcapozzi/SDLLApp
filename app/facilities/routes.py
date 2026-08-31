@@ -124,7 +124,11 @@ def field_schedules():
     # Get games for these fields in the date range
     games = []
     if field_ids:
-        query = Game.query.filter(
+        from sqlalchemy.orm import joinedload
+        query = Game.query.options(
+            joinedload(Game.home_team),
+            joinedload(Game.away_team)
+        ).filter(
             Game.field_id.in_(field_ids),
             Game.game_date >= datetime.combine(start_date, datetime.min.time()),
             Game.active == 1
