@@ -83,6 +83,10 @@ def field_schedules():
         flash('You do not have permission to access field schedules.', 'error')
         return redirect(url_for('main.dashboard'))
 
+    # Track page view
+    from app.utils.tracking import log_authenticated_view
+    log_authenticated_view('field_schedules')
+
     # Get date range from query params (default: start=today, no end date)
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')

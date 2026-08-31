@@ -93,7 +93,7 @@ def _safe_get_ad():
         return None
 
 
-def _safe_log_page_view(page_type, page_context, session_id):
+def _safe_log_page_view(page_type, page_context, session_id, user_id=None):
     """
     Safely log a page view. Returns page_view or None on failure.
     Called AFTER response is built - failure doesn't affect the page.
@@ -102,7 +102,7 @@ def _safe_log_page_view(page_type, page_context, session_id):
         return None
     try:
         from app.models.analytics import PageView
-        return PageView.log_view(page_type, page_context, request, session_id)
+        return PageView.log_view(page_type, page_context, request, session_id, user_id=user_id)
     except Exception as e:
         _log_tracking_error("log_page_view", e)
         _safe_rollback()
@@ -701,7 +701,8 @@ def partner_schedule(token):
         LeagueSeason.year.desc(), LeagueSeason.is_spring.desc()
     ).all()
 
-    return render_template(
+    # Build response
+    response = make_response(render_template(
         'public/partner_schedule.html',
         partner=partner,
         games=games,
@@ -719,7 +720,14 @@ def partner_schedule(token):
         has_ntl_games=has_ntl_games,
         game_originals=game_originals,
         today=date.today()
-    )
+    ))
+
+    # Track page view (fails silently)
+    session_id = _get_or_create_session_id()
+    _safe_log_page_view('partner_schedule', partner.short_code, session_id)
+    _set_session_cookie(response, session_id)
+
+    return response
 
 
 @public_bp.route('/partner/<token>/csv')
@@ -1102,7 +1110,8 @@ def division_schedule(token):
     except Exception:
         pass  # Don't fail page load if lookup fails
 
-    return render_template(
+    # Build response
+    response = make_response(render_template(
         'public/division_schedule.html',
         league_season=league_season,
         display_name=display_name,
@@ -1118,7 +1127,15 @@ def division_schedule(token):
         show_minimal_menu=not has_full_access,
         today=today,
         token=token
-    )
+    ))
+
+    # Track page view (fails silently) - include user_id for authenticated users
+    session_id = _get_or_create_session_id()
+    user_id = current_user.ID if current_user.is_authenticated else None
+    _safe_log_page_view('division_schedule', league_season.league, session_id, user_id=user_id)
+    _set_session_cookie(response, session_id)
+
+    return response
 
 
 @public_bp.route('/division/<token>/gamechanger')
