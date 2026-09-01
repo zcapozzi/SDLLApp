@@ -81,7 +81,7 @@
         </div>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; flex-wrap: wrap; gap: 10px;">
             <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
-                <input type="checkbox" name="show_cancelled" value="1" {{ 'checked' if show_cancelled else '' }} onchange="this.form.submit()">
+                <input type="checkbox" id="show_cancelled" value="1" onchange="applyFilters()">
                 <span>Show Cancelled Events</span>
             </label>
             <div style="display: flex; gap: 10px; align-items: center;">
@@ -116,7 +116,8 @@
                 data-matchup="{{ (game.home_team.computed_display_name if game.home_team else 'TBD') }}"
                 data-location="{{ game.field_rel.name if game.field_rel else '' }}"
                 data-field-id="{{ game.field_id or '' }}"
-                data-event-type="{{ event_type }}">
+                data-event-type="{{ event_type }}"
+                data-cancelled="{{ '1' if game.status == 'cancelled' else '0' }}">
                 <td>{{ game.game_date.strftime('%a, %b %d') }}</td>
                 <td>{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</td>
                 <td>{{ game.league or '-' }}</td>
@@ -171,7 +172,8 @@
     <div class="event-card {{ 'cancelled' if game.status == 'cancelled' else '' }}"
          data-division="{{ game.league or '' }}"
          data-field-id="{{ game.field_id or '' }}"
-         data-event-type="{{ event_type }}">
+         data-event-type="{{ event_type }}"
+         data-cancelled="{{ '1' if game.status == 'cancelled' else '0' }}">
         <div class="event-header">
             <span class="event-date">{{ game.game_date.strftime('%a, %b %d') }}</span>
             <span class="event-time">{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</span>
@@ -516,6 +518,7 @@ function applyFilters() {
     var leagueFilter = document.getElementById('league').value;
     var fieldFilter = document.getElementById('field').value;
     var eventTypeFilter = document.getElementById('event_type').value;
+    var showCancelled = document.getElementById('show_cancelled').checked;
 
     // Filter desktop table rows
     var tableRows = document.querySelectorAll('#schedule-table tbody tr');
@@ -524,11 +527,13 @@ function applyFilters() {
         var rowLeague = row.dataset.division || '';
         var rowFieldId = row.dataset.fieldId || '';
         var rowEventType = row.dataset.eventType || '';
+        var rowCancelled = row.dataset.cancelled === '1';
 
         var show = true;
         if (leagueFilter && rowLeague !== leagueFilter) show = false;
         if (fieldFilter && rowFieldId !== fieldFilter) show = false;
         if (eventTypeFilter && rowEventType !== eventTypeFilter) show = false;
+        if (rowCancelled && !showCancelled) show = false;
 
         row.style.display = show ? '' : 'none';
         if (show) visibleCount++;
@@ -540,11 +545,13 @@ function applyFilters() {
         var cardLeague = card.dataset.division || '';
         var cardFieldId = card.dataset.fieldId || '';
         var cardEventType = card.dataset.eventType || '';
+        var cardCancelled = card.dataset.cancelled === '1';
 
         var show = true;
         if (leagueFilter && cardLeague !== leagueFilter) show = false;
         if (fieldFilter && cardFieldId !== fieldFilter) show = false;
         if (eventTypeFilter && cardEventType !== eventTypeFilter) show = false;
+        if (cardCancelled && !showCancelled) show = false;
 
         card.style.display = show ? '' : 'none';
     });
@@ -563,6 +570,8 @@ function applyFilters() {
     else url.searchParams.delete('field');
     if (eventTypeFilter) url.searchParams.set('event_type', eventTypeFilter);
     else url.searchParams.delete('event_type');
+    if (showCancelled) url.searchParams.set('show_cancelled', '1');
+    else url.searchParams.delete('show_cancelled');
     history.replaceState(null, '', url.toString());
 }
 
@@ -570,24 +579,25 @@ function resetFilters() {
     document.getElementById('league').value = '';
     document.getElementById('field').value = '';
     document.getElementById('event_type').value = '';
+    document.getElementById('show_cancelled').checked = false;
     applyFilters();
 }
 
-// Restore filters from URL on page load
+// Restore filters from URL on page load and apply initial filter
 document.addEventListener('DOMContentLoaded', function() {
     var url = new URL(window.location.href);
     var league = url.searchParams.get('league');
     var field = url.searchParams.get('field');
     var eventType = url.searchParams.get('event_type');
+    var showCancelled = url.searchParams.get('show_cancelled') === '1';
 
     if (league) document.getElementById('league').value = league;
     if (field) document.getElementById('field').value = field;
     if (eventType) document.getElementById('event_type').value = eventType;
+    document.getElementById('show_cancelled').checked = showCancelled;
 
-    // Apply filters if any are set
-    if (league || field || eventType) {
-        applyFilters();
-    }
+    // Always apply filters on load to hide cancelled by default
+    applyFilters();
 });
 </script>
 {% endblock %}

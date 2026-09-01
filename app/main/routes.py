@@ -957,11 +957,10 @@ def master_schedule():
     log_authenticated_view('master_schedule')
 
     # Parse filters - only date filters are server-side (controls data range)
-    # League, field, event_type filters are handled client-side via JS
+    # League, field, event_type, show_cancelled filters are handled client-side via JS
     today = date.today()
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
-    show_cancelled = request.args.get('show_cancelled') == '1'
 
     # Default start date to today
     if start_date_str:
@@ -981,6 +980,7 @@ def master_schedule():
             pass
 
     # Build query - load all data for the date range, filter client-side
+    # Include cancelled events - client-side JS hides them by default
     query = Game.query.options(
         joinedload(Game.home_team),
         joinedload(Game.away_team),
@@ -994,9 +994,6 @@ def master_schedule():
 
     if end_date:
         query = query.filter(Game.game_date <= datetime.combine(end_date, datetime.max.time()))
-
-    if not show_cancelled:
-        query = query.filter(Game.status != 'cancelled')
 
     games = query.order_by(Game.game_date).all()
 
@@ -1082,7 +1079,6 @@ def master_schedule():
         event_types=event_types,
         start_date=start_date,
         end_date=end_date,
-        show_cancelled=show_cancelled,
         progress_pct=progress_pct,
         completed_events=completed_events,
         remaining_events=remaining_events,
