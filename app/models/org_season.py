@@ -33,12 +33,15 @@ class OrgSeason(db.Model):
         """Return human-readable season name"""
         return f'{"Spring" if self.is_spring else "Fall"} {self.year}'
 
+    # Default organization ID for SDLL
+    DEFAULT_ORG_ID = 1
+
     @classmethod
     def get_current_season(cls, org_id=None):
         """Get the current season for an organization.
 
         Args:
-            org_id: Organization ID. If None, uses home org (SDLL).
+            org_id: Organization ID. If None, uses home org (SDLL, org_id=1).
 
         Returns:
             OrgSeason instance or None if no seasons exist.
@@ -47,12 +50,12 @@ class OrgSeason(db.Model):
             1. First look for a season explicitly marked as is_current=1
             2. If none found, fall back to the season with the latest season_started_at
         """
+        # Use default org if not specified
+        if org_id is None:
+            org_id = cls.DEFAULT_ORG_ID
+
         # Try to find explicitly marked current season
-        query = cls.query.filter_by(is_current=1)
-        if org_id is not None:
-            query = query.filter_by(org_id=org_id)
-        else:
-            query = query.filter(cls.org_id.is_(None))
+        query = cls.query.filter_by(is_current=1, org_id=org_id)
 
         current = query.first()
         if current:
@@ -60,11 +63,7 @@ class OrgSeason(db.Model):
 
         # Fall back to latest started season
         # MySQL doesn't support NULLS LAST, so use CASE to sort NULLs last
-        query = cls.query
-        if org_id is not None:
-            query = query.filter_by(org_id=org_id)
-        else:
-            query = query.filter(cls.org_id.is_(None))
+        query = cls.query.filter_by(org_id=org_id)
 
         return query.order_by(
             db.case((cls.season_started_at.is_(None), 1), else_=0),  # NULLs last
@@ -94,30 +93,24 @@ class OrgSeason(db.Model):
         Args:
             year: The year to set as current
             is_spring: 1 for Spring, 0 for Fall
-            org_id: Organization ID. If None, uses home org.
+            org_id: Organization ID. If None, uses home org (SDLL, org_id=1).
 
         Returns:
             The OrgSeason that was set as current, or None if not found.
         """
+        # Use default org if not specified
+        if org_id is None:
+            org_id = cls.DEFAULT_ORG_ID
+
         # Clear current flag from all seasons for this org
-        if org_id is not None:
-            cls.query.filter_by(org_id=org_id).update({'is_current': 0})
-        else:
-            cls.query.filter(cls.org_id.is_(None)).update({'is_current': 0})
+        cls.query.filter_by(org_id=org_id).update({'is_current': 0})
 
         # Set the new current season
-        if org_id is not None:
-            season = cls.query.filter_by(
-                org_id=org_id,
-                year=year,
-                is_spring=is_spring
-            ).first()
-        else:
-            season = cls.query.filter(
-                cls.org_id.is_(None),
-                cls.year == year,
-                cls.is_spring == is_spring
-            ).first()
+        season = cls.query.filter_by(
+            org_id=org_id,
+            year=year,
+            is_spring=is_spring
+        ).first()
 
         if season:
             season.is_current = 1
