@@ -51,11 +51,23 @@ def index():
             field_id = int(request.form.get('field_id'))
             field = Field.query.get(field_id)
             if field:
-                field_name = field.location_title  # Save before commit
-                field.active = 0
-                db.session.commit()
-                logger.info(f'Deactivated field: {field_name}')
-                flash(f'Deactivated field: {field_name}. It will no longer appear in dropdowns or calendars.', 'success')
+                field_name = field.location_title
+                # Check for future games assigned to this field
+                from datetime import datetime
+                from app.models.game import Game
+                future_games = Game.query.filter(
+                    Game.field_id == field_id,
+                    Game.active == 1,
+                    Game.game_date >= datetime.now()
+                ).count()
+
+                if future_games > 0:
+                    flash(f'Cannot deactivate "{field_name}": {future_games} upcoming game(s) are scheduled at this field. Reassign them first.', 'error')
+                else:
+                    field.active = 0
+                    db.session.commit()
+                    logger.info(f'Deactivated field: {field_name}')
+                    flash(f'Deactivated field: {field_name}. It will no longer appear in dropdowns or calendars.', 'success')
                 # Can't scroll to deactivated item unless showing inactive
 
         elif action == 'reactivate_field':
