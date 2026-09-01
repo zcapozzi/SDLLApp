@@ -8,30 +8,31 @@
     <p style="color: var(--text-muted); margin: 5px 0 0 0;">{{ season_name }}</p>
 </div>
 
-{# Season Progress #}
-{% if progress_pct is not none and earliest_start and latest_end %}
-<div class="card" style="margin-bottom: 20px; padding: 15px 20px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <span style="font-weight: 600;">Season Progress</span>
-        <span style="color: var(--text-muted); font-size: 14px;">
-            {% if days_remaining is not none %}
-                {% if days_remaining == 0 %}
-                    Season complete
-                {% elif days_remaining == 1 %}
-                    1 day remaining
-                {% else %}
-                    {{ days_remaining }} days remaining
-                {% endif %}
-            {% endif %}
-        </span>
+{# Season Progress - Compact with expand option #}
+{% if total_events > 0 %}
+<div class="progress-widget" id="progress-widget">
+    <div class="progress-compact" onclick="toggleProgress()">
+        <div class="progress-bar-mini">
+            <div class="progress-bar-fill" style="width: {{ progress_pct }}%;"></div>
+        </div>
+        <span class="progress-text">{{ progress_pct }}% complete ({{ completed_events }}/{{ total_events }} events)</span>
+        <span class="progress-toggle" id="progress-toggle">+</span>
     </div>
-    <div style="background: #e0e0e0; border-radius: 10px; height: 12px; overflow: hidden;">
-        <div style="background: linear-gradient(90deg, #228B22, #32CD32); height: 100%; width: {{ progress_pct }}%; transition: width 0.3s;"></div>
-    </div>
-    <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; color: var(--text-muted);">
-        <span>{{ earliest_start.strftime('%b %d') }}</span>
-        <span style="font-weight: 600; color: var(--primary);">{{ progress_pct }}%</span>
-        <span>{{ latest_end.strftime('%b %d') }}</span>
+    <div class="progress-expanded" id="progress-expanded">
+        <div class="progress-stats">
+            <div class="stat">
+                <span class="stat-value">{{ completed_events }}</span>
+                <span class="stat-label">Completed</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{{ remaining_events }}</span>
+                <span class="stat-label">Remaining</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{{ total_events }}</span>
+                <span class="stat-label">Total</span>
+            </div>
+        </div>
     </div>
 </div>
 {% endif %}
@@ -107,16 +108,28 @@
                     {% endif %}
                     {% if game.game_type == 'practice' %}
                     <span class="type-badge practice">Practice</span>
+                    {% if game.home_team and game.home_team.schedule_token %}
+                    <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
+                    {% else %}
                     {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                    {% endif %}
                     {% else %}
                     {% if game.game_type == 'scrimmage' %}
                     <span class="type-badge scrimmage">Scrimmage</span>
                     {% elif game.game_type == 'playoff' %}
                     <span class="type-badge playoff">Playoff</span>
                     {% endif %}
+                    {% if game.home_team and game.home_team.schedule_token %}
+                    <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
+                    {% else %}
                     {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                    {% endif %}
                     <span style="color: var(--text-muted);"> vs </span>
+                    {% if game.away_team and game.away_team.schedule_token %}
+                    <a href="{{ url_for('public.team_schedule', token=game.away_team.schedule_token) }}" class="team-link">{{ game.away_team.computed_display_name }}</a>
+                    {% else %}
                     {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                    {% endif %}
                     {% endif %}
                 </td>
                 <td>{{ game.field_rel.name if game.field_rel else '-' }}</td>
@@ -146,16 +159,28 @@
             {% endif %}
             {% if game.game_type == 'practice' %}
             <span class="type-badge practice">Practice</span>
+            {% if game.home_team and game.home_team.schedule_token %}
+            <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
+            {% else %}
             {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+            {% endif %}
             {% else %}
             {% if game.game_type == 'scrimmage' %}
             <span class="type-badge scrimmage">Scrimmage</span>
             {% elif game.game_type == 'playoff' %}
             <span class="type-badge playoff">Playoff</span>
             {% endif %}
+            {% if game.home_team and game.home_team.schedule_token %}
+            <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
+            {% else %}
             {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+            {% endif %}
             <span style="color: var(--text-muted);"> vs </span>
+            {% if game.away_team and game.away_team.schedule_token %}
+            <a href="{{ url_for('public.team_schedule', token=game.away_team.schedule_token) }}" class="team-link">{{ game.away_team.computed_display_name }}</a>
+            {% else %}
             {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+            {% endif %}
             {% endif %}
         </div>
         <div class="event-details">
@@ -172,6 +197,88 @@
 </div>
 
 <style>
+/* Progress widget - compact by default */
+.progress-widget {
+    margin-bottom: 15px;
+}
+.progress-compact {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+.progress-compact:hover {
+    background: #f0f1f2;
+}
+.progress-bar-mini {
+    flex: 0 0 80px;
+    height: 6px;
+    background: #e0e0e0;
+    border-radius: 3px;
+    overflow: hidden;
+}
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #228B22, #32CD32);
+    transition: width 0.3s;
+}
+.progress-text {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+.progress-toggle {
+    margin-left: auto;
+    font-size: 16px;
+    color: #999;
+    font-weight: bold;
+    width: 20px;
+    text-align: center;
+}
+.progress-expanded {
+    display: none;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 0 0 6px 6px;
+    margin-top: -6px;
+}
+.progress-expanded.show {
+    display: block;
+}
+.progress-stats {
+    display: flex;
+    justify-content: space-around;
+    text-align: center;
+}
+.stat {
+    display: flex;
+    flex-direction: column;
+}
+.stat-value {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--primary);
+}
+.stat-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+/* Team links */
+.team-link {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted #999;
+}
+.team-link:hover {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
 /* Filter layout */
 .filter-row {
     display: flex;
@@ -292,6 +399,26 @@
     .filter-group {
         min-width: 100%;
     }
+    .progress-bar-mini {
+        flex: 0 0 60px;
+    }
+    .progress-text {
+        font-size: 12px;
+    }
 }
 </style>
+
+<script>
+function toggleProgress() {
+    var expanded = document.getElementById('progress-expanded');
+    var toggle = document.getElementById('progress-toggle');
+    if (expanded.classList.contains('show')) {
+        expanded.classList.remove('show');
+        toggle.textContent = '+';
+    } else {
+        expanded.classList.add('show');
+        toggle.textContent = '-';
+    }
+}
+</script>
 {% endblock %}

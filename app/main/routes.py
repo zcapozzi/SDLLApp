@@ -1018,35 +1018,31 @@ def master_schedule():
 
     fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
 
-    # Calculate season progress
-    league_seasons = LeagueSeason.query.filter_by(year=year, is_spring=is_spring).all()
+    # Calculate season progress based on events completed
+    # Count all events (games + practices) for the season
+    total_events = db.session.query(db.func.count(Game.ID)).filter(
+        Game.year == year,
+        Game.is_spring == is_spring,
+        Game.active == 1,
+        Game.status != 'cancelled'
+    ).scalar() or 0
 
-    # Find earliest opening day and latest season end
-    earliest_start = None
-    latest_end = None
-    for ls in league_seasons:
-        if ls.opening_day_date:
-            if earliest_start is None or ls.opening_day_date < earliest_start:
-                earliest_start = ls.opening_day_date
-        if ls.season_end_date:
-            if latest_end is None or ls.season_end_date > latest_end:
-                latest_end = ls.season_end_date
+    # Count events that have already occurred (game_date < today)
+    completed_events = db.session.query(db.func.count(Game.ID)).filter(
+        Game.year == year,
+        Game.is_spring == is_spring,
+        Game.active == 1,
+        Game.status != 'cancelled',
+        Game.game_date < datetime.combine(today, datetime.min.time())
+    ).scalar() or 0
+
+    # Count remaining events
+    remaining_events = total_events - completed_events
 
     # Calculate progress percentage
     progress_pct = 0
-    days_remaining = None
-    if earliest_start and latest_end and earliest_start < latest_end:
-        total_days = (latest_end - earliest_start).days
-        if today < earliest_start:
-            progress_pct = 0
-            days_remaining = (latest_end - earliest_start).days
-        elif today > latest_end:
-            progress_pct = 100
-            days_remaining = 0
-        else:
-            elapsed = (today - earliest_start).days
-            progress_pct = min(100, max(0, int((elapsed / total_days) * 100)))
-            days_remaining = (latest_end - today).days
+    if total_events > 0:
+        progress_pct = min(100, max(0, int((completed_events / total_events) * 100)))
 
     return render_template(
         'main/master_schedule.html',
@@ -1062,8 +1058,8 @@ def master_schedule():
         field_filter=field_filter,
         show_cancelled=show_cancelled,
         progress_pct=progress_pct,
-        days_remaining=days_remaining,
-        earliest_start=earliest_start,
-        latest_end=latest_end,
+        completed_events=completed_events,
+        remaining_events=remaining_events,
+        total_events=total_events,
         total_games=len(games)
     )
