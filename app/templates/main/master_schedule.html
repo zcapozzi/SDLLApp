@@ -69,6 +69,15 @@
                     {% endfor %}
                 </select>
             </div>
+            <div class="filter-group">
+                <label for="event_type">Type</label>
+                <select id="event_type" name="event_type" class="form-control" onchange="this.form.submit()">
+                    <option value="">All Types</option>
+                    {% for type_value, type_label in event_types %}
+                    <option value="{{ type_value }}" {{ 'selected' if event_type_filter == type_value else '' }}>{{ type_label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
         </div>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; flex-wrap: wrap; gap: 10px;">
             <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
@@ -86,19 +95,24 @@
 {# Schedule Table - Desktop #}
 <div class="card desktop-table">
     {% if games %}
-    <table>
+    <table id="schedule-table">
         <thead>
             <tr>
-                <th>Date</th>
-                <th>Time</th>
-                <th>Division</th>
-                <th>Matchup</th>
-                <th>Location</th>
+                <th class="sortable" data-sort="date" data-sort-dir="asc">Date <span class="sort-icon">▲</span></th>
+                <th class="sortable" data-sort="time">Time <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="division">Division <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="matchup">Matchup <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="location">Location <span class="sort-icon"></span></th>
             </tr>
         </thead>
         <tbody>
             {% for game in games %}
-            <tr class="{{ 'cancelled-row' if game.status == 'cancelled' else '' }}">
+            <tr class="{{ 'cancelled-row' if game.status == 'cancelled' else '' }}"
+                data-date="{{ game.game_date.strftime('%Y-%m-%d %H:%M') }}"
+                data-time="{{ game.game_date.strftime('%H:%M') }}"
+                data-division="{{ game.league or '' }}"
+                data-matchup="{{ (game.home_team.computed_display_name if game.home_team else 'TBD') }}"
+                data-location="{{ game.field_rel.name if game.field_rel else '' }}">
                 <td>{{ game.game_date.strftime('%a, %b %d') }}</td>
                 <td>{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</td>
                 <td>{{ game.league or '-' }}</td>
@@ -384,6 +398,26 @@
     color: #999;
 }
 
+/* Sortable table headers */
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+.sortable:hover {
+    background: #f0f0f0;
+}
+.sort-icon {
+    display: inline-block;
+    width: 16px;
+    color: #999;
+    font-size: 10px;
+}
+.sortable[data-sort-dir="asc"] .sort-icon,
+.sortable[data-sort-dir="desc"] .sort-icon {
+    color: var(--primary);
+}
+
 /* Mobile responsiveness */
 @media (max-width: 768px) {
     .desktop-table {
@@ -419,6 +453,53 @@ function toggleProgress() {
         expanded.classList.add('show');
         toggle.textContent = '-';
     }
+}
+
+// Table sorting
+document.addEventListener('DOMContentLoaded', function() {
+    var headers = document.querySelectorAll('.sortable');
+    headers.forEach(function(header) {
+        header.addEventListener('click', function() {
+            var sortKey = this.dataset.sort;
+            var currentDir = this.dataset.sortDir || '';
+            var newDir = currentDir === 'asc' ? 'desc' : 'asc';
+
+            // Clear all sort directions
+            headers.forEach(function(h) {
+                h.dataset.sortDir = '';
+                h.querySelector('.sort-icon').textContent = '';
+            });
+
+            // Set new sort direction
+            this.dataset.sortDir = newDir;
+            this.querySelector('.sort-icon').textContent = newDir === 'asc' ? '▲' : '▼';
+
+            sortTable(sortKey, newDir);
+        });
+    });
+});
+
+function sortTable(sortKey, direction) {
+    var table = document.getElementById('schedule-table');
+    if (!table) return;
+
+    var tbody = table.querySelector('tbody');
+    var rows = Array.from(tbody.querySelectorAll('tr'));
+
+    rows.sort(function(a, b) {
+        var aVal = a.dataset[sortKey] || '';
+        var bVal = b.dataset[sortKey] || '';
+
+        // For date/time, compare as strings (ISO format sorts correctly)
+        var comparison = aVal.localeCompare(bVal);
+
+        return direction === 'asc' ? comparison : -comparison;
+    });
+
+    // Re-append rows in sorted order
+    rows.forEach(function(row) {
+        tbody.appendChild(row);
+    });
 }
 </script>
 {% endblock %}

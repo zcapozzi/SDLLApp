@@ -962,6 +962,7 @@ def master_schedule():
     end_date_str = request.args.get('end_date')
     league_filter = request.args.get('league', '')
     field_filter = request.args.get('field', '')
+    event_type_filter = request.args.get('event_type', '')
     show_cancelled = request.args.get('show_cancelled') == '1'
 
     # Default start date to today
@@ -1005,6 +1006,9 @@ def master_schedule():
     if field_filter:
         query = query.filter(Game.field_id == int(field_filter))
 
+    if event_type_filter:
+        query = query.filter(Game.game_type == event_type_filter)
+
     games = query.order_by(Game.game_date).all()
 
     # Get unique leagues and fields for filter dropdowns
@@ -1015,6 +1019,24 @@ def master_schedule():
         Game.league.isnot(None)
     ).distinct().order_by(Game.league).all()
     leagues = [l[0] for l in leagues if l[0]]
+
+    # Get available event types for filter dropdown
+    event_types_raw = db.session.query(Game.game_type).filter(
+        Game.year == year,
+        Game.is_spring == is_spring,
+        Game.active == 1,
+        Game.game_type.isnot(None)
+    ).distinct().all()
+    event_types_raw = [e[0] for e in event_types_raw if e[0]]
+
+    # Define display order and labels
+    event_type_labels = {
+        'game': 'Game',
+        'practice': 'Practice',
+        'scrimmage': 'Scrimmage',
+        'playoff': 'Playoff'
+    }
+    event_types = [(t, event_type_labels.get(t, t.title())) for t in ['game', 'practice', 'scrimmage', 'playoff'] if t in event_types_raw]
 
     fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
 
@@ -1052,10 +1074,12 @@ def master_schedule():
         games=games,
         leagues=leagues,
         fields=fields,
+        event_types=event_types,
         start_date=start_date,
         end_date=end_date,
         league_filter=league_filter,
         field_filter=field_filter,
+        event_type_filter=event_type_filter,
         show_cancelled=show_cancelled,
         progress_pct=progress_pct,
         completed_events=completed_events,
