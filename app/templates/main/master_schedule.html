@@ -115,7 +115,7 @@
                 data-division="{{ game.league or '' }}"
                 data-matchup="{{ (game.home_team.computed_display_name if game.home_team else 'TBD') }}"
                 data-location="{{ game.field_rel.name if game.field_rel else '' }}"
-                data-field-id="{{ game.field_id or '' }}"
+                data-field-id="{{ game.field_rel.ID if game.field_rel else '' }}"
                 data-event-type="{{ event_type }}"
                 data-cancelled="{{ '1' if game.status == 'cancelled' else '0' }}">
                 <td>{{ game.game_date.strftime('%a, %b %d') }}</td>
@@ -179,7 +179,7 @@
         {% set event_type = 'practice' if game.game_type == 'practice' else ('scrimmage' if game.is_scrimmage else ('playoff' if game.game_type == 'playoff' else 'game')) %}
         <div class="event-card {{ 'cancelled' if game.status == 'cancelled' else '' }}"
              data-division="{{ game.league or '' }}"
-             data-field-id="{{ game.field_id or '' }}"
+             data-field-id="{{ game.field_rel.ID if game.field_rel else '' }}"
              data-event-type="{{ event_type }}"
              data-cancelled="{{ '1' if game.status == 'cancelled' else '0' }}">
             <div class="event-header">
@@ -239,7 +239,7 @@
                 {% set event_type = 'practice' if game.game_type == 'practice' else ('scrimmage' if game.is_scrimmage else ('playoff' if game.game_type == 'playoff' else 'game')) %}
                 <tr class="compact-row {{ 'cancelled-row' if game.status == 'cancelled' else '' }}"
                     data-division="{{ game.league or '' }}"
-                    data-field-id="{{ game.field_id or '' }}"
+                    data-field-id="{{ game.field_rel.ID if game.field_rel else '' }}"
                     data-event-type="{{ event_type }}"
                     data-cancelled="{{ '1' if game.status == 'cancelled' else '0' }}"
                     onclick="toggleRowExpand(this)">
