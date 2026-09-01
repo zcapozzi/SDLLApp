@@ -53,28 +53,28 @@
             </div>
             <div class="filter-group">
                 <label for="league">Division</label>
-                <select id="league" name="league" class="form-control" onchange="this.form.submit()">
+                <select id="league" class="form-control" onchange="applyFilters()">
                     <option value="">All Divisions</option>
                     {% for league in leagues %}
-                    <option value="{{ league }}" {{ 'selected' if league_filter == league else '' }}>{{ league }}</option>
+                    <option value="{{ league }}">{{ league }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="filter-group">
                 <label for="field">Field</label>
-                <select id="field" name="field" class="form-control" onchange="this.form.submit()">
+                <select id="field" class="form-control" onchange="applyFilters()">
                     <option value="">All Fields</option>
                     {% for field in fields %}
-                    <option value="{{ field.ID }}" {{ 'selected' if field_filter == field.ID|string else '' }}>{{ field.name }}</option>
+                    <option value="{{ field.ID }}">{{ field.name }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="filter-group">
                 <label for="event_type">Type</label>
-                <select id="event_type" name="event_type" class="form-control" onchange="this.form.submit()">
+                <select id="event_type" class="form-control" onchange="applyFilters()">
                     <option value="">All Types</option>
                     {% for type_value, type_label in event_types %}
-                    <option value="{{ type_value }}" {{ 'selected' if event_type_filter == type_value else '' }}>{{ type_label }}</option>
+                    <option value="{{ type_value }}">{{ type_label }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -85,8 +85,8 @@
                 <span>Show Cancelled Events</span>
             </label>
             <div style="display: flex; gap: 10px; align-items: center;">
-                <span style="color: var(--text-muted); font-size: 14px;">{{ total_games }} event{{ 's' if total_games != 1 else '' }}</span>
-                <a href="{{ url_for('main.master_schedule') }}" class="btn btn-outline btn-sm">Reset</a>
+                <span id="event-count" style="color: var(--text-muted); font-size: 14px;">{{ total_games }} event{{ 's' if total_games != 1 else '' }}</span>
+                <a href="{{ url_for('main.master_schedule') }}" class="btn btn-outline btn-sm" onclick="resetFilters()">Reset</a>
             </div>
         </div>
     </form>
@@ -107,12 +107,16 @@
         </thead>
         <tbody>
             {% for game in games %}
+            {# Compute display type for filtering: game, practice, scrimmage, playoff #}
+            {% set event_type = 'practice' if game.game_type == 'practice' else ('scrimmage' if game.is_scrimmage else ('playoff' if game.game_type == 'playoff' else 'game')) %}
             <tr class="{{ 'cancelled-row' if game.status == 'cancelled' else '' }}"
                 data-date="{{ game.game_date.strftime('%Y-%m-%d %H:%M') }}"
                 data-time="{{ game.game_date.strftime('%H:%M') }}"
                 data-division="{{ game.league or '' }}"
                 data-matchup="{{ (game.home_team.computed_display_name if game.home_team else 'TBD') }}"
-                data-location="{{ game.field_rel.name if game.field_rel else '' }}">
+                data-location="{{ game.field_rel.name if game.field_rel else '' }}"
+                data-field-id="{{ game.field_id or '' }}"
+                data-event-type="{{ event_type }}">
                 <td>{{ game.game_date.strftime('%a, %b %d') }}</td>
                 <td>{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</td>
                 <td>{{ game.league or '-' }}</td>
@@ -128,7 +132,7 @@
                     {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
                     {% endif %}
                     {% else %}
-                    {% if game.game_type == 'scrimmage' %}
+                    {% if game.is_scrimmage %}
                     <span class="type-badge scrimmage">Scrimmage</span>
                     {% elif game.game_type == 'playoff' %}
                     <span class="type-badge playoff">Playoff</span>
@@ -162,7 +166,12 @@
 <div class="mobile-cards">
     {% if games %}
     {% for game in games %}
-    <div class="event-card {{ 'cancelled' if game.status == 'cancelled' else '' }}">
+    {# Compute display type for filtering: game, practice, scrimmage, playoff #}
+    {% set event_type = 'practice' if game.game_type == 'practice' else ('scrimmage' if game.is_scrimmage else ('playoff' if game.game_type == 'playoff' else 'game')) %}
+    <div class="event-card {{ 'cancelled' if game.status == 'cancelled' else '' }}"
+         data-division="{{ game.league or '' }}"
+         data-field-id="{{ game.field_id or '' }}"
+         data-event-type="{{ event_type }}">
         <div class="event-header">
             <span class="event-date">{{ game.game_date.strftime('%a, %b %d') }}</span>
             <span class="event-time">{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</span>
@@ -179,7 +188,7 @@
             {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
             {% endif %}
             {% else %}
-            {% if game.game_type == 'scrimmage' %}
+            {% if game.is_scrimmage %}
             <span class="type-badge scrimmage">Scrimmage</span>
             {% elif game.game_type == 'playoff' %}
             <span class="type-badge playoff">Playoff</span>
@@ -501,5 +510,84 @@ function sortTable(sortKey, direction) {
         tbody.appendChild(row);
     });
 }
+
+// Client-side filtering
+function applyFilters() {
+    var leagueFilter = document.getElementById('league').value;
+    var fieldFilter = document.getElementById('field').value;
+    var eventTypeFilter = document.getElementById('event_type').value;
+
+    // Filter desktop table rows
+    var tableRows = document.querySelectorAll('#schedule-table tbody tr');
+    var visibleCount = 0;
+    tableRows.forEach(function(row) {
+        var rowLeague = row.dataset.division || '';
+        var rowFieldId = row.dataset.fieldId || '';
+        var rowEventType = row.dataset.eventType || '';
+
+        var show = true;
+        if (leagueFilter && rowLeague !== leagueFilter) show = false;
+        if (fieldFilter && rowFieldId !== fieldFilter) show = false;
+        if (eventTypeFilter && rowEventType !== eventTypeFilter) show = false;
+
+        row.style.display = show ? '' : 'none';
+        if (show) visibleCount++;
+    });
+
+    // Filter mobile cards
+    var cards = document.querySelectorAll('.mobile-cards .event-card');
+    cards.forEach(function(card) {
+        var cardLeague = card.dataset.division || '';
+        var cardFieldId = card.dataset.fieldId || '';
+        var cardEventType = card.dataset.eventType || '';
+
+        var show = true;
+        if (leagueFilter && cardLeague !== leagueFilter) show = false;
+        if (fieldFilter && cardFieldId !== fieldFilter) show = false;
+        if (eventTypeFilter && cardEventType !== eventTypeFilter) show = false;
+
+        card.style.display = show ? '' : 'none';
+    });
+
+    // Update event count
+    var countEl = document.getElementById('event-count');
+    if (countEl) {
+        countEl.textContent = visibleCount + ' event' + (visibleCount !== 1 ? 's' : '');
+    }
+
+    // Update URL for bookmarking (without reload)
+    var url = new URL(window.location.href);
+    if (leagueFilter) url.searchParams.set('league', leagueFilter);
+    else url.searchParams.delete('league');
+    if (fieldFilter) url.searchParams.set('field', fieldFilter);
+    else url.searchParams.delete('field');
+    if (eventTypeFilter) url.searchParams.set('event_type', eventTypeFilter);
+    else url.searchParams.delete('event_type');
+    history.replaceState(null, '', url.toString());
+}
+
+function resetFilters() {
+    document.getElementById('league').value = '';
+    document.getElementById('field').value = '';
+    document.getElementById('event_type').value = '';
+    applyFilters();
+}
+
+// Restore filters from URL on page load
+document.addEventListener('DOMContentLoaded', function() {
+    var url = new URL(window.location.href);
+    var league = url.searchParams.get('league');
+    var field = url.searchParams.get('field');
+    var eventType = url.searchParams.get('event_type');
+
+    if (league) document.getElementById('league').value = league;
+    if (field) document.getElementById('field').value = field;
+    if (eventType) document.getElementById('event_type').value = eventType;
+
+    // Apply filters if any are set
+    if (league || field || eventType) {
+        applyFilters();
+    }
+});
 </script>
 {% endblock %}

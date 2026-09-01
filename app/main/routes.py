@@ -956,13 +956,11 @@ def master_schedule():
     from app.utils.tracking import log_authenticated_view
     log_authenticated_view('master_schedule')
 
-    # Parse filters
+    # Parse filters - only date filters are server-side (controls data range)
+    # League, field, event_type filters are handled client-side via JS
     today = date.today()
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
-    league_filter = request.args.get('league', '')
-    field_filter = request.args.get('field', '')
-    event_type_filter = request.args.get('event_type', '')
     show_cancelled = request.args.get('show_cancelled') == '1'
 
     # Default start date to today
@@ -982,7 +980,7 @@ def master_schedule():
         except ValueError:
             pass
 
-    # Build query
+    # Build query - load all data for the date range, filter client-side
     query = Game.query.options(
         joinedload(Game.home_team),
         joinedload(Game.away_team),
@@ -1000,15 +998,6 @@ def master_schedule():
     if not show_cancelled:
         query = query.filter(Game.status != 'cancelled')
 
-    if league_filter:
-        query = query.filter(Game.league == league_filter)
-
-    if field_filter:
-        query = query.filter(Game.field_id == int(field_filter))
-
-    if event_type_filter:
-        query = query.filter(Game.game_type == event_type_filter)
-
     games = query.order_by(Game.game_date).all()
 
     # Get unique leagues and fields for filter dropdowns
@@ -1021,22 +1010,38 @@ def master_schedule():
     leagues = [l[0] for l in leagues if l[0]]
 
     # Get available event types for filter dropdown
-    event_types_raw = db.session.query(Game.game_type).filter(
-        Game.year == year,
-        Game.is_spring == is_spring,
-        Game.active == 1,
-        Game.game_type.isnot(None)
-    ).distinct().all()
-    event_types_raw = [e[0] for e in event_types_raw if e[0]]
+    # Game uses display_type property: 'regular', 'practice', 'scrimmage', 'playoff'
+    # We need to check both game_type and is_scrimmage fields
+    has_regular = db.session.query(Game.ID).filter(
+        Game.year == year, Game.is_spring == is_spring, Game.active == 1,
+        Game.game_type == 'regular', Game.is_scrimmage == 0
+    ).first() is not None
 
-    # Define display order and labels
-    event_type_labels = {
-        'game': 'Game',
-        'practice': 'Practice',
-        'scrimmage': 'Scrimmage',
-        'playoff': 'Playoff'
-    }
-    event_types = [(t, event_type_labels.get(t, t.title())) for t in ['game', 'practice', 'scrimmage', 'playoff'] if t in event_types_raw]
+    has_practice = db.session.query(Game.ID).filter(
+        Game.year == year, Game.is_spring == is_spring, Game.active == 1,
+        Game.game_type == 'practice'
+    ).first() is not None
+
+    has_scrimmage = db.session.query(Game.ID).filter(
+        Game.year == year, Game.is_spring == is_spring, Game.active == 1,
+        Game.is_scrimmage == 1
+    ).first() is not None
+
+    has_playoff = db.session.query(Game.ID).filter(
+        Game.year == year, Game.is_spring == is_spring, Game.active == 1,
+        Game.game_type == 'playoff'
+    ).first() is not None
+
+    # Build event types list with display labels
+    event_types = []
+    if has_regular:
+        event_types.append(('game', 'Game'))
+    if has_practice:
+        event_types.append(('practice', 'Practice'))
+    if has_scrimmage:
+        event_types.append(('scrimmage', 'Scrimmage'))
+    if has_playoff:
+        event_types.append(('playoff', 'Playoff'))
 
     fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
 
@@ -1077,9 +1082,6 @@ def master_schedule():
         event_types=event_types,
         start_date=start_date,
         end_date=end_date,
-        league_filter=league_filter,
-        field_filter=field_filter,
-        event_type_filter=event_type_filter,
         show_cancelled=show_cancelled,
         progress_pct=progress_pct,
         completed_events=completed_events,
