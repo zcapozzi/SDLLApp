@@ -62,12 +62,21 @@ def index():
             field_id = int(request.form.get('field_id'))
             field = Field.query.get(field_id)
             if field:
-                field_name = field.location_title  # Save before commit
-                field.active = 1
-                db.session.commit()
-                logger.info(f'Reactivated field: {field_name}')
-                flash(f'Reactivated field: {field_name}', 'success')
-                anchor = f'field-{field_id}'
+                field_name = field.location_title
+                # Check for existing active field with same name
+                existing = Field.query.filter(
+                    Field.location_title == field_name,
+                    Field.active == 1,
+                    Field.ID != field_id
+                ).first()
+                if existing:
+                    flash(f'Cannot reactivate: an active field named "{field_name}" already exists (ID {existing.ID})', 'error')
+                else:
+                    field.active = 1
+                    db.session.commit()
+                    logger.info(f'Reactivated field: {field_name}')
+                    flash(f'Reactivated field: {field_name}', 'success')
+                    anchor = f'field-{field_id}'
 
         elif action == 'toggle_ownership':
             field_id = int(request.form.get('field_id'))
