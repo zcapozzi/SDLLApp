@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+
+{% block title %}Master Schedule - {{ season_name }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <h1 style="margin: 0;">Master Schedule</h1>
+    <p style="color: var(--text-muted); margin: 5px 0 0 0;">{{ season_name }}</p>
+</div>
+
+{# Season Progress #}
+{% if progress_pct is not none and earliest_start and latest_end %}
+<div class="card" style="margin-bottom: 20px; padding: 15px 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span style="font-weight: 600;">Season Progress</span>
+        <span style="color: var(--text-muted); font-size: 14px;">
+            {% if days_remaining is not none %}
+                {% if days_remaining == 0 %}
+                    Season complete
+                {% elif days_remaining == 1 %}
+                    1 day remaining
+                {% else %}
+                    {{ days_remaining }} days remaining
+                {% endif %}
+            {% endif %}
+        </span>
+    </div>
+    <div style="background: #e0e0e0; border-radius: 10px; height: 12px; overflow: hidden;">
+        <div style="background: linear-gradient(90deg, #228B22, #32CD32); height: 100%; width: {{ progress_pct }}%; transition: width 0.3s;"></div>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; color: var(--text-muted);">
+        <span>{{ earliest_start.strftime('%b %d') }}</span>
+        <span style="font-weight: 600; color: var(--primary);">{{ progress_pct }}%</span>
+        <span>{{ latest_end.strftime('%b %d') }}</span>
+    </div>
+</div>
+{% endif %}
+
+{# Filters #}
+<div class="card" style="margin-bottom: 20px;">
+    <form method="GET" id="filter-form">
+        <div class="filter-row">
+            <div class="filter-group">
+                <label for="start_date">From</label>
+                <input type="date" id="start_date" name="start_date" class="form-control"
+                       value="{{ start_date.strftime('%Y-%m-%d') }}" onchange="this.form.submit()">
+            </div>
+            <div class="filter-group">
+                <label for="end_date">To <span class="optional">(optional)</span></label>
+                <input type="date" id="end_date" name="end_date" class="form-control"
+                       value="{{ end_date.strftime('%Y-%m-%d') if end_date else '' }}" onchange="this.form.submit()">
+            </div>
+            <div class="filter-group">
+                <label for="league">Division</label>
+                <select id="league" name="league" class="form-control" onchange="this.form.submit()">
+                    <option value="">All Divisions</option>
+                    {% for league in leagues %}
+                    <option value="{{ league }}" {{ 'selected' if league_filter == league else '' }}>{{ league }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="field">Field</label>
+                <select id="field" name="field" class="form-control" onchange="this.form.submit()">
+                    <option value="">All Fields</option>
+                    {% for field in fields %}
+                    <option value="{{ field.ID }}" {{ 'selected' if field_filter == field.ID|string else '' }}>{{ field.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; flex-wrap: wrap; gap: 10px;">
+            <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+                <input type="checkbox" name="show_cancelled" value="1" {{ 'checked' if show_cancelled else '' }} onchange="this.form.submit()">
+                <span>Show Cancelled Events</span>
+            </label>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <span style="color: var(--text-muted); font-size: 14px;">{{ total_games }} event{{ 's' if total_games != 1 else '' }}</span>
+                <a href="{{ url_for('main.master_schedule') }}" class="btn btn-outline btn-sm">Reset</a>
+            </div>
+        </div>
+    </form>
+</div>
+
+{# Schedule Table - Desktop #}
+<div class="card desktop-table">
+    {% if games %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Division</th>
+                <th>Matchup</th>
+                <th>Location</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in games %}
+            <tr class="{{ 'cancelled-row' if game.status == 'cancelled' else '' }}">
+                <td>{{ game.game_date.strftime('%a, %b %d') }}</td>
+                <td>{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</td>
+                <td>{{ game.league or '-' }}</td>
+                <td>
+                    {% if game.status == 'cancelled' %}
+                    <span class="cancelled-badge">Cancelled</span>
+                    {% endif %}
+                    {% if game.game_type == 'practice' %}
+                    <span class="type-badge practice">Practice</span>
+                    {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                    {% else %}
+                    {% if game.game_type == 'scrimmage' %}
+                    <span class="type-badge scrimmage">Scrimmage</span>
+                    {% elif game.game_type == 'playoff' %}
+                    <span class="type-badge playoff">Playoff</span>
+                    {% endif %}
+                    {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                    <span style="color: var(--text-muted);"> vs </span>
+                    {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                    {% endif %}
+                </td>
+                <td>{{ game.field_rel.name if game.field_rel else '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: var(--text-muted); padding: 40px;">
+        No events found for the selected filters.
+    </p>
+    {% endif %}
+</div>
+
+{# Schedule Cards - Mobile #}
+<div class="mobile-cards">
+    {% if games %}
+    {% for game in games %}
+    <div class="event-card {{ 'cancelled' if game.status == 'cancelled' else '' }}">
+        <div class="event-header">
+            <span class="event-date">{{ game.game_date.strftime('%a, %b %d') }}</span>
+            <span class="event-time">{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</span>
+        </div>
+        <div class="event-matchup">
+            {% if game.status == 'cancelled' %}
+            <span class="cancelled-badge">Cancelled</span>
+            {% endif %}
+            {% if game.game_type == 'practice' %}
+            <span class="type-badge practice">Practice</span>
+            {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+            {% else %}
+            {% if game.game_type == 'scrimmage' %}
+            <span class="type-badge scrimmage">Scrimmage</span>
+            {% elif game.game_type == 'playoff' %}
+            <span class="type-badge playoff">Playoff</span>
+            {% endif %}
+            {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+            <span style="color: var(--text-muted);"> vs </span>
+            {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+            {% endif %}
+        </div>
+        <div class="event-details">
+            <span class="event-division">{{ game.league or '-' }}</span>
+            <span class="event-location">{{ game.field_rel.name if game.field_rel else '-' }}</span>
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="card" style="text-align: center; color: var(--text-muted); padding: 40px;">
+        No events found for the selected filters.
+    </div>
+    {% endif %}
+</div>
+
+<style>
+/* Filter layout */
+.filter-row {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+.filter-group {
+    flex: 1;
+    min-width: 140px;
+}
+.filter-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+.filter-group .optional {
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
+/* Desktop table */
+.desktop-table {
+    display: block;
+}
+.desktop-table table {
+    margin: 0;
+}
+
+/* Mobile cards */
+.mobile-cards {
+    display: none;
+}
+.event-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 10px;
+}
+.event-card.cancelled {
+    opacity: 0.6;
+    background: #f9f9f9;
+}
+.event-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+.event-date {
+    font-weight: 600;
+}
+.event-time {
+    color: var(--text-muted);
+}
+.event-matchup {
+    font-size: 16px;
+    margin-bottom: 8px;
+}
+.event-details {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+/* Type badges */
+.type-badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-right: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+.type-badge.practice {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+.type-badge.scrimmage {
+    background: #f3e5f5;
+    color: #7b1fa2;
+}
+.type-badge.playoff {
+    background: #ffebee;
+    color: #c62828;
+}
+.cancelled-badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-right: 4px;
+    background: #eee;
+    color: #666;
+    text-decoration: line-through;
+}
+
+/* Cancelled row styling */
+.cancelled-row td {
+    color: #999;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .desktop-table {
+        display: none;
+    }
+    .mobile-cards {
+        display: block;
+    }
+    .filter-row {
+        flex-direction: column;
+        gap: 10px;
+    }
+    .filter-group {
+        min-width: 100%;
+    }
+}
+</style>
+{% endblock %}

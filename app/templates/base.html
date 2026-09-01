@@ -282,6 +282,12 @@
             </div>
             {% endif %}
 
+            {% if current_user.has_role('admin', 'BoardExec', 'BB_VP', 'SB_VP', 'scheduler', 'umpire_coordinator', 'treasurer', 'BBPlayerAgent', 'SBPlayerAgent', 'coaching_coordinator', 'facilities') %}
+            <div class="nav-item">
+                <a href="{{ url_for('main.master_schedule') }}" class="nav-link">Master Schedule</a>
+            </div>
+            {% endif %}
+
             {% if current_user.is_admin() or current_user.can_edit_schedule() %}
             <div class="nav-item">
                 <a href="#" class="nav-link">Admin ▾</a>

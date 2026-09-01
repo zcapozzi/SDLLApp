@@ -44,7 +44,8 @@ class User(UserMixin, db.Model):
     password_reset_expiry = db.Column(db.DateTime)
 
     # Valid roles - ordered by typical privilege level
-    ROLES = ['admin', 'scheduler', 'umpire_coordinator', 'treasurer',
+    ROLES = ['admin', 'BoardExec', 'BB_VP', 'SB_VP',
+             'scheduler', 'umpire_coordinator', 'treasurer',
              'BBPlayerAgent', 'SBPlayerAgent', 'coaching_coordinator',
              'facilities', 'fieldCaptain',
              'umpire', 'coach', 'parent', 'partner_contact', 'viewer']

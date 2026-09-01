@@ -47,16 +47,27 @@ def index():
             else:
                 flash('Field name is required', 'error')
 
-        elif action == 'delete_field':
+        elif action == 'deactivate_field':
             field_id = int(request.form.get('field_id'))
             field = Field.query.get(field_id)
             if field:
                 field_name = field.location_title  # Save before commit
                 field.active = 0
                 db.session.commit()
-                logger.info(f'Deleted field: {field_name}')
-                flash(f'Deleted field: {field_name}', 'success')
-                # Can't scroll to deleted item, just go to top of list
+                logger.info(f'Deactivated field: {field_name}')
+                flash(f'Deactivated field: {field_name}. It will no longer appear in dropdowns or calendars.', 'success')
+                # Can't scroll to deactivated item unless showing inactive
+
+        elif action == 'reactivate_field':
+            field_id = int(request.form.get('field_id'))
+            field = Field.query.get(field_id)
+            if field:
+                field_name = field.location_title  # Save before commit
+                field.active = 1
+                db.session.commit()
+                logger.info(f'Reactivated field: {field_name}')
+                flash(f'Reactivated field: {field_name}', 'success')
+                anchor = f'field-{field_id}'
 
         elif action == 'toggle_ownership':
             field_id = int(request.form.get('field_id'))
@@ -70,13 +81,23 @@ def index():
                 logger.info(f'Set {field_name} ownership to {status}')
                 anchor = f'field-{field_id}'
 
-        redirect_url = url_for('fields.index')
+        # Preserve show_inactive param in redirect
+        show_inactive = request.form.get('show_inactive') == '1'
+        redirect_url = url_for('fields.index', show_inactive='1' if show_inactive else None)
         if anchor:
             redirect_url += f'#{anchor}'
         return redirect(redirect_url)
 
-    fields = Field.get_all_active()
-    return render_template('fields/index.html', fields=fields)
+    # Check if showing inactive fields
+    show_inactive = request.args.get('show_inactive') == '1'
+
+    if show_inactive:
+        # Show all fields, ordered with active first
+        fields = Field.query.order_by(Field.active.desc(), Field.location_title).all()
+    else:
+        fields = Field.get_all_active()
+
+    return render_template('fields/index.html', fields=fields, show_inactive=show_inactive)
 
 
 @fields_bp.route('/allocations')

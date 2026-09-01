@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Master Schedule - {{ season_name }}{% endblock %}
+
+{% block content %}
+<div style="max-width: 500px; margin: 60px auto; text-align: center;">
+    <h1 style="margin-bottom: 10px;">Master Schedule</h1>
+    <p style="color: var(--text-muted); font-size: 18px; margin-bottom: 40px;">{{ season_name }}</p>
+
+    <div class="card" style="padding: 40px;">
+        <p style="margin-bottom: 30px;">
+            The Master Schedule is available to SDLL board members and coordinators.
+        </p>
+        <a href="{{ login_url }}" class="btn btn-primary" style="font-size: 16px; padding: 12px 30px;">
+            Log In to Continue
+        </a>
+        <p style="margin-top: 20px; font-size: 14px; color: var(--text-muted);">
+            <a href="{{ url_for('auth.forgot_password') }}">Forgot password?</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

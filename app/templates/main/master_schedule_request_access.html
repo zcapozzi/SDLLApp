@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Request Access - Master Schedule{% endblock %}
+
+{% block content %}
+<div style="max-width: 500px; margin: 60px auto; text-align: center;">
+    <h1 style="margin-bottom: 10px;">Master Schedule</h1>
+    <p style="color: var(--text-muted); font-size: 18px; margin-bottom: 40px;">{{ season_name }}</p>
+
+    <div class="card" style="padding: 40px;">
+        <div style="font-size: 48px; margin-bottom: 20px;">🔒</div>
+        <h3 style="margin-bottom: 15px;">Access Required</h3>
+        <p style="margin-bottom: 25px; color: var(--text-muted);">
+            The Master Schedule is available to board members and coordinators.
+        </p>
+        <p style="margin-bottom: 30px;">
+            If you believe you should have access, please contact the league administrator.
+        </p>
+        <a href="mailto:info@sdll.org?subject=Master%20Schedule%20Access%20Request&body=Hi%2C%0A%0AI%20would%20like%20to%20request%20access%20to%20the%20Master%20Schedule.%0A%0AMy%20role%3A%20%0A%0AThank%20you!" class="btn btn-primary">
+            Request Access
+        </a>
+        <p style="margin-top: 20px;">
+            <a href="{{ url_for('main.dashboard') }}">Return to Dashboard</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

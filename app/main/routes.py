@@ -895,3 +895,175 @@ def cron_digest_reminders():
             'status': 'error',
             'error': str(e)
         }), 500
+
+
+# ============================================================================
+# Master Schedule (Board View)
+# ============================================================================
+
+# Roles that can access the master schedule
+MASTER_SCHEDULE_ROLES = [
+    'admin', 'BoardExec', 'BB_VP', 'SB_VP',
+    'scheduler', 'umpire_coordinator', 'treasurer',
+    'BBPlayerAgent', 'SBPlayerAgent', 'coaching_coordinator',
+    'facilities'
+]
+
+
+@main_bp.route('/master-schedule')
+def master_schedule():
+    """
+    Master Schedule - board-level view of all games.
+
+    Access control:
+    - Not logged in: Landing page with login link
+    - Logged in, no permission: Request access page
+    - Logged in with permission: Full schedule view
+    """
+    from datetime import date, datetime
+    from sqlalchemy.orm import joinedload
+    from app.models.org_season import OrgSeason
+    from app.models.league_season import LeagueSeason
+    from app.models.field import Field
+
+    # Get current season info
+    current_season = OrgSeason.get_current_season()
+    if not current_season:
+        flash('No current season configured.', 'error')
+        return redirect(url_for('main.index'))
+
+    year = current_season.year
+    is_spring = current_season.is_spring
+    season_name = current_season.season_name
+
+    # Check authentication
+    if not current_user.is_authenticated:
+        login_url = url_for('auth.login', next=request.url)
+        return render_template(
+            'main/master_schedule_landing.html',
+            season_name=season_name,
+            login_url=login_url
+        )
+
+    # Check authorization
+    if not current_user.has_role(*MASTER_SCHEDULE_ROLES):
+        return render_template(
+            'main/master_schedule_request_access.html',
+            season_name=season_name
+        )
+
+    # Track page view
+    from app.utils.tracking import log_authenticated_view
+    log_authenticated_view('master_schedule')
+
+    # Parse filters
+    today = date.today()
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+    league_filter = request.args.get('league', '')
+    field_filter = request.args.get('field', '')
+    show_cancelled = request.args.get('show_cancelled') == '1'
+
+    # Default start date to today
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            start_date = today
+    else:
+        start_date = today
+
+    # End date is optional
+    end_date = None
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+
+    # Build query
+    query = Game.query.options(
+        joinedload(Game.home_team),
+        joinedload(Game.away_team),
+        joinedload(Game.field_rel)
+    ).filter(
+        Game.year == year,
+        Game.is_spring == is_spring,
+        Game.active == 1,
+        Game.game_date >= datetime.combine(start_date, datetime.min.time())
+    )
+
+    if end_date:
+        query = query.filter(Game.game_date <= datetime.combine(end_date, datetime.max.time()))
+
+    if not show_cancelled:
+        query = query.filter(Game.status != 'cancelled')
+
+    if league_filter:
+        query = query.filter(Game.league == league_filter)
+
+    if field_filter:
+        query = query.filter(Game.field_id == int(field_filter))
+
+    games = query.order_by(Game.game_date).all()
+
+    # Get unique leagues and fields for filter dropdowns
+    leagues = db.session.query(Game.league).filter(
+        Game.year == year,
+        Game.is_spring == is_spring,
+        Game.active == 1,
+        Game.league.isnot(None)
+    ).distinct().order_by(Game.league).all()
+    leagues = [l[0] for l in leagues if l[0]]
+
+    fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
+
+    # Calculate season progress
+    league_seasons = LeagueSeason.query.filter_by(year=year, is_spring=is_spring).all()
+
+    # Find earliest opening day and latest season end
+    earliest_start = None
+    latest_end = None
+    for ls in league_seasons:
+        if ls.opening_day_date:
+            if earliest_start is None or ls.opening_day_date < earliest_start:
+                earliest_start = ls.opening_day_date
+        if ls.season_end_date:
+            if latest_end is None or ls.season_end_date > latest_end:
+                latest_end = ls.season_end_date
+
+    # Calculate progress percentage
+    progress_pct = 0
+    days_remaining = None
+    if earliest_start and latest_end and earliest_start < latest_end:
+        total_days = (latest_end - earliest_start).days
+        if today < earliest_start:
+            progress_pct = 0
+            days_remaining = (latest_end - earliest_start).days
+        elif today > latest_end:
+            progress_pct = 100
+            days_remaining = 0
+        else:
+            elapsed = (today - earliest_start).days
+            progress_pct = min(100, max(0, int((elapsed / total_days) * 100)))
+            days_remaining = (latest_end - today).days
+
+    return render_template(
+        'main/master_schedule.html',
+        season_name=season_name,
+        year=year,
+        is_spring=is_spring,
+        games=games,
+        leagues=leagues,
+        fields=fields,
+        start_date=start_date,
+        end_date=end_date,
+        league_filter=league_filter,
+        field_filter=field_filter,
+        show_cancelled=show_cancelled,
+        progress_pct=progress_pct,
+        days_remaining=days_remaining,
+        earliest_start=earliest_start,
+        latest_end=latest_end,
+        total_games=len(games)
+    )

@@ -8,14 +8,24 @@ This document enumerates every capability available in the South Durham Little L
 |------|-------------|
 | `public` | No login required |
 | `authenticated` | Any logged-in user |
-| `coach` | Users with coach role (may have limited access to their own teams) |
-| `umpire` | Users with umpire role |
-| `umpire_coordinator` | Users who manage umpire assignments |
-| `scheduler` | Users who can edit schedules and league settings |
 | `admin` | Full administrative access |
+| `BoardExec` | President and President-elect |
+| `BB_VP` | Baseball Vice President (on-field operations leader) |
+| `SB_VP` | Softball Vice President (on-field operations leader) |
+| `scheduler` | Users who can edit schedules and league settings |
+| `umpire_coordinator` | Users who manage umpire assignments |
 | `treasurer` | Financial/pay-related access |
+| `BBPlayerAgent` | Baseball player agent (draft/player management) |
+| `SBPlayerAgent` | Softball player agent (draft/player management) |
+| `coaching_coordinator` | Coaching coordination functions |
 | `facilities` | Board member responsible for fields/structures |
 | `fieldCaptain` | Users responsible for specific fields |
+| `umpire` | Users with umpire role |
+| `coach` | Users with coach role (may have limited access to their own teams) |
+| `parent` | Parent/family member (minimal access) |
+| `partner_contact` | Contact for partner umpire organizations |
+| `viewer` | Default role - basic authenticated access |
+| `product_admin` | Site owner(s) with full analytics access (via PRODUCT_ADMIN_EMAILS env var) |
 
 Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` which supports pipe-delimited role strings.
 
@@ -74,6 +84,23 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
   - Switch between Spring/Fall seasons
   - Switch between years
 - **Navigation:** Season dropdown in top navigation
+
+### 2.3 Master Schedule (Board View)
+- **Access:** `admin`, `BoardExec`, `BB_VP`, `SB_VP`, `scheduler`, `umpire_coordinator`, `treasurer`, `BBPlayerAgent`, `SBPlayerAgent`, `coaching_coordinator`, `facilities`
+- **Path:** `/master-schedule`
+- **URL Args:** `?start_date=YYYY-MM-DD`, `?end_date=YYYY-MM-DD`, `?league=`, `?field=`, `?show_cancelled=1`
+- **Actions:**
+  - View all games/practices/scrimmages in current season
+  - Filter by date range (start date defaults to today)
+  - Filter by division (league)
+  - Filter by field
+  - Toggle cancelled events visibility
+  - View season progress indicator (% complete, days remaining)
+- **Access Control:**
+  - Not logged in: Landing page with login link
+  - Logged in without permission: Request access page
+  - Logged in with permission: Full schedule view
+- **Navigation:** "Master Schedule" link in top navigation (visible to authorized roles)
 
 ---
 
@@ -172,12 +199,14 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
 ### 4.1 Fields Index
 - **Access:** `scheduler`, `admin`
 - **Path:** `/fields/`
+- **URL Args:** `?show_inactive=1` to include inactive fields
 - **Actions:**
-  - View all fields (owned and away)
-  - See field properties (lights, irrigation, parking)
-  - Quick edit field details
+  - View all active fields (owned and away)
+  - See field properties (usage type, practice capacity)
+  - Toggle ownership (SDLL vs Away)
   - Add new field
-  - Deactivate/reactivate fields
+  - Deactivate fields (removes from calendars and dropdowns)
+  - Toggle "Show Inactive Fields" to view and reactivate deactivated fields
 - **Navigation:** Dashboard → "Fields" → "Manage Fields"
 
 ### 4.2 Add Field
@@ -471,7 +500,7 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
 ### 8.1b Umpire Calendar (Day View)
 - **Access:** `umpire_coordinator`, `scheduler`, `admin`
 - **Path:** `/umpires/<year>/<is_spring>/day/<date>` or `/umpires/<year>/<is_spring>/day?date=YYYY-MM-DD`
-- **URL Args:** `?date=YYYY-MM-DD` to jump to a specific date, `?league=` to filter
+- **URL Args:** `?date=YYYY-MM-DD` to jump to a specific date, `?league=` to filter, `?game=ID` to highlight specific game
 - **Actions:**
   - View all games for a single day with full details
   - Filter by league (client-side)
@@ -479,7 +508,7 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
   - Right-click to set umpire count override
   - Date picker to jump to any date
   - "Today" button for quick access
-- **Navigation:** Umpire Calendar → "Day View" button, or click day header in week view
+- **Navigation:** Umpire Calendar → "Day View" button, or click day header in week view, or via umpire assignment email links
 
 ### 8.2 Manage Umpires
 - **Access:** `umpire_coordinator`, `scheduler`, `admin`
@@ -696,10 +725,13 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
 ### 10.7 Partner Schedule (Umpire Orgs)
 - **Access:** `public` (with token)
 - **Path:** `/s/partner/<token>`
+- **URL Args:** `?changes_since=YYYY-MM-DD` to filter by recent changes
 - **Actions:**
   - View schedule designed for partner organizations
-  - Filter by league, field, date
+  - Filter by league, field, date (client-side)
+  - Filter by "changes since" date (server-side) - shows only games modified after specified date
   - See umpire requirements per game
+  - Displays banner showing count of changes when filter active
 - **Navigation:** Shared via URL from umpire coordinator
 
 ### 10.8 Record Game Start Time
@@ -948,6 +980,47 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
   - Does not remove the fieldCaptain role from user
 - **Navigation:** Field Captains → Click × next to captain name
 
+### 15.6 Field Schedules View
+- **Access:** `facilities`, `fieldCaptain`, `admin`
+- **Path:** `/facilities/field-schedules`
+- **Actions:**
+  - View games and practices scheduled at assigned fields
+  - Filter by date range (start date, optional end date)
+  - Filter by specific fields (client-side checkboxes)
+  - Toggle "Show Cancellations" to see cancelled games (hidden by default)
+  - Report field issues (sends email to scheduler + facilities coordinator)
+- **Navigation:** Facilities → "Field Schedules"
+
+### 15.7 Report Field Issue
+- **Access:** `facilities`, `fieldCaptain`, `admin`
+- **Path:** POST `/facilities/field-schedules/report-issue`
+- **Actions:**
+  - Submit field condition report (standing water, equipment damage, etc.)
+  - Sends email to both scheduling@sdll.org and facilities@sdll.org
+  - Includes reporter info and field details
+- **Navigation:** Field Schedules → "Report Issue" button on field card
+
+---
+
+## 16. Product Admin Analytics
+
+### 16.1 Analytics Dashboard
+- **Access:** `product_admin` (via PRODUCT_ADMIN_EMAILS environment variable)
+- **Path:** `/analytics/`
+- **Actions:**
+  - View usage analytics summary cards:
+    - Total page views (last 30 days) with % change vs prior period
+    - Unique sessions with % change
+    - Active authenticated users with % change
+    - Average time on page
+  - View daily traffic trend chart (7/30/90 day options)
+  - Filter by route/page type
+  - View top routes table with views, sessions, avg time
+  - View top authenticated users table
+  - View device breakdown (mobile/tablet/desktop)
+  - Product admin views are excluded from counts
+- **Navigation:** Direct URL access `/analytics/` (no menu link - product admin only)
+
 ---
 
 ## Quick Reference: Navigation Paths
@@ -969,7 +1042,10 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
 | League Settings | Scheduler+ | Dashboard → "Leagues" |
 | Facilities | Facilities/FieldCaptain | Dashboard → "Facilities" |
 | Field Captains | Facilities/Admin | Facilities → "Field Captains" |
+| Field Schedules | Facilities/FieldCaptain | Facilities → "Field Schedules" |
+| Master Schedule | Board/Coordinators | "Master Schedule" in top nav |
 | Managed Umpires | Ump Coord+ | Umpires → "Add Managed" |
+| Analytics Dashboard | Product Admin | Direct URL `/analytics/` |
 
 ---
 
@@ -992,10 +1068,15 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
 | View Reports | - | - | - | - | ✓ | - | - | ✓ |
 | Facilities Dashboard | - | - | - | - | - | ✓ | ✓ | ✓ |
 | Manage Field Captains | - | - | - | - | - | ✓ | - | ✓ |
+| View Field Schedules | - | - | - | - | - | ✓ | ✓ | ✓ |
+| Master Schedule | - | - | - | ✓ | ✓ | ✓ | - | ✓***** |
+| Analytics Dashboard | - | - | - | - | - | - | - | ✓**** |
 
 \* With valid token
 \** Landing page only
 \*** If coach in that division
+\**** Requires email in PRODUCT_ADMIN_EMAILS env var
+\***** Also available to BoardExec, BB_VP, SB_VP, BBPlayerAgent, SBPlayerAgent, coaching_coordinator, treasurer
 
 ---
 
@@ -1007,4 +1088,4 @@ When adding new routes or features:
 3. Update feature matrix if needed
 4. Update quick reference navigation paths
 
-Last updated: August 30, 2026
+Last updated: September 1, 2026

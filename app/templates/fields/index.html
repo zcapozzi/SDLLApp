@@ -14,7 +14,13 @@
 
 {% if current_user.can_edit_schedule() %}
 <div class="card" style="margin-bottom: 20px;">
-    <h3 style="margin-top: 0; margin-bottom: 15px;">Add Field</h3>
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
+        <h3 style="margin: 0;">Add Field</h3>
+        <label style="display: inline-flex; align-items: center; gap: 5px; cursor: pointer; user-select: none;">
+            <input type="checkbox" id="show-inactive" onchange="toggleInactiveFields()" {{ 'checked' if show_inactive else '' }}>
+            <span>Show Inactive Fields</span>
+        </label>
+    </div>
     <form method="POST" style="display: flex; gap: 10px; align-items: flex-end;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="add_field">
@@ -37,15 +43,21 @@
                 <th>Practice Capacity</th>
                 <th>Ownership</th>
                 {% if current_user.can_edit_schedule() %}
-                <th style="width: 80px;"></th>
+                <th>Status</th>
+                <th style="width: 100px;"></th>
                 {% endif %}
             </tr>
         </thead>
         <tbody>
             {% for field in fields %}
             {% if field %}
-            <tr id="field-{{ field.ID }}">
-                <td><strong>{{ field.location_title }}</strong></td>
+            <tr id="field-{{ field.ID }}" {% if not field.active %}class="inactive-row"{% endif %}>
+                <td>
+                    <strong>{{ field.location_title }}</strong>
+                    {% if not field.active %}
+                    <span style="color: #999; font-size: 12px; margin-left: 5px;">(inactive)</span>
+                    {% endif %}
+                </td>
                 <td>
                     <span class="text-small">{{ field.usage_type_display if field.usage_type else 'Games & Practices' }}</span>
                 </td>
@@ -53,11 +65,12 @@
                     <span class="text-small">{{ field.capacity_display if field.practice_capacity else '1 team' }}</span>
                 </td>
                 <td>
-                    {% if current_user.can_edit_schedule() %}
+                    {% if current_user.can_edit_schedule() and field.active %}
                     <form method="POST" style="display: inline;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="toggle_ownership">
                         <input type="hidden" name="field_id" value="{{ field.ID }}">
+                        <input type="hidden" name="show_inactive" value="{{ '1' if show_inactive else '0' }}">
                         <button type="submit" class="btn btn-sm" style="min-width: 70px; {{ 'background: rgb(34, 139, 34); color: white;' if field.is_owned else 'background: #eee; color: #666;' }}">
                             {{ 'SDLL' if field.is_owned else 'Away' }}
                         </button>
@@ -71,21 +84,39 @@
                     {% endif %}
                 </td>
                 {% if current_user.can_edit_schedule() %}
+                <td>
+                    {% if field.active %}
+                    <span style="color: rgb(34, 139, 34);">Active</span>
+                    {% else %}
+                    <span style="color: #999;">Inactive</span>
+                    {% endif %}
+                </td>
                 <td style="text-align: right;">
+                    {% if field.active %}
                     <form method="POST" style="display: inline;"
-                          onsubmit="return confirm('Delete {{ field.location_title }}?');">
+                          onsubmit="return confirm('Deactivate {{ field.location_title }}? It will no longer appear in calendars or dropdowns.');">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="action" value="delete_field">
+                        <input type="hidden" name="action" value="deactivate_field">
                         <input type="hidden" name="field_id" value="{{ field.ID }}">
-                        <button type="submit" class="btn btn-sm" style="background: #dc3545; color: white;">X</button>
+                        <input type="hidden" name="show_inactive" value="{{ '1' if show_inactive else '0' }}">
+                        <button type="submit" class="btn btn-sm btn-outline" style="color: #dc3545; border-color: #dc3545;">Deactivate</button>
                     </form>
+                    {% else %}
+                    <form method="POST" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="reactivate_field">
+                        <input type="hidden" name="field_id" value="{{ field.ID }}">
+                        <input type="hidden" name="show_inactive" value="1">
+                        <button type="submit" class="btn btn-sm btn-primary">Reactivate</button>
+                    </form>
+                    {% endif %}
                 </td>
                 {% endif %}
             </tr>
             {% endif %}
             {% else %}
             <tr>
-                <td colspan="{{ 5 if current_user.can_edit_schedule() else 4 }}" style="text-align: center; color: #666;">
+                <td colspan="{{ 6 if current_user.can_edit_schedule() else 4 }}" style="text-align: center; color: #666;">
                     No fields found.
                 </td>
             </tr>
@@ -93,4 +124,31 @@
         </tbody>
     </table>
 </div>
+
+<style>
+.inactive-row {
+    background: #f9f9f9;
+}
+.inactive-row td {
+    color: #999;
+}
+.inactive-row td strong {
+    color: #666;
+}
+</style>
+
+<script>
+function toggleInactiveFields() {
+    var showInactive = document.getElementById('show-inactive').checked;
+    var url = new URL(window.location.href);
+
+    if (showInactive) {
+        url.searchParams.set('show_inactive', '1');
+    } else {
+        url.searchParams.delete('show_inactive');
+    }
+
+    window.location.href = url.toString();
+}
+</script>
 {% endblock %}
