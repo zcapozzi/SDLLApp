@@ -163,57 +163,155 @@
     {% endif %}
 </div>
 
-{# Schedule Cards - Mobile #}
-<div class="mobile-cards">
+{# Mobile View - Cards and Compact Table #}
+<div class="mobile-section">
     {% if games %}
-    {% for game in games %}
-    {# Compute display type for filtering: game, practice, scrimmage, playoff #}
-    {% set event_type = 'practice' if game.game_type == 'practice' else ('scrimmage' if game.is_scrimmage else ('playoff' if game.game_type == 'playoff' else 'game')) %}
-    <div class="event-card {{ 'cancelled' if game.status == 'cancelled' else '' }}"
-         data-division="{{ game.league or '' }}"
-         data-field-id="{{ game.field_id or '' }}"
-         data-event-type="{{ event_type }}"
-         data-cancelled="{{ '1' if game.status == 'cancelled' else '0' }}">
-        <div class="event-header">
-            <span class="event-date">{{ game.game_date.strftime('%a, %b %d') }}</span>
-            <span class="event-time">{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</span>
-        </div>
-        <div class="event-matchup">
-            {% if game.status == 'cancelled' %}
-            <span class="cancelled-badge">Cancelled</span>
-            {% endif %}
-            {% if game.game_type == 'practice' %}
-            <span class="type-badge practice">Practice</span>
-            {% if game.home_team and game.home_team.schedule_token %}
-            <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
-            {% else %}
-            {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
-            {% endif %}
-            {% else %}
-            {% if game.is_scrimmage %}
-            <span class="type-badge scrimmage">Scrimmage</span>
-            {% elif game.game_type == 'playoff' %}
-            <span class="type-badge playoff">Playoff</span>
-            {% endif %}
-            {% if game.home_team and game.home_team.schedule_token %}
-            <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
-            {% else %}
-            {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
-            {% endif %}
-            <span style="color: var(--text-muted);"> vs </span>
-            {% if game.away_team and game.away_team.schedule_token %}
-            <a href="{{ url_for('public.team_schedule', token=game.away_team.schedule_token) }}" class="team-link">{{ game.away_team.computed_display_name }}</a>
-            {% else %}
-            {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
-            {% endif %}
-            {% endif %}
-        </div>
-        <div class="event-details">
-            <span class="event-division">{{ game.league or '-' }}</span>
-            <span class="event-location">{{ game.field_rel.name if game.field_rel else '-' }}</span>
-        </div>
+    {# View Toggle #}
+    <div class="mobile-view-toggle">
+        <button class="view-btn active" data-view="cards" onclick="setMobileView('cards')">Cards</button>
+        <button class="view-btn" data-view="table" onclick="setMobileView('table')">Table</button>
     </div>
-    {% endfor %}
+
+    {# Cards View #}
+    <div class="mobile-cards" id="mobile-cards-view">
+        {% for game in games %}
+        {# Compute display type for filtering: game, practice, scrimmage, playoff #}
+        {% set event_type = 'practice' if game.game_type == 'practice' else ('scrimmage' if game.is_scrimmage else ('playoff' if game.game_type == 'playoff' else 'game')) %}
+        <div class="event-card {{ 'cancelled' if game.status == 'cancelled' else '' }}"
+             data-division="{{ game.league or '' }}"
+             data-field-id="{{ game.field_id or '' }}"
+             data-event-type="{{ event_type }}"
+             data-cancelled="{{ '1' if game.status == 'cancelled' else '0' }}">
+            <div class="event-header">
+                <span class="event-date">{{ game.game_date.strftime('%a, %b %d') }}</span>
+                <span class="event-time">{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</span>
+            </div>
+            <div class="event-matchup">
+                {% if game.status == 'cancelled' %}
+                <span class="cancelled-badge">Cancelled</span>
+                {% endif %}
+                {% if game.game_type == 'practice' %}
+                <span class="type-badge practice">Practice</span>
+                {% if game.home_team and game.home_team.schedule_token %}
+                <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
+                {% else %}
+                {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                {% endif %}
+                {% else %}
+                {% if game.is_scrimmage %}
+                <span class="type-badge scrimmage">Scrimmage</span>
+                {% elif game.game_type == 'playoff' %}
+                <span class="type-badge playoff">Playoff</span>
+                {% endif %}
+                {% if game.home_team and game.home_team.schedule_token %}
+                <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
+                {% else %}
+                {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                {% endif %}
+                <span style="color: var(--text-muted);"> vs </span>
+                {% if game.away_team and game.away_team.schedule_token %}
+                <a href="{{ url_for('public.team_schedule', token=game.away_team.schedule_token) }}" class="team-link">{{ game.away_team.computed_display_name }}</a>
+                {% else %}
+                {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                {% endif %}
+                {% endif %}
+            </div>
+            <div class="event-details">
+                <span class="event-division">{{ game.league or '-' }}</span>
+                <span class="event-location">{{ game.field_rel.name if game.field_rel else '-' }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {# Compact Table View #}
+    <div class="mobile-table" id="mobile-table-view" style="display: none;">
+        <table class="compact-table">
+            <thead>
+                <tr>
+                    <th>Date/Time</th>
+                    <th>Event</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for game in games %}
+                {% set event_type = 'practice' if game.game_type == 'practice' else ('scrimmage' if game.is_scrimmage else ('playoff' if game.game_type == 'playoff' else 'game')) %}
+                <tr class="compact-row {{ 'cancelled-row' if game.status == 'cancelled' else '' }}"
+                    data-division="{{ game.league or '' }}"
+                    data-field-id="{{ game.field_id or '' }}"
+                    data-event-type="{{ event_type }}"
+                    data-cancelled="{{ '1' if game.status == 'cancelled' else '0' }}"
+                    onclick="toggleRowExpand(this)">
+                    <td class="compact-date">
+                        <div>{{ game.game_date.strftime('%b %d') }}</div>
+                        <div class="compact-time">{{ game.game_date.strftime('%I:%M%p').lstrip('0').lower() }}</div>
+                    </td>
+                    <td class="compact-event">
+                        {% if game.status == 'cancelled' %}<span class="cancelled-badge-sm">X</span>{% endif %}
+                        {% if event_type == 'practice' %}<span class="type-dot practice"></span>
+                        {% elif event_type == 'scrimmage' %}<span class="type-dot scrimmage"></span>
+                        {% elif event_type == 'playoff' %}<span class="type-dot playoff"></span>
+                        {% endif %}
+                        {% if game.game_type == 'practice' %}
+                            {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                        {% else %}
+                            {{ (game.home_team.computed_display_name if game.home_team else 'TBD')[:12] }}{% if game.home_team and game.home_team.computed_display_name|length > 12 %}..{% endif %}
+                            <span style="color:#999">v</span>
+                            {{ (game.away_team.computed_display_name if game.away_team else 'TBD')[:12] }}{% if game.away_team and game.away_team.computed_display_name|length > 12 %}..{% endif %}
+                        {% endif %}
+                    </td>
+                    <td class="compact-expand">▼</td>
+                </tr>
+                <tr class="expand-row" style="display: none;">
+                    <td colspan="3">
+                        <div class="expand-content">
+                            <div class="expand-detail">
+                                <strong>{{ game.game_date.strftime('%A, %B %d') }} at {{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</strong>
+                            </div>
+                            <div class="expand-detail">
+                                {% if game.game_type == 'practice' %}
+                                <span class="type-badge practice">Practice</span>
+                                {% if game.home_team and game.home_team.schedule_token %}
+                                <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
+                                {% else %}
+                                {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                                {% endif %}
+                                {% else %}
+                                {% if game.is_scrimmage %}<span class="type-badge scrimmage">Scrimmage</span>
+                                {% elif game.game_type == 'playoff' %}<span class="type-badge playoff">Playoff</span>
+                                {% endif %}
+                                {% if game.home_team and game.home_team.schedule_token %}
+                                <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
+                                {% else %}
+                                {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                                {% endif %}
+                                <span style="color: var(--text-muted);"> vs </span>
+                                {% if game.away_team and game.away_team.schedule_token %}
+                                <a href="{{ url_for('public.team_schedule', token=game.away_team.schedule_token) }}" class="team-link">{{ game.away_team.computed_display_name }}</a>
+                                {% else %}
+                                {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                                {% endif %}
+                                {% endif %}
+                            </div>
+                            <div class="expand-detail">
+                                <span class="expand-label">Division:</span> {{ game.league or '-' }}
+                            </div>
+                            <div class="expand-detail">
+                                <span class="expand-label">Field:</span> {{ game.field_rel.name if game.field_rel else '-' }}
+                            </div>
+                            {% if game.status == 'cancelled' %}
+                            <div class="expand-detail" style="color: #c33;">
+                                <strong>CANCELLED</strong>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
     {% else %}
     <div class="card" style="text-align: center; color: var(--text-muted); padding: 40px;">
         No events found for the selected filters.
@@ -429,10 +527,147 @@
     color: var(--primary);
 }
 
+/* Mobile section - hidden by default */
+.mobile-section {
+    display: none;
+}
+
+/* Mobile view toggle */
+.mobile-view-toggle {
+    display: flex;
+    background: #f0f0f0;
+    border-radius: 6px;
+    padding: 3px;
+    margin-bottom: 12px;
+}
+.view-btn {
+    flex: 1;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 500;
+    color: #666;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+.view-btn.active {
+    background: white;
+    color: #333;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Compact table for mobile */
+.mobile-table {
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #e0e0e0;
+}
+.compact-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.compact-table th {
+    background: #f8f8f8;
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #666;
+    border-bottom: 1px solid #e0e0e0;
+}
+.compact-row {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.compact-row:hover {
+    background: #f8f8f8;
+}
+.compact-row td {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    vertical-align: top;
+}
+.compact-date {
+    white-space: nowrap;
+    width: 60px;
+}
+.compact-time {
+    font-size: 11px;
+    color: #888;
+}
+.compact-event {
+    line-height: 1.4;
+}
+.compact-expand {
+    width: 20px;
+    text-align: center;
+    color: #ccc;
+    font-size: 10px;
+    transition: transform 0.2s;
+}
+.compact-row.expanded .compact-expand {
+    transform: rotate(180deg);
+}
+
+/* Type indicators for compact view */
+.type-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+    vertical-align: middle;
+}
+.type-dot.practice { background: #1976d2; }
+.type-dot.scrimmage { background: #7b1fa2; }
+.type-dot.playoff { background: #c62828; }
+.cancelled-badge-sm {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    background: #eee;
+    color: #999;
+    font-size: 9px;
+    font-weight: bold;
+    text-align: center;
+    line-height: 14px;
+    border-radius: 3px;
+    margin-right: 4px;
+}
+
+/* Expandable row content */
+.expand-row td {
+    padding: 0;
+    border-bottom: 1px solid #e0e0e0;
+}
+.expand-content {
+    background: #f8f9fa;
+    padding: 12px 15px;
+}
+.expand-detail {
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+.expand-detail:last-child {
+    margin-bottom: 0;
+}
+.expand-label {
+    color: #888;
+    font-size: 12px;
+}
+
 /* Mobile responsiveness */
 @media (max-width: 768px) {
     .desktop-table {
         display: none;
+    }
+    .mobile-section {
+        display: block;
     }
     .mobile-cards {
         display: block;
@@ -463,6 +698,38 @@ function toggleProgress() {
     } else {
         expanded.classList.add('show');
         toggle.textContent = '-';
+    }
+}
+
+// Mobile view toggle
+function setMobileView(view) {
+    var cardsView = document.getElementById('mobile-cards-view');
+    var tableView = document.getElementById('mobile-table-view');
+    var buttons = document.querySelectorAll('.view-btn');
+
+    buttons.forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.view === view);
+    });
+
+    if (view === 'cards') {
+        cardsView.style.display = 'block';
+        tableView.style.display = 'none';
+    } else {
+        cardsView.style.display = 'none';
+        tableView.style.display = 'block';
+    }
+
+    // Save preference
+    localStorage.setItem('masterScheduleMobileView', view);
+}
+
+// Toggle row expansion in compact table
+function toggleRowExpand(row) {
+    var expandRow = row.nextElementSibling;
+    if (expandRow && expandRow.classList.contains('expand-row')) {
+        var isExpanded = expandRow.style.display !== 'none';
+        expandRow.style.display = isExpanded ? 'none' : 'table-row';
+        row.classList.toggle('expanded', !isExpanded);
     }
 }
 
@@ -556,6 +823,29 @@ function applyFilters() {
         card.style.display = show ? '' : 'none';
     });
 
+    // Filter mobile compact table rows
+    var compactRows = document.querySelectorAll('.compact-row');
+    compactRows.forEach(function(row) {
+        var rowLeague = row.dataset.division || '';
+        var rowFieldId = row.dataset.fieldId || '';
+        var rowEventType = row.dataset.eventType || '';
+        var rowCancelled = row.dataset.cancelled === '1';
+
+        var show = true;
+        if (leagueFilter && rowLeague !== leagueFilter) show = false;
+        if (fieldFilter && rowFieldId !== fieldFilter) show = false;
+        if (eventTypeFilter && rowEventType !== eventTypeFilter) show = false;
+        if (rowCancelled && !showCancelled) show = false;
+
+        row.style.display = show ? '' : 'none';
+        // Also hide the expand row
+        var expandRow = row.nextElementSibling;
+        if (expandRow && expandRow.classList.contains('expand-row')) {
+            expandRow.style.display = 'none';
+            row.classList.remove('expanded');
+        }
+    });
+
     // Update event count
     var countEl = document.getElementById('event-count');
     if (countEl) {
@@ -595,6 +885,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (field) document.getElementById('field').value = field;
     if (eventType) document.getElementById('event_type').value = eventType;
     document.getElementById('show_cancelled').checked = showCancelled;
+
+    // Restore mobile view preference
+    var savedView = localStorage.getItem('masterScheduleMobileView');
+    if (savedView === 'table') {
+        setMobileView('table');
+    }
 
     // Always apply filters on load to hide cancelled by default
     applyFilters();
