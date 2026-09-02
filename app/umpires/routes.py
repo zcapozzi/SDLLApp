@@ -814,6 +814,81 @@ def schedule():
 
 
 # =============================================================================
+# Missing Umpire - Quick lookup for field calls
+# =============================================================================
+
+@umpires_bp.route('/missing-umpire')
+@umpires_bp.route('/missing-umpire/<date_str>')
+@login_required
+@umpire_coordinator_required
+def missing_umpire(date_str=None):
+    """Quick lookup page for when a field reports a missing umpire.
+
+    Shows all games for a given day with umpire source info and
+    quick copy-to-clipboard for contacting the responsible organization.
+    """
+    from sqlalchemy.orm import joinedload
+    from app.models.partner_contact import PartnerContact
+
+    # Parse date (default to today)
+    if date_str:
+        try:
+            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            target_date = date.today()
+    else:
+        target_date = date.today()
+
+    # Get all games for this date
+    start_of_day = datetime.combine(target_date, datetime.min.time())
+    end_of_day = datetime.combine(target_date, datetime.max.time())
+
+    games = Game.query.options(
+        joinedload(Game.home_team),
+        joinedload(Game.away_team),
+        joinedload(Game.field_rel)
+    ).filter(
+        Game.game_date >= start_of_day,
+        Game.game_date <= end_of_day,
+        Game.active == 1,
+        Game.status != 'cancelled'
+    ).order_by(Game.game_date).all()
+
+    # Get all partners for lookup
+    partners = {p.short_code: p for p in UmpirePartner.query.filter_by(active=True).all()}
+
+    # Get primary contacts for each partner
+    partner_contacts = {}
+    for code, partner in partners.items():
+        primary = PartnerContact.query.filter_by(
+            partner_id=partner.id,
+            active=True,
+            is_primary=True
+        ).first()
+        if not primary:
+            # Fall back to any active contact
+            primary = PartnerContact.query.filter_by(
+                partner_id=partner.id,
+                active=True
+            ).first()
+        partner_contacts[code] = primary
+
+    # Get unique values for filters
+    fields = sorted(set(g.field_rel.name for g in games if g.field_rel))
+    leagues = sorted(set(g.league for g in games if g.league))
+
+    return render_template(
+        'umpires/missing_umpire.html',
+        games=games,
+        target_date=target_date,
+        partners=partners,
+        partner_contacts=partner_contacts,
+        fields=fields,
+        leagues=leagues
+    )
+
+
+# =============================================================================
 # Delegation Report - Costs by Partner and League
 # =============================================================================
 

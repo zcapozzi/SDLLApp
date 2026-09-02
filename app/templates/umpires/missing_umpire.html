@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Missing Umpire Lookup{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <h1 style="margin: 0;">Missing Umpire Lookup</h1>
+    <p style="color: var(--text-muted); margin: 5px 0 0 0;">Find game details and contact the responsible umpire organization</p>
+</div>
+
+{# Date selector #}
+<div class="card" style="margin-bottom: 20px;">
+    <form method="GET" action="{{ url_for('umpires.missing_umpire') }}" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+        <div class="filter-group">
+            <label for="date">Date</label>
+            <input type="date" id="date" name="date" class="form-control"
+                   value="{{ target_date.strftime('%Y-%m-%d') }}" onchange="this.form.action = '/umpires/missing-umpire/' + this.value; this.form.submit();">
+        </div>
+        <div class="filter-group">
+            <label for="field_filter">Field</label>
+            <select id="field_filter" class="form-control" onchange="applyFilters()">
+                <option value="">All Fields</option>
+                {% for field in fields %}
+                <option value="{{ field }}">{{ field }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="league_filter">Division</label>
+            <select id="league_filter" class="form-control" onchange="applyFilters()">
+                <option value="">All Divisions</option>
+                {% for league in leagues %}
+                <option value="{{ league }}">{{ league }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="color: var(--text-muted); font-size: 14px;">
+            <span id="game-count">{{ games|length }}</span> game(s)
+        </div>
+    </form>
+</div>
+
+{# Games list #}
+<div class="card">
+    {% if games %}
+    <table id="games-table">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Field</th>
+                <th>Division</th>
+                <th>Matchup</th>
+                <th>Umpire Source</th>
+                <th>Contact</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in games %}
+            {% set partner_code = game.umpire_override or 'SDL' %}
+            {% set partner = partners.get(partner_code) %}
+            {% set contact = partner_contacts.get(partner_code) %}
+            <tr data-field="{{ game.field_rel.name if game.field_rel else '' }}"
+                data-league="{{ game.league or '' }}">
+                <td>{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</td>
+                <td>{{ game.field_rel.name if game.field_rel else '-' }}</td>
+                <td>{{ game.league or '-' }}</td>
+                <td>
+                    {% if game.game_type == 'practice' %}
+                    <span class="type-badge practice">Practice</span>
+                    {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                    {% else %}
+                    {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                    <span style="color: var(--text-muted);"> vs </span>
+                    {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if partner %}
+                    <span class="partner-badge {{ partner_code|lower }}">{{ partner.name }}</span>
+                    {% else %}
+                    <span class="partner-badge unknown">Unknown</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if contact %}
+                    <div class="contact-actions">
+                        <button class="btn btn-sm btn-outline" onclick="copyText('{{ contact.display_name }}', '{{ contact.phone or '' }}', '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}')" title="Copy text message">
+                            SMS
+                        </button>
+                        <button class="btn btn-sm btn-outline" onclick="copyEmail('{{ contact.email }}', '{{ contact.display_name }}', '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}')" title="Copy email">
+                            Email
+                        </button>
+                        {% if contact.phone %}
+                        <a href="tel:{{ contact.phone }}" class="btn btn-sm btn-outline" title="Call">
+                            Call
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <span style="color: var(--text-muted);">No contact</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: var(--text-muted); padding: 40px;">
+        No games scheduled for {{ target_date.strftime('%A, %B %d, %Y') }}.
+    </p>
+    {% endif %}
+</div>
+
+{# Toast for copy confirmation #}
+<div id="copy-toast" class="copy-toast">Copied to clipboard!</div>
+
+<style>
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.filter-group label {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.partner-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.partner-badge.sdl { background: #e3f2fd; color: #1565c0; }
+.partner-badge.dia { background: #fff3e0; color: #e65100; }
+.partner-badge.dyn { background: #f3e5f5; color: #7b1fa2; }
+.partner-badge.unknown { background: #eee; color: #666; }
+
+.type-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    margin-right: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+.type-badge.practice { background: #e3f2fd; color: #1976d2; }
+
+.contact-actions {
+    display: flex;
+    gap: 6px;
+}
+.contact-actions .btn {
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+.copy-toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 6px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 1000;
+}
+.copy-toast.show {
+    opacity: 1;
+}
+
+@media (max-width: 768px) {
+    table {
+        font-size: 13px;
+    }
+    .contact-actions {
+        flex-direction: column;
+        gap: 4px;
+    }
+}
+</style>
+
+<script>
+function applyFilters() {
+    var fieldFilter = document.getElementById('field_filter').value;
+    var leagueFilter = document.getElementById('league_filter').value;
+    var rows = document.querySelectorAll('#games-table tbody tr');
+    var visibleCount = 0;
+
+    rows.forEach(function(row) {
+        var rowField = row.dataset.field || '';
+        var rowLeague = row.dataset.league || '';
+        var show = true;
+
+        if (fieldFilter && rowField !== fieldFilter) show = false;
+        if (leagueFilter && rowLeague !== leagueFilter) show = false;
+
+        row.style.display = show ? '' : 'none';
+        if (show) visibleCount++;
+    });
+
+    document.getElementById('game-count').textContent = visibleCount;
+}
+
+function showToast(message) {
+    var toast = document.getElementById('copy-toast');
+    toast.textContent = message || 'Copied to clipboard!';
+    toast.classList.add('show');
+    setTimeout(function() {
+        toast.classList.remove('show');
+    }, 2000);
+}
+
+function copyText(contactName, phone, field, time, league) {
+    var message = 'Hi ' + contactName + ', this is SDLL. We have a report of a missing umpire at ' + field + ' for the ' + time + ' ' + league + ' game. Can you check on this? Thanks!';
+    navigator.clipboard.writeText(message).then(function() {
+        showToast('Text message copied!');
+    });
+}
+
+function copyEmail(email, contactName, field, time, league) {
+    var subject = 'Missing Umpire - ' + field + ' ' + time;
+    var body = 'Hi ' + contactName + ',\n\nWe have a report of a missing umpire at ' + field + ' for the ' + time + ' ' + league + ' game.\n\nCan you please check on this and let us know the status?\n\nThank you,\nSDLL';
+
+    // Copy the email body
+    navigator.clipboard.writeText(body).then(function() {
+        showToast('Email body copied! Opening email...');
+        // Also open mailto link
+        window.location.href = 'mailto:' + email + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+    });
+}
+</script>
+{% endblock %}
