@@ -1,9 +1,28 @@
 import os
+import sys
 import json
 from datetime import timedelta
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 project_root = os.path.dirname(basedir)
+
+
+def is_running_on_railway():
+    """Detect if we're running on Railway production environment.
+
+    Railway sets specific environment variables that won't be present locally.
+    """
+    # Railway always sets RAILWAY_ENVIRONMENT in production
+    if os.environ.get('RAILWAY_ENVIRONMENT'):
+        return True
+    # Also check for Railway's internal variables
+    if os.environ.get('RAILWAY_PROJECT_ID'):
+        return True
+    # Check if MYSQL_URL points to Railway's proxy
+    mysql_url = os.environ.get('MYSQL_URL', '')
+    if 'rlwy.net' in mysql_url or 'railway' in mysql_url.lower():
+        return True
+    return False
 
 
 def load_secrets():
@@ -47,22 +66,43 @@ class Config:
         return default
 
 
+def _get_local_database_uri():
+    """Build local database URI, ignoring any Railway env vars.
+
+    Reads from .env file values only (MYSQL_HOST, MYSQL_USER, etc.)
+    and explicitly ignores MYSQL_URL to prevent accidentally
+    connecting to production.
+    """
+    # Load from .env - these should be local values
+    from dotenv import dotenv_values
+    env_path = os.path.join(project_root, '.env')
+    env_values = dotenv_values(env_path) if os.path.exists(env_path) else {}
+
+    # Use .env values, fall back to safe local defaults
+    host = env_values.get('MYSQL_HOST', 'localhost')
+    user = env_values.get('MYSQL_USER', 'root')
+    password = env_values.get('MYSQL_PASSWORD', '')
+    database = env_values.get('MYSQL_DB', 'railway_replica')
+
+    # Safety check: never connect to Railway in development
+    if 'rlwy.net' in host or 'railway' in host.lower():
+        print(f"WARNING: .env MYSQL_HOST points to Railway ({host}). Using localhost instead.", file=sys.stderr)
+        host = 'localhost'
+
+    uri = f"mysql+pymysql://{user}:{password}@{host}/{database}"
+    print(f"[DEV CONFIG] Database: {user}@{host}/{database}", file=sys.stderr)
+    return uri
+
+
 class DevelopmentConfig(Config):
-    """Development configuration"""
+    """Development configuration - always uses local database."""
     DEBUG = True
 
     # Server-side session file directory
     SESSION_FILE_DIR = os.path.join(project_root, 'flask_session')
 
-    # MySQL connection - local development
-    MYSQL_HOST = os.environ.get('MYSQL_HOST', 'localhost')
-    MYSQL_USER = os.environ.get('MYSQL_USER', 'root')
-    MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD', '')
-    MYSQL_DB = os.environ.get('MYSQL_DB', 'sdll')
-
-    SQLALCHEMY_DATABASE_URI = (
-        f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}/{MYSQL_DB}"
-    )
+    # Use local database URI (reads directly from .env, ignores system env vars)
+    SQLALCHEMY_DATABASE_URI = _get_local_database_uri()
 
 
 class TestingConfig(Config):
