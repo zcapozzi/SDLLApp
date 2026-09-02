@@ -531,26 +531,7 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
   - Send assignment notifications
 - **Navigation:** Umpire Calendar → Click game → "Assign"
 
-### 8.4 Umpire Pay Management
-- **Access:** `umpire_coordinator`, `treasurer`, `admin`
-- **Path:** `/umpires/pay`
-- **Actions:**
-  - View games worked by umpires
-  - See pay amounts per game
-  - Mark games as paid
-  - Export pay reports
-- **Navigation:** Umpires → "Pay Management"
-
-### 8.5 Umpire Availability Report
-- **Access:** `umpire_coordinator`, `scheduler`, `admin`
-- **Path:** `/umpires/availability`
-- **Actions:**
-  - View umpire availability by date
-  - See patterns (e.g., who works Saturdays)
-  - Identify scheduling gaps
-- **Navigation:** Umpires → "Availability Report"
-
-### 8.6 Partner Schedule Management
+### 8.4 Partner Schedule Management
 - **Access:** `umpire_coordinator`, `scheduler`, `admin`
 - **Path:** `/umpires/partners`
 - **Actions:**
@@ -559,7 +540,7 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
   - Copy schedule URLs
 - **Navigation:** Umpires → "Partner Schedules"
 
-### 8.7 Add Managed Umpire
+### 8.5 Add Managed Umpire
 - **Access:** `umpire_coordinator`, `admin`
 - **Path:** `/umpires/add-managed`
 - **Actions:**
@@ -570,7 +551,7 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
   - Specify guardian relationship (parent, guardian, other)
 - **Navigation:** Umpires → "Add Managed"
 
-### 8.8 Hive Off Managed Umpire
+### 8.6 Hive Off Managed Umpire
 - **Access:** `umpire_coordinator`, `admin`
 - **Path:** `/umpires/<id>/hive-off`
 - **Actions:**
@@ -580,7 +561,7 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
   - Option to send welcome email with password setup
 - **Navigation:** Umpire Profile → "Create Independent Account"
 
-### 8.9 Umpire Guardian Management
+### 8.7 Umpire Guardian Management
 - **Access:** `umpire_coordinator`, `admin`
 - **Path:** Via umpire edit page
 - **Actions:**
@@ -588,6 +569,85 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
   - Parents can manage multiple children's umpire profiles
   - Switch between managed profiles in umpire portal
 - **Navigation:** Umpire Profile → Edit → Guardian section
+
+### 8.8 Assignr Integration Dashboard
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** `/umpires/assignr/`
+- **URL Args:** `?start=YYYY-MM-DD`, `?end=YYYY-MM-DD`
+- **Actions:**
+  - View games from Assignr API with umpire assignments
+  - See summary stats (total games, assigned, unassigned, active umpires)
+  - View games by league breakdown
+  - View top umpires with game counts
+  - Urgent games section (within 2 weeks, need umpires, unassigned)
+  - Set umpire source (SDL, DIA, DYN) directly from page
+  - Set umpire count override
+  - Games linked to local database highlighted
+- **Navigation:** Dashboard → "Umpires" → "Assignr"
+
+### 8.9 Assignr Games List
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** `/umpires/assignr/games`
+- **URL Args:** `?start=YYYY-MM-DD`, `?end=YYYY-MM-DD`, `?league=`
+- **Actions:**
+  - View all Assignr games in date range
+  - Filter by league (client-side)
+  - Filter by assignment status (assigned/unassigned)
+  - See accepted umpire names from Assignr
+  - Set umpire source and count directly
+  - Red highlighting for games needing umpires but unassigned
+  - Link to local game edit page for synced games
+- **Navigation:** Assignr Dashboard → "View All Games"
+
+### 8.10 Assignr Sync Status
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** `/umpires/assignr/sync-status`
+- **Actions:**
+  - See which games are synced between Assignr and local database
+  - Identify games in Assignr but not linked locally
+  - Identify local games not in Assignr
+  - Troubleshoot sync issues
+- **Navigation:** Assignr Dashboard → "Sync Status"
+
+### 8.11 Missing Umpire Lookup
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** `/umpires/missing-umpire` or `/umpires/missing-umpire/<date>`
+- **Actions:**
+  - Quick lookup for when a field reports missing umpire
+  - See all games for a given day
+  - View umpire source assignment for each game
+  - One-click copy of partner contact info for SMS
+  - Filter by field and league (client-side)
+  - Mobile-friendly with expandable rows
+  - Red highlighting for games needing umpires
+- **Navigation:** Dashboard → "Umpires" → "Missing Umpire"
+
+### 8.12 Delegation Rules
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** `/umpires/delegation`
+- **Actions:**
+  - Set rules for automatic umpire partner assignment
+  - Configure percentage allocations per partner per league
+  - Set priority order for partners
+- **Navigation:** Dashboard → "Umpires" → "Delegation Rules"
+
+### 8.13 Delegation Report
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** `/umpires/delegation/report`
+- **Actions:**
+  - View game counts by partner and league
+  - See cost estimates based on umpire counts
+  - Track actual vs. allocated assignments
+- **Navigation:** Dashboard → "Umpires" → "Delegation Report"
+
+### 8.14 Weekly Digests
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** `/umpires/<year>/<is_spring>/digests`
+- **Actions:**
+  - View weekly digest emails for umpire partners
+  - Preview digest content before sending
+  - Send weekly assignment summaries
+- **Navigation:** Dashboard → "Umpires" → "Weekly Digests"
 
 ---
 
