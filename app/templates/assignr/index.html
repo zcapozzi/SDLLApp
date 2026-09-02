@@ -1,0 +1,486 @@
+{% extends "base.html" %}
+
+{% block title %}Assignr Dashboard{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <h1 style="margin: 0;">Assignr Dashboard</h1>
+    <p style="color: var(--text-muted); margin: 5px 0 0 0;">View games and umpire assignments from Assignr</p>
+</div>
+
+{# Date Range Selector #}
+<div class="card" style="margin-bottom: 20px;">
+    <form method="GET" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+        <div class="filter-group">
+            <label for="start">Start Date</label>
+            <input type="date" id="start" name="start" class="form-control"
+                   value="{{ start_date.strftime('%Y-%m-%d') }}">
+        </div>
+        <div class="filter-group">
+            <label for="end">End Date</label>
+            <input type="date" id="end" name="end" class="form-control"
+                   value="{{ end_date.strftime('%Y-%m-%d') }}">
+        </div>
+        <button type="submit" class="btn btn-primary">Update</button>
+        <div style="margin-left: auto;">
+            <a href="{{ url_for('assignr.games_list', start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d')) }}" class="btn btn-outline">View All Games</a>
+            <a href="{{ url_for('assignr.sync_status', start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d')) }}" class="btn btn-outline">Sync Status</a>
+        </div>
+    </form>
+</div>
+
+{# Summary Cards #}
+<div class="stats-grid" style="margin-bottom: 20px;">
+    <div class="stat-card">
+        <div class="stat-value">{{ summary.total_games }}</div>
+        <div class="stat-label">Total Games</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--success-color);">{{ summary.assigned_games }}</div>
+        <div class="stat-label">Assigned</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--danger-color);">{{ summary.unassigned_games }}</div>
+        <div class="stat-label">Unassigned</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ umpires|length }}</div>
+        <div class="stat-label">Active Umpires</div>
+    </div>
+</div>
+
+{# Urgent Games Alert #}
+{% if urgent_games %}
+<div class="card urgent-section" style="margin-bottom: 20px;">
+    <h3 style="margin: 0 0 15px 0; color: var(--danger-color);">
+        <span style="margin-right: 8px;">&#9888;</span>
+        Urgent: {{ urgent_games|length }} Game(s) Need Umpires Within 2 Weeks
+    </h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Date/Time</th>
+                <th>League</th>
+                <th>Matchup</th>
+                <th>Location</th>
+                <th>Source</th>
+                <th>Count</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in urgent_games %}
+            {% set local = game._local %}
+            <tr>
+                <td>
+                    {{ game.localized_date[:10] if game.localized_date else '-' }}
+                    <span style="color: var(--text-muted);">{{ game.localized_time or '' }}</span>
+                </td>
+                <td>{{ local.league if local else game.league_name or '-' }}</td>
+                <td>
+                    {% if local %}
+                    {{ local.home_team or 'TBD' }} vs {{ local.away_team or 'TBD' }}
+                    {% else %}
+                    {{ game.home_team or 'TBD' }} vs {{ game.away_team or 'TBD' }}
+                    {% endif %}
+                </td>
+                <td>{{ local.field if local else game.venue_name or '-' }}</td>
+                <td>
+                    {% if local %}
+                    <select class="umpire-source-select form-control"
+                            data-game-id="{{ local.game_id }}"
+                            style="width: 80px; padding: 4px 6px; font-size: 12px;"
+                            onchange="setUmpireSource(this)">
+                        <option value="">None</option>
+                        {% for partner in partners %}
+                        <option value="{{ partner.short_code }}" {% if local.umpire_override == partner.short_code %}selected{% endif %}>{{ partner.short_code }}</option>
+                        {% endfor %}
+                    </select>
+                    {% else %}
+                    <span style="color: var(--text-muted);">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if local %}
+                    <select class="umpire-count-select form-control"
+                            data-game-id="{{ local.game_id }}"
+                            style="width: 70px; padding: 4px 6px; font-size: 12px;"
+                            onchange="setUmpireCount(this)">
+                        <option value="">Def</option>
+                        <option value="0" {% if local.umpire_count_override == 0 %}selected{% endif %}>0</option>
+                        <option value="1" {% if local.umpire_count_override == 1 %}selected{% endif %}>1</option>
+                        <option value="2" {% if local.umpire_count_override == 2 %}selected{% endif %}>2</option>
+                    </select>
+                    {% else %}
+                    <span style="color: var(--text-muted);">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if local %}
+                    <a href="{{ url_for('games.edit_game', id=local.game_id) }}" class="btn btn-sm btn-outline">View</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    {# Games by League #}
+    <div class="card">
+        <h3 style="margin-top: 0;">Games by League</h3>
+        {% if leagues %}
+        <table>
+            <thead>
+                <tr>
+                    <th>League</th>
+                    <th style="text-align: center;">Games</th>
+                    <th style="text-align: center;">Assigned</th>
+                    <th style="text-align: center;">Unassigned</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for league, data in leagues %}
+                <tr>
+                    <td>{{ league }}</td>
+                    <td style="text-align: center;">{{ data.games }}</td>
+                    <td style="text-align: center; color: var(--success-color);">{{ data.assigned }}</td>
+                    <td style="text-align: center;">
+                        {% if data.unassigned > 0 %}
+                        <span style="color: var(--danger-color); font-weight: 600;">{{ data.unassigned }}</span>
+                        {% else %}
+                        <span style="color: var(--text-muted);">0</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color: var(--text-muted); text-align: center; padding: 20px;">No games found in this date range.</p>
+        {% endif %}
+    </div>
+
+    {# Top Umpires #}
+    <div class="card">
+        <h3 style="margin-top: 0;">Top Umpires</h3>
+        {% if umpires %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th style="text-align: center;">Games</th>
+                    <th>Leagues</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for name, data in umpires[:15] %}
+                <tr>
+                    <td>{{ name }}</td>
+                    <td style="text-align: center;">{{ data.games }}</td>
+                    <td>
+                        {% for league in data.leagues[:3] %}
+                        <span class="badge">{{ league }}</span>
+                        {% endfor %}
+                        {% if data.leagues|length > 3 %}
+                        <span class="badge" style="background: var(--text-muted);">+{{ data.leagues|length - 3 }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if umpires|length > 15 %}
+        <p style="text-align: center; margin-top: 10px;">
+            <a href="{{ url_for('assignr.umpires_list', start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d')) }}">View all {{ umpires|length }} umpires</a>
+        </p>
+        {% endif %}
+        {% else %}
+        <p style="color: var(--text-muted); text-align: center; padding: 20px;">No umpire assignments found.</p>
+        {% endif %}
+    </div>
+</div>
+
+{# Recent Games #}
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">Recent Games</h3>
+    {% if games %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date/Time</th>
+                <th>League</th>
+                <th>Matchup</th>
+                <th>Location</th>
+                <th>Officials</th>
+                <th>Source</th>
+                <th>Count</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in games[:20] %}
+            {% set local = game._local %}
+            {% set has_assignment = game._accepted_umpires|length > 0 if game._accepted_umpires else false %}
+            {% set needs_alert = game._needs_umpire and not has_assignment %}
+            <tr class="{{ 'needs-umpire-alert' if needs_alert else '' }}">
+                <td>
+                    {{ game.localized_date[:10] if game.localized_date else '-' }}
+                    <span style="color: var(--text-muted);">{{ game.localized_time or '' }}</span>
+                </td>
+                <td>
+                    {% if local %}
+                    {{ local.league or '-' }}
+                    {% else %}
+                    {{ game.league_name or '-' }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if local %}
+                    {{ local.home_team or 'TBD' }} vs {{ local.away_team or 'TBD' }}
+                    {% else %}
+                    {{ game.home_team or 'TBD' }} vs {{ game.away_team or 'TBD' }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if local %}
+                    {{ local.field or '-' }}
+                    {% else %}
+                    {{ game.venue_name or '-' }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if game._accepted_umpires %}
+                    <span style="color: var(--success-color);">{{ game._accepted_umpires|join(', ') }}</span>
+                    {% else %}
+                    <span style="color: var(--danger-color);">Unassigned</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if local %}
+                    <select class="umpire-source-select form-control"
+                            data-game-id="{{ local.game_id }}"
+                            style="width: 70px; padding: 3px 6px; font-size: 11px;"
+                            onchange="setUmpireSource(this)">
+                        <option value="">-</option>
+                        {% for partner in partners %}
+                        <option value="{{ partner.short_code }}" {% if local.umpire_override == partner.short_code %}selected{% endif %}>{{ partner.short_code }}</option>
+                        {% endfor %}
+                    </select>
+                    {% else %}
+                    <span style="color: var(--text-muted); font-size: 11px;">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if local %}
+                    <select class="umpire-count-select form-control"
+                            data-game-id="{{ local.game_id }}"
+                            style="width: 55px; padding: 3px 6px; font-size: 11px;"
+                            onchange="setUmpireCount(this)">
+                        <option value="">Def</option>
+                        <option value="0" {% if local.umpire_count_override == 0 %}selected{% endif %}>0</option>
+                        <option value="1" {% if local.umpire_count_override == 1 %}selected{% endif %}>1</option>
+                        <option value="2" {% if local.umpire_count_override == 2 %}selected{% endif %}>2</option>
+                    </select>
+                    {% else %}
+                    <span style="color: var(--text-muted); font-size: 11px;">-</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if games|length > 20 %}
+    <p style="text-align: center; margin-top: 10px;">
+        <a href="{{ url_for('assignr.games_list', start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d')) }}">View all {{ games|length }} games</a>
+    </p>
+    {% endif %}
+    {% else %}
+    <p style="color: var(--text-muted); text-align: center; padding: 40px;">No games found in this date range.</p>
+    {% endif %}
+</div>
+
+<style>
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.filter-group label {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+}
+.stat-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+}
+.stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+.stat-label {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--primary-color);
+    color: white;
+    margin-right: 4px;
+}
+.badge-success {
+    background: #d4edda;
+    color: #155724;
+}
+
+/* Urgent section styling */
+.urgent-section {
+    border: 2px solid var(--danger-color);
+    background: #fff5f5;
+}
+
+/* Red alert for games needing umpires */
+tr.needs-umpire-alert {
+    background-color: #fff5f5 !important;
+}
+tr.needs-umpire-alert:hover {
+    background-color: #ffe8e8 !important;
+}
+tr.needs-umpire-alert td:first-child {
+    border-left: 4px solid var(--danger-color);
+}
+
+/* Umpire dropdowns */
+.umpire-count-select, .umpire-source-select {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+}
+.umpire-count-select:focus, .umpire-source-select:focus {
+    border-color: var(--primary-color);
+    outline: none;
+}
+
+.unassigned-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    background: #f8d7da;
+    color: #721c24;
+}
+
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    div[style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+    .umpire-count-select, .umpire-source-select {
+        width: 60px !important;
+        font-size: 10px !important;
+    }
+}
+</style>
+
+<script>
+function setUmpireCount(selectEl) {
+    var gameId = selectEl.dataset.gameId;
+    var count = selectEl.value === '' ? null : parseInt(selectEl.value);
+
+    // Get CSRF token
+    var csrfToken = document.querySelector('meta[name="csrf-token"]');
+    csrfToken = csrfToken ? csrfToken.getAttribute('content') : '';
+
+    fetch('/umpires/api/set-umpire-count', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            game_id: gameId,
+            count: count
+        })
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(result) {
+        if (result.success) {
+            // If set to 0 (no umpire), remove alert styling from the row
+            var row = selectEl.closest('tr');
+            if (row && count === 0) {
+                row.classList.remove('needs-umpire-alert');
+            }
+            // Show brief success indicator
+            selectEl.style.borderColor = '#28a745';
+            setTimeout(function() {
+                selectEl.style.borderColor = '#ddd';
+            }, 1000);
+        } else {
+            alert('Error: ' + (result.error || 'Unknown error'));
+            location.reload();
+        }
+    })
+    .catch(function(err) {
+        alert('Error setting umpire count: ' + err);
+        location.reload();
+    });
+}
+
+function setUmpireSource(selectEl) {
+    var gameId = selectEl.dataset.gameId;
+    var source = selectEl.value || null;
+
+    // Get CSRF token
+    var csrfToken = document.querySelector('meta[name="csrf-token"]');
+    csrfToken = csrfToken ? csrfToken.getAttribute('content') : '';
+
+    fetch('/umpires/api/set-umpire-source', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            game_id: gameId,
+            source: source
+        })
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(result) {
+        if (result.success) {
+            // Show brief success indicator
+            selectEl.style.borderColor = '#28a745';
+            setTimeout(function() {
+                selectEl.style.borderColor = '#ddd';
+            }, 1000);
+        } else {
+            alert('Error: ' + (result.error || 'Unknown error'));
+            location.reload();
+        }
+    })
+    .catch(function(err) {
+        alert('Error setting umpire source: ' + err);
+        location.reload();
+    });
+}
+</script>
+{% endblock %}

@@ -259,6 +259,8 @@
                     <a href="{{ url_for('umpires.partners') }}">Partners</a>
                     <a href="{{ url_for('umpires.delegation') }}">Delegation Rules</a>
                     <a href="{{ url_for('umpires.delegation_report') }}">Delegation Report</a>
+                    <a href="{{ url_for('umpires.missing_umpire') }}">Missing Umpire</a>
+                    <a href="{{ url_for('assignr.index') }}">Assignr</a>
                     <a href="{{ url_for('leagues.umpire_patterns') }}">Umpire Patterns</a>
                     {% if current_season_year %}
                     <a href="{{ url_for('umpires.weekly_digests', year=current_season_year, is_spring=current_season_is_spring) }}">Weekly Digests</a>

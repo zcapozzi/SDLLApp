@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Assignr Umpires{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <a href="{{ url_for('assignr.index') }}" style="color: var(--text-muted); text-decoration: none;">&larr; Back to Dashboard</a>
+    <h1 style="margin: 10px 0 0 0;">Umpire Assignments</h1>
+    <p style="color: var(--text-muted); margin: 5px 0 0 0;">
+        {{ umpires|length }} umpire(s) with assignments from {{ start_date.strftime('%B %d') }} to {{ end_date.strftime('%B %d, %Y') }}
+    </p>
+</div>
+
+{# Date Range Selector #}
+<div class="card" style="margin-bottom: 20px;">
+    <form method="GET" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+        <div class="filter-group">
+            <label for="start">Start Date</label>
+            <input type="date" id="start" name="start" class="form-control"
+                   value="{{ start_date.strftime('%Y-%m-%d') }}">
+        </div>
+        <div class="filter-group">
+            <label for="end">End Date</label>
+            <input type="date" id="end" name="end" class="form-control"
+                   value="{{ end_date.strftime('%Y-%m-%d') }}">
+        </div>
+        <button type="submit" class="btn btn-primary">Update</button>
+    </form>
+</div>
+
+{# Summary Cards #}
+<div class="stats-grid" style="margin-bottom: 20px;">
+    <div class="stat-card">
+        <div class="stat-value">{{ summary.total_games }}</div>
+        <div class="stat-label">Total Games</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ umpires|length }}</div>
+        <div class="stat-label">Active Umpires</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ summary.assigned_games }}</div>
+        <div class="stat-label">Games Assigned</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ summary.unassigned_games }}</div>
+        <div class="stat-label">Unassigned</div>
+    </div>
+</div>
+
+{# Umpires Table #}
+<div class="card">
+    <h3 style="margin-top: 0;">Umpire Summary</h3>
+    {% if umpires %}
+    <table id="umpires-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th style="text-align: center;">Games</th>
+                <th>Leagues</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for name, data in umpires %}
+            <tr>
+                <td>
+                    <strong>{{ name }}</strong>
+                </td>
+                <td style="text-align: center;">
+                    <span class="game-count">{{ data.games }}</span>
+                </td>
+                <td>
+                    <div class="leagues-list">
+                        {% for league in data.leagues|sort %}
+                        <span class="league-badge">{{ league }}</span>
+                        {% endfor %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: var(--text-muted); padding: 40px;">
+        No umpire assignments found in this date range.
+    </p>
+    {% endif %}
+</div>
+
+<style>
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.filter-group label {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+}
+.stat-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+}
+.stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+.stat-label {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.game-count {
+    display: inline-block;
+    min-width: 30px;
+    padding: 4px 12px;
+    background: var(--primary-color);
+    color: white;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+.leagues-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.league-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+</style>
+{% endblock %}

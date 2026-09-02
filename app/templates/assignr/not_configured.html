@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Assignr Not Configured{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 600px; margin: 40px auto; text-align: center; padding: 40px;">
+    <h2 style="margin-top: 0;">Assignr Not Configured</h2>
+    <p style="color: var(--text-muted); margin-bottom: 20px;">
+        Assignr API credentials are not configured. Please add the following environment variables:
+    </p>
+
+    <div style="background: var(--bg-color); padding: 20px; border-radius: 8px; text-align: left; font-family: monospace;">
+        <p style="margin: 0 0 10px 0;"><code>ASSIGNR_CLIENT_ID</code></p>
+        <p style="margin: 0 0 10px 0;"><code>ASSIGNR_CLIENT_SECRET</code></p>
+        <p style="margin: 0;"><code>ASSIGNR_SITE_ID</code></p>
+    </div>
+
+    <p style="color: var(--text-muted); margin-top: 20px; font-size: 14px;">
+        These credentials can be obtained from your Assignr account under Settings &rarr; API Access.
+    </p>
+
+    <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary" style="margin-top: 20px;">Back to Dashboard</a>
+</div>
+{% endblock %}

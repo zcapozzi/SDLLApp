@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+
+{% block title %}Assignr Sync Status{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <a href="{{ url_for('assignr.index') }}" style="color: var(--text-muted); text-decoration: none;">&larr; Back to Dashboard</a>
+    <h1 style="margin: 10px 0 0 0;">Sync Status</h1>
+    <p style="color: var(--text-muted); margin: 5px 0 0 0;">
+        Comparison between Assignr and local games for {{ start_date.strftime('%B %d') }} to {{ end_date.strftime('%B %d, %Y') }}
+    </p>
+</div>
+
+{# Date Range Selector #}
+<div class="card" style="margin-bottom: 20px;">
+    <form method="GET" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+        <div class="filter-group">
+            <label for="start">Start Date</label>
+            <input type="date" id="start" name="start" class="form-control"
+                   value="{{ start_date.strftime('%Y-%m-%d') }}">
+        </div>
+        <div class="filter-group">
+            <label for="end">End Date</label>
+            <input type="date" id="end" name="end" class="form-control"
+                   value="{{ end_date.strftime('%Y-%m-%d') }}">
+        </div>
+        <button type="submit" class="btn btn-primary">Update</button>
+    </form>
+</div>
+
+{# Summary Cards #}
+<div class="stats-grid" style="margin-bottom: 20px;">
+    <div class="stat-card status-synced">
+        <div class="stat-value">{{ synced|length }}</div>
+        <div class="stat-label">Synced</div>
+        <div class="stat-desc">In both systems</div>
+    </div>
+    <div class="stat-card status-warning">
+        <div class="stat-value">{{ assignr_only|length }}</div>
+        <div class="stat-label">Assignr Only</div>
+        <div class="stat-desc">Not linked locally</div>
+    </div>
+    <div class="stat-card status-warning">
+        <div class="stat-value">{{ local_only|length }}</div>
+        <div class="stat-label">Local Only</div>
+        <div class="stat-desc">ID not in Assignr</div>
+    </div>
+    <div class="stat-card status-info">
+        <div class="stat-value">{{ unlinked|length }}</div>
+        <div class="stat-label">Unlinked</div>
+        <div class="stat-desc">No Assignr ID</div>
+    </div>
+</div>
+
+{# Tabs #}
+<div class="tabs" style="margin-bottom: 20px;">
+    <button class="tab-btn active" onclick="showTab('synced')">Synced ({{ synced|length }})</button>
+    <button class="tab-btn" onclick="showTab('assignr-only')">Assignr Only ({{ assignr_only|length }})</button>
+    <button class="tab-btn" onclick="showTab('local-only')">Local Only ({{ local_only|length }})</button>
+    <button class="tab-btn" onclick="showTab('unlinked')">Unlinked ({{ unlinked|length }})</button>
+</div>
+
+{# Synced Games #}
+<div id="tab-synced" class="tab-content card">
+    <h3 style="margin-top: 0; color: var(--success-color);">Synced Games</h3>
+    <p style="color: var(--text-muted); margin-bottom: 15px;">Games that exist in both Assignr and the local database with matching IDs.</p>
+    {% if synced %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date/Time</th>
+                <th>League</th>
+                <th>Matchup</th>
+                <th>Field</th>
+                <th>Assignr ID</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in synced %}
+            <tr>
+                <td>{{ game.game_date.strftime('%m/%d %I:%M %p') if game.game_date else '-' }}</td>
+                <td>{{ game.league or '-' }}</td>
+                <td>
+                    {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                    vs {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                </td>
+                <td>{{ game.field_name or '-' }}</td>
+                <td><code>{{ game.assignr_id }}</code></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: var(--text-muted); padding: 20px;">No synced games found.</p>
+    {% endif %}
+</div>
+
+{# Assignr Only #}
+<div id="tab-assignr-only" class="tab-content card" style="display: none;">
+    <h3 style="margin-top: 0; color: var(--warning-color);">Assignr Only Games</h3>
+    <p style="color: var(--text-muted); margin-bottom: 15px;">Games in Assignr that are not linked to any local game. These may need to be imported or linked manually.</p>
+    {% if assignr_only %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date/Time</th>
+                <th>League</th>
+                <th>Matchup</th>
+                <th>Venue</th>
+                <th>Assignr ID</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in assignr_only %}
+            <tr>
+                <td>{{ game.localized_date[:10] if game.localized_date else '-' }} {{ game.localized_time or '' }}</td>
+                <td>{{ game.league_name or '-' }}</td>
+                <td>{{ game.home_team or 'TBD' }} vs {{ game.away_team or 'TBD' }}</td>
+                <td>{{ game.venue_name or '-' }}</td>
+                <td><code>{{ game.id }}</code></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: var(--text-muted); padding: 20px;">No Assignr-only games found.</p>
+    {% endif %}
+</div>
+
+{# Local Only #}
+<div id="tab-local-only" class="tab-content card" style="display: none;">
+    <h3 style="margin-top: 0; color: var(--warning-color);">Local Only Games</h3>
+    <p style="color: var(--text-muted); margin-bottom: 15px;">Local games with an Assignr ID that doesn't appear in Assignr results. The game may have been deleted from Assignr or the ID may be incorrect.</p>
+    {% if local_only %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date/Time</th>
+                <th>League</th>
+                <th>Matchup</th>
+                <th>Field</th>
+                <th>Assignr ID</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in local_only %}
+            <tr>
+                <td>{{ game.game_date.strftime('%m/%d %I:%M %p') if game.game_date else '-' }}</td>
+                <td>{{ game.league or '-' }}</td>
+                <td>
+                    {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                    vs {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                </td>
+                <td>{{ game.field_name or '-' }}</td>
+                <td><code>{{ game.assignr_id }}</code></td>
+                <td>
+                    <a href="{{ url_for('games.edit_game', id=game.ID) }}" class="btn btn-sm btn-outline">Edit</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: var(--text-muted); padding: 20px;">No local-only games found.</p>
+    {% endif %}
+</div>
+
+{# Unlinked #}
+<div id="tab-unlinked" class="tab-content card" style="display: none;">
+    <h3 style="margin-top: 0; color: var(--text-muted);">Unlinked Local Games</h3>
+    <p style="color: var(--text-muted); margin-bottom: 15px;">Local games without an Assignr ID. These may not need to be in Assignr (practices, scrimmages) or may need to be linked.</p>
+    {% if unlinked %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date/Time</th>
+                <th>League</th>
+                <th>Type</th>
+                <th>Matchup</th>
+                <th>Field</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in unlinked %}
+            <tr>
+                <td>{{ game.game_date.strftime('%m/%d %I:%M %p') if game.game_date else '-' }}</td>
+                <td>{{ game.league or '-' }}</td>
+                <td>
+                    <span class="type-badge {{ game.display_type }}">{{ game.display_type }}</span>
+                </td>
+                <td>
+                    {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                    {% if game.away_team %}
+                    vs {{ game.away_team.computed_display_name }}
+                    {% endif %}
+                </td>
+                <td>{{ game.field_name or '-' }}</td>
+                <td>
+                    <a href="{{ url_for('games.edit_game', id=game.ID) }}" class="btn btn-sm btn-outline">Edit</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: var(--text-muted); padding: 20px;">No unlinked games found.</p>
+    {% endif %}
+</div>
+
+<style>
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.filter-group label {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+}
+.stat-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+}
+.stat-card.status-synced {
+    border-color: var(--success-color);
+    background: #d4edda;
+}
+.stat-card.status-warning {
+    border-color: var(--warning-color);
+    background: #fff3cd;
+}
+.stat-card.status-info {
+    border-color: var(--text-muted);
+    background: #e9ecef;
+}
+.stat-value {
+    font-size: 32px;
+    font-weight: 700;
+}
+.stat-label {
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: 4px;
+}
+.stat-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.tabs {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+.tab-btn {
+    padding: 8px 16px;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+.tab-btn:hover {
+    background: var(--card-bg);
+}
+.tab-btn.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.type-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+.type-badge.regular { background: #d4edda; color: #155724; }
+.type-badge.playoff { background: #fff3cd; color: #856404; }
+.type-badge.practice { background: #e3f2fd; color: #1565c0; }
+.type-badge.scrimmage { background: #f3e5f5; color: #7b1fa2; }
+
+code {
+    background: var(--bg-color);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+</style>
+
+<script>
+function showTab(tabId) {
+    // Hide all tabs
+    document.querySelectorAll('.tab-content').forEach(function(tab) {
+        tab.style.display = 'none';
+    });
+
+    // Deactivate all buttons
+    document.querySelectorAll('.tab-btn').forEach(function(btn) {
+        btn.classList.remove('active');
+    });
+
+    // Show selected tab
+    document.getElementById('tab-' + tabId).style.display = 'block';
+
+    // Activate button
+    event.target.classList.add('active');
+}
+</script>
+{% endblock %}

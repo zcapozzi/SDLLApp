@@ -8,7 +8,7 @@ from flask import Flask, jsonify, request, redirect, url_for, flash
 from flask_wtf.csrf import CSRFError
 
 from .extensions import db, login_manager, limiter, csrf, sess
-from .config import config
+from .config import config, is_running_on_railway
 
 
 def load_logging_config(app):
@@ -21,9 +21,20 @@ def load_logging_config(app):
 
 
 def create_app(config_name=None):
-    """Application factory for Flask app"""
+    """Application factory for Flask app.
+
+    Auto-detects environment:
+    - If running on Railway (detected via env vars), uses 'production'
+    - Otherwise uses 'development' (local database)
+    """
     if config_name is None:
-        config_name = os.environ.get('FLASK_CONFIG', 'development')
+        # Auto-detect: Railway = production, local = development
+        if is_running_on_railway():
+            config_name = 'production'
+            print("[CONFIG] Detected Railway environment, using production config", file=sys.stderr)
+        else:
+            config_name = 'development'
+            print("[CONFIG] Local environment, using development config", file=sys.stderr)
 
     app = Flask(__name__)
     app.config.from_object(config[config_name])
@@ -54,6 +65,7 @@ def create_app(config_name=None):
     from .admin import admin_bp
     from .facilities import facilities_bp
     from .analytics import analytics_bp
+    from .assignr import assignr_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(main_bp)
@@ -70,6 +82,7 @@ def create_app(config_name=None):
     app.register_blueprint(admin_bp, url_prefix='/admin')  # Admin user management
     app.register_blueprint(facilities_bp, url_prefix='/facilities')  # Facilities management
     app.register_blueprint(analytics_bp, url_prefix='/analytics')  # Product admin analytics
+    app.register_blueprint(assignr_bp, url_prefix='/umpires/assignr')  # Assignr API integration
 
     # User loader for Flask-Login
     from .models.user import User

@@ -839,7 +839,7 @@ def missing_umpire(date_str=None):
     else:
         target_date = date.today()
 
-    # Get all games for this date
+    # Get all games for this date (excluding practices)
     start_of_day = datetime.combine(target_date, datetime.min.time())
     end_of_day = datetime.combine(target_date, datetime.max.time())
 
@@ -851,7 +851,8 @@ def missing_umpire(date_str=None):
         Game.game_date >= start_of_day,
         Game.game_date <= end_of_day,
         Game.active == 1,
-        Game.status != 'cancelled'
+        Game.status != 'cancelled',
+        Game.game_type != 'practice'  # Exclude practices
     ).order_by(Game.game_date).all()
 
     # Get all partners for lookup
@@ -875,7 +876,24 @@ def missing_umpire(date_str=None):
 
     # Get unique values for filters
     fields = sorted(set(g.field_rel.name for g in games if g.field_rel))
-    leagues = sorted(set(g.league for g in games if g.league))
+    leagues_list = sorted(set(g.league for g in games if g.league))
+
+    # Get league umpire requirements
+    from app.models.league import League
+    league_lookup = {l.name: l for l in League.query.all()}
+
+    # For each game, determine if it needs an umpire alert
+    # (needs umpire based on league, but doesn't have one assigned and count_override != 0)
+    for game in games:
+        league_obj = league_lookup.get(game.league)
+        needs_umpire = False
+        if league_obj and league_obj.needs_umpires:
+            # Check if umpire count override is 0 (explicitly no umpire needed)
+            if game.umpire_count_override == 0:
+                needs_umpire = False
+            else:
+                needs_umpire = True
+        game._needs_umpire = needs_umpire
 
     return render_template(
         'umpires/missing_umpire.html',
@@ -884,7 +902,7 @@ def missing_umpire(date_str=None):
         partners=partners,
         partner_contacts=partner_contacts,
         fields=fields,
-        leagues=leagues
+        leagues=leagues_list
     )
 
 

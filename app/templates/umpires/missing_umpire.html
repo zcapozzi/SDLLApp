@@ -10,38 +10,40 @@
 
 {# Date selector #}
 <div class="card" style="margin-bottom: 20px;">
-    <form method="GET" action="{{ url_for('umpires.missing_umpire') }}" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
-        <div class="filter-group">
-            <label for="date">Date</label>
-            <input type="date" id="date" name="date" class="form-control"
-                   value="{{ target_date.strftime('%Y-%m-%d') }}" onchange="this.form.action = '/umpires/missing-umpire/' + this.value; this.form.submit();">
+    <form method="GET" action="{{ url_for('umpires.missing_umpire') }}" class="filter-form">
+        <div class="filter-row">
+            <div class="filter-group">
+                <label for="date">Date</label>
+                <input type="date" id="date" name="date" class="form-control"
+                       value="{{ target_date.strftime('%Y-%m-%d') }}" onchange="this.form.action = '/umpires/missing-umpire/' + this.value; this.form.submit();">
+            </div>
+            <div class="filter-group">
+                <label for="field_filter">Field</label>
+                <select id="field_filter" class="form-control" onchange="applyFilters()">
+                    <option value="">All Fields</option>
+                    {% for field in fields %}
+                    <option value="{{ field }}">{{ field }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="league_filter">Division</label>
+                <select id="league_filter" class="form-control" onchange="applyFilters()">
+                    <option value="">All Divisions</option>
+                    {% for league in leagues %}
+                    <option value="{{ league }}">{{ league }}</option>
+                    {% endfor %}
+                </select>
+            </div>
         </div>
-        <div class="filter-group">
-            <label for="field_filter">Field</label>
-            <select id="field_filter" class="form-control" onchange="applyFilters()">
-                <option value="">All Fields</option>
-                {% for field in fields %}
-                <option value="{{ field }}">{{ field }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="filter-group">
-            <label for="league_filter">Division</label>
-            <select id="league_filter" class="form-control" onchange="applyFilters()">
-                <option value="">All Divisions</option>
-                {% for league in leagues %}
-                <option value="{{ league }}">{{ league }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div style="color: var(--text-muted); font-size: 14px;">
+        <div class="filter-count">
             <span id="game-count">{{ games|length }}</span> game(s)
         </div>
     </form>
 </div>
 
-{# Games list #}
-<div class="card">
+{# Desktop Games Table #}
+<div class="card desktop-table">
     {% if games %}
     <table id="games-table">
         <thead>
@@ -59,8 +61,10 @@
             {% set partner_code = game.umpire_override or 'SDL' %}
             {% set partner = partners.get(partner_code) %}
             {% set contact = partner_contacts.get(partner_code) %}
+            {% set needs_alert = game._needs_umpire and not game.umpire_override %}
             <tr data-field="{{ game.field_rel.name if game.field_rel else '' }}"
-                data-league="{{ game.league or '' }}">
+                data-league="{{ game.league or '' }}"
+                class="{{ 'needs-umpire-alert' if needs_alert else '' }}">
                 <td>{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</td>
                 <td>{{ game.field_rel.name if game.field_rel else '-' }}</td>
                 <td>{{ game.league or '-' }}</td>
@@ -111,11 +115,126 @@
     {% endif %}
 </div>
 
+{# Mobile View - Compact Table with Expandable Rows #}
+<div class="mobile-section">
+    {% if games %}
+    <div class="mobile-table">
+        <table class="compact-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Game</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="mobile-games-table">
+                {% for game in games %}
+                {% set partner_code = game.umpire_override or 'SDL' %}
+                {% set partner = partners.get(partner_code) %}
+                {% set contact = partner_contacts.get(partner_code) %}
+                {% set needs_alert = game._needs_umpire and not game.umpire_override %}
+                <tr class="compact-row {{ 'needs-umpire-alert' if needs_alert else '' }}"
+                    data-field="{{ game.field_rel.name if game.field_rel else '' }}"
+                    data-league="{{ game.league or '' }}"
+                    onclick="toggleRowExpand(this)">
+                    <td class="compact-time-cell">
+                        <div class="compact-time">{{ game.game_date.strftime('%I:%M').lstrip('0') }}</div>
+                        <div class="compact-ampm">{{ game.game_date.strftime('%p') }}</div>
+                    </td>
+                    <td class="compact-game">
+                        <div class="compact-matchup">
+                            {% if game.game_type == 'practice' %}
+                            {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                            {% else %}
+                            {{ (game.home_team.computed_display_name if game.home_team else 'TBD')[:10] }}{% if game.home_team and game.home_team.computed_display_name|length > 10 %}..{% endif %}
+                            <span style="color:#999">v</span>
+                            {{ (game.away_team.computed_display_name if game.away_team else 'TBD')[:10] }}{% if game.away_team and game.away_team.computed_display_name|length > 10 %}..{% endif %}
+                            {% endif %}
+                        </div>
+                        <div class="compact-details">
+                            {{ game.league or '-' }} @ {{ (game.field_rel.name if game.field_rel else '-')[:15] }}
+                        </div>
+                    </td>
+                    <td class="compact-expand">▼</td>
+                </tr>
+                <tr class="expand-row" style="display: none;">
+                    <td colspan="3">
+                        <div class="expand-content">
+                            <div class="expand-detail">
+                                <strong>{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</strong> at <strong>{{ game.field_rel.name if game.field_rel else '-' }}</strong>
+                            </div>
+                            <div class="expand-detail">
+                                {% if game.game_type == 'practice' %}
+                                <span class="type-badge practice">Practice</span>
+                                {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                                {% else %}
+                                {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                                <span style="color: var(--text-muted);"> vs </span>
+                                {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                                {% endif %}
+                            </div>
+                            <div class="expand-detail">
+                                <span class="expand-label">Division:</span> {{ game.league or '-' }}
+                            </div>
+                            <div class="expand-detail">
+                                <span class="expand-label">Umpire Source:</span>
+                                {% if partner %}
+                                <span class="partner-badge {{ partner_code|lower }}">{{ partner.name }}</span>
+                                {% else %}
+                                <span class="partner-badge unknown">Unknown</span>
+                                {% endif %}
+                            </div>
+                            {% if contact %}
+                            <div class="expand-actions">
+                                <button class="btn btn-primary" onclick="event.stopPropagation(); copyText('{{ contact.display_name }}', '{{ contact.phone or '' }}', '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}')">
+                                    SMS
+                                </button>
+                                <button class="btn btn-outline" onclick="event.stopPropagation(); copyEmail('{{ contact.email }}', '{{ contact.display_name }}', '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}')">
+                                    Email
+                                </button>
+                                {% if contact.phone %}
+                                <a href="tel:{{ contact.phone }}" class="btn btn-outline" onclick="event.stopPropagation();">
+                                    Call
+                                </a>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <div class="expand-detail" style="color: var(--text-muted);">
+                                No contact info available
+                            </div>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card" style="text-align: center; color: var(--text-muted); padding: 40px;">
+        No games scheduled for {{ target_date.strftime('%A, %B %d, %Y') }}.
+    </div>
+    {% endif %}
+</div>
+
 {# Toast for copy confirmation #}
 <div id="copy-toast" class="copy-toast">Copied to clipboard!</div>
 
 <style>
+/* Filter layout */
+.filter-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+.filter-row {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
 .filter-group {
+    flex: 1;
+    min-width: 120px;
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -124,7 +243,12 @@
     font-size: 13px;
     font-weight: 600;
 }
+.filter-count {
+    color: var(--text-muted);
+    font-size: 14px;
+}
 
+/* Partner badges */
 .partner-badge {
     display: inline-block;
     padding: 3px 8px;
@@ -148,6 +272,10 @@
 }
 .type-badge.practice { background: #e3f2fd; color: #1976d2; }
 
+/* Desktop table */
+.desktop-table {
+    display: block;
+}
 .contact-actions {
     display: flex;
     gap: 6px;
@@ -157,6 +285,127 @@
     font-size: 12px;
 }
 
+/* Alert for games needing umpires */
+.needs-umpire-alert {
+    background: #fff5f5 !important;
+}
+.needs-umpire-alert td {
+    color: #c00;
+}
+.needs-umpire-alert .partner-badge {
+    background: #ffebee !important;
+    color: #c62828 !important;
+}
+
+/* Mobile section - hidden by default */
+.mobile-section {
+    display: none;
+}
+
+/* Compact table for mobile */
+.mobile-table {
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #e0e0e0;
+}
+.compact-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+.compact-table th {
+    background: #f8f8f8;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #666;
+    border-bottom: 1px solid #e0e0e0;
+}
+.compact-row {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.compact-row:hover {
+    background: #f8f8f8;
+}
+.compact-row td {
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+    vertical-align: top;
+}
+.compact-time-cell {
+    width: 50px;
+    text-align: center;
+}
+.compact-time {
+    font-weight: 600;
+    font-size: 15px;
+}
+.compact-ampm {
+    font-size: 10px;
+    color: #888;
+    text-transform: uppercase;
+}
+.compact-game {
+    line-height: 1.4;
+}
+.compact-matchup {
+    font-weight: 500;
+}
+.compact-details {
+    font-size: 12px;
+    color: #888;
+    margin-top: 2px;
+}
+.compact-expand {
+    width: 24px;
+    text-align: center;
+    color: #ccc;
+    font-size: 10px;
+    transition: transform 0.2s;
+}
+.compact-row.expanded .compact-expand {
+    transform: rotate(180deg);
+}
+
+/* Expandable row content */
+.expand-row td {
+    padding: 0;
+    border-bottom: 1px solid #e0e0e0;
+}
+.expand-content {
+    background: #f8f9fa;
+    padding: 15px;
+}
+.expand-detail {
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+.expand-detail:last-child {
+    margin-bottom: 0;
+}
+.expand-label {
+    color: #888;
+    font-size: 12px;
+}
+.expand-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e0e0e0;
+}
+.expand-actions .btn {
+    flex: 1;
+    padding: 10px 12px;
+    font-size: 14px;
+    text-align: center;
+}
+
+/* Toast */
 .copy-toast {
     position: fixed;
     bottom: 20px;
@@ -174,25 +423,43 @@
     opacity: 1;
 }
 
+/* Mobile responsiveness */
 @media (max-width: 768px) {
-    table {
-        font-size: 13px;
+    .desktop-table {
+        display: none;
     }
-    .contact-actions {
+    .mobile-section {
+        display: block;
+    }
+    .filter-row {
         flex-direction: column;
-        gap: 4px;
+        gap: 10px;
+    }
+    .filter-group {
+        min-width: 100%;
     }
 }
 </style>
 
 <script>
+// Toggle row expansion in compact table
+function toggleRowExpand(row) {
+    var expandRow = row.nextElementSibling;
+    if (expandRow && expandRow.classList.contains('expand-row')) {
+        var isExpanded = expandRow.style.display !== 'none';
+        expandRow.style.display = isExpanded ? 'none' : 'table-row';
+        row.classList.toggle('expanded', !isExpanded);
+    }
+}
+
 function applyFilters() {
     var fieldFilter = document.getElementById('field_filter').value;
     var leagueFilter = document.getElementById('league_filter').value;
-    var rows = document.querySelectorAll('#games-table tbody tr');
     var visibleCount = 0;
 
-    rows.forEach(function(row) {
+    // Filter desktop table
+    var desktopRows = document.querySelectorAll('#games-table tbody tr');
+    desktopRows.forEach(function(row) {
         var rowField = row.dataset.field || '';
         var rowLeague = row.dataset.league || '';
         var show = true;
@@ -202,6 +469,25 @@ function applyFilters() {
 
         row.style.display = show ? '' : 'none';
         if (show) visibleCount++;
+    });
+
+    // Filter mobile table (both compact and expand rows)
+    var mobileRows = document.querySelectorAll('#mobile-games-table tr.compact-row');
+    mobileRows.forEach(function(row) {
+        var rowField = row.dataset.field || '';
+        var rowLeague = row.dataset.league || '';
+        var show = true;
+
+        if (fieldFilter && rowField !== fieldFilter) show = false;
+        if (leagueFilter && rowLeague !== leagueFilter) show = false;
+
+        row.style.display = show ? '' : 'none';
+        // Also hide the expand row
+        var expandRow = row.nextElementSibling;
+        if (expandRow && expandRow.classList.contains('expand-row')) {
+            expandRow.style.display = 'none';
+            row.classList.remove('expanded');
+        }
     });
 
     document.getElementById('game-count').textContent = visibleCount;
@@ -217,15 +503,15 @@ function showToast(message) {
 }
 
 function copyText(contactName, phone, field, time, league) {
-    var message = 'Hi ' + contactName + ', this is SDLL. We have a report of a missing umpire at ' + field + ' for the ' + time + ' ' + league + ' game. Can you check on this? Thanks!';
+    var message = "I just heard that there's no umpire at " + field + " for the " + league + " game. Have you heard anything about traffic issues or a delay?";
     navigator.clipboard.writeText(message).then(function() {
         showToast('Text message copied!');
     });
 }
 
 function copyEmail(email, contactName, field, time, league) {
-    var subject = 'Missing Umpire - ' + field + ' ' + time;
-    var body = 'Hi ' + contactName + ',\n\nWe have a report of a missing umpire at ' + field + ' for the ' + time + ' ' + league + ' game.\n\nCan you please check on this and let us know the status?\n\nThank you,\nSDLL';
+    var subject = 'Umpire Status - ' + field + ' ' + time;
+    var body = 'Hi ' + contactName + ",\n\nI just heard that there's no umpire at " + field + " for the " + league + " game. Have you heard anything about traffic issues or a delay?\n\nThanks!";
 
     // Copy the email body
     navigator.clipboard.writeText(body).then(function() {
