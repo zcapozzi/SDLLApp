@@ -880,7 +880,7 @@ def missing_umpire(date_str=None):
 
     # Get league umpire requirements
     from app.models.league import League
-    league_lookup = {l.name: l for l in League.query.all()}
+    league_lookup = {l.display_name: l for l in League.query.all()}
 
     # For each game, determine if it needs an umpire alert
     # (needs umpire based on league, but doesn't have one assigned and count_override != 0)
