@@ -255,6 +255,14 @@
         tr.no-umpire-row td.cell-notes {
             text-decoration: none;
         }
+        tr.cancelled-row td {
+            opacity: 0.6;
+            text-decoration: line-through;
+            background: #fce4ec;
+        }
+        tr.cancelled-row td.cell-notes {
+            text-decoration: none;
+        }
         .game-originally {
             font-size: 11px;
             color: #e65100;
@@ -392,8 +400,10 @@
         </div>
         {% endif %}
 
+        {% set cancelled_count = games|selectattr('status', 'equalto', 'cancelled')|list|length %}
+        {% set active_count = games|length - cancelled_count %}
         <div class="game-count">
-            {{ games|length }} game{{ 's' if games|length != 1 else '' }} {% if changes_since_date %}with changes{% else %}assigned{% endif %}
+            {{ active_count }} game{{ 's' if active_count != 1 else '' }} {% if changes_since_date %}with changes{% else %}assigned{% endif %}{% if cancelled_count > 0 %} (and {{ cancelled_count }} cancelled){% endif %}
             {% if new_game_ids and not changes_since_date %}<span style="color: rgb(255, 140, 0);">({{ new_game_ids|length }} new this week)</span>{% endif %}
         </div>
 
@@ -416,10 +426,11 @@
                 </thead>
                 <tbody>
                     {% for game in games %}
-                    <tr class="{{ 'new-game' if game.ID in new_game_ids else '' }}{{ ' past-game' if game.game_date and game.game_date.date() < today else '' }}{{ ' no-umpire-row' if game.umpire_was_unassigned else '' }}"
+                    <tr class="{{ 'new-game' if game.ID in new_game_ids else '' }}{{ ' past-game' if game.game_date and game.game_date.date() < today else '' }}{{ ' no-umpire-row' if game.umpire_was_unassigned else '' }}{{ ' cancelled-row' if game.status == 'cancelled' else '' }}"
                         data-field="{{ game._cached_field_name or game.field_name or '' }}"
                         data-league="{{ game.league or '' }}"
-                        data-date="{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}">
+                        data-date="{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}"
+                        data-status="{{ game.status or 'scheduled' }}">
                         <td class="cell-date">
                             {% if game.game_date %}
                             {{ game.game_date.strftime('%m/%d/%Y') }}
@@ -579,15 +590,42 @@
             }
         }
 
-        function updateGameCount(count) {
+        function updateGameCount(visibleCount) {
             var countEl = document.querySelector('.game-count');
             if (countEl) {
-                var totalGames = document.querySelectorAll('.schedule-table tbody tr').length;
-                if (count === totalGames) {
-                    countEl.innerHTML = totalGames + ' game' + (totalGames !== 1 ? 's' : '') + ' assigned';
+                var allRows = document.querySelectorAll('.schedule-table tbody tr');
+                var totalGames = allRows.length;
+
+                // Count visible cancelled games
+                var visibleCancelled = 0;
+                var totalCancelled = 0;
+                allRows.forEach(function(row) {
+                    var isCancelled = row.dataset.status === 'cancelled';
+                    var isVisible = row.style.display !== 'none';
+                    if (isCancelled) {
+                        totalCancelled++;
+                        if (isVisible) visibleCancelled++;
+                    }
+                });
+
+                var activeVisible = visibleCount - visibleCancelled;
+                var activeTotal = totalGames - totalCancelled;
+
+                var text = '';
+                if (visibleCount === totalGames) {
+                    // No filter applied
+                    text = activeTotal + ' game' + (activeTotal !== 1 ? 's' : '') + ' assigned';
+                    if (totalCancelled > 0) {
+                        text += ' (and ' + totalCancelled + ' cancelled)';
+                    }
                 } else {
-                    countEl.innerHTML = 'Showing ' + count + ' of ' + totalGames + ' games';
+                    // Filter applied
+                    text = 'Showing ' + activeVisible + ' of ' + activeTotal + ' games';
+                    if (visibleCancelled > 0) {
+                        text += ' (and ' + visibleCancelled + ' cancelled)';
+                    }
                 }
+                countEl.innerHTML = text;
             }
         }
 
