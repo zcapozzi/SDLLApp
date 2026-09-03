@@ -232,6 +232,10 @@
             background: rgb(255, 140, 0);
             color: white;
         }
+        .badge-cancelled {
+            background: #c62828;
+            color: white;
+        }
         .badge-playoff {
             background: #7b1fa2;
             color: white;
@@ -437,7 +441,9 @@
                             {% else %}
                             TBD
                             {% endif %}
-                            {% if game.ID in new_game_ids %}
+                            {% if game.status == 'cancelled' %}
+                            <span class="badge badge-cancelled">CANCELLED</span>
+                            {% elif game.ID in new_game_ids %}
                             <span class="badge badge-new">NEW</span>
                             {% endif %}
                         </td>
@@ -596,11 +602,11 @@
                 var allRows = document.querySelectorAll('.schedule-table tbody tr');
                 var totalGames = allRows.length;
 
-                // Count visible cancelled games
+                // Count cancelled games (check both class and data attribute)
                 var visibleCancelled = 0;
                 var totalCancelled = 0;
                 allRows.forEach(function(row) {
-                    var isCancelled = row.dataset.status === 'cancelled';
+                    var isCancelled = row.classList.contains('cancelled-row') || row.dataset.status === 'cancelled';
                     var isVisible = row.style.display !== 'none';
                     if (isCancelled) {
                         totalCancelled++;
