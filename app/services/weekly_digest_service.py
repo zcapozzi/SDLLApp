@@ -123,7 +123,7 @@ class WeeklyDigestService:
             return partner.name, auto_send
         return partner_code, False
 
-    def render_digest_html(self, partner_name, games, week_start):
+    def render_digest_html(self, partner_name, games, week_start, partner_code=None):
         """
         Render the HTML content for a digest email.
 
@@ -131,10 +131,17 @@ class WeeklyDigestService:
             partner_name: Name to use in greeting
             games: List of Game objects
             week_start: Monday of the week
+            partner_code: Partner short code (for schedule link)
 
         Returns:
             Tuple of (subject, html_body)
         """
+        # Get partner schedule URL if available
+        schedule_url = None
+        if partner_code:
+            partner = UmpirePartner.get_by_code(partner_code)
+            if partner and partner.schedule_token:
+                schedule_url = f"https://www.southdurhamlittleleague.org/s/partner/{partner.schedule_token}"
         week_display = week_start.strftime('%B %d')
         game_count = len(games)
 
@@ -210,10 +217,32 @@ Here's your upcoming schedule of {game_count} SDLL game{'s' if game_count != 1 e
                     time_str = game.game_date.strftime('%I:%M %p').lstrip('0').lower()
                     field_name = game.field_name or 'TBD'
 
+                    # Add Google Maps link if field has address
+                    maps_link = ''
+                    if game.field_rel and game.field_rel.google_maps_url:
+                        maps_link = (
+                            f' <a href="{game.field_rel.google_maps_url}" '
+                            f'style="text-decoration:none;vertical-align:middle" '
+                            f'title="Get directions">'
+                            f'<img src="https://maps.google.com/mapfiles/ms/icons/red-dot.png" '
+                            f'style="width:16px;height:16px;vertical-align:middle" alt="Map">'
+                            f'</a>'
+                        )
+
                     html_parts.append(
                         f'<tr><td style="border-bottom:solid 1px #eee;padding-left:20px">'
-                        f'{time_str} @ {field_name}</td></tr>'
+                        f'{time_str} @ {field_name}{maps_link}</td></tr>'
                     )
+
+        # Link to full schedule
+        if schedule_url:
+            html_parts.append(f'''
+<tr><td style="line-height:1.5;padding:16px 0 6px 0">
+<a href="{schedule_url}" style="color:#228B22;text-decoration:none;font-weight:500">
+View Full Schedule →
+</a>
+</td></tr>
+''')
 
         # Footer
         html_parts.append('''
@@ -266,7 +295,7 @@ Here's your upcoming schedule of {game_count} SDLL game{'s' if game_count != 1 e
         recipients = self.get_partner_recipients(partner_code)
 
         # Generate content
-        subject, body_html = self.render_digest_html(partner_name, games, week_start)
+        subject, body_html = self.render_digest_html(partner_name, games, week_start, partner_code)
 
         if existing:
             # Update existing draft
