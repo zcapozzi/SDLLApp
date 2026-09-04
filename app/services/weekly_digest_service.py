@@ -186,10 +186,14 @@ class WeeklyDigestService:
 ''')
 
         # Greeting
+        schedule_link_text = ''
+        if schedule_url:
+            schedule_link_text = f' And <a href="{schedule_url}" style="color:#228B22">here</a> is the full schedule view.'
+
         html_parts.append(f'''
 <tr><td style="line-height:1.5;padding:6px 0">Hi,</td></tr>
 <tr><td style="line-height:1.5;padding:6px 0">
-Here's your upcoming schedule of {game_count} SDLL game{'s' if game_count != 1 else ''} for the week of {week_display}. If you see anything that looks inaccurate, let me know.
+Here's your upcoming schedule of {game_count} SDLL game{'s' if game_count != 1 else ''} for the week of {week_display}. If you see anything that looks inaccurate, let me know.{schedule_link_text}
 </td></tr>
 <tr><td style="line-height:1.5;padding:6px 0"></td></tr>
 ''')
@@ -233,16 +237,6 @@ Here's your upcoming schedule of {game_count} SDLL game{'s' if game_count != 1 e
                         f'<tr><td style="border-bottom:solid 1px #eee;padding-left:20px">'
                         f'{time_str} @ {field_name}{maps_link}</td></tr>'
                     )
-
-        # Link to full schedule
-        if schedule_url:
-            html_parts.append(f'''
-<tr><td style="line-height:1.5;padding:16px 0 6px 0">
-<a href="{schedule_url}" style="color:#228B22;text-decoration:none;font-weight:500">
-View Full Schedule →
-</a>
-</td></tr>
-''')
 
         # Footer
         html_parts.append('''
