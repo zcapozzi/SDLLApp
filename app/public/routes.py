@@ -589,6 +589,14 @@ def partner_schedule(token):
     from sqlalchemy.orm import joinedload
     from app.models.league import League
 
+    # Check if user is umpire coordinator (for email generator feature)
+    is_umpire_coordinator = False
+    try:
+        if current_user.is_authenticated:
+            is_umpire_coordinator = current_user.has_role('admin', 'umpire_coordinator')
+    except Exception:
+        pass
+
     partner = UmpirePartner.get_by_schedule_token(token)
     if not partner:
         abort(404)
@@ -709,6 +717,80 @@ def partner_schedule(token):
     # Build game_originals for rescheduled games (batch query to avoid N+1)
     game_originals = GameChange.get_original_display_batch(games)
 
+    # Build change types for filtering (date_changed, time_changed, location_changed)
+    # Query all unacknowledged changes for these games
+    game_change_types = {}  # game_id -> set of change types
+    game_ids_for_changes = [g.ID for g in games]
+    if game_ids_for_changes:
+        change_records = GameChange.query.filter(
+            GameChange.game_id.in_(game_ids_for_changes),
+            GameChange.acknowledged == 0,
+            GameChange.change_type.in_(['update', 'reschedule'])
+        ).all()
+        for record in change_records:
+            changes_dict = record.changes_dict or {}
+            if record.game_id not in game_change_types:
+                game_change_types[record.game_id] = set()
+            # Check for date changes
+            if 'date' in changes_dict:
+                game_change_types[record.game_id].add('date')
+                game_change_types[record.game_id].add('time')  # date change implies time change
+            # Check for time changes (without date)
+            if 'time' in changes_dict:
+                game_change_types[record.game_id].add('time')
+            # Check for location/field changes
+            if 'field' in changes_dict or 'location' in changes_dict:
+                game_change_types[record.game_id].add('location')
+
+    # Build detailed change data for email generator (only for umpire coordinators)
+    game_change_details = {}  # game_id -> {'date': {old, new}, 'time': {old, new}, 'location': {old, new}}
+    if is_umpire_coordinator and game_ids_for_changes:
+        # Query change records again to get full details
+        detail_records = GameChange.query.filter(
+            GameChange.game_id.in_(game_ids_for_changes),
+            GameChange.acknowledged == 0,
+            GameChange.change_type.in_(['update', 'reschedule'])
+        ).order_by(GameChange.changed_at.desc()).all()
+
+        for record in detail_records:
+            changes_dict = record.changes_dict or {}
+            if record.game_id not in game_change_details:
+                game_change_details[record.game_id] = {}
+
+            # Store date change details
+            if 'date' in changes_dict and 'date' not in game_change_details[record.game_id]:
+                date_change = changes_dict['date']
+                if isinstance(date_change, dict):
+                    game_change_details[record.game_id]['date'] = {
+                        'old': date_change.get('old', ''),
+                        'new': date_change.get('new', '')
+                    }
+
+            # Store time change details
+            if 'time' in changes_dict and 'time' not in game_change_details[record.game_id]:
+                time_change = changes_dict['time']
+                if isinstance(time_change, dict):
+                    game_change_details[record.game_id]['time'] = {
+                        'old': time_change.get('old', ''),
+                        'new': time_change.get('new', '')
+                    }
+
+            # Store location change details
+            if 'field' in changes_dict and 'location' not in game_change_details[record.game_id]:
+                field_change = changes_dict['field']
+                if isinstance(field_change, dict):
+                    game_change_details[record.game_id]['location'] = {
+                        'old': field_change.get('old', ''),
+                        'new': field_change.get('new', '')
+                    }
+            elif 'location' in changes_dict and 'location' not in game_change_details[record.game_id]:
+                loc_change = changes_dict['location']
+                if isinstance(loc_change, dict):
+                    game_change_details[record.game_id]['location'] = {
+                        'old': loc_change.get('old', ''),
+                        'new': loc_change.get('new', '')
+                    }
+
     # Get games changed since a specific date (for filtering)
     # Only include changes to date/time/field - team changes don't matter to umpires
     changed_game_ids = set()
@@ -779,6 +861,9 @@ def partner_schedule(token):
         new_game_ids=new_game_ids,
         has_ntl_games=has_ntl_games,
         game_originals=game_originals,
+        game_change_types=game_change_types,
+        game_change_details=game_change_details,
+        is_umpire_coordinator=is_umpire_coordinator,
         today=date.today()
     ))
 

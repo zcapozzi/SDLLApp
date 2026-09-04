@@ -323,6 +323,117 @@
             }
         }
 
+        /* Change Type Filter Panel */
+        .change-type-filter {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid #e65100;
+        }
+        .change-type-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: #333;
+        }
+        .change-type-header .btn-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #666;
+            padding: 0 5px;
+        }
+        .change-type-header .btn-close:hover {
+            color: #333;
+        }
+        .change-type-options {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .change-type-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .change-type-checkbox input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+        .change-type-note {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #888;
+            font-style: italic;
+        }
+        #change-type-filter-btn.active {
+            background: #e65100;
+            color: white;
+            border-color: #e65100;
+        }
+
+        /* Email Generator Panel */
+        .email-generator {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            border: 2px solid rgb(34, 139, 34);
+        }
+        .email-generator-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: #333;
+        }
+        .email-generator-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .email-generator-actions .btn-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #666;
+            padding: 0 5px;
+        }
+        .email-generator-actions .btn-close:hover {
+            color: #333;
+        }
+        .btn-sm {
+            padding: 5px 12px;
+            font-size: 12px;
+        }
+        .email-generator textarea {
+            width: 100%;
+            height: 300px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 13px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+            background: #f8f9fa;
+        }
+        #generate-email-btn.active {
+            background: rgb(34, 139, 34) !important;
+            color: white;
+            border-color: rgb(34, 139, 34);
+        }
+
         /* Print styles */
         @media print {
             .header {
@@ -332,7 +443,7 @@
                 padding: 10px 0;
                 border-bottom: 2px solid black;
             }
-            .controls, .footer {
+            .controls, .footer, .change-type-filter {
                 display: none;
             }
             .schedule-table th {
@@ -349,6 +460,11 @@
                 <div class="subtitle">South Durham Little League | {{ season_name }}</div>
             </div>
             <div class="header-right">
+                {% if is_umpire_coordinator %}
+                <button id="generate-email-btn" class="btn btn-outline" onclick="toggleEmailGenerator()" style="background: white;" title="Generate email summary of changes">
+                    Generate Email
+                </button>
+                {% endif %}
                 <a href="{{ url_for('public.partner_schedule_csv', token=token, year=year, is_spring=is_spring) }}" class="btn btn-secondary">
                     Download CSV
                 </a>
@@ -394,7 +510,49 @@
                 <input type="date" id="changes_since" value="{{ changes_since }}" onchange="applyFilters()">
             </div>
             <button id="clear-filters-btn" class="btn btn-outline" onclick="clearFilters()" style="display: none;">Clear Filters</button>
+            <button id="change-type-filter-btn" class="btn btn-outline" onclick="toggleChangeTypeFilter()" title="Filter by change type" style="padding: 8px 10px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
+            </button>
         </div>
+
+        <!-- Change Type Filter Panel (hidden by default) -->
+        <div id="change-type-filter-panel" class="change-type-filter" style="display: none;">
+            <div class="change-type-header">
+                <span>Filter by Change Type:</span>
+                <button class="btn-close" onclick="toggleChangeTypeFilter()">&times;</button>
+            </div>
+            <div class="change-type-options">
+                <label class="change-type-checkbox">
+                    <input type="checkbox" id="filter-time-change" onchange="applyChangeTypeFilter()">
+                    <span>Time Change</span>
+                </label>
+                <label class="change-type-checkbox">
+                    <input type="checkbox" id="filter-date-change" onchange="applyChangeTypeFilter()">
+                    <span>Date Change</span>
+                </label>
+                <label class="change-type-checkbox">
+                    <input type="checkbox" id="filter-location-change" onchange="applyChangeTypeFilter()">
+                    <span>Location Change</span>
+                </label>
+            </div>
+            <div class="change-type-note">
+                Note: Date changes also appear as time changes.
+            </div>
+        </div>
+
+        {% if is_umpire_coordinator %}
+        <!-- Email Generator (Umpire Coordinators Only) -->
+        <div id="email-generator-panel" class="email-generator" style="display: none;">
+            <div class="email-generator-header">
+                <span>Email Summary</span>
+                <div class="email-generator-actions">
+                    <button class="btn btn-primary btn-sm" onclick="copyEmailToClipboard()">Copy to Clipboard</button>
+                    <button class="btn-close" onclick="toggleEmailGenerator()">&times;</button>
+                </div>
+            </div>
+            <textarea id="email-text" readonly></textarea>
+        </div>
+        {% endif %}
 
         {% if changes_since_date %}
         <div class="changes-notice" style="background: #fff3e0; border: 1px solid #ffb74d; border-radius: 6px; padding: 12px 16px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
@@ -433,10 +591,14 @@
                 <tbody>
                     {% for game in games %}
                     <tr class="{{ 'new-game' if game.ID in new_game_ids else '' }}{{ ' past-game' if game.game_date and game.game_date.date() < today else '' }}{{ ' no-umpire-row' if game.umpire_was_unassigned else '' }}{{ ' cancelled-row' if game.status == 'cancelled' else '' }}"
+                        data-game-id="{{ game.ID }}"
                         data-field="{{ game._cached_field_name or game.field_name or '' }}"
                         data-league="{{ game.league or '' }}"
                         data-date="{{ game.game_date.strftime('%Y-%m-%d') if game.game_date else '' }}"
-                        data-status="{{ game.status or 'scheduled' }}">
+                        data-status="{{ game.status or 'scheduled' }}"
+                        data-change-date="{{ 'true' if game.ID in game_change_types and 'date' in game_change_types[game.ID] else 'false' }}"
+                        data-change-time="{{ 'true' if game.ID in game_change_types and 'time' in game_change_types[game.ID] else 'false' }}"
+                        data-change-location="{{ 'true' if game.ID in game_change_types and 'location' in game_change_types[game.ID] else 'false' }}">
                         <td class="cell-date">
                             {% if game.game_date %}
                             {{ game.game_date.strftime('%m/%d/%Y') }}
@@ -571,6 +733,12 @@
             var rows = document.querySelectorAll('.schedule-table tbody tr');
             var visibleCount = 0;
 
+            // Check change type filters
+            var timeChange = document.getElementById('filter-time-change').checked;
+            var dateChange = document.getElementById('filter-date-change').checked;
+            var locationChange = document.getElementById('filter-location-change').checked;
+            var anyChangeTypeFilter = timeChange || dateChange || locationChange;
+
             rows.forEach(function(row) {
                 var rowField = (row.dataset.field || '').toLowerCase();
                 var rowLeague = (row.dataset.league || '').toLowerCase();
@@ -580,7 +748,20 @@
                 var showLeague = !leagueFilter || rowLeague === leagueFilter;
                 var showDate = !dateFilter || rowDate === dateFilter;
 
-                if (showField && showLeague && showDate) {
+                // Change type filters (OR logic)
+                var showChangeType = true;
+                if (anyChangeTypeFilter) {
+                    var hasTimeChange = row.dataset.changeTime === 'true';
+                    var hasDateChange = row.dataset.changeDate === 'true';
+                    var hasLocationChange = row.dataset.changeLocation === 'true';
+                    showChangeType = (
+                        (timeChange && hasTimeChange) ||
+                        (dateChange && hasDateChange) ||
+                        (locationChange && hasLocationChange)
+                    );
+                }
+
+                if (showField && showLeague && showDate && showChangeType) {
                     row.style.display = '';
                     visibleCount++;
                 } else {
@@ -594,7 +775,7 @@
             // Show/hide clear filters button
             var clearBtn = document.getElementById('clear-filters-btn');
             if (clearBtn) {
-                clearBtn.style.display = (fieldFilter || leagueFilter || dateFilter || changesSince) ? 'inline-block' : 'none';
+                clearBtn.style.display = (fieldFilter || leagueFilter || dateFilter || changesSince || anyChangeTypeFilter) ? 'inline-block' : 'none';
             }
         }
 
@@ -651,6 +832,10 @@
             document.getElementById('league').value = '';
             document.getElementById('date').value = '';
             document.getElementById('changes_since').value = '';
+            // Clear change type filters
+            document.getElementById('filter-time-change').checked = false;
+            document.getElementById('filter-date-change').checked = false;
+            document.getElementById('filter-location-change').checked = false;
             // If changes_since was set, need to reload
             if ('{{ changes_since }}') {
                 var url = new URL(window.location.href);
@@ -663,6 +848,228 @@
             }
             applyFilters();
         }
+
+        // Change Type Filter functions
+        function toggleChangeTypeFilter() {
+            var panel = document.getElementById('change-type-filter-panel');
+            var btn = document.getElementById('change-type-filter-btn');
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+                btn.classList.add('active');
+            } else {
+                panel.style.display = 'none';
+                btn.classList.remove('active');
+                // Clear checkboxes when closing
+                document.getElementById('filter-time-change').checked = false;
+                document.getElementById('filter-date-change').checked = false;
+                document.getElementById('filter-location-change').checked = false;
+                applyFilters(); // Reapply other filters without change type filter
+            }
+        }
+
+        function applyChangeTypeFilter() {
+            // Just call applyFilters since it now handles change type filters too
+            applyFilters();
+        }
+
+        {% if is_umpire_coordinator %}
+        // Game data for email generator
+        var gameData = {
+            {% for game in games %}
+            '{{ game.ID }}': {
+                id: {{ game.ID }},
+                date: '{{ game.game_date.strftime("%b %d") if game.game_date else "TBD" }}',
+                dateSortable: '{{ game.game_date.strftime("%Y-%m-%d %H:%M") if game.game_date else "9999-12-31 00:00" }}',
+                dateFormatted: '{{ game.game_date.strftime("%m/%d") if game.game_date else "TBD" }}',
+                day: '{{ game.game_date.strftime("%a") if game.game_date else "" }}',
+                time: '{{ game.game_date.strftime("%I:%M %p").lstrip("0") if game.game_date else "TBD" }}',
+                timeShort: '{{ game.game_date.strftime("%I:%M").lstrip("0") if game.game_date else "TBD" }}',
+                league: '{{ game.league or "" }}',
+                field: '{{ game._cached_field_name or game.field_name or "TBD" }}',
+                homeTeam: '{{ game.home_team.computed_display_name if game.home_team else "TBD" }}',
+                awayTeam: '{{ game.away_team.computed_display_name if game.away_team else "TBD" }}',
+                isNew: {{ 'true' if game.ID in new_game_ids else 'false' }},
+                isCancelled: {{ 'true' if game.status == 'cancelled' else 'false' }},
+                hasDateChange: {{ 'true' if game.ID in game_change_types and 'date' in game_change_types[game.ID] else 'false' }},
+                hasTimeChange: {{ 'true' if game.ID in game_change_types and 'time' in game_change_types[game.ID] else 'false' }},
+                hasLocationChange: {{ 'true' if game.ID in game_change_types and 'location' in game_change_types[game.ID] else 'false' }},
+                changeDetails: {{ game_change_details.get(game.ID, {})|tojson }}
+            }{{ ',' if not loop.last else '' }}
+            {% endfor %}
+        };
+
+        var partnerName = '{{ partner.name }}';
+        var changesSinceDate = '{{ changes_since }}';
+
+        function toggleEmailGenerator() {
+            var panel = document.getElementById('email-generator-panel');
+            var btn = document.getElementById('generate-email-btn');
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+                btn.classList.add('active');
+                generateEmail();
+            } else {
+                panel.style.display = 'none';
+                btn.classList.remove('active');
+            }
+        }
+
+        function generateEmail() {
+            var textarea = document.getElementById('email-text');
+            var rows = document.querySelectorAll('.schedule-table tbody tr');
+
+            // Get visible game IDs
+            var visibleGameIds = new Set();
+            rows.forEach(function(row) {
+                if (row.style.display !== 'none') {
+                    var gameId = row.dataset.gameId;
+                    if (gameId) {
+                        visibleGameIds.add(gameId);
+                    }
+                }
+            });
+
+            var email = '';
+
+            // Collect games by category
+            var newGames = [];
+            var locationChanges = [];
+            var timeChanges = [];
+            var dateChanges = [];
+
+            // Categorize only visible games
+            for (var id in gameData) {
+                // Only process visible games
+                if (!visibleGameIds.has(id)) continue;
+
+                var game = gameData[id];
+                if (game.isCancelled) continue;
+
+                if (game.isNew) {
+                    newGames.push(game);
+                } else if (game.hasLocationChange && !game.hasDateChange) {
+                    locationChanges.push(game);
+                } else if (game.hasDateChange) {
+                    dateChanges.push(game);
+                } else if (game.hasTimeChange) {
+                    timeChanges.push(game);
+                }
+            }
+
+            // Helper to format time nicely (e.g., "6:30pm" instead of "06:30 PM" or "1830")
+            function formatTime(timeStr) {
+                if (!timeStr) return '?';
+                // Handle 24-hour format (e.g., "1830", "0930")
+                if (/^\d{4}$/.test(timeStr)) {
+                    var hours = parseInt(timeStr.substring(0, 2), 10);
+                    var mins = parseInt(timeStr.substring(2, 4), 10);
+                    var ampm = hours >= 12 ? 'pm' : 'am';
+                    hours = hours % 12 || 12;
+                    return mins === 0 ? hours + ampm : hours + ':' + (mins < 10 ? '0' : '') + mins + ampm;
+                }
+                // Handle "HH:MM" format (e.g., "18:30")
+                if (/^\d{1,2}:\d{2}$/.test(timeStr)) {
+                    var parts = timeStr.split(':');
+                    var hours = parseInt(parts[0], 10);
+                    var mins = parseInt(parts[1], 10);
+                    var ampm = hours >= 12 ? 'pm' : 'am';
+                    hours = hours % 12 || 12;
+                    return mins === 0 ? hours + ampm : hours + ':' + (mins < 10 ? '0' : '') + mins + ampm;
+                }
+                // Handle "HH:MM AM/PM" format - convert to lowercase, remove leading zero
+                return timeStr.replace(/^0/, '').replace(/ /g, '').toLowerCase();
+            }
+
+            // Sort helper - by game date (earliest first)
+            function sortByDate(a, b) {
+                return a.dateSortable.localeCompare(b.dateSortable);
+            }
+
+            // Build email sections
+            if (newGames.length > 0) {
+                email += 'NEW GAMES ADDED (' + newGames.length + ' total)\n';
+                email += '-----------------------------------\n';
+                newGames.sort(sortByDate);
+                newGames.forEach(function(g) {
+                    email += g.date + ': ' + g.league + ' at ' + g.field + ' (' + formatTime(g.time) + ')\n';
+                });
+                email += '\nThese are indicated with the orange "NEW" label next to the date.\n\n';
+            }
+
+            if (locationChanges.length > 0) {
+                email += 'LOCATION CHANGES (' + locationChanges.length + ' total)\n';
+                email += '-----------------------------------\n';
+                locationChanges.sort(sortByDate);
+                locationChanges.forEach(function(g) {
+                    var details = g.changeDetails;
+                    var oldLoc = details.location ? details.location.old : '?';
+                    var newLoc = details.location ? details.location.new : g.field;
+                    var timeInfo = '';
+                    if (details.time) {
+                        timeInfo = ' (time also changed from ' + formatTime(details.time.old) + ' to ' + formatTime(details.time.new) + ')';
+                    }
+                    email += g.date + ' (' + g.league + '): moved from ' + oldLoc + ' to ' + newLoc + timeInfo + '\n';
+                });
+                email += '\n';
+            }
+
+            if (dateChanges.length > 0) {
+                email += 'DATE CHANGES (' + dateChanges.length + ' total)\n';
+                email += '-----------------------------------\n';
+                dateChanges.sort(sortByDate);
+                dateChanges.forEach(function(g) {
+                    var details = g.changeDetails;
+                    var oldDate = details.date ? details.date.old : '?';
+                    email += 'Moved from ' + oldDate + ' to ' + g.date + ' (' + g.league + ' at ' + g.field + ', ' + formatTime(g.time) + ')\n';
+                });
+                email += '\n';
+            }
+
+            if (timeChanges.length > 0) {
+                email += 'TIME CHANGES (' + timeChanges.length + ' total)\n';
+                email += '-----------------------------------\n';
+                timeChanges.sort(sortByDate);
+                timeChanges.forEach(function(g) {
+                    var details = g.changeDetails;
+                    var oldTime = details.time ? formatTime(details.time.old) : '?';
+                    var newTime = details.time ? formatTime(details.time.new) : formatTime(g.time);
+                    email += g.date + ' (' + g.league + ') at ' + g.field + ': ' + oldTime + ' → ' + newTime + '\n';
+                });
+                email += '\n';
+            }
+
+            if (email === '') {
+                email = 'No changes to report.\n';
+            } else {
+                // Add header
+                var header = 'Schedule Changes for ' + partnerName + '\n';
+                if (changesSinceDate) {
+                    header += 'Changes since: ' + changesSinceDate + '\n';
+                }
+                header += '\n';
+                email = header + email;
+            }
+
+            textarea.value = email;
+        }
+
+        function copyEmailToClipboard() {
+            var textarea = document.getElementById('email-text');
+            textarea.select();
+            textarea.setSelectionRange(0, 99999); // For mobile
+            document.execCommand('copy');
+
+            // Show feedback
+            var btn = document.querySelector('.email-generator-actions .btn-primary');
+            var originalText = btn.textContent;
+            btn.textContent = 'Copied!';
+            btn.style.background = '#28a745';
+            setTimeout(function() {
+                btn.textContent = originalText;
+                btn.style.background = '';
+            }, 2000);
+        }
+        {% endif %}
 
     </script>
 </body>
