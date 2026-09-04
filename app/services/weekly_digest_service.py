@@ -210,14 +210,9 @@ Here's your upcoming schedule of {game_count} SDLL game{'s' if game_count != 1 e
                     time_str = game.game_date.strftime('%I:%M %p').lstrip('0').lower()
                     field_name = game.field_name or 'TBD'
 
-                    # Format matchup
-                    home = game.home_team.display_name if game.home_team else 'TBD'
-                    away = game.away_team.display_name if game.away_team else 'TBD'
-                    matchup = f'{away} vs {home}'
-
                     html_parts.append(
                         f'<tr><td style="border-bottom:solid 1px #eee;padding-left:20px">'
-                        f'{time_str} @ {field_name} - {matchup}</td></tr>'
+                        f'{time_str} @ {field_name}</td></tr>'
                     )
 
         # Footer
