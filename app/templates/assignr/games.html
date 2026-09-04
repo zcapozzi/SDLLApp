@@ -148,11 +148,15 @@
             {% set local = game._local %}
             {% set has_assignment = game._accepted_umpires|length > 0 if game._accepted_umpires else false %}
             {% set needs_alert = game._needs_umpire and not has_assignment %}
+            {% set is_unpublished = not game.published %}
             <tr data-league="{{ local.league if local else game.league_name or '' }}"
                 data-status="{{ 'assigned' if has_assignment else 'unassigned' }}"
-                class="{{ 'needs-umpire-alert' if needs_alert else '' }}">
+                class="{{ 'needs-umpire-alert' if needs_alert else '' }}{{ ' unpublished-row' if is_unpublished else '' }}">
                 <td>
-                    <div>{{ game.localized_date[:10] if game.localized_date else '-' }}</div>
+                    <div>
+                        {{ game.localized_date[:10] if game.localized_date else '-' }}
+                        {% if is_unpublished %}<span class="badge-unpublished">UNPUB</span>{% endif %}
+                    </div>
                     <div style="color: var(--text-muted); font-size: 13px;">{{ game.localized_time or '' }}</div>
                 </td>
                 <td>
@@ -325,6 +329,25 @@ tr.needs-umpire-alert:hover {
 }
 tr.needs-umpire-alert td:first-child {
     border-left: 4px solid var(--danger-color);
+}
+
+/* Unpublished games */
+.badge-unpublished {
+    display: inline-block;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    background: #6c757d;
+    color: white;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+tr.unpublished-row {
+    background-color: #f8f9fa !important;
+}
+tr.unpublished-row td {
+    opacity: 0.7;
 }
 
 /* Umpire dropdowns */

@@ -242,10 +242,12 @@
             {% set local = game._local %}
             {% set has_assignment = game._accepted_umpires|length > 0 if game._accepted_umpires else false %}
             {% set needs_alert = game._needs_umpire and not has_assignment %}
-            <tr class="{{ 'needs-umpire-alert' if needs_alert else '' }}">
+            {% set is_unpublished = not game.published %}
+            <tr class="{{ 'needs-umpire-alert' if needs_alert else '' }}{{ ' unpublished-row' if is_unpublished else '' }}">
                 <td>
                     {{ game.localized_date[:10] if game.localized_date else '-' }}
                     <span style="color: var(--text-muted);">{{ game.localized_time or '' }}</span>
+                    {% if is_unpublished %}<span class="badge-unpublished">UNPUB</span>{% endif %}
                 </td>
                 <td>
                     {% if local %}
@@ -404,6 +406,25 @@ tr.needs-umpire-alert td:first-child {
     font-size: 12px;
     background: #f8d7da;
     color: #721c24;
+}
+
+/* Unpublished games */
+.badge-unpublished {
+    display: inline-block;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    background: #6c757d;
+    color: white;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+tr.unpublished-row {
+    background-color: #f8f9fa !important;
+}
+tr.unpublished-row td {
+    opacity: 0.7;
 }
 
 .delegated-badge {
