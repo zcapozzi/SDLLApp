@@ -890,6 +890,7 @@
                 awayTeam: '{{ game.away_team.computed_display_name if game.away_team else "TBD" }}',
                 isNew: {{ 'true' if game.ID in new_game_ids else 'false' }},
                 isCancelled: {{ 'true' if game.status == 'cancelled' else 'false' }},
+                isNoUmpire: {{ 'true' if game.umpire_was_unassigned else 'false' }},
                 hasDateChange: {{ 'true' if game.ID in game_change_types and 'date' in game_change_types[game.ID] else 'false' }},
                 hasTimeChange: {{ 'true' if game.ID in game_change_types and 'time' in game_change_types[game.ID] else 'false' }},
                 hasLocationChange: {{ 'true' if game.ID in game_change_types and 'location' in game_change_types[game.ID] else 'false' }},
@@ -936,6 +937,7 @@
             var locationChanges = [];
             var timeChanges = [];
             var dateChanges = [];
+            var cancellations = [];
 
             // Categorize only visible games
             for (var id in gameData) {
@@ -943,7 +945,12 @@
                 if (!visibleGameIds.has(id)) continue;
 
                 var game = gameData[id];
-                if (game.isCancelled) continue;
+
+                // Cancelled or no-umpire games go to cancellations
+                if (game.isCancelled || game.isNoUmpire) {
+                    cancellations.push(game);
+                    continue;
+                }
 
                 if (game.isNew) {
                     newGames.push(game);
@@ -1034,6 +1041,17 @@
                     var oldTime = details.time ? formatTime(details.time.old) : '?';
                     var newTime = details.time ? formatTime(details.time.new) : formatTime(g.time);
                     email += g.date + ' (' + g.league + ') at ' + g.field + ': ' + oldTime + ' → ' + newTime + '\n';
+                });
+                email += '\n';
+            }
+
+            if (cancellations.length > 0) {
+                email += 'CANCELLATIONS (' + cancellations.length + ' total)\n';
+                email += '-----------------------------------\n';
+                cancellations.sort(sortByDate);
+                cancellations.forEach(function(g) {
+                    var reason = g.isCancelled ? 'cancelled' : 'umpires not needed';
+                    email += g.date + ' (' + g.league + ') at ' + g.field + ', ' + formatTime(g.time) + ' - ' + reason + '\n';
                 });
                 email += '\n';
             }
