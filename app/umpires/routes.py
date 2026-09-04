@@ -1354,8 +1354,47 @@ def api_set_umpire_source():
         except Exception as e:
             logger.warning(f'Failed to log umpire source change: {e}')
 
+    # Handle Assignr publish/unpublish based on SDL assignment
+    assignr_unpublished = False
+    assignr_published = False
+    assignr_error = None
+
+    if game.assignr_id:
+        try:
+            from app.services.assignr_service import get_assignr_service
+            assignr_service = get_assignr_service()
+            if assignr_service.is_configured():
+                # If removing from SDL (Academy), unpublish in Assignr
+                if old_source and old_source.upper() == 'SDL' and (source is None or source.upper() != 'SDL'):
+                    success, error = assignr_service.unpublish_game(int(game.assignr_id))
+                    if success:
+                        assignr_unpublished = True
+                        logger.info(f'Unpublished game {game_id} (assignr_id={game.assignr_id}) from Assignr')
+                    else:
+                        assignr_error = error
+                        logger.warning(f'Failed to unpublish game in Assignr: {error}')
+                # If assigning TO SDL (Academy), publish in Assignr
+                elif source and source.upper() == 'SDL' and (old_source is None or old_source.upper() != 'SDL'):
+                    success, error = assignr_service.publish_game(int(game.assignr_id))
+                    if success:
+                        assignr_published = True
+                        logger.info(f'Published game {game_id} (assignr_id={game.assignr_id}) in Assignr')
+                    else:
+                        assignr_error = error
+                        logger.warning(f'Failed to publish game in Assignr: {error}')
+        except Exception as e:
+            assignr_error = str(e)
+            logger.warning(f'Failed to update game in Assignr: {e}')
+
     logger.info(f'Set umpire source for game {game_id} to {source} (notifications queued: {notifications_queued})')
-    return jsonify({'success': True, 'source': source, 'notifications_queued': notifications_queued})
+    return jsonify({
+        'success': True,
+        'source': source,
+        'notifications_queued': notifications_queued,
+        'assignr_unpublished': assignr_unpublished,
+        'assignr_published': assignr_published,
+        'assignr_error': assignr_error
+    })
 
 
 @umpires_bp.route('/api/set-umpire-count', methods=['POST'])
@@ -1380,7 +1419,13 @@ def api_set_umpire_count():
         except (ValueError, TypeError):
             return jsonify({'error': 'Invalid count value'}), 400
 
+    old_count = game.umpire_count_override
     game.umpire_count_override = count
+
+    # If changing from 0 umpires to 1+ umpires, reset umpire_was_unassigned
+    if old_count == 0 and count is not None and count > 0:
+        game.umpire_was_unassigned = 0
+
     db.session.commit()
 
     # Return the effective count (for display)

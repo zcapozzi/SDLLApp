@@ -106,12 +106,17 @@ def index():
     # Add _needs_umpire flag to each game
     assignr_games = add_needs_umpire_flags(assignr_games, league_lookup)
 
-    # Separate urgent games (within 2 weeks from now, needs umpire, unassigned)
+    # Separate urgent games (within 2 weeks from now, needs umpire, unassigned, SDL-managed)
     now = datetime.now()
     two_weeks_from_now = now + timedelta(days=14)
     urgent_games = []
 
     for game in assignr_games:
+        # Only consider SDL-managed games for urgent list
+        local = game.get('_local')
+        if not local or local.get('umpire_override') != 'SDL':
+            continue
+
         # Parse game date
         game_date_str = game.get('localized_date', '')[:10] if game.get('localized_date') else ''
         game_datetime = None
@@ -133,8 +138,15 @@ def index():
         if is_urgent:
             urgent_games.append(game)
 
-    # Build summary
-    summary = service.get_umpire_summary(assignr_games)
+    # Filter to only SDL-managed games for summary stats
+    # (games where umpire_override='SDL' - these are games WE need to assign)
+    sdl_games = [
+        g for g in assignr_games
+        if g.get('_local') and g['_local'].get('umpire_override') == 'SDL'
+    ]
+
+    # Build summary based only on SDL-managed games
+    summary = service.get_umpire_summary(sdl_games)
 
     # Sort umpires by game count (descending)
     umpires_sorted = sorted(
@@ -153,6 +165,22 @@ def index():
     # Get umpire partners for source dropdown
     partners = UmpirePartner.get_active()
 
+    # Build delegated games summary (games NOT managed by SDL)
+    # These are unpublished in Assignr and assigned to partners
+    delegated_summary = {}
+    for game in assignr_games:
+        local = game.get('_local')
+        if local:
+            override = local.get('umpire_override')
+            # Count games by their umpire_override (excluding SDL and None)
+            if override and override.upper() != 'SDL':
+                if override not in delegated_summary:
+                    delegated_summary[override] = {'count': 0, 'unpublished': 0}
+                delegated_summary[override]['count'] += 1
+                # Check if game is unpublished in Assignr
+                if not game.get('published', True):
+                    delegated_summary[override]['unpublished'] += 1
+
     return render_template(
         'assignr/index.html',
         games=assignr_games,
@@ -161,6 +189,7 @@ def index():
         umpires=umpires_sorted,
         leagues=leagues_sorted,
         partners=partners,
+        delegated_summary=delegated_summary,
         start_date=start_date,
         end_date=end_date
     )

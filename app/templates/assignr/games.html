@@ -51,6 +51,7 @@
                     {% if local %}
                     <select class="umpire-source-select form-control"
                             data-game-id="{{ local.game_id }}"
+                            data-current-source="{{ local.umpire_override or '' }}"
                             style="width: 80px; padding: 4px 6px; font-size: 12px;"
                             onchange="setUmpireSource(this)">
                         <option value="">None</option>
@@ -194,6 +195,7 @@
                     {% if local %}
                     <select class="umpire-source-select form-control"
                             data-game-id="{{ local.game_id }}"
+                            data-current-source="{{ local.umpire_override or '' }}"
                             style="width: 70px; padding: 3px 6px; font-size: 11px;"
                             onchange="setUmpireSource(this)">
                         <option value="">-</option>
@@ -415,7 +417,20 @@ function setUmpireCount(selectEl) {
 
 function setUmpireSource(selectEl) {
     var gameId = selectEl.dataset.gameId;
-    var source = selectEl.value || null;
+    var newSource = selectEl.value || null;
+    var oldSource = selectEl.dataset.currentSource || '';
+
+    // If changing FROM SDL (Academy) to something else, warn about Assignr unpublishing
+    if (oldSource.toUpperCase() === 'SDL' && (!newSource || newSource.toUpperCase() !== 'SDL')) {
+        var message = 'Removing this game from Academy (SDL) will:\n\n' +
+            '• Set the game to UNPUBLISHED in Assignr\n' +
+            '• Prevent officials from seeing or claiming it\n\n' +
+            'Continue?';
+        if (!confirm(message)) {
+            selectEl.value = oldSource;
+            return;
+        }
+    }
 
     // Get CSRF token
     var csrfToken = document.querySelector('meta[name="csrf-token"]');
@@ -429,17 +444,27 @@ function setUmpireSource(selectEl) {
         },
         body: JSON.stringify({
             game_id: gameId,
-            source: source
+            source: newSource
         })
     })
     .then(function(response) { return response.json(); })
     .then(function(result) {
         if (result.success) {
-            // Show brief success indicator
+            // Update current source tracking
+            selectEl.dataset.currentSource = newSource || '';
+
+            // Show success indicator
             selectEl.style.borderColor = '#28a745';
             setTimeout(function() {
                 selectEl.style.borderColor = '#ddd';
             }, 1000);
+
+            // If Assignr was unpublished, show notification
+            if (result.assignr_unpublished) {
+                console.log('Game unpublished in Assignr');
+            } else if (result.assignr_error) {
+                alert('Warning: Source updated but Assignr unpublish failed: ' + result.assignr_error);
+            }
         } else {
             alert('Error: ' + (result.error || 'Unknown error'));
             location.reload();

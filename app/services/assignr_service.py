@@ -27,18 +27,35 @@ class AssignrService:
         self.client_secret = os.environ.get('ASSIGNR_CLIENT_SECRET') or os.environ.get('assignr_client_secret')
         self.site_id = os.environ.get('ASSIGNR_SITE_ID') or os.environ.get('assignr_site_id')
         self._access_token = None
+        self._access_token_write = None
         self._token_expires_at = None
+        self._token_write_expires_at = None
 
     def is_configured(self) -> bool:
         """Check if Assignr credentials are configured."""
         return all([self.client_id, self.client_secret, self.site_id])
 
-    def _get_access_token(self) -> Optional[str]:
-        """Get or refresh the OAuth2 access token."""
+    def _get_access_token(self, scope: str = "read") -> Optional[str]:
+        """Get or refresh the OAuth2 access token.
+
+        Args:
+            scope: OAuth scope - 'read' or 'write'
+
+        Returns:
+            Access token string or None if failed
+        """
+        # Use different cache for read vs write tokens
+        if scope == "write":
+            cached_token = self._access_token_write
+            expires_at = self._token_write_expires_at
+        else:
+            cached_token = self._access_token
+            expires_at = self._token_expires_at
+
         # Return cached token if still valid
-        if self._access_token and self._token_expires_at:
-            if datetime.now() < self._token_expires_at - timedelta(minutes=5):
-                return self._access_token
+        if cached_token and expires_at:
+            if datetime.now() < expires_at - timedelta(minutes=5):
+                return cached_token
 
         if not self.client_id or not self.client_secret:
             logger.error("Assignr credentials not configured")
@@ -51,26 +68,34 @@ class AssignrService:
                     "grant_type": "client_credentials",
                     "client_id": self.client_id,
                     "client_secret": self.client_secret,
-                    "scope": "read"
+                    "scope": scope
                 },
                 timeout=30
             )
             response.raise_for_status()
             data = response.json()
 
-            self._access_token = data.get('access_token')
+            token = data.get('access_token')
             expires_in = data.get('expires_in', 3600)
-            self._token_expires_at = datetime.now() + timedelta(seconds=expires_in)
+            expires_at = datetime.now() + timedelta(seconds=expires_in)
 
-            logger.info(f"Obtained Assignr access token, expires in {expires_in}s")
-            return self._access_token
+            # Cache based on scope
+            if scope == "write":
+                self._access_token_write = token
+                self._token_write_expires_at = expires_at
+            else:
+                self._access_token = token
+                self._token_expires_at = expires_at
+
+            logger.info(f"Obtained Assignr {scope} access token, expires in {expires_in}s")
+            return token
 
         except requests.RequestException as e:
             logger.error(f"Failed to obtain Assignr access token: {e}")
             return None
 
     def _request(self, url: str, params: Optional[Dict] = None) -> Optional[Dict[str, Any]]:
-        """Make an authenticated request to the Assignr API."""
+        """Make an authenticated GET request to the Assignr API."""
         token = self._get_access_token()
         if not token:
             return None
@@ -90,6 +115,44 @@ class AssignrService:
             if hasattr(e, 'response') and e.response is not None:
                 logger.error(f"Response body: {e.response.text[:500]}")
             return None
+
+    def _put_request(self, url: str, data: Dict) -> Tuple[bool, Optional[str]]:
+        """Make an authenticated PUT request to the Assignr API.
+
+        Args:
+            url: API endpoint URL
+            data: Form data to send (application/x-www-form-urlencoded)
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        token = self._get_access_token(scope="write")
+        if not token:
+            return False, "Failed to obtain write access token"
+
+        try:
+            response = requests.put(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                data=data,  # Form-urlencoded, not JSON
+                timeout=30
+            )
+            response.raise_for_status()
+            return True, None
+        except requests.RequestException as e:
+            error_msg = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    error_msg = error_data.get('message', error_data.get('error', str(e)))
+                except Exception:
+                    error_msg = e.response.text[:200]
+            logger.error(f"Assignr PUT request failed: {error_msg}")
+            return False, error_msg
 
     def get_games(
         self,
@@ -181,6 +244,62 @@ class AssignrService:
             return []
 
         return data.get('_embedded', {}).get('assignments', [])
+
+    def get_game(self, game_id: int) -> Optional[Dict]:
+        """Fetch a single game's details from Assignr.
+
+        Args:
+            game_id: Assignr game ID
+
+        Returns:
+            Game data dict or None if not found
+        """
+        url = f"{self.BASE_URL}/games/{game_id}"
+        return self._request(url)
+
+    def set_game_published(self, game_id: int, published: bool) -> Tuple[bool, Optional[str]]:
+        """Set a game's published (is_public) status in Assignr.
+
+        When a game is unpublished, officials cannot see or claim it.
+
+        Args:
+            game_id: Assignr game ID
+            published: True to publish, False to unpublish
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        url = f"{self.BASE_URL}/games/{game_id}"
+        # Assignr API: is_public="y" to publish, is_public=0 to unpublish
+        data = {"is_public": "y" if published else 0}
+
+        success, error = self._put_request(url, data)
+        if success:
+            status = "published" if published else "unpublished"
+            logger.info(f"Assignr game {game_id} set to {status}")
+        return success, error
+
+    def unpublish_game(self, game_id: int) -> Tuple[bool, Optional[str]]:
+        """Unpublish a game in Assignr (convenience method).
+
+        Args:
+            game_id: Assignr game ID
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        return self.set_game_published(game_id, published=False)
+
+    def publish_game(self, game_id: int) -> Tuple[bool, Optional[str]]:
+        """Publish a game in Assignr (convenience method).
+
+        Args:
+            game_id: Assignr game ID
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        return self.set_game_published(game_id, published=True)
 
     def enrich_games_with_local_data(self, assignr_games: List[Dict]) -> List[Dict]:
         """Link Assignr games to local sdll_games records and add info.

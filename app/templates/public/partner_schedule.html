@@ -405,9 +405,11 @@
         {% endif %}
 
         {% set cancelled_count = games|selectattr('status', 'equalto', 'cancelled')|list|length %}
-        {% set active_count = games|length - cancelled_count %}
+        {% set no_umpire_count = games|selectattr('umpire_was_unassigned', 'equalto', 1)|list|length %}
+        {% set excluded_count = cancelled_count + no_umpire_count %}
+        {% set active_count = games|length - excluded_count %}
         <div class="game-count">
-            {{ active_count }} game{{ 's' if active_count != 1 else '' }} {% if changes_since_date %}with changes{% else %}assigned{% endif %}{% if cancelled_count > 0 %} (and {{ cancelled_count }} cancelled){% endif %}
+            {{ active_count }} game{{ 's' if active_count != 1 else '' }} {% if changes_since_date %}with changes{% else %}assigned{% endif %}{% if excluded_count > 0 %} (and {{ excluded_count }} cancelled){% endif %}
             {% if new_game_ids and not changes_since_date %}<span style="color: rgb(255, 140, 0);">({{ new_game_ids|length }} new this week)</span>{% endif %}
         </div>
 
@@ -602,33 +604,42 @@
                 var allRows = document.querySelectorAll('.schedule-table tbody tr');
                 var totalGames = allRows.length;
 
-                // Count cancelled games (check both class and data attribute)
+                // Count cancelled and no-umpire games
                 var visibleCancelled = 0;
                 var totalCancelled = 0;
+                var visibleNoUmpire = 0;
+                var totalNoUmpire = 0;
                 allRows.forEach(function(row) {
                     var isCancelled = row.classList.contains('cancelled-row') || row.dataset.status === 'cancelled';
+                    var isNoUmpire = row.classList.contains('no-umpire-row');
                     var isVisible = row.style.display !== 'none';
                     if (isCancelled) {
                         totalCancelled++;
                         if (isVisible) visibleCancelled++;
                     }
+                    if (isNoUmpire && !isCancelled) {
+                        totalNoUmpire++;
+                        if (isVisible) visibleNoUmpire++;
+                    }
                 });
 
-                var activeVisible = visibleCount - visibleCancelled;
-                var activeTotal = totalGames - totalCancelled;
+                var totalExcluded = totalCancelled + totalNoUmpire;
+                var visibleExcluded = visibleCancelled + visibleNoUmpire;
+                var activeVisible = visibleCount - visibleExcluded;
+                var activeTotal = totalGames - totalExcluded;
 
                 var text = '';
                 if (visibleCount === totalGames) {
                     // No filter applied
                     text = activeTotal + ' game' + (activeTotal !== 1 ? 's' : '') + ' assigned';
-                    if (totalCancelled > 0) {
-                        text += ' (and ' + totalCancelled + ' cancelled)';
+                    if (totalExcluded > 0) {
+                        text += ' (and ' + totalExcluded + ' cancelled' + ')';
                     }
                 } else {
                     // Filter applied
                     text = 'Showing ' + activeVisible + ' of ' + activeTotal + ' games';
-                    if (visibleCancelled > 0) {
-                        text += ' (and ' + visibleCancelled + ' cancelled)';
+                    if (visibleExcluded > 0) {
+                        text += ' (and ' + visibleExcluded + ' cancelled' + ')';
                     }
                 }
                 countEl.innerHTML = text;

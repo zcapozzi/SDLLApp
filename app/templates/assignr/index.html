@@ -29,11 +29,11 @@
     </form>
 </div>
 
-{# Summary Cards #}
+{# Summary Cards - SDL-managed games only #}
 <div class="stats-grid" style="margin-bottom: 20px;">
     <div class="stat-card">
         <div class="stat-value">{{ summary.total_games }}</div>
-        <div class="stat-label">Total Games</div>
+        <div class="stat-label">SDL Games</div>
     </div>
     <div class="stat-card">
         <div class="stat-value" style="color: var(--success-color);">{{ summary.assigned_games }}</div>
@@ -48,6 +48,23 @@
         <div class="stat-label">Active Umpires</div>
     </div>
 </div>
+
+{# Delegated Games Note #}
+{% if delegated_summary %}
+<div class="card delegated-note" style="margin-bottom: 20px; padding: 12px 16px; background: #f8f9fa;">
+    <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+        <span style="font-weight: 600; color: var(--text-muted);">Delegated to Partners:</span>
+        {% for partner, data in delegated_summary.items() %}
+        <span class="delegated-badge">
+            {{ partner }}: {{ data.count }} game{{ 's' if data.count != 1 else '' }}
+            {% if data.unpublished > 0 %}
+            <span style="color: #6c757d; font-size: 11px;">({{ data.unpublished }} unpublished)</span>
+            {% endif %}
+        </span>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 
 {# Urgent Games Alert #}
 {% if urgent_games %}
@@ -89,6 +106,7 @@
                     {% if local %}
                     <select class="umpire-source-select form-control"
                             data-game-id="{{ local.game_id }}"
+                            data-current-source="{{ local.umpire_override or '' }}"
                             style="width: 80px; padding: 4px 6px; font-size: 12px;"
                             onchange="setUmpireSource(this)">
                         <option value="">None</option>
@@ -261,6 +279,7 @@
                     {% if local %}
                     <select class="umpire-source-select form-control"
                             data-game-id="{{ local.game_id }}"
+                            data-current-source="{{ local.umpire_override or '' }}"
                             style="width: 70px; padding: 3px 6px; font-size: 11px;"
                             onchange="setUmpireSource(this)">
                         <option value="">-</option>
@@ -387,6 +406,16 @@ tr.needs-umpire-alert td:first-child {
     color: #721c24;
 }
 
+.delegated-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    background: #e9ecef;
+    color: #495057;
+    font-weight: 500;
+}
+
 @media (max-width: 768px) {
     .stats-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -447,7 +476,21 @@ function setUmpireCount(selectEl) {
 
 function setUmpireSource(selectEl) {
     var gameId = selectEl.dataset.gameId;
-    var source = selectEl.value || null;
+    var newSource = selectEl.value || null;
+    var oldSource = selectEl.dataset.currentSource || '';
+
+    // If changing FROM SDL (Academy) to something else, warn about Assignr unpublishing
+    if (oldSource.toUpperCase() === 'SDL' && (!newSource || newSource.toUpperCase() !== 'SDL')) {
+        var message = 'Removing this game from Academy (SDL) will:\n\n' +
+            '• Set the game to UNPUBLISHED in Assignr\n' +
+            '• Prevent officials from seeing or claiming it\n\n' +
+            'Continue?';
+        if (!confirm(message)) {
+            // Reset to old value
+            selectEl.value = oldSource;
+            return;
+        }
+    }
 
     // Get CSRF token
     var csrfToken = document.querySelector('meta[name="csrf-token"]');
@@ -461,25 +504,38 @@ function setUmpireSource(selectEl) {
         },
         body: JSON.stringify({
             game_id: gameId,
-            source: source
+            source: newSource
         })
     })
     .then(function(response) { return response.json(); })
     .then(function(result) {
         if (result.success) {
-            // Show brief success indicator
-            selectEl.style.borderColor = '#28a745';
+            // Update the stored current source
+            selectEl.dataset.currentSource = newSource || '';
+
+            // Show feedback about Assignr
+            if (result.assignr_unpublished) {
+                selectEl.style.borderColor = '#28a745';
+                selectEl.title = 'Game unpublished from Assignr';
+            } else if (result.assignr_error) {
+                selectEl.style.borderColor = '#ffc107';
+                selectEl.title = 'Warning: Assignr update failed - ' + result.assignr_error;
+                alert('Source changed, but Assignr update failed:\n' + result.assignr_error);
+            } else {
+                selectEl.style.borderColor = '#28a745';
+            }
+
             setTimeout(function() {
                 selectEl.style.borderColor = '#ddd';
-            }, 1000);
+            }, 2000);
         } else {
             alert('Error: ' + (result.error || 'Unknown error'));
-            location.reload();
+            selectEl.value = oldSource;
         }
     })
     .catch(function(err) {
         alert('Error setting umpire source: ' + err);
-        location.reload();
+        selectEl.value = oldSource;
     });
 }
 </script>

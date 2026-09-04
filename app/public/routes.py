@@ -677,13 +677,34 @@ def partner_schedule(token):
         if g.league:
             leagues_set.add(g.league)
 
-        # Check for new games (use date_added column)
-        if g.date_added and g.date_added > one_week_ago:
+        # Check for new games (use date_added column) - exclude cancelled
+        if g.date_added and g.date_added > one_week_ago and g.status != 'cancelled':
             new_game_ids.add(g.ID)
 
         # Check for NTL games
         if g.no_time_limit:
             has_ntl_games = True
+
+    # Also mark games as NEW if they were recently assigned to this partner
+    # (even if the game itself is older in the database) - exclude cancelled
+    game_ids_to_status = {g.ID: g.status for g in games}
+    game_ids = list(game_ids_to_status.keys())
+    if game_ids:
+        recently_assigned = GameChange.query.filter(
+            GameChange.game_id.in_(game_ids),
+            GameChange.changed_at >= one_week_ago,
+            GameChange.change_type == 'update'
+        ).all()
+        for change in recently_assigned:
+            # Skip if game is cancelled
+            if game_ids_to_status.get(change.game_id) == 'cancelled':
+                continue
+            changes_dict = change.changes_dict or {}
+            umpire_source_change = changes_dict.get('umpire_source')
+            if umpire_source_change and isinstance(umpire_source_change, dict):
+                new_source = umpire_source_change.get('new', '')
+                if new_source and new_source.upper() == partner_code.upper():
+                    new_game_ids.add(change.game_id)
 
     # Build game_originals for rescheduled games (batch query to avoid N+1)
     game_originals = GameChange.get_original_display_batch(games)

@@ -576,13 +576,18 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
 - **URL Args:** `?start=YYYY-MM-DD`, `?end=YYYY-MM-DD`
 - **Actions:**
   - View games from Assignr API with umpire assignments
-  - See summary stats (total games, assigned, unassigned, active umpires)
-  - View games by league breakdown
+  - See summary stats for SDL-managed games only (total, assigned, unassigned, active umpires)
+  - View delegated games summary (games assigned to partners with unpublished count)
+  - View games by league breakdown (SDL-managed only)
   - View top umpires with game counts
-  - Urgent games section (within 2 weeks, need umpires, unassigned)
+  - Urgent games section (within 2 weeks, need umpires, unassigned, SDL-managed only)
   - Set umpire source (SDL, DIA, DYN) directly from page
   - Set umpire count override
   - Games linked to local database highlighted
+  - **Assignr Publish/Unpublish Integration:**
+    - Changing source TO SDL automatically publishes game in Assignr (officials can see/claim)
+    - Changing source FROM SDL automatically unpublishes game in Assignr (officials cannot see)
+    - Confirmation dialog warns when removing from SDL about unpublishing
 - **Navigation:** Dashboard → "Umpires" → "Assignr"
 
 ### 8.9 Assignr Games List
@@ -1148,4 +1153,4 @@ When adding new routes or features:
 3. Update feature matrix if needed
 4. Update quick reference navigation paths
 
-Last updated: September 1, 2026
+Last updated: September 4, 2026
