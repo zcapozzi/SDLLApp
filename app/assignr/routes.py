@@ -489,6 +489,7 @@ def sync_status():
 def officials_list():
     """List officials and their group memberships from Assignr."""
     from app.models.umpire_profile import UmpireProfile
+    from app.models.umpire_group_assignment import UmpireGroupAssignment
 
     service = get_assignr_service()
 
@@ -508,12 +509,27 @@ def officials_list():
     ).all()
     local_by_assignr_id = {p.assignr_id: p for p in local_profiles}
 
+    # Get all local group assignments
+    all_assignments = UmpireGroupAssignment.query.all()
+    local_groups_by_profile = {}
+    for assignment in all_assignments:
+        if assignment.umpire_profile_id not in local_groups_by_profile:
+            local_groups_by_profile[assignment.umpire_profile_id] = set()
+        local_groups_by_profile[assignment.umpire_profile_id].add(assignment.assignr_group_id)
+
     # Enrich officials with local data and group info
     for official in officials:
         official_id = str(official.get('id', ''))
-        official['_local_profile'] = local_by_assignr_id.get(official_id)
+        local_profile = local_by_assignr_id.get(official_id)
+        official['_local_profile'] = local_profile
 
-        # Get this official's groups
+        # Get local SDLL group assignments for this profile
+        if local_profile:
+            official['_local_group_ids'] = local_groups_by_profile.get(local_profile.id, set())
+        else:
+            official['_local_group_ids'] = set()
+
+        # Get this official's groups from Assignr
         official_groups = service.get_official_groups(int(official_id)) if official_id else []
         official['_groups'] = official_groups
         official['_group_names'] = [g.get('name', '') for g in official_groups]
@@ -558,12 +574,13 @@ def update_official_groups(official_id):
         return jsonify({'error': error}), 500
 
 
-@assignr_bp.route('/officials/<int:official_id>/sdll-flags', methods=['POST'])
+@assignr_bp.route('/officials/<int:official_id>/sdll-groups', methods=['POST'])
 @login_required
 @umpire_coordinator_required
-def update_sdll_flags(official_id):
-    """Update SDLL profile flags and sync with Assignr groups."""
+def update_sdll_groups(official_id):
+    """Update SDLL group assignment and sync with Assignr."""
     from app.models.umpire_profile import UmpireProfile
+    from app.models.umpire_group_assignment import UmpireGroupAssignment
 
     service = get_assignr_service()
 
@@ -572,48 +589,33 @@ def update_sdll_flags(official_id):
 
     data = request.get_json()
     profile_id = data.get('profile_id')
-    flag = data.get('flag')  # 'active' or 'plate_trained'
-    value = data.get('value', False)
+    group_id = data.get('group_id')
+    group_name = data.get('group_name')
+    checked = data.get('checked', False)
 
-    if not profile_id or not flag:
-        return jsonify({'error': 'Missing profile_id or flag'}), 400
+    if not profile_id or not group_id:
+        return jsonify({'error': 'Missing profile_id or group_id'}), 400
 
     # Find the SDLL profile
     profile = UmpireProfile.query.get(profile_id)
     if not profile:
         return jsonify({'error': 'Profile not found'}), 404
 
-    # Update the flag
-    if flag == 'active':
-        profile.assignr_active = value
-    elif flag == 'plate_trained':
-        profile.assignr_plate_trained = value
+    # Update local assignment
+    if checked:
+        UmpireGroupAssignment.add_group(profile_id, group_id, group_name)
     else:
-        return jsonify({'error': 'Invalid flag'}), 400
+        UmpireGroupAssignment.remove_group(profile_id, group_id)
 
-    db.session.commit()
+    # Sync with Assignr
+    if checked:
+        success, error = service.add_official_to_group(official_id, group_id)
+    else:
+        success, error = service.remove_official_from_group(official_id, group_id)
 
-    # Sync with Assignr groups
-    groups = service.get_site_groups()
-    group_map = {}
-    for g in groups:
-        name_lower = g.get('name', '').lower()
-        if 'active' in name_lower:
-            group_map['active'] = g.get('id')
-        elif 'plate' in name_lower or 'behind' in name_lower:
-            group_map['plate_trained'] = g.get('id')
-
-    # Add or remove from group based on flag value
-    group_id = group_map.get(flag)
-    if group_id:
-        if value:
-            success, error = service.add_official_to_group(official_id, group_id)
-        else:
-            success, error = service.remove_official_from_group(official_id, group_id)
-
-        if not success:
-            logger.warning(f"Failed to sync {flag} flag to Assignr: {error}")
-            # Still return success - local update worked
+    if not success:
+        logger.warning(f"Failed to sync group {group_id} to Assignr: {error}")
+        # Still return success - local update worked
 
     return jsonify({'success': True})
 
@@ -622,8 +624,9 @@ def update_sdll_flags(official_id):
 @login_required
 @umpire_coordinator_required
 def import_from_assignr():
-    """Import group memberships from Assignr and update SDLL flags."""
+    """Import group memberships from Assignr and update SDLL database."""
     from app.models.umpire_profile import UmpireProfile
+    from app.models.umpire_group_assignment import UmpireGroupAssignment
 
     service = get_assignr_service()
 
@@ -631,42 +634,31 @@ def import_from_assignr():
         flash('Assignr not configured.', 'error')
         return redirect(url_for('assignr.officials_list'))
 
-    # Get groups and build map
+    # Get all groups for name lookup
     groups = service.get_site_groups()
-    active_group_id = None
-    plate_group_id = None
-
-    for g in groups:
-        name_lower = g.get('name', '').lower()
-        if 'active' in name_lower:
-            active_group_id = g.get('id')
-        elif 'plate' in name_lower or 'behind' in name_lower:
-            plate_group_id = g.get('id')
+    group_lookup = {g.get('id'): g.get('name') for g in groups}
 
     # Get all linked profiles
     profiles = UmpireProfile.query.filter(
         UmpireProfile.assignr_id.isnot(None)
     ).all()
 
-    updated = 0
+    total_added = 0
+    total_removed = 0
 
     for profile in profiles:
         official_id = int(profile.assignr_id)
         official_groups = service.get_official_groups(official_id)
-        group_ids = {g.get('id') for g in official_groups}
+        group_ids = [g.get('id') for g in official_groups]
 
-        # Update active flag based on Assignr group membership
-        new_active = active_group_id in group_ids if active_group_id else False
-        new_plate = plate_group_id in group_ids if plate_group_id else False
+        # Sync local assignments to match Assignr
+        added, removed = UmpireGroupAssignment.sync_from_list(
+            profile.id, group_ids, group_lookup
+        )
+        total_added += added
+        total_removed += removed
 
-        if profile.assignr_active != new_active or profile.assignr_plate_trained != new_plate:
-            profile.assignr_active = new_active
-            profile.assignr_plate_trained = new_plate
-            updated += 1
-
-    db.session.commit()
-
-    flash(f'Imported group memberships: {updated} profiles updated.', 'success')
+    flash(f'Imported from Assignr: {total_added} added, {total_removed} removed.', 'success')
     return redirect(url_for('assignr.officials_list'))
 
 
@@ -674,8 +666,9 @@ def import_from_assignr():
 @login_required
 @umpire_coordinator_required
 def sync_officials_with_assignr():
-    """Sync all SDLL profile flags with Assignr groups."""
+    """Push SDLL group assignments to Assignr."""
     from app.models.umpire_profile import UmpireProfile
+    from app.models.umpire_group_assignment import UmpireGroupAssignment
 
     service = get_assignr_service()
 
@@ -683,24 +676,14 @@ def sync_officials_with_assignr():
         flash('Assignr not configured.', 'error')
         return redirect(url_for('assignr.officials_list'))
 
-    # Get groups and build map
-    groups = service.get_site_groups()
-    group_map = {}
-    for g in groups:
-        name_lower = g.get('name', '').lower()
-        if 'active' in name_lower:
-            group_map['active'] = g.get('id')
-        elif 'plate' in name_lower or 'behind' in name_lower:
-            group_map['plate_trained'] = g.get('id')
-
-    if not group_map:
-        flash('Could not find Active or Plate Trained groups in Assignr.', 'error')
-        return redirect(url_for('assignr.officials_list'))
-
-    # Get all linked profiles
+    # Get all linked profiles with their group assignments
     profiles = UmpireProfile.query.filter(
         UmpireProfile.assignr_id.isnot(None)
     ).all()
+
+    # Get all groups for reference
+    all_groups = service.get_site_groups()
+    all_group_ids = {g.get('id') for g in all_groups}
 
     synced = 0
     errors = 0
@@ -708,31 +691,32 @@ def sync_officials_with_assignr():
     for profile in profiles:
         official_id = int(profile.assignr_id)
 
-        # Sync active flag
-        if 'active' in group_map:
-            group_id = group_map['active']
-            if profile.assignr_active:
-                success, error = service.add_official_to_group(official_id, group_id)
-            else:
-                success, error = service.remove_official_from_group(official_id, group_id)
-            if success:
-                synced += 1
-            else:
-                errors += 1
+        # Get current Assignr groups
+        current_assignr_groups = service.get_official_groups(official_id)
+        current_group_ids = {g.get('id') for g in current_assignr_groups}
 
-        # Sync plate_trained flag
-        if 'plate_trained' in group_map:
-            group_id = group_map['plate_trained']
-            if profile.assignr_plate_trained:
-                success, error = service.add_official_to_group(official_id, group_id)
-            else:
-                success, error = service.remove_official_from_group(official_id, group_id)
-            if success:
-                synced += 1
-            else:
-                errors += 1
+        # Get desired SDLL groups
+        desired_group_ids = set(UmpireGroupAssignment.get_group_ids_for_profile(profile.id))
 
-    flash(f'Synced {synced} group assignments ({errors} errors).', 'success' if errors == 0 else 'warning')
+        # Add missing groups
+        for gid in desired_group_ids - current_group_ids:
+            if gid in all_group_ids:  # Only sync known groups
+                success, error = service.add_official_to_group(official_id, gid)
+                if success:
+                    synced += 1
+                else:
+                    errors += 1
+
+        # Remove extra groups
+        for gid in current_group_ids - desired_group_ids:
+            if gid in all_group_ids:  # Only sync known groups
+                success, error = service.remove_official_from_group(official_id, gid)
+                if success:
+                    synced += 1
+                else:
+                    errors += 1
+
+    flash(f'Synced to Assignr: {synced} changes ({errors} errors).', 'success' if errors == 0 else 'warning')
     return redirect(url_for('assignr.officials_list'))
 
 

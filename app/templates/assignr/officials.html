@@ -118,18 +118,14 @@
                             &#10003; Linked
                         </span>
                         <div class="sdll-flags">
-                            <label class="flag-toggle" title="Active Umpires group">
+                            {% for group in groups %}
+                            <label class="flag-toggle" title="{{ group.name }}">
                                 <input type="checkbox"
-                                    {% if official._local_profile.assignr_active %}checked{% endif %}
-                                    onchange="toggleSDLLFlag({{ official.id }}, {{ official._local_profile.id }}, 'active', this.checked)">
-                                <span>Active</span>
+                                    {% if group.id in official._local_group_ids %}checked{% endif %}
+                                    onchange="toggleSDLLGroup({{ official.id }}, {{ official._local_profile.id }}, {{ group.id }}, '{{ group.name }}', this.checked)">
+                                <span>{{ group.name[:8] }}{% if group.name|length > 8 %}...{% endif %}</span>
                             </label>
-                            <label class="flag-toggle" title="Behind-the-plate Trained group">
-                                <input type="checkbox"
-                                    {% if official._local_profile.assignr_plate_trained %}checked{% endif %}
-                                    onchange="toggleSDLLFlag({{ official.id }}, {{ official._local_profile.id }}, 'plate_trained', this.checked)">
-                                <span>Plate</span>
-                            </label>
+                            {% endfor %}
                         </div>
                     </div>
                     {% else %}
@@ -401,11 +397,11 @@ function removeFromGroup(officialId, groupId, btn) {
     });
 }
 
-function toggleSDLLFlag(assignrId, profileId, flag, checked) {
+function toggleSDLLGroup(assignrId, profileId, groupId, groupName, checked) {
     var csrfToken = document.querySelector('meta[name="csrf-token"]');
     csrfToken = csrfToken ? csrfToken.getAttribute('content') : '';
 
-    fetch('/assignr/officials/' + assignrId + '/sdll-flags', {
+    fetch('/assignr/officials/' + assignrId + '/sdll-groups', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -413,8 +409,9 @@ function toggleSDLLFlag(assignrId, profileId, flag, checked) {
         },
         body: JSON.stringify({
             profile_id: profileId,
-            flag: flag,
-            value: checked
+            group_id: groupId,
+            group_name: groupName,
+            checked: checked
         })
     })
     .then(function(response) { return response.json(); })
@@ -426,7 +423,7 @@ function toggleSDLLFlag(assignrId, profileId, flag, checked) {
         }
     })
     .catch(function(err) {
-        alert('Error updating flag: ' + err);
+        alert('Error updating group: ' + err);
         // Revert checkbox
         event.target.checked = !checked;
     });
