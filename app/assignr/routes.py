@@ -74,9 +74,10 @@ def index():
             'assignr/not_configured.html'
         )
 
-    # Get date range from query params (default to next 2 weeks)
+    # Get date range from query params
     start_str = request.args.get('start')
     end_str = request.args.get('end')
+    show_unpublished = request.args.get('show_unpublished', '0') == '1'
 
     if start_str:
         try:
@@ -86,16 +87,19 @@ def index():
     else:
         start_date = datetime.now()
 
+    # End date is optional - if not specified, fetch through end of year
+    end_date = None
     if end_str:
         try:
             end_date = datetime.strptime(end_str, '%Y-%m-%d')
         except ValueError:
-            end_date = start_date + timedelta(days=14)
-    else:
-        end_date = start_date + timedelta(days=14)
+            pass
+
+    # Use end of year as API fallback when no end date specified
+    api_end_date = end_date if end_date else datetime(start_date.year, 12, 31)
 
     # Fetch games from Assignr
-    assignr_games = service.get_all_games(start_date, end_date)
+    assignr_games = service.get_all_games(start_date, api_end_date)
 
     # Enrich with local data
     assignr_games = service.enrich_games_with_local_data(assignr_games)
@@ -191,7 +195,8 @@ def index():
         partners=partners,
         delegated_summary=delegated_summary,
         start_date=start_date,
-        end_date=end_date
+        end_date=end_date,
+        show_unpublished=show_unpublished
     )
 
 

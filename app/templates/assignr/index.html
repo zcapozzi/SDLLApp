@@ -17,14 +17,22 @@
                    value="{{ start_date.strftime('%Y-%m-%d') }}">
         </div>
         <div class="filter-group">
-            <label for="end">End Date</label>
+            <label for="end">End Date <span style="font-weight: normal; color: var(--text-muted);">(optional)</span></label>
             <input type="date" id="end" name="end" class="form-control"
-                   value="{{ end_date.strftime('%Y-%m-%d') }}">
+                   value="{{ end_date.strftime('%Y-%m-%d') if end_date else '' }}">
+        </div>
+        <div class="filter-group">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin-top: 20px;">
+                <input type="checkbox" id="show_unpublished" name="show_unpublished" value="1"
+                       {% if show_unpublished %}checked{% endif %}
+                       onchange="filterGames()">
+                Show unpublished
+            </label>
         </div>
         <button type="submit" class="btn btn-primary">Update</button>
         <div style="margin-left: auto;">
-            <a href="{{ url_for('assignr.games_list', start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d')) }}" class="btn btn-outline">View All Games</a>
-            <a href="{{ url_for('assignr.sync_status', start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d')) }}" class="btn btn-outline">Sync Status</a>
+            <a href="{{ url_for('assignr.games_list', start=start_date.strftime('%Y-%m-%d')) }}{% if end_date %}&end={{ end_date.strftime('%Y-%m-%d') }}{% endif %}" class="btn btn-outline">View All Games</a>
+            <a href="{{ url_for('assignr.sync_status', start=start_date.strftime('%Y-%m-%d')) }}{% if end_date %}&end={{ end_date.strftime('%Y-%m-%d') }}{% endif %}" class="btn btn-outline">Sync Status</a>
         </div>
     </form>
 </div>
@@ -212,7 +220,7 @@
         </table>
         {% if umpires|length > 15 %}
         <p style="text-align: center; margin-top: 10px;">
-            <a href="{{ url_for('assignr.umpires_list', start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d')) }}">View all {{ umpires|length }} umpires</a>
+            <a href="{{ url_for('assignr.umpires_list', start=start_date.strftime('%Y-%m-%d')) }}{% if end_date %}&end={{ end_date.strftime('%Y-%m-%d') }}{% endif %}">View all {{ umpires|length }} umpires</a>
         </p>
         {% endif %}
         {% else %}
@@ -221,9 +229,9 @@
     </div>
 </div>
 
-{# Recent Games #}
+{# Upcoming Games #}
 <div class="card" style="margin-top: 20px;">
-    <h3 style="margin-top: 0;">Recent Games</h3>
+    <h3 style="margin-top: 0;">Upcoming Games</h3>
     {% if games %}
     <table>
         <thead>
@@ -243,7 +251,9 @@
             {% set has_assignment = game._accepted_umpires|length > 0 if game._accepted_umpires else false %}
             {% set needs_alert = game._needs_umpire and not has_assignment %}
             {% set is_unpublished = not game.published %}
-            <tr class="{{ 'needs-umpire-alert' if needs_alert else '' }}{{ ' unpublished-row' if is_unpublished else '' }}">
+            <tr class="{{ 'needs-umpire-alert' if needs_alert else '' }}{{ ' unpublished-row' if is_unpublished else '' }}"
+                data-published="{{ 'true' if game.published else 'false' }}"
+                {% if is_unpublished and not show_unpublished %}style="display: none;"{% endif %}>
                 <td>
                     {{ game.localized_date[:10] if game.localized_date else '-' }}
                     <span style="color: var(--text-muted);">{{ game.localized_time or '' }}</span>
@@ -314,7 +324,7 @@
     </table>
     {% if games|length > 20 %}
     <p style="text-align: center; margin-top: 10px;">
-        <a href="{{ url_for('assignr.games_list', start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d')) }}">View all {{ games|length }} games</a>
+        <a href="{{ url_for('assignr.games_list', start=start_date.strftime('%Y-%m-%d')) }}{% if end_date %}&end={{ end_date.strftime('%Y-%m-%d') }}{% endif %}">View all {{ games|length }} games</a>
     </p>
     {% endif %}
     {% else %}
@@ -452,6 +462,21 @@ tr.unpublished-row td {
 </style>
 
 <script>
+function filterGames() {
+    var showUnpublished = document.getElementById('show_unpublished').checked;
+    var rows = document.querySelectorAll('tr[data-published]');
+
+    rows.forEach(function(row) {
+        var rowPublished = row.dataset.published === 'true';
+        // Hide unpublished games unless checkbox is checked
+        if (!showUnpublished && !rowPublished) {
+            row.style.display = 'none';
+        } else {
+            row.style.display = '';
+        }
+    });
+}
+
 function setUmpireCount(selectEl) {
     var gameId = selectEl.dataset.gameId;
     var count = selectEl.value === '' ? null : parseInt(selectEl.value);
