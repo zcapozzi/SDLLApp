@@ -155,7 +155,9 @@
         <tbody>
             {% for game in games %}
             {% set local = game._local %}
-            {% set has_assignment = game._accepted_umpires|length > 0 if game._accepted_umpires else false %}
+            {% set has_accepted = game._accepted_umpires|length > 0 if game._accepted_umpires else false %}
+            {% set has_pending = game._pending_umpires|length > 0 if game._pending_umpires else false %}
+            {% set has_assignment = has_accepted or has_pending %}
             {% set needs_alert = game._needs_umpire and not has_assignment %}
             {% set is_unpublished = not game.published %}
             <tr data-league="{{ local.league if local else game.league_name or '' }}"
@@ -194,11 +196,16 @@
                     {% endif %}
                 </td>
                 <td>
-                    {% if game._accepted_umpires %}
+                    {% if game._accepted_umpires or game._pending_umpires %}
                     <div class="officials-list">
                         {% for umpire_name in game._accepted_umpires %}
                         <div class="official-badge accepted">
                             {{ umpire_name }}
+                        </div>
+                        {% endfor %}
+                        {% for umpire_name in game._pending_umpires %}
+                        <div class="official-badge pending" title="Assigned but not yet accepted">
+                            <span class="pending-icon">&#9203;</span> {{ umpire_name }}
                         </div>
                         {% endfor %}
                     </div>
@@ -304,6 +311,10 @@
 .official-badge.pending {
     background: #fff3cd;
     color: #856404;
+    border: 1px dashed #856404;
+}
+.pending-icon {
+    font-size: 10px;
 }
 .status-indicator {
     font-size: 10px;

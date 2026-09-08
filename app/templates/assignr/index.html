@@ -248,7 +248,9 @@
         <tbody>
             {% for game in games[:20] %}
             {% set local = game._local %}
-            {% set has_assignment = game._accepted_umpires|length > 0 if game._accepted_umpires else false %}
+            {% set has_accepted = game._accepted_umpires|length > 0 if game._accepted_umpires else false %}
+            {% set has_pending = game._pending_umpires|length > 0 if game._pending_umpires else false %}
+            {% set has_assignment = has_accepted or has_pending %}
             {% set needs_alert = game._needs_umpire and not has_assignment %}
             {% set is_unpublished = not game.published %}
             <tr class="{{ 'needs-umpire-alert' if needs_alert else '' }}{{ ' unpublished-row' if is_unpublished else '' }}"
@@ -281,8 +283,15 @@
                     {% endif %}
                 </td>
                 <td>
-                    {% if game._accepted_umpires %}
-                    <span style="color: var(--success-color);">{{ game._accepted_umpires|join(', ') }}</span>
+                    {% if game._accepted_umpires or game._pending_umpires %}
+                        {% if game._accepted_umpires %}
+                        <span style="color: var(--success-color);">{{ game._accepted_umpires|join(', ') }}</span>
+                        {% endif %}
+                        {% if game._pending_umpires %}
+                        <span class="pending-umpire" title="Assigned but not yet accepted">
+                            <span class="pending-icon">&#9203;</span> {{ game._pending_umpires|join(', ') }}
+                        </span>
+                        {% endif %}
                     {% else %}
                     <span style="color: var(--danger-color);">Unassigned</span>
                     {% endif %}
@@ -445,6 +454,20 @@ tr.unpublished-row td {
     background: #e9ecef;
     color: #495057;
     font-weight: 500;
+}
+
+/* Pending umpire styling */
+.pending-umpire {
+    color: #856404;
+    background: #fff3cd;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    display: inline-block;
+    margin-left: 4px;
+}
+.pending-icon {
+    font-size: 10px;
 }
 
 @media (max-width: 768px) {

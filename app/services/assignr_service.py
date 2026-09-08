@@ -344,18 +344,26 @@ class AssignrService:
             else:
                 game['_local'] = None
 
-            # Extract accepted umpire names for easy template access
+            # Extract umpire names for easy template access
+            # - accepted: umpire has confirmed the assignment
+            # - pending: umpire has been assigned but hasn't accepted yet
             assignments = game.get('_embedded', {}).get('assignments', []) or []
             accepted_umpires = []
+            pending_umpires = []
             for assignment in assignments:
-                if assignment.get('accepted') in [True, 'True']:
-                    embedded = assignment.get('_embedded', {}) or {}
-                    official = embedded.get('official', {}) or {}
-                    first_name = official.get('first_name', '')
-                    last_name = official.get('last_name', '')
-                    if first_name or last_name:
-                        accepted_umpires.append(f"{first_name} {last_name}".strip())
+                embedded = assignment.get('_embedded', {}) or {}
+                official = embedded.get('official', {}) or {}
+                first_name = official.get('first_name', '')
+                last_name = official.get('last_name', '')
+                if first_name or last_name:
+                    name = f"{first_name} {last_name}".strip()
+                    if assignment.get('accepted') in [True, 'True']:
+                        accepted_umpires.append(name)
+                    else:
+                        # Assigned but not yet accepted
+                        pending_umpires.append(name)
             game['_accepted_umpires'] = accepted_umpires
+            game['_pending_umpires'] = pending_umpires
 
         return assignr_games
 
