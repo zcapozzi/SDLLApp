@@ -481,3 +481,96 @@ def sync_status():
         start_date=start_date,
         end_date=end_date
     )
+
+
+@assignr_bp.route('/officials')
+@login_required
+@umpire_coordinator_required
+def officials_list():
+    """List officials and their group memberships from Assignr."""
+    from app.models.umpire_profile import UmpireProfile
+
+    service = get_assignr_service()
+
+    if not service.is_configured():
+        return redirect(url_for('assignr.index'))
+
+    # Fetch groups first
+    groups = service.get_site_groups()
+    group_lookup = {g.get('id'): g for g in groups}
+
+    # Fetch all officials
+    officials = service.get_all_site_officials()
+
+    # Get local umpire profiles for linking
+    local_profiles = UmpireProfile.query.filter(
+        UmpireProfile.assignr_id.isnot(None)
+    ).all()
+    local_by_assignr_id = {p.assignr_id: p for p in local_profiles}
+
+    # Enrich officials with local data and group info
+    for official in officials:
+        official_id = str(official.get('id', ''))
+        official['_local_profile'] = local_by_assignr_id.get(official_id)
+
+        # Get this official's groups
+        official_groups = service.get_official_groups(int(official_id)) if official_id else []
+        official['_groups'] = official_groups
+        official['_group_names'] = [g.get('name', '') for g in official_groups]
+
+    # Sort by last name, first name
+    officials.sort(key=lambda o: (o.get('last_name', '').lower(), o.get('first_name', '').lower()))
+
+    return render_template(
+        'assignr/officials.html',
+        officials=officials,
+        groups=groups
+    )
+
+
+@assignr_bp.route('/officials/<int:official_id>/groups', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def update_official_groups(official_id):
+    """Update an official's group memberships."""
+    service = get_assignr_service()
+
+    if not service.is_configured():
+        return jsonify({'error': 'Assignr not configured'}), 500
+
+    data = request.get_json()
+    action = data.get('action')  # 'add' or 'remove'
+    group_id = data.get('group_id')
+
+    if not action or not group_id:
+        return jsonify({'error': 'Missing action or group_id'}), 400
+
+    if action == 'add':
+        success, error = service.add_official_to_group(official_id, group_id)
+    elif action == 'remove':
+        success, error = service.remove_official_from_group(official_id, group_id)
+    else:
+        return jsonify({'error': 'Invalid action'}), 400
+
+    if success:
+        return jsonify({'success': True})
+    else:
+        return jsonify({'error': error}), 500
+
+
+@assignr_bp.route('/groups')
+@login_required
+@umpire_coordinator_required
+def groups_list():
+    """List all groups defined for this site."""
+    service = get_assignr_service()
+
+    if not service.is_configured():
+        return redirect(url_for('assignr.index'))
+
+    groups = service.get_site_groups()
+
+    return render_template(
+        'assignr/groups.html',
+        groups=groups
+    )

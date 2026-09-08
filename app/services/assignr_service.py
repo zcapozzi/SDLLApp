@@ -367,6 +367,183 @@ class AssignrService:
 
         return assignr_games
 
+    # =========================================================================
+    # Officials and Groups API
+    # =========================================================================
+
+    def get_site_officials(self, page: int = 1, limit: int = 50) -> Tuple[List[Dict], int, int]:
+        """Fetch officials (umpires) registered on this site.
+
+        Args:
+            page: Page number (1-indexed)
+            limit: Number of results per page (max 50)
+
+        Returns:
+            Tuple of (officials list, total count, total pages)
+        """
+        if not self.site_id:
+            logger.error("Assignr site ID not configured")
+            return [], 0, 0
+
+        url = f"{self.BASE_URL}/sites/{self.site_id}/officials"
+        params = {'page': page, 'limit': limit}
+
+        data = self._request(url, params=params)
+        if not data:
+            return [], 0, 0
+
+        officials = data.get('_embedded', {}).get('officials', [])
+        page_info = data.get('page', {})
+        total_count = page_info.get('records', len(officials))
+        total_pages = page_info.get('pages', 1)
+
+        return officials, total_count, total_pages
+
+    def get_all_site_officials(self) -> List[Dict]:
+        """Fetch all officials for this site (handles pagination).
+
+        Returns:
+            List of all officials
+        """
+        all_officials = []
+        page = 1
+        limit = 50
+
+        while True:
+            officials, total_count, total_pages = self.get_site_officials(page=page, limit=limit)
+            all_officials.extend(officials)
+
+            if page >= total_pages:
+                break
+            page += 1
+
+        logger.info(f"Fetched {len(all_officials)} officials from Assignr")
+        return all_officials
+
+    def get_site_groups(self) -> List[Dict]:
+        """Fetch all groups defined for this site.
+
+        Returns:
+            List of group dictionaries with id, name, etc.
+        """
+        if not self.site_id:
+            logger.error("Assignr site ID not configured")
+            return []
+
+        url = f"{self.BASE_URL}/sites/{self.site_id}/groups"
+        data = self._request(url)
+        if not data:
+            return []
+
+        return data.get('_embedded', {}).get('groups', [])
+
+    def get_official(self, official_id: int) -> Optional[Dict]:
+        """Fetch a single official's details including group memberships.
+
+        Args:
+            official_id: Assignr official ID
+
+        Returns:
+            Official data dict or None
+        """
+        url = f"{self.BASE_URL}/officials/{official_id}"
+        return self._request(url)
+
+    def get_official_groups(self, official_id: int) -> List[Dict]:
+        """Fetch the groups an official belongs to.
+
+        Args:
+            official_id: Assignr official ID
+
+        Returns:
+            List of group dictionaries
+        """
+        url = f"{self.BASE_URL}/officials/{official_id}/groups"
+        data = self._request(url)
+        if not data:
+            return []
+
+        return data.get('_embedded', {}).get('groups', [])
+
+    def add_official_to_group(self, official_id: int, group_id: int) -> Tuple[bool, Optional[str]]:
+        """Add an official to a group.
+
+        Args:
+            official_id: Assignr official ID
+            group_id: Assignr group ID
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        url = f"{self.BASE_URL}/officials/{official_id}/groups/{group_id}"
+
+        # Try POST first (common pattern for adding to collections)
+        token = self._get_access_token(scope="write")
+        if not token:
+            return False, "Failed to obtain write access token"
+
+        try:
+            response = requests.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json"
+                },
+                timeout=30
+            )
+            response.raise_for_status()
+            logger.info(f"Added official {official_id} to group {group_id}")
+            return True, None
+        except requests.RequestException as e:
+            error_msg = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    error_msg = error_data.get('message', error_data.get('error', str(e)))
+                except Exception:
+                    error_msg = e.response.text[:200]
+            logger.error(f"Failed to add official to group: {error_msg}")
+            return False, error_msg
+
+    def remove_official_from_group(self, official_id: int, group_id: int) -> Tuple[bool, Optional[str]]:
+        """Remove an official from a group.
+
+        Args:
+            official_id: Assignr official ID
+            group_id: Assignr group ID
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        url = f"{self.BASE_URL}/officials/{official_id}/groups/{group_id}"
+
+        token = self._get_access_token(scope="write")
+        if not token:
+            return False, "Failed to obtain write access token"
+
+        try:
+            response = requests.delete(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json"
+                },
+                timeout=30
+            )
+            response.raise_for_status()
+            logger.info(f"Removed official {official_id} from group {group_id}")
+            return True, None
+        except requests.RequestException as e:
+            error_msg = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    error_msg = error_data.get('message', error_data.get('error', str(e)))
+                except Exception:
+                    error_msg = e.response.text[:200]
+            logger.error(f"Failed to remove official from group: {error_msg}")
+            return False, error_msg
+
     def get_umpire_summary(
         self,
         assignr_games: List[Dict]

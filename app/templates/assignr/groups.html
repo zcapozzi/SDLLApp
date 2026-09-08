@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Assignr Groups{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <a href="{{ url_for('assignr.index') }}" style="color: var(--text-muted); text-decoration: none;">&larr; Back to Dashboard</a>
+    <h1 style="margin: 10px 0 0 0;">Assignr Groups</h1>
+    <p style="color: var(--text-muted); margin: 5px 0 0 0;">
+        {{ groups|length }} group(s) defined for your site
+    </p>
+</div>
+
+<div class="card">
+    {% if groups %}
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for group in groups %}
+            <tr>
+                <td>{{ group.id }}</td>
+                <td><strong>{{ group.name }}</strong></td>
+                <td>{{ group.description or '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: var(--text-muted); padding: 40px;">
+        No groups found. You can create groups in the Assignr admin interface.
+    </p>
+    {% endif %}
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">About Groups</h3>
+    <p>Groups in Assignr allow you to categorize officials for various purposes:</p>
+    <ul>
+        <li><strong>Active Umpires</strong> - Officials currently available to work games</li>
+        <li><strong>Behind-the-plate Trained</strong> - Officials certified for balls & strikes</li>
+        <li>Other custom groups as needed</li>
+    </ul>
+    <p>
+        <a href="{{ url_for('assignr.officials_list') }}" class="btn btn-primary">Manage Official Group Memberships</a>
+    </p>
+</div>
+{% endblock %}
