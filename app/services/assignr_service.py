@@ -227,7 +227,32 @@ class AssignrService:
             page += 1
 
         logger.info(f"Fetched {len(all_games)} games from Assignr for {start_date} to {end_date}")
+
+        # Parse dates into proper datetime objects
+        for game in all_games:
+            game['_game_date'] = self._parse_game_datetime(game)
+
         return all_games
+
+    def _parse_game_datetime(self, game: Dict) -> Optional[datetime]:
+        """Parse a game's start_time into a datetime object.
+
+        Args:
+            game: Game dict from Assignr API
+
+        Returns:
+            datetime object or None if parsing fails
+        """
+        start_time = game.get('start_time', '')
+        if not start_time:
+            return None
+
+        try:
+            # Assignr format: "2026-09-08T10:00:00"
+            return datetime.strptime(start_time[:19], "%Y-%m-%dT%H:%M:%S")
+        except (ValueError, TypeError):
+            logger.warning(f"Failed to parse start_time: {start_time}")
+            return None
 
     def get_game_officials(self, game_id: int) -> List[Dict]:
         """Fetch officials (umpires) assigned to a specific game.

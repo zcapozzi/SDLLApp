@@ -35,7 +35,7 @@
             {% set local = game._local %}
             <tr>
                 <td class="date-cell">
-                    <div>{{ game.start_time[5:10] if game.start_time else '-' }}</div>
+                    <div>{{ game._game_date.strftime('%m-%d') if game._game_date else '-' }}</div>
                     <div style="color: var(--text-muted); font-size: 13px;">{{ game.localized_time or '' }}</div>
                 </td>
                 <td>{{ local.league if local else game.league_name or '-' }}</td>
@@ -178,11 +178,12 @@
             <tr data-league="{{ local.league if local else game.league_name or '' }}"
                 data-status="{{ 'assigned' if has_assignment else 'unassigned' }}"
                 data-published="{{ 'true' if game.published else 'false' }}"
+                data-game-date="{{ game._game_date.strftime('%Y-%m-%d') if game._game_date else '' }}"
                 class="{{ 'needs-umpire-alert' if needs_alert else '' }}{{ ' unpublished-row' if is_unpublished else '' }}"
                 {% if is_unpublished and not show_unpublished %}style="display: none;"{% endif %}>
                 <td class="date-cell">
                     <div>
-                        {{ game.start_time[5:10] if game.start_time else '-' }}
+                        {{ game._game_date.strftime('%m-%d') if game._game_date else '-' }}
                         {% if is_unpublished %}<span class="badge-unpublished">UNPUB</span>{% endif %}
                     </div>
                     <div style="color: var(--text-muted); font-size: 13px;">{{ game.localized_time or '' }}</div>
@@ -546,14 +547,10 @@ function generateEmailContent() {
         var leagueCell = cells[1];
         var locationCell = cells[3];
 
-        // Parse date and time
-        var dateDiv = dateTimeCell.querySelector('div');
+        // Get date from data attribute (YYYY-MM-DD format)
+        var dateStr = row.dataset.gameDate || '';
         var timeDiv = dateTimeCell.querySelectorAll('div')[1];
-        var dateStr = dateDiv ? dateDiv.textContent.trim() : '';
         var timeStr = timeDiv ? timeDiv.textContent.trim() : '';
-
-        // Remove "UNPUB" badge if present
-        dateStr = dateStr.replace(/UNPUB/g, '').trim();
 
         var league = leagueCell ? leagueCell.textContent.trim() : '';
         var field = locationCell ? locationCell.textContent.trim() : '';
