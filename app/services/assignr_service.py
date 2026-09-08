@@ -617,6 +617,161 @@ class AssignrService:
             logger.error(f"Failed to remove official from group: {error_msg}")
             return False, error_msg
 
+    def get_group_members(self, group_id: int) -> List[Dict]:
+        """Fetch all members of a specific group.
+
+        Args:
+            group_id: Assignr group ID
+
+        Returns:
+            List of official (user) dictionaries
+        """
+        url = f"{self.BASE_URL}/groups/{group_id}/users"
+        data = self._request(url)
+        if not data:
+            return []
+
+        return data.get('_embedded', {}).get('users', [])
+
+    def get_officials_by_group_name(self, group_name: str) -> List[Dict]:
+        """Get all officials that belong to a group by name.
+
+        Args:
+            group_name: Name of the group (e.g., "SDLL Academy")
+
+        Returns:
+            List of official dictionaries with their email addresses
+        """
+        # First, find the group ID by name
+        groups = self.get_site_groups()
+        target_group = None
+        for group in groups:
+            if group.get('name', '').lower() == group_name.lower():
+                target_group = group
+                break
+
+        if not target_group:
+            logger.warning(f"Group '{group_name}' not found")
+            return []
+
+        group_id = target_group.get('id')
+        if not group_id:
+            return []
+
+        # Get members of this group
+        members = self.get_group_members(group_id)
+        logger.info(f"Found {len(members)} members in group '{group_name}'")
+        return members
+
+    def get_umpire_games_for_week(
+        self,
+        official_id: int,
+        week_start: datetime,
+        week_end: datetime
+    ) -> List[Dict]:
+        """Get games assigned to a specific official for a date range.
+
+        Fetches all games in the range and filters to those assigned to
+        the specified official.
+
+        Args:
+            official_id: Assignr user ID
+            week_start: Start of date range
+            week_end: End of date range
+
+        Returns:
+            List of game dictionaries assigned to this official
+        """
+        # Fetch all games for the date range
+        all_games = self.get_all_games(week_start, week_end)
+
+        # Filter to games assigned to this official
+        umpire_games = []
+        for game in all_games:
+            assignments = game.get('_embedded', {}).get('assignments', []) or []
+            for assignment in assignments:
+                embedded = assignment.get('_embedded', {}) or {}
+                official = embedded.get('official', {}) or {}
+                if official.get('id') == official_id:
+                    # This game is assigned to our umpire
+                    umpire_games.append(game)
+                    break  # Don't add the same game twice
+
+        return umpire_games
+
+    def get_academy_umpires_with_games(
+        self,
+        group_name: str,
+        week_start: datetime,
+        week_end: datetime
+    ) -> List[Dict]:
+        """Get Academy umpires who have games assigned in a date range.
+
+        Returns enriched official data including their assigned games.
+
+        Args:
+            group_name: Name of the Academy group in Assignr
+            week_start: Start of date range
+            week_end: End of date range
+
+        Returns:
+            List of dicts with official info and their games:
+            [{'official': {...}, 'games': [...], 'emails': [...]}]
+        """
+        # Get all members of the Academy group
+        officials = self.get_officials_by_group_name(group_name)
+
+        # Fetch all games once (more efficient than per-umpire)
+        all_games = self.get_all_games(week_start, week_end)
+
+        # Build a map of official_id -> assigned games
+        games_by_official: Dict[int, List[Dict]] = {}
+        for game in all_games:
+            assignments = game.get('_embedded', {}).get('assignments', []) or []
+            for assignment in assignments:
+                embedded = assignment.get('_embedded', {}) or {}
+                official = embedded.get('official', {}) or {}
+                off_id = official.get('id')
+                if off_id:
+                    if off_id not in games_by_official:
+                        games_by_official[off_id] = []
+                    # Check if game already added (avoid duplicates)
+                    if game not in games_by_official[off_id]:
+                        games_by_official[off_id].append(game)
+
+        # Build result: only include umpires with games
+        result = []
+        for official in officials:
+            official_id = official.get('id')
+            if not official_id:
+                continue
+
+            games = games_by_official.get(official_id, [])
+            if not games:
+                continue  # Skip umpires with no games
+
+            # Extract email addresses
+            emails = []
+            email_addresses = official.get('email_addresses', [])
+            for email_obj in email_addresses:
+                email = email_obj.get('email')
+                if email:
+                    emails.append(email)
+
+            result.append({
+                'official': official,
+                'official_id': official_id,
+                'first_name': official.get('first_name', ''),
+                'last_name': official.get('last_name', ''),
+                'full_name': f"{official.get('first_name', '')} {official.get('last_name', '')}".strip(),
+                'games': games,
+                'game_count': len(games),
+                'emails': emails
+            })
+
+        logger.info(f"Found {len(result)} Academy umpires with games for week of {week_start.date()}")
+        return result
+
     def get_umpire_summary(
         self,
         assignr_games: List[Dict]

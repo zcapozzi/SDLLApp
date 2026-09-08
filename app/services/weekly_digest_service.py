@@ -490,3 +490,358 @@ This is an automated reminder.
         except Exception as e:
             logger.error(f"Failed to send digest reminder: {e}")
             return False
+
+    # =========================================================================
+    # Academy Umpire Digests
+    # =========================================================================
+
+    # Default group name for Academy umpires in Assignr
+    ACADEMY_GROUP_NAME = 'SDLL Academy'
+
+    def get_umpire_recipients(self, official, umpire_profile=None):
+        """
+        Get email recipients for an Academy umpire digest.
+
+        Includes the umpire's email (from Assignr) and parent emails
+        (from local UmpireProfile if linked).
+
+        Args:
+            official: Dict with official data from Assignr (has 'emails' list)
+            umpire_profile: Optional UmpireProfile model instance
+
+        Returns:
+            List of email addresses
+        """
+        recipients = []
+
+        # Add umpire's own emails from Assignr
+        for email in official.get('emails', []):
+            if email and email not in recipients:
+                recipients.append(email)
+
+        # Add parent/guardian emails from local profile
+        if umpire_profile:
+            # Check parent_email field
+            if umpire_profile.parent_email:
+                if umpire_profile.parent_email not in recipients:
+                    recipients.append(umpire_profile.parent_email)
+
+            # Check guardians
+            for ug in umpire_profile.guardians:
+                if ug.guardian and ug.guardian.email:
+                    if ug.guardian.email not in recipients:
+                        recipients.append(ug.guardian.email)
+
+        return recipients
+
+    def render_umpire_digest_html(self, umpire_name, games, week_start):
+        """
+        Render the HTML content for an individual umpire's digest email.
+
+        Args:
+            umpire_name: Umpire's full name
+            games: List of game dicts from Assignr
+            week_start: Monday of the week
+
+        Returns:
+            Tuple of (subject, html_body)
+        """
+        week_display = week_start.strftime('%B %d')
+        game_count = len(games)
+
+        subject = f"Your SDLL Games - Week of {week_display}"
+
+        # Group games by date
+        games_by_date = defaultdict(list)
+        for game in games:
+            game_date = game.get('_game_date')
+            if game_date:
+                games_by_date[game_date.date()].append(game)
+
+        # Build HTML content
+        html_parts = []
+
+        # Header with logo
+        html_parts.append('''
+<div style="margin:0px">
+<table width="100%" bgcolor="#ffffff" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">
+<tbody><tr><td>
+<div style="display:block;max-width:670px;margin:0 auto">
+<div style="margin-bottom:7px">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">
+<tbody><tr><th style="text-align:left;font-weight:400;padding:15px;font-family:Helvetica,Arial,sans-serif;font-size:16px;color:#333;display:block;background-color:#fff;border-radius:15px;border:1px solid #e6e6e6;border-collapse:collapse;margin-bottom:0px">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">
+<tbody><tr><td colspan="2" align="center" style="padding-top:0px">
+<div style="display:inline-flex">
+<div style="padding:0">
+<img style="width:30px;height:30px" src="https://tshq.bluesombrero.com/Portals/22965/logo/logo638660559650795307.png">
+</div>
+<div style="padding:4px 0px 0px 15px">
+<p style="font-family:Helvetica;font-size:24px;font-weight:700;line-height:22px;margin-top:0;margin-bottom:0px">SDLL Umpiring</p>
+</div>
+</div>
+</td></tr>
+</tbody></table>
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">
+<tbody><tr><td style="padding-top:20px">
+<div>
+<table style="border-collapse:collapse;width:100%">
+<tbody>
+''')
+
+        # Greeting
+        html_parts.append(f'''
+<tr><td style="line-height:1.5;padding:6px 0">Hi {umpire_name.split()[0] if umpire_name else 'there'},</td></tr>
+<tr><td style="line-height:1.5;padding:6px 0">
+Here's your upcoming schedule of {game_count} SDLL game{'s' if game_count != 1 else ''} for the week of {week_display}.
+</td></tr>
+<tr><td style="line-height:1.5;padding:6px 0"></td></tr>
+''')
+
+        # Games by date
+        for game_date in sorted(games_by_date.keys()):
+            date_games = games_by_date[game_date]
+            day_suffix = self._get_day_suffix(game_date.day)
+            date_display = f"{game_date.strftime('%a %b')} {game_date.day}{day_suffix}"
+            game_word = "game" if len(date_games) == 1 else "games"
+
+            html_parts.append(f'<tr><td><h3>{date_display} ({len(date_games)} {game_word})</h3></td></tr>')
+
+            for game in date_games:
+                time_str = game.get('localized_time', '')
+                venue_name = game.get('venue_name', 'TBD')
+                league_name = game.get('league_name', '')
+                home_team = game.get('home_team', 'TBD')
+                away_team = game.get('away_team', 'TBD')
+
+                # Build matchup string
+                matchup = f"{home_team} vs {away_team}"
+                if league_name:
+                    matchup = f"({league_name}) {matchup}"
+
+                html_parts.append(
+                    f'<tr><td style="border-bottom:solid 1px #eee;padding-left:10px">'
+                    f'<strong>{time_str}</strong> @ {venue_name}<br>'
+                    f'<span style="color:#666;font-size:14px">{matchup}</span>'
+                    f'</td></tr>'
+                )
+
+        # Footer
+        html_parts.append('''
+<tr><td style="line-height:1.5;padding:20px 0 6px 0">
+Good luck out there!
+</td></tr>
+</tbody></table>
+</div>
+</td></tr></tbody></table>
+</th></tr></tbody></table>
+</div>
+</div>
+</td></tr></tbody></table>
+</div>
+''')
+
+        html_body = ''.join(html_parts)
+        return subject, html_body
+
+    def generate_academy_umpire_digests(
+        self,
+        week_start=None,
+        year=None,
+        is_spring=None,
+        group_name=None,
+        auto_send=False
+    ):
+        """
+        Generate digests for Academy umpires who have games in the upcoming week.
+
+        Args:
+            week_start: Monday of the target week (default: next week)
+            year: Season year (default: current season)
+            is_spring: 1 for spring, 0 for fall (default: current season)
+            group_name: Assignr group name (default: ACADEMY_GROUP_NAME)
+            auto_send: Whether to auto-send digests (default: False)
+
+        Returns:
+            List of generated UmpireDigest objects
+        """
+        from datetime import timedelta
+        from app.models.umpire_digest import UmpireDigest
+        from app.models.umpire_profile import UmpireProfile
+        from app.services.assignr_service import AssignrService
+
+        if week_start is None:
+            week_start = self.get_next_week_monday()
+
+        if year is None or is_spring is None:
+            year, is_spring = self.get_current_season()
+
+        if group_name is None:
+            group_name = self.ACADEMY_GROUP_NAME
+
+        # Convert to datetime if needed
+        if hasattr(week_start, 'date'):
+            week_start_dt = week_start
+        else:
+            week_start_dt = datetime.combine(week_start, datetime.min.time())
+
+        week_end_dt = week_start_dt + timedelta(days=6, hours=23, minutes=59)
+
+        # Get Academy umpires with games from Assignr
+        assignr_service = AssignrService()
+        if not assignr_service.is_configured():
+            logger.warning("Assignr not configured - cannot generate Academy digests")
+            return []
+
+        umpires_with_games = assignr_service.get_academy_umpires_with_games(
+            group_name, week_start_dt, week_end_dt
+        )
+
+        if not umpires_with_games:
+            logger.info(f"No Academy umpires with games for week of {week_start}")
+            return []
+
+        # Get local umpire profiles for parent emails
+        local_profiles = UmpireProfile.query.filter(
+            UmpireProfile.assignr_id.isnot(None)
+        ).all()
+        profiles_by_assignr_id = {p.assignr_id: p for p in local_profiles}
+
+        # Generate digest for each umpire
+        digests = []
+        for umpire_data in umpires_with_games:
+            try:
+                official_id = umpire_data['official_id']
+                umpire_name = umpire_data['full_name']
+                games = umpire_data['games']
+
+                # Check for existing digest
+                existing = UmpireDigest.get_for_umpire_week(official_id, week_start)
+                if existing and existing.status == UmpireDigest.STATUS_SENT:
+                    logger.info(f"Digest already sent for {umpire_name}")
+                    digests.append(existing)
+                    continue
+
+                # Get local profile if linked
+                local_profile = profiles_by_assignr_id.get(str(official_id))
+
+                # Get recipients (umpire + parents)
+                recipients = self.get_umpire_recipients(umpire_data, local_profile)
+
+                # Generate content
+                subject, body_html = self.render_umpire_digest_html(
+                    umpire_name, games, week_start
+                )
+
+                if existing:
+                    # Update existing draft
+                    digest = existing
+                    digest.umpire_name = umpire_name
+                    digest.recipient_emails = json.dumps(recipients)
+                    digest.subject = subject
+                    digest.body_html = body_html
+                    digest.game_count = len(games)
+                    digest.umpire_profile_id = local_profile.id if local_profile else None
+                    if digest.status != UmpireDigest.STATUS_SENT:
+                        digest.status = UmpireDigest.STATUS_DRAFT
+                else:
+                    # Create new digest
+                    digest = UmpireDigest(
+                        assignr_official_id=official_id,
+                        umpire_name=umpire_name,
+                        week_start=week_start,
+                        year=year,
+                        is_spring=is_spring,
+                        umpire_profile_id=local_profile.id if local_profile else None,
+                        recipient_emails=json.dumps(recipients),
+                        subject=subject,
+                        body_html=body_html,
+                        game_count=len(games),
+                        status=UmpireDigest.STATUS_DRAFT
+                    )
+                    db.session.add(digest)
+
+                db.session.commit()
+
+                # Handle auto-send
+                if auto_send and recipients:
+                    success = self.send_umpire_digest(digest)
+                    if success:
+                        logger.info(f"Auto-sent digest for {umpire_name}")
+
+                digests.append(digest)
+
+            except Exception as e:
+                logger.error(f"Error generating digest for {umpire_data.get('full_name', 'unknown')}: {e}")
+
+        logger.info(f"Generated {len(digests)} Academy umpire digests")
+        return digests
+
+    def send_umpire_digest(self, digest, sent_by_user_id=None):
+        """
+        Send an individual umpire digest email.
+
+        Args:
+            digest: UmpireDigest object
+            sent_by_user_id: User ID who initiated the send (optional)
+
+        Returns:
+            True if sent successfully, False otherwise
+        """
+        from app.models.umpire_digest import UmpireDigest
+
+        if not digest.can_send:
+            logger.warning(f"Cannot send umpire digest {digest.id}")
+            return False
+
+        recipients = digest.recipient_emails_list
+        if not recipients:
+            logger.warning(f"No recipients for umpire digest {digest.id}")
+            return False
+
+        # Generate plain text version
+        body_text = self._html_to_text(digest.body_html)
+
+        try:
+            # Send to each recipient
+            for recipient in recipients:
+                self.gmail.send_email(
+                    to=recipient,
+                    subject=digest.subject,
+                    body_text=body_text,
+                    body_html=digest.body_html
+                )
+                logger.info(f"Sent umpire digest {digest.id} to {recipient}")
+
+            # Mark as sent
+            digest.mark_sent(sent_by_user_id)
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to send umpire digest {digest.id}: {e}")
+            return False
+
+    def send_all_umpire_digests(self, week_start, sent_by_user_id=None):
+        """
+        Send all pending umpire digests for a week.
+
+        Args:
+            week_start: Monday of the target week
+            sent_by_user_id: User ID who initiated the send
+
+        Returns:
+            Tuple of (sent_count, failed_count)
+        """
+        from app.models.umpire_digest import UmpireDigest
+
+        pending = UmpireDigest.get_pending_for_week(week_start)
+        sent = 0
+        failed = 0
+
+        for digest in pending:
+            if self.send_umpire_digest(digest, sent_by_user_id):
+                sent += 1
+            else:
+                failed += 1
+
+        return sent, failed

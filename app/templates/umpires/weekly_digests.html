@@ -41,7 +41,11 @@
     <h3 style="margin-top: 0; margin-bottom: 15px;">
         Week of {{ week.strftime('%B %d, %Y') }}
     </h3>
-    <table>
+
+    {# Partner Digests #}
+    {% if digests_by_week.get(week) %}
+    <h4 style="color: var(--text-muted); margin-bottom: 10px;">Partner Organizations</h4>
+    <table style="margin-bottom: 20px;">
         <thead>
             <tr>
                 <th>Partner</th>
@@ -84,6 +88,81 @@
             {% endfor %}
         </tbody>
     </table>
+    {% endif %}
+
+    {# Academy Umpire Digests #}
+    {% set umpire_digests = umpire_digests_by_week.get(week, []) %}
+    {% if umpire_digests %}
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <h4 style="color: var(--text-muted); margin: 0;">Academy Umpires</h4>
+        {% set pending_count = umpire_digests|selectattr('status', 'equalto', 'draft')|list|length %}
+        {% if pending_count > 0 %}
+        <form method="POST" action="{{ url_for('umpires.send_all_umpire_digests', year=year, is_spring=is_spring) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="week_start" value="{{ week.strftime('%Y-%m-%d') }}">
+            <button type="submit" class="btn btn-sm btn-primary"
+                    onclick="return confirm('Send all {{ pending_count }} pending Academy umpire digests?')">
+                Send All ({{ pending_count }})
+            </button>
+        </form>
+        {% endif %}
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Umpire</th>
+                <th>Games</th>
+                <th>Recipients</th>
+                <th>Status</th>
+                <th>Sent</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for digest in umpire_digests %}
+            <tr>
+                <td><strong>{{ digest.umpire_name }}</strong></td>
+                <td>{{ digest.game_count }}</td>
+                <td>
+                    {% set recipients = digest.recipient_emails_list %}
+                    <span style="color: var(--text-muted);">{{ recipients|length }} recipient(s)</span>
+                </td>
+                <td>
+                    {% if digest.status == 'draft' %}
+                    <span class="badge" style="background: #f0ad4e;">DRAFT</span>
+                    {% elif digest.status == 'ready' %}
+                    <span class="badge badge-spring">READY</span>
+                    {% elif digest.status == 'sent' %}
+                    <span class="badge" style="background: #228B22;">SENT</span>
+                    {% elif digest.status == 'skipped' %}
+                    <span class="badge" style="background: #999;">SKIPPED</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if digest.sent_at %}
+                    {{ digest.sent_at.strftime('%m/%d %I:%M %p') }}
+                    {% else %}
+                    <span style="color: var(--text-muted);">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('umpires.umpire_digest_preview', year=year, is_spring=is_spring, id=digest.id) }}"
+                       class="btn btn-outline" style="padding: 3px 10px;">
+                        {% if digest.status == 'sent' %}View{% else %}Preview{% endif %}
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {# Empty state for week #}
+    {% if not digests_by_week.get(week) and not umpire_digests %}
+    <p style="color: var(--text-muted); text-align: center; margin: 20px 0;">
+        No digests for this week.
+    </p>
+    {% endif %}
 </div>
 {% else %}
 <div class="card">
