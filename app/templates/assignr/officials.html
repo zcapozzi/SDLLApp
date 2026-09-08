@@ -99,7 +99,17 @@
                 data-groups="{{ official._group_names|join(',') }}"
                 data-linked="{{ 'linked' if official._local_profile else 'unlinked' }}">
                 <td>
-                    <strong>{{ official.last_name }}, {{ official.first_name }}</strong>
+                    <a href="{{ official._assignr_url }}" target="_blank" style="text-decoration: none; color: inherit;">
+                        <strong>{{ official.last_name }}, {{ official.first_name }}</strong>
+                    </a>
+                    {% if official._is_inactive %}
+                    <div>
+                        <span class="badge badge-inactive">Inactive</span>
+                        <span class="last-active-label">
+                            Last: {{ official._last_active_date.strftime('%b %Y') if official._last_active_date else 'Never' }}
+                        </span>
+                    </div>
+                    {% endif %}
                 </td>
                 <td>{{ official.email_addresses[0].email if official.email_addresses else '-' }}</td>
                 <td>
@@ -227,6 +237,16 @@
 .badge-warning {
     background: #fff3cd;
     color: #856404;
+}
+.badge-inactive {
+    background: #e9ecef;
+    color: #6c757d;
+}
+
+.last-active-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: 4px;
 }
 
 .dropdown {
