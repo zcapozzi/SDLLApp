@@ -7,7 +7,7 @@
     <a href="{{ url_for('assignr.index') }}" style="color: var(--text-muted); text-decoration: none;">&larr; Back to Dashboard</a>
     <h1 style="margin: 10px 0 0 0;">Assignr Games</h1>
     <p style="color: var(--text-muted); margin: 5px 0 0 0;">
-        {{ games|length }} game(s) from {{ start_date.strftime('%B %d') }} to {{ end_date.strftime('%B %d, %Y') }}
+        {{ games|length }} game(s) from {{ start_date.strftime('%B %d, %Y') }}{% if end_date %} to {{ end_date.strftime('%B %d, %Y') }}{% endif %}
     </p>
 </div>
 
@@ -99,9 +99,10 @@
                    value="{{ start_date.strftime('%Y-%m-%d') }}">
         </div>
         <div class="filter-group">
-            <label for="end">End Date</label>
+            <label for="end">End Date <span style="font-weight: normal; color: var(--text-muted);">(optional)</span></label>
             <input type="date" id="end" name="end" class="form-control"
-                   value="{{ end_date.strftime('%Y-%m-%d') }}">
+                   value="{{ end_date.strftime('%Y-%m-%d') if end_date else '' }}"
+                   placeholder="No limit">
         </div>
         <div class="filter-group">
             <label for="league_select">League</label>
@@ -120,7 +121,15 @@
                 <option value="unassigned">Unassigned</option>
             </select>
         </div>
-        <button type="submit" class="btn btn-primary">Update Dates</button>
+        <div class="filter-group">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin-top: 20px;">
+                <input type="checkbox" id="show_unpublished" name="show_unpublished" value="1"
+                       {% if show_unpublished %}checked{% endif %}
+                       onchange="filterGames()">
+                Show unpublished
+            </label>
+        </div>
+        <button type="submit" class="btn btn-primary">Update</button>
         <div style="color: var(--text-muted); font-size: 14px; margin-left: auto;">
             <span id="visible-count">{{ games|length }}</span> visible
         </div>
@@ -151,7 +160,9 @@
             {% set is_unpublished = not game.published %}
             <tr data-league="{{ local.league if local else game.league_name or '' }}"
                 data-status="{{ 'assigned' if has_assignment else 'unassigned' }}"
-                class="{{ 'needs-umpire-alert' if needs_alert else '' }}{{ ' unpublished-row' if is_unpublished else '' }}">
+                data-published="{{ 'true' if game.published else 'false' }}"
+                class="{{ 'needs-umpire-alert' if needs_alert else '' }}{{ ' unpublished-row' if is_unpublished else '' }}"
+                {% if is_unpublished and not show_unpublished %}style="display: none;"{% endif %}>
                 <td>
                     <div>
                         {{ game.localized_date[:10] if game.localized_date else '-' }}
@@ -376,16 +387,20 @@ tr.unpublished-row td {
 function filterGames() {
     var leagueFilter = document.getElementById('league_select').value.toLowerCase();
     var statusFilter = document.getElementById('status_filter').value.toLowerCase();
+    var showUnpublished = document.getElementById('show_unpublished').checked;
     var rows = document.querySelectorAll('#games-table tbody tr');
     var visibleCount = 0;
 
     rows.forEach(function(row) {
         var rowLeague = (row.dataset.league || '').toLowerCase();
         var rowStatus = (row.dataset.status || '').toLowerCase();
+        var rowPublished = row.dataset.published === 'true';
         var show = true;
 
         if (leagueFilter && rowLeague !== leagueFilter) show = false;
         if (statusFilter && rowStatus !== statusFilter) show = false;
+        // Hide unpublished games unless checkbox is checked
+        if (!showUnpublished && !rowPublished) show = false;
 
         row.style.display = show ? '' : 'none';
         if (show) visibleCount++;
@@ -393,6 +408,11 @@ function filterGames() {
 
     document.getElementById('visible-count').textContent = visibleCount;
 }
+
+// Apply filters on page load to set correct initial count
+document.addEventListener('DOMContentLoaded', function() {
+    filterGames();
+});
 
 function setUmpireCount(selectEl) {
     var gameId = selectEl.dataset.gameId;
