@@ -35,7 +35,7 @@
             {% set local = game._local %}
             <tr>
                 <td class="date-cell">
-                    <div>{{ game._game_date.strftime('%m-%d') if game._game_date else '-' }}</div>
+                    <div>{{ game._game_date.strftime('%a %b %d') if game._game_date else '-' }}</div>
                     <div style="color: var(--text-muted); font-size: 13px;">{{ game.localized_time or '' }}</div>
                 </td>
                 <td>{{ local.league if local else game.league_name or '-' }}</td>
@@ -183,7 +183,7 @@
                 {% if is_unpublished and not show_unpublished %}style="display: none;"{% endif %}>
                 <td class="date-cell">
                     <div>
-                        {{ game._game_date.strftime('%m-%d') if game._game_date else '-' }}
+                        {{ game._game_date.strftime('%a %b %d') if game._game_date else '-' }}
                         {% if is_unpublished %}<span class="badge-unpublished">UNPUB</span>{% endif %}
                     </div>
                     <div style="color: var(--text-muted); font-size: 13px;">{{ game.localized_time or '' }}</div>
@@ -614,11 +614,14 @@ function generateEmailContent() {
 }
 
 function formatDisplayDate(dateStr) {
-    // Convert YYYY-MM-DD to Month Day (no year needed for current season)
+    // Convert YYYY-MM-DD to "Day Mon DD" format (e.g., "Mon Sep 08")
     var d = new Date(dateStr);
-    var months = ['January', 'February', 'March', 'April', 'May', 'June',
-                  'July', 'August', 'September', 'October', 'November', 'December'];
-    return months[d.getMonth()] + ' ' + d.getDate();
+    var days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var day = d.getDate();
+    var dayStr = day < 10 ? '0' + day : day;
+    return days[d.getDay()] + ' ' + months[d.getMonth()] + ' ' + dayStr;
 }
 
 function copyEmailToClipboard() {
