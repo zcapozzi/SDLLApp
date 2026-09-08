@@ -35,7 +35,7 @@
             {% set local = game._local %}
             <tr>
                 <td class="date-cell">
-                    <div>{{ game.localized_date[5:10] if game.localized_date else '-' }}</div>
+                    <div>{{ game.start_time[5:10] if game.start_time else '-' }}</div>
                     <div style="color: var(--text-muted); font-size: 13px;">{{ game.localized_time or '' }}</div>
                 </td>
                 <td>{{ local.league if local else game.league_name or '-' }}</td>
@@ -182,7 +182,7 @@
                 {% if is_unpublished and not show_unpublished %}style="display: none;"{% endif %}>
                 <td class="date-cell">
                     <div>
-                        {{ game.localized_date[5:10] if game.localized_date else '-' }}
+                        {{ game.start_time[5:10] if game.start_time else '-' }}
                         {% if is_unpublished %}<span class="badge-unpublished">UNPUB</span>{% endif %}
                     </div>
                     <div style="color: var(--text-muted); font-size: 13px;">{{ game.localized_time or '' }}</div>

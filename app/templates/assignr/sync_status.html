@@ -113,7 +113,7 @@
         <tbody>
             {% for game in assignr_only %}
             <tr>
-                <td>{{ game.localized_date[5:10] if game.localized_date else '-' }} {{ game.localized_time or '' }}</td>
+                <td>{{ game.start_time[5:10] if game.start_time else '-' }} {{ game.localized_time or '' }}</td>
                 <td>{{ game.league_name or '-' }}</td>
                 <td>{{ game.home_team or 'TBD' }} vs {{ game.away_team or 'TBD' }}</td>
                 <td>{{ game.venue_name or '-' }}</td>
