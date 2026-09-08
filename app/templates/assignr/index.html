@@ -98,7 +98,7 @@
             {% for game in urgent_games %}
             {% set local = game._local %}
             <tr>
-                <td>
+                <td style="white-space: nowrap;">
                     {{ game.localized_date[:10] if game.localized_date else '-' }}
                     <span style="color: var(--text-muted);">{{ game.localized_time or '' }}</span>
                 </td>
@@ -257,7 +257,7 @@
             <tr class="{{ 'needs-umpire-alert' if needs_alert else '' }}{{ ' unpublished-row' if is_unpublished else '' }}"
                 data-published="{{ 'true' if game.published else 'false' }}"
                 {% if is_unpublished and not show_unpublished %}style="display: none;"{% endif %}>
-                <td>
+                <td style="white-space: nowrap;">
                     {{ game.localized_date[:10] if game.localized_date else '-' }}
                     <span style="color: var(--text-muted);">{{ game.localized_time or '' }}</span>
                     {% if is_unpublished %}<span class="badge-unpublished">UNPUB</span>{% endif %}

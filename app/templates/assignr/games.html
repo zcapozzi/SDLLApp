@@ -34,7 +34,7 @@
             {% for game in urgent_games %}
             {% set local = game._local %}
             <tr>
-                <td>
+                <td style="white-space: nowrap;">
                     <div>{{ game.localized_date[:10] if game.localized_date else '-' }}</div>
                     <div style="color: var(--text-muted); font-size: 13px;">{{ game.localized_time or '' }}</div>
                 </td>
@@ -180,7 +180,7 @@
                 data-published="{{ 'true' if game.published else 'false' }}"
                 class="{{ 'needs-umpire-alert' if needs_alert else '' }}{{ ' unpublished-row' if is_unpublished else '' }}"
                 {% if is_unpublished and not show_unpublished %}style="display: none;"{% endif %}>
-                <td>
+                <td style="white-space: nowrap;">
                     <div>
                         {{ game.localized_date[:10] if game.localized_date else '-' }}
                         {% if is_unpublished %}<span class="badge-unpublished">UNPUB</span>{% endif %}
@@ -582,11 +582,7 @@ function generateEmailContent() {
         });
 
         email = 'Hi Academy Umpires!\n\n';
-        email += 'The following games are available and need umpires. ';
-        email += 'Please log in to Assignr to sign up for any games you can cover.\n\n';
-        email += '═══════════════════════════════════════\n';
-        email += 'AVAILABLE GAMES (' + unassignedGames.length + ' total)\n';
-        email += '═══════════════════════════════════════\n\n';
+        email += 'AVAILABLE GAMES (' + unassignedGames.length + ' total)\n\n';
 
         dates.forEach(function(date) {
             var games = byDate[date];
@@ -595,8 +591,7 @@ function generateEmailContent() {
             var dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
             var dayName = dayNames[d.getDay()];
 
-            email += '📅 ' + dayName + ', ' + formatDisplayDate(date) + '\n';
-            email += '───────────────────────────────────────\n';
+            email += dayName + ', ' + formatDisplayDate(date) + '\n';
 
             // Sort games by time within the date
             games.sort(function(a, b) {
@@ -604,15 +599,11 @@ function generateEmailContent() {
             });
 
             games.forEach(function(g) {
-                email += '  • ' + g.time + ' - ' + g.league + ' at ' + g.field + '\n';
+                email += '  ' + g.time + ' - ' + g.league + ' at ' + g.field + '\n';
             });
 
             email += '\n';
         });
-
-        email += '═══════════════════════════════════════\n';
-        email += 'Sign up at: https://app.assignr.com\n\n';
-        email += 'Thanks!\n';
     }
 
     textarea.value = email;
