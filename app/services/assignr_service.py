@@ -372,7 +372,7 @@ class AssignrService:
     # =========================================================================
 
     def get_site_officials(self, page: int = 1, limit: int = 50) -> Tuple[List[Dict], int, int]:
-        """Fetch officials (umpires) registered on this site.
+        """Fetch officials (users) registered on this site.
 
         Args:
             page: Page number (1-indexed)
@@ -385,14 +385,16 @@ class AssignrService:
             logger.error("Assignr site ID not configured")
             return [], 0, 0
 
-        url = f"{self.BASE_URL}/sites/{self.site_id}/officials"
+        # Assignr API uses /users endpoint for officials
+        url = f"{self.BASE_URL}/sites/{self.site_id}/users"
         params = {'page': page, 'limit': limit}
 
         data = self._request(url, params=params)
         if not data:
             return [], 0, 0
 
-        officials = data.get('_embedded', {}).get('officials', [])
+        # Response uses 'users' key in _embedded
+        officials = data.get('_embedded', {}).get('users', [])
         page_info = data.get('page', {})
         total_count = page_info.get('records', len(officials))
         total_pages = page_info.get('pages', 1)
@@ -438,27 +440,27 @@ class AssignrService:
         return data.get('_embedded', {}).get('groups', [])
 
     def get_official(self, official_id: int) -> Optional[Dict]:
-        """Fetch a single official's details including group memberships.
+        """Fetch a single official's details.
 
         Args:
-            official_id: Assignr official ID
+            official_id: Assignr user ID
 
         Returns:
-            Official data dict or None
+            User data dict or None
         """
-        url = f"{self.BASE_URL}/officials/{official_id}"
+        url = f"{self.BASE_URL}/users/{official_id}"
         return self._request(url)
 
     def get_official_groups(self, official_id: int) -> List[Dict]:
         """Fetch the groups an official belongs to.
 
         Args:
-            official_id: Assignr official ID
+            official_id: Assignr user ID
 
         Returns:
             List of group dictionaries
         """
-        url = f"{self.BASE_URL}/officials/{official_id}/groups"
+        url = f"{self.BASE_URL}/users/{official_id}/groups"
         data = self._request(url)
         if not data:
             return []
@@ -469,13 +471,13 @@ class AssignrService:
         """Add an official to a group.
 
         Args:
-            official_id: Assignr official ID
+            official_id: Assignr user ID
             group_id: Assignr group ID
 
         Returns:
             Tuple of (success, error_message)
         """
-        url = f"{self.BASE_URL}/officials/{official_id}/groups/{group_id}"
+        url = f"{self.BASE_URL}/users/{official_id}/groups/{group_id}"
 
         # Try POST first (common pattern for adding to collections)
         token = self._get_access_token(scope="write")
@@ -509,13 +511,13 @@ class AssignrService:
         """Remove an official from a group.
 
         Args:
-            official_id: Assignr official ID
+            official_id: Assignr user ID
             group_id: Assignr group ID
 
         Returns:
             Tuple of (success, error_message)
         """
-        url = f"{self.BASE_URL}/officials/{official_id}/groups/{group_id}"
+        url = f"{self.BASE_URL}/users/{official_id}/groups/{group_id}"
 
         token = self._get_access_token(scope="write")
         if not token:
