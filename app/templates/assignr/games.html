@@ -130,10 +130,25 @@
             </label>
         </div>
         <button type="submit" class="btn btn-primary">Update</button>
+        <button type="button" id="generate-email-btn" class="btn btn-outline" onclick="toggleEmailGenerator()" title="Generate email for available games">
+            &#9993; Email Draft
+        </button>
         <div style="color: var(--text-muted); font-size: 14px; margin-left: auto;">
             <span id="visible-count">{{ games|length }}</span> visible
         </div>
     </form>
+</div>
+
+{# Email Generator Panel #}
+<div id="email-generator-panel" class="email-generator" style="display: none;">
+    <div class="email-generator-header">
+        <span>Email Draft - Available Games for Academy Umpires</span>
+        <div class="email-generator-actions">
+            <button class="btn btn-primary btn-sm" onclick="copyEmailToClipboard()">Copy to Clipboard</button>
+            <button class="btn-close" onclick="toggleEmailGenerator()">&times;</button>
+        </div>
+    </div>
+    <textarea id="email-text" readonly></textarea>
 </div>
 
 {# Games Table #}
@@ -383,6 +398,62 @@ tr.unpublished-row td {
     outline: none;
 }
 
+/* Email Generator */
+.email-generator {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 500px;
+    max-width: calc(100vw - 40px);
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    z-index: 1000;
+}
+.email-generator-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--primary-color);
+    color: white;
+    border-radius: 8px 8px 0 0;
+    font-weight: 600;
+}
+.email-generator-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.email-generator-actions .btn-close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+}
+.email-generator-actions .btn-close:hover {
+    opacity: 0.8;
+}
+.email-generator textarea {
+    width: 100%;
+    height: 300px;
+    padding: 12px;
+    border: none;
+    border-radius: 0 0 8px 8px;
+    font-family: monospace;
+    font-size: 13px;
+    resize: vertical;
+    background: #f8f9fa;
+}
+#generate-email-btn.active {
+    background: var(--primary-color);
+    color: white;
+}
+
 @media (max-width: 768px) {
     table {
         font-size: 13px;
@@ -390,6 +461,11 @@ tr.unpublished-row td {
     .umpire-count-select, .umpire-source-select {
         width: 60px !important;
         font-size: 10px !important;
+    }
+    .email-generator {
+        width: calc(100vw - 20px);
+        bottom: 10px;
+        right: 10px;
     }
 }
 </style>
@@ -424,6 +500,152 @@ function filterGames() {
 document.addEventListener('DOMContentLoaded', function() {
     filterGames();
 });
+
+// Email Generator Functions
+function toggleEmailGenerator() {
+    var panel = document.getElementById('email-generator-panel');
+    var btn = document.getElementById('generate-email-btn');
+
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        btn.classList.add('active');
+        generateEmailContent();
+    } else {
+        panel.style.display = 'none';
+        btn.classList.remove('active');
+    }
+}
+
+function generateEmailContent() {
+    var textarea = document.getElementById('email-text');
+    var rows = document.querySelectorAll('#games-table tbody tr');
+
+    // Collect visible unassigned SDL games
+    var unassignedGames = [];
+
+    rows.forEach(function(row) {
+        // Skip hidden rows
+        if (row.style.display === 'none') return;
+
+        // Only include unassigned games
+        if (row.dataset.status !== 'unassigned') return;
+
+        // Only include published games (SDL-managed)
+        if (row.dataset.published !== 'true') return;
+
+        // Extract game info from the row
+        var cells = row.querySelectorAll('td');
+        var dateTimeCell = cells[0];
+        var leagueCell = cells[1];
+        var locationCell = cells[3];
+
+        // Parse date and time
+        var dateDiv = dateTimeCell.querySelector('div');
+        var timeDiv = dateTimeCell.querySelectorAll('div')[1];
+        var dateStr = dateDiv ? dateDiv.textContent.trim() : '';
+        var timeStr = timeDiv ? timeDiv.textContent.trim() : '';
+
+        // Remove "UNPUB" badge if present
+        dateStr = dateStr.replace(/UNPUB/g, '').trim();
+
+        var league = leagueCell ? leagueCell.textContent.trim() : '';
+        var field = locationCell ? locationCell.textContent.trim() : '';
+
+        if (dateStr) {
+            unassignedGames.push({
+                date: dateStr,
+                time: timeStr,
+                league: league,
+                field: field
+            });
+        }
+    });
+
+    // Generate email content
+    var email = '';
+
+    if (unassignedGames.length === 0) {
+        email = 'No unassigned games available at this time.\n';
+    } else {
+        // Group games by date
+        var byDate = {};
+        unassignedGames.forEach(function(g) {
+            if (!byDate[g.date]) {
+                byDate[g.date] = [];
+            }
+            byDate[g.date].push(g);
+        });
+
+        // Sort dates
+        var dates = Object.keys(byDate).sort(function(a, b) {
+            return new Date(a) - new Date(b);
+        });
+
+        email = 'Hi Academy Umpires!\n\n';
+        email += 'The following games are available and need umpires. ';
+        email += 'Please log in to Assignr to sign up for any games you can cover.\n\n';
+        email += '═══════════════════════════════════════\n';
+        email += 'AVAILABLE GAMES (' + unassignedGames.length + ' total)\n';
+        email += '═══════════════════════════════════════\n\n';
+
+        dates.forEach(function(date) {
+            var games = byDate[date];
+            // Parse date for day of week
+            var d = new Date(date);
+            var dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            var dayName = dayNames[d.getDay()];
+
+            email += '📅 ' + dayName + ', ' + formatDisplayDate(date) + '\n';
+            email += '───────────────────────────────────────\n';
+
+            // Sort games by time within the date
+            games.sort(function(a, b) {
+                return a.time.localeCompare(b.time);
+            });
+
+            games.forEach(function(g) {
+                email += '  • ' + g.time + ' - ' + g.league + ' at ' + g.field + '\n';
+            });
+
+            email += '\n';
+        });
+
+        email += '═══════════════════════════════════════\n';
+        email += 'Sign up at: https://app.assignr.com\n\n';
+        email += 'Thanks!\n';
+    }
+
+    textarea.value = email;
+}
+
+function formatDisplayDate(dateStr) {
+    // Convert YYYY-MM-DD to Month Day, Year
+    var d = new Date(dateStr);
+    var months = ['January', 'February', 'March', 'April', 'May', 'June',
+                  'July', 'August', 'September', 'October', 'November', 'December'];
+    return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+}
+
+function copyEmailToClipboard() {
+    var textarea = document.getElementById('email-text');
+    textarea.select();
+    textarea.setSelectionRange(0, 99999); // For mobile
+
+    navigator.clipboard.writeText(textarea.value).then(function() {
+        var btn = document.querySelector('.email-generator-actions .btn-primary');
+        var originalText = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.style.background = '#28a745';
+        setTimeout(function() {
+            btn.textContent = originalText;
+            btn.style.background = '';
+        }, 2000);
+    }).catch(function(err) {
+        // Fallback for older browsers
+        document.execCommand('copy');
+        alert('Copied to clipboard!');
+    });
+}
 
 function setUmpireCount(selectEl) {
     var gameId = selectEl.dataset.gameId;
