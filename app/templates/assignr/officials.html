@@ -11,10 +11,10 @@
     </p>
 </div>
 
-{# Groups Legend and Sync Actions #}
-{% if groups %}
+{# Sync Actions - always show #}
 <div class="card" style="margin-bottom: 20px;">
     <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px;">
+        {% if groups %}
         <div>
             <h3 style="margin-top: 0;">Available Groups</h3>
             <div style="display: flex; flex-wrap: wrap; gap: 10px;">
@@ -25,6 +25,12 @@
                 {% endfor %}
             </div>
         </div>
+        {% else %}
+        <div>
+            <h3 style="margin-top: 0;">Groups</h3>
+            <p style="color: var(--text-muted); margin: 0;">No groups found. Click "Import from Assignr" to fetch groups.</p>
+        </div>
+        {% endif %}
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
             <form action="{{ url_for('assignr.import_from_assignr') }}" method="POST" style="margin: 0;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -41,7 +47,6 @@
         </div>
     </div>
 </div>
-{% endif %}
 
 {# Filter #}
 <div class="card" style="margin-bottom: 20px;">
