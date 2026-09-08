@@ -94,7 +94,7 @@
     {% set umpire_digests = umpire_digests_by_week.get(week, []) %}
     {% if umpire_digests %}
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <h4 style="color: var(--text-muted); margin: 0;">Academy Umpires</h4>
+        <h4 style="color: var(--text-muted); margin: 0;">Individual Umpires</h4>
         {% set pending_count = umpire_digests|selectattr('status', 'equalto', 'draft')|list|length %}
         {% if pending_count > 0 %}
         <form method="POST" action="{{ url_for('umpires.send_all_umpire_digests', year=year, is_spring=is_spring) }}" style="display: inline;">

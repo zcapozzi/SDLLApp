@@ -699,18 +699,17 @@ class AssignrService:
 
         return umpire_games
 
-    def get_academy_umpires_with_games(
+    def get_umpires_with_games(
         self,
-        group_name: str,
         week_start: datetime,
         week_end: datetime
     ) -> List[Dict]:
-        """Get Academy umpires who have games assigned in a date range.
+        """Get all umpires who have games assigned in a date range.
 
         Returns enriched official data including their assigned games.
+        All officials registered on the site are considered valid umpires.
 
         Args:
-            group_name: Name of the Academy group in Assignr
             week_start: Start of date range
             week_end: End of date range
 
@@ -718,8 +717,8 @@ class AssignrService:
             List of dicts with official info and their games:
             [{'official': {...}, 'games': [...], 'emails': [...]}]
         """
-        # Get all members of the Academy group
-        officials = self.get_officials_by_group_name(group_name)
+        # Get all officials registered on our site
+        officials = self.get_all_site_officials()
 
         # Fetch all games once (more efficient than per-umpire)
         all_games = self.get_all_games(week_start, week_end)
@@ -769,7 +768,7 @@ class AssignrService:
                 'emails': emails
             })
 
-        logger.info(f"Found {len(result)} Academy umpires with games for week of {week_start.date()}")
+        logger.info(f"Found {len(result)} umpires with games for week of {week_start.date()}")
         return result
 
     def get_umpire_summary(

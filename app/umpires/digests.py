@@ -169,17 +169,17 @@ def generate_digests(year, is_spring):
     if skipped_count:
         msg_parts.append(f'{skipped_count} partner skipped')
 
-    # Generate Academy umpire digests
+    # Generate individual umpire digests (for all umpires with games in Assignr)
     try:
-        umpire_digests = service.generate_academy_umpire_digests(
+        umpire_digests = service.generate_umpire_digests(
             week_start, year, is_spring, auto_send=False
         )
         umpire_count = len([d for d in umpire_digests if d.status == 'draft'])
         if umpire_count:
-            msg_parts.append(f'{umpire_count} Academy umpire digest(s)')
+            msg_parts.append(f'{umpire_count} umpire digest(s)')
     except Exception as e:
-        # Don't fail the whole operation if Academy digests fail
-        flash(f'Warning: Could not generate Academy umpire digests: {e}', 'warning')
+        # Don't fail the whole operation if umpire digests fail
+        flash(f'Warning: Could not generate umpire digests: {e}', 'warning')
 
     flash(f'Generated digests for week of {week_start.strftime("%B %d")}: {", ".join(msg_parts)}', 'success')
 

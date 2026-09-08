@@ -353,8 +353,10 @@ Here's your upcoming schedule of {game_count} SDLL game{'s' if game_count != 1 e
             year, is_spring = self.get_current_season()
 
         # Get all partner codes that have games assigned
+        # Exclude SDLL Academy (SDL) since individual umpires get their own digests
         partner_codes_with_games = db.session.query(Game.umpire_override).filter(
             Game.umpire_override.isnot(None),
+            Game.umpire_override != self.SDLL_ACADEMY_CODE,
             Game.year == year,
             Game.is_spring == (is_spring == 1),
             Game.active == 1
@@ -362,13 +364,14 @@ Here's your upcoming schedule of {game_count} SDLL game{'s' if game_count != 1 e
         partner_codes = [p[0] for p in partner_codes_with_games if p[0]]
 
         # Also include any active partners even if they have no games
-        # (so we can show "skipped" status)
+        # (so we can show "skipped" status) - but not SDLL Academy
         active_partners = UmpirePartner.get_active()
         for p in active_partners:
             if p.short_code and p.short_code not in partner_codes:
-                partner_codes.append(p.short_code)
+                if p.short_code != self.SDLL_ACADEMY_CODE:
+                    partner_codes.append(p.short_code)
 
-        # Generate digest for each partner
+        # Generate digest for each partner (external orgs only)
         digests = []
         for code in partner_codes:
             try:
@@ -492,11 +495,8 @@ This is an automated reminder.
             return False
 
     # =========================================================================
-    # Academy Umpire Digests
+    # Individual Umpire Digests
     # =========================================================================
-
-    # Default group name for Academy umpires in Assignr
-    ACADEMY_GROUP_NAME = 'SDLL Academy'
 
     def get_umpire_recipients(self, official, umpire_profile=None):
         """
@@ -644,22 +644,23 @@ Good luck out there!
         html_body = ''.join(html_parts)
         return subject, html_body
 
-    def generate_academy_umpire_digests(
+    def generate_umpire_digests(
         self,
         week_start=None,
         year=None,
         is_spring=None,
-        group_name=None,
         auto_send=False
     ):
         """
-        Generate digests for Academy umpires who have games in the upcoming week.
+        Generate digests for all umpires who have games in the upcoming week.
+
+        All officials registered on our Assignr site are considered valid umpires.
+        If they have games assigned for the week, they get a digest.
 
         Args:
             week_start: Monday of the target week (default: next week)
             year: Season year (default: current season)
             is_spring: 1 for spring, 0 for fall (default: current season)
-            group_name: Assignr group name (default: ACADEMY_GROUP_NAME)
             auto_send: Whether to auto-send digests (default: False)
 
         Returns:
@@ -676,9 +677,6 @@ Good luck out there!
         if year is None or is_spring is None:
             year, is_spring = self.get_current_season()
 
-        if group_name is None:
-            group_name = self.ACADEMY_GROUP_NAME
-
         # Convert to datetime if needed
         if hasattr(week_start, 'date'):
             week_start_dt = week_start
@@ -687,18 +685,18 @@ Good luck out there!
 
         week_end_dt = week_start_dt + timedelta(days=6, hours=23, minutes=59)
 
-        # Get Academy umpires with games from Assignr
+        # Get all umpires with games from Assignr
         assignr_service = AssignrService()
         if not assignr_service.is_configured():
-            logger.warning("Assignr not configured - cannot generate Academy digests")
+            logger.warning("Assignr not configured - cannot generate umpire digests")
             return []
 
-        umpires_with_games = assignr_service.get_academy_umpires_with_games(
-            group_name, week_start_dt, week_end_dt
+        umpires_with_games = assignr_service.get_umpires_with_games(
+            week_start_dt, week_end_dt
         )
 
         if not umpires_with_games:
-            logger.info(f"No Academy umpires with games for week of {week_start}")
+            logger.info(f"No umpires with games for week of {week_start}")
             return []
 
         # Get local umpire profiles for parent emails
