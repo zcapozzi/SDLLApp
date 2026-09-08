@@ -447,6 +447,52 @@ class AssignrService:
         logger.info(f"Fetched {len(all_officials)} officials from Assignr")
         return all_officials
 
+    def get_official_last_game_dates(self, months_back: int = 24) -> Dict[int, datetime]:
+        """Get the most recent game date for each official from Assignr.
+
+        Fetches all games going back the specified number of months and builds
+        a mapping of official_id -> last_game_date.
+
+        Args:
+            months_back: How many months of history to fetch (default 24)
+
+        Returns:
+            Dict mapping official_id (int) to their last game datetime
+        """
+        from dateutil.relativedelta import relativedelta
+
+        end_date = datetime.now()
+        start_date = end_date - relativedelta(months=months_back)
+
+        logger.info(f"Fetching games from {start_date.date()} to {end_date.date()} for last active dates")
+
+        # Fetch all games in the date range
+        games = self.get_all_games(start_date, end_date)
+
+        # Build mapping of official_id -> last game date
+        last_game_by_official: Dict[int, datetime] = {}
+
+        for game in games:
+            game_date = game.get('_game_date')
+            if not game_date:
+                continue
+
+            # Get assignments from embedded data
+            assignments = game.get('_embedded', {}).get('assignments', []) or []
+            for assignment in assignments:
+                embedded = assignment.get('_embedded', {}) or {}
+                official = embedded.get('official', {}) or {}
+                official_id = official.get('id')
+
+                if official_id:
+                    # Track the most recent game for this official
+                    current_last = last_game_by_official.get(official_id)
+                    if current_last is None or game_date > current_last:
+                        last_game_by_official[official_id] = game_date
+
+        logger.info(f"Found last game dates for {len(last_game_by_official)} officials")
+        return last_game_by_official
+
     def get_site_groups(self) -> List[Dict]:
         """Fetch all groups defined for this site.
 

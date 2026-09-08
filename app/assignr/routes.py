@@ -490,9 +490,6 @@ def officials_list():
     """List officials and their group memberships from Assignr."""
     from app.models.umpire_profile import UmpireProfile
     from app.models.umpire_group_assignment import UmpireGroupAssignment
-    from app.models.game_umpire import GameUmpire
-    from app.models.game import Game
-    from sqlalchemy import func
     from dateutil.relativedelta import relativedelta
 
     service = get_assignr_service()
@@ -521,38 +518,29 @@ def officials_list():
             local_groups_by_profile[assignment.umpire_profile_id] = set()
         local_groups_by_profile[assignment.umpire_profile_id].add(assignment.assignr_group_id)
 
-    # Get last game date for each umpire profile
-    last_game_dates = db.session.query(
-        GameUmpire.umpire_profile_id,
-        func.max(Game.game_date).label('last_game_date')
-    ).join(Game, GameUmpire.game_id == Game.ID).filter(
-        GameUmpire.umpire_profile_id.isnot(None),
-        GameUmpire.status.notin_(['cancelled'])
-    ).group_by(GameUmpire.umpire_profile_id).all()
-
-    last_game_by_profile = {row.umpire_profile_id: row.last_game_date for row in last_game_dates}
+    # Get last game date for each official from Assignr API
+    last_game_by_official = service.get_official_last_game_dates(months_back=24)
 
     # Calculate inactive threshold (12 months ago)
     inactive_threshold = datetime.now() - relativedelta(months=12)
 
     # Enrich officials with local data and group info
     for official in officials:
-        official_id = str(official.get('id', ''))
-        local_profile = local_by_assignr_id.get(official_id)
+        official_id = official.get('id')
+        official_id_str = str(official_id) if official_id else ''
+        local_profile = local_by_assignr_id.get(official_id_str)
         official['_local_profile'] = local_profile
 
         # Get local SDLL group assignments for this profile
         if local_profile:
             official['_local_group_ids'] = local_groups_by_profile.get(local_profile.id, set())
-
-            # Get last active date
-            last_game = last_game_by_profile.get(local_profile.id)
-            official['_last_active_date'] = last_game
-            official['_is_inactive'] = last_game is None or last_game < inactive_threshold
         else:
             official['_local_group_ids'] = set()
-            official['_last_active_date'] = None
-            official['_is_inactive'] = False  # Can't determine without local profile
+
+        # Get last active date from Assignr data
+        last_game = last_game_by_official.get(official_id)
+        official['_last_active_date'] = last_game
+        official['_is_inactive'] = last_game is None or last_game < inactive_threshold
 
         # Get this official's groups from Assignr
         official_groups = service.get_official_groups(int(official_id)) if official_id else []
