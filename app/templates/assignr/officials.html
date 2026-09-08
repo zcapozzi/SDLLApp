@@ -11,16 +11,34 @@
     </p>
 </div>
 
-{# Groups Legend #}
+{# Groups Legend and Sync Actions #}
 {% if groups %}
 <div class="card" style="margin-bottom: 20px;">
-    <h3 style="margin-top: 0;">Available Groups</h3>
-    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-        {% for group in groups %}
-        <div class="group-badge" data-group-id="{{ group.id }}">
-            {{ group.name }}
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px;">
+        <div>
+            <h3 style="margin-top: 0;">Available Groups</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                {% for group in groups %}
+                <div class="group-badge" data-group-id="{{ group.id }}">
+                    {{ group.name }}
+                </div>
+                {% endfor %}
+            </div>
         </div>
-        {% endfor %}
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <form action="{{ url_for('assignr.import_from_assignr') }}" method="POST" style="margin: 0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline btn-sm" title="Read group memberships from Assignr and update SDLL flags">
+                    Import from Assignr
+                </button>
+            </form>
+            <form action="{{ url_for('assignr.sync_officials_with_assignr') }}" method="POST" style="margin: 0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary btn-sm" title="Push SDLL flags to Assignr groups">
+                    Sync to Assignr
+                </button>
+            </form>
+        </div>
     </div>
 </div>
 {% endif %}
@@ -95,9 +113,25 @@
                 </td>
                 <td>
                     {% if official._local_profile %}
-                    <span class="badge badge-success" title="Linked to SDLL profile #{{ official._local_profile.id }}">
-                        &#10003; Linked
-                    </span>
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <span class="badge badge-success" title="Linked to SDLL profile #{{ official._local_profile.id }}">
+                            &#10003; Linked
+                        </span>
+                        <div class="sdll-flags">
+                            <label class="flag-toggle" title="Active Umpires group">
+                                <input type="checkbox"
+                                    {% if official._local_profile.assignr_active %}checked{% endif %}
+                                    onchange="toggleSDLLFlag({{ official.id }}, {{ official._local_profile.id }}, 'active', this.checked)">
+                                <span>Active</span>
+                            </label>
+                            <label class="flag-toggle" title="Behind-the-plate Trained group">
+                                <input type="checkbox"
+                                    {% if official._local_profile.assignr_plate_trained %}checked{% endif %}
+                                    onchange="toggleSDLLFlag({{ official.id }}, {{ official._local_profile.id }}, 'plate_trained', this.checked)">
+                                <span>Plate</span>
+                            </label>
+                        </div>
+                    </div>
                     {% else %}
                     <span class="badge badge-warning">Not Linked</span>
                     {% endif %}
@@ -221,6 +255,45 @@
 .dropdown-menu a:hover {
     background: #f8f9fa;
 }
+
+.sdll-flags {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.flag-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+
+.flag-toggle input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.flag-toggle input[type="checkbox"]:checked + span {
+    color: #155724;
+    font-weight: 600;
+}
+
+.sync-status {
+    font-size: 10px;
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+.sync-status.synced {
+    background: #d4edda;
+    color: #155724;
+}
+.sync-status.out-of-sync {
+    background: #fff3cd;
+    color: #856404;
+}
 </style>
 
 <script>
@@ -325,6 +398,37 @@ function removeFromGroup(officialId, groupId, btn) {
     })
     .catch(function(err) {
         alert('Error removing from group: ' + err);
+    });
+}
+
+function toggleSDLLFlag(assignrId, profileId, flag, checked) {
+    var csrfToken = document.querySelector('meta[name="csrf-token"]');
+    csrfToken = csrfToken ? csrfToken.getAttribute('content') : '';
+
+    fetch('/assignr/officials/' + assignrId + '/sdll-flags', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            profile_id: profileId,
+            flag: flag,
+            value: checked
+        })
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(result) {
+        if (!result.success) {
+            alert('Error: ' + (result.error || 'Unknown error'));
+            // Revert checkbox
+            event.target.checked = !checked;
+        }
+    })
+    .catch(function(err) {
+        alert('Error updating flag: ' + err);
+        // Revert checkbox
+        event.target.checked = !checked;
     });
 }
 </script>

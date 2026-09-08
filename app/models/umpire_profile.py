@@ -49,6 +49,10 @@ class UmpireProfile(db.Model):
     # External reference for imports
     assignr_id = db.Column(db.String(50))
 
+    # Assignr group memberships (synced with Assignr API)
+    assignr_active = db.Column(db.Boolean, default=False)  # "Active Umpires" group
+    assignr_plate_trained = db.Column(db.Boolean, default=False)  # "Behind-the-plate Trained" group
+
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
