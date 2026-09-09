@@ -386,6 +386,9 @@ Here's your upcoming schedule of {game_count} SDLL game{'s' if game_count != 1 e
         """
         Send a digest email.
 
+        If the partner has multiple email addresses, sends a single email with
+        the first address as the primary recipient and the rest as CC.
+
         Args:
             digest: WeeklyDigest object
             sent_by_user_id: User ID who initiated the send (optional for auto-send)
@@ -406,15 +409,22 @@ Here's your upcoming schedule of {game_count} SDLL game{'s' if game_count != 1 e
         body_text = self._html_to_text(digest.body_html)
 
         try:
-            # Send to each recipient
-            for recipient in recipients:
-                self.gmail.send_email(
-                    to=recipient,
-                    subject=digest.subject,
-                    body_text=body_text,
-                    body_html=digest.body_html
-                )
-                logger.info(f"Sent digest {digest.id} to {recipient}")
+            # Send single email: first recipient as To, rest as CC
+            primary_recipient = recipients[0]
+            cc_recipients = recipients[1:] if len(recipients) > 1 else None
+
+            self.gmail.send_email(
+                to=primary_recipient,
+                subject=digest.subject,
+                body_text=body_text,
+                body_html=digest.body_html,
+                cc=cc_recipients
+            )
+
+            if cc_recipients:
+                logger.info(f"Sent digest {digest.id} to {primary_recipient} (cc: {', '.join(cc_recipients)})")
+            else:
+                logger.info(f"Sent digest {digest.id} to {primary_recipient}")
 
             # Mark as sent
             digest.status = WeeklyDigest.STATUS_SENT

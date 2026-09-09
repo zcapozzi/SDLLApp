@@ -186,6 +186,33 @@
 
         <hr style="margin: 20px 0;">
 
+        <h3>Payment Information</h3>
+        <p style="color: var(--text-muted); margin-bottom: 15px; font-size: 14px;">
+            Payment account IDs for umpire compensation (used by treasurer).
+        </p>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+            <div class="form-group">
+                <label for="venmo_id">Venmo ID</label>
+                <input type="text" name="venmo_id" id="venmo_id" class="form-control"
+                       value="{{ profile.venmo_id or '' }}" placeholder="@username">
+            </div>
+
+            <div class="form-group">
+                <label for="paypal_id">PayPal ID</label>
+                <input type="text" name="paypal_id" id="paypal_id" class="form-control"
+                       value="{{ profile.paypal_id or '' }}" placeholder="email or @handle">
+            </div>
+
+            <div class="form-group">
+                <label for="zelle_id">Zelle ID</label>
+                <input type="text" name="zelle_id" id="zelle_id" class="form-control"
+                       value="{{ profile.zelle_id or '' }}" placeholder="email or phone">
+            </div>
+        </div>
+
+        <hr style="margin: 20px 0;">
+
         <div style="display: flex; gap: 10px;">
             <button type="submit" class="btn btn-primary">Save Changes</button>
             <a href="{{ url_for('umpires.view', id=profile.id) }}" class="btn btn-outline">Cancel</a>

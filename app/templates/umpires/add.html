@@ -63,6 +63,29 @@
             <input type="tel" id="parent_phone" name="parent_phone" class="form-control">
         </div>
 
+        <hr style="margin: 20px 0;">
+        <h4 style="margin-bottom: 15px;">Payment Information</h4>
+        <small style="color: var(--text-muted); display: block; margin-bottom: 15px;">
+            Payment account IDs for umpire compensation (used by treasurer)
+        </small>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+            <div class="form-group">
+                <label for="venmo_id">Venmo ID</label>
+                <input type="text" id="venmo_id" name="venmo_id" class="form-control" placeholder="@username">
+            </div>
+
+            <div class="form-group">
+                <label for="paypal_id">PayPal ID</label>
+                <input type="text" id="paypal_id" name="paypal_id" class="form-control" placeholder="email or @handle">
+            </div>
+
+            <div class="form-group">
+                <label for="zelle_id">Zelle ID</label>
+                <input type="text" id="zelle_id" name="zelle_id" class="form-control" placeholder="email or phone">
+            </div>
+        </div>
+
         <div style="display: flex; gap: 10px; margin-top: 20px;">
             <button type="submit" class="btn btn-primary">Add Umpire</button>
             <a href="{{ url_for('umpires.index') }}" class="btn btn-outline">Cancel</a>

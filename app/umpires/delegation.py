@@ -221,11 +221,14 @@ def delegation_report(year=None, is_spring=None):
             league_lookup[l.fall_display_name.lower().strip()] = l
 
     # Get games for this season (include scrimmages - we pay for those umpires too)
+    # Exclude cancelled and postponed games - we don't pay for those
+    # Postponed games will show up again with their rescheduled date
     games = Game.query.filter(
         Game.year == year,
         Game.is_spring == (is_spring == 1),
         Game.active == 1,
-        Game.game_type.in_(['regular', 'playoff', 'scrimmage'])
+        Game.game_type.in_(['regular', 'playoff', 'scrimmage']),
+        ~Game.status.in_(['cancelled', 'postponed'])
     ).all()
 
     # Build summary data structure
@@ -448,11 +451,13 @@ def invoice_tieout():
             league_lookup[l.fall_display_name.lower().strip()] = l
 
     # Query games in date range
+    # Exclude cancelled and postponed games - we don't pay for those
     games_query = Game.query.filter(
         Game.game_date >= start_date,
         Game.game_date <= end_date,
         Game.active == 1,
-        Game.game_type.in_(['regular', 'playoff', 'scrimmage'])
+        Game.game_type.in_(['regular', 'playoff', 'scrimmage']),
+        ~Game.status.in_(['cancelled', 'postponed'])
     )
 
     # Filter by partner if specified

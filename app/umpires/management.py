@@ -125,6 +125,17 @@ def add():
             if parent_phone:
                 profile.parent_phone = parent_phone
 
+            # Set payment IDs if provided
+            venmo_id = request.form.get('venmo_id', '').strip()
+            paypal_id = request.form.get('paypal_id', '').strip()
+            zelle_id = request.form.get('zelle_id', '').strip()
+            if venmo_id:
+                profile.venmo_id = venmo_id
+            if paypal_id:
+                profile.paypal_id = paypal_id
+            if zelle_id:
+                profile.zelle_id = zelle_id
+
             db.session.add(profile)
             db.session.commit()
 
@@ -374,6 +385,11 @@ def edit(id):
             profile.parent_name = request.form.get('parent_name', '').strip() or None
             profile.parent_email = request.form.get('parent_email', '').strip() or None
             profile.parent_phone = request.form.get('parent_phone', '').strip() or None
+
+        # Payment IDs
+        profile.venmo_id = request.form.get('venmo_id', '').strip() or None
+        profile.paypal_id = request.form.get('paypal_id', '').strip() or None
+        profile.zelle_id = request.form.get('zelle_id', '').strip() or None
 
         try:
             db.session.commit()

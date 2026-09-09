@@ -47,6 +47,30 @@
                 </td>
             </tr>
         </table>
+
+        {% if profile.venmo_id or profile.paypal_id or profile.zelle_id %}
+        <h4 style="margin-top: 20px; margin-bottom: 10px; font-size: 14px; color: var(--text-muted);">Payment Info</h4>
+        <table style="width: 100%;">
+            {% if profile.venmo_id %}
+            <tr>
+                <td style="color: var(--text-muted); width: 40%;">Venmo</td>
+                <td>{{ profile.venmo_id }}</td>
+            </tr>
+            {% endif %}
+            {% if profile.paypal_id %}
+            <tr>
+                <td style="color: var(--text-muted); width: 40%;">PayPal</td>
+                <td>{{ profile.paypal_id }}</td>
+            </tr>
+            {% endif %}
+            {% if profile.zelle_id %}
+            <tr>
+                <td style="color: var(--text-muted); width: 40%;">Zelle</td>
+                <td>{{ profile.zelle_id }}</td>
+            </tr>
+            {% endif %}
+        </table>
+        {% endif %}
     </div>
 
     {% if profile.is_managed %}

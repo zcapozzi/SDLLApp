@@ -49,6 +49,11 @@ class UmpireProfile(db.Model):
     # External reference for imports
     assignr_id = db.Column(db.String(50))
 
+    # Payment IDs (for treasurer to track payment methods)
+    venmo_id = db.Column(db.String(40))
+    paypal_id = db.Column(db.String(40))
+    zelle_id = db.Column(db.String(40))
+
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)

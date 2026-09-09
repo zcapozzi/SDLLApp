@@ -53,18 +53,19 @@ class GmailService:
         """Check if SendGrid is configured"""
         return bool(os.environ.get('SENDGRID_API_KEY'))
 
-    def send_email(self, to, subject, body_text, body_html=None, reply_to=None):
+    def send_email(self, to, subject, body_text, body_html=None, reply_to=None, cc=None):
         """
         Send an email via Resend (preferred), Brevo, SendGrid, SMTP, or Gmail API.
 
         Automatically falls back to next provider if one fails (e.g., rate limit).
 
         Args:
-            to: Recipient email address
+            to: Recipient email address (or list of addresses)
             subject: Email subject
             body_text: Plain text body
             body_html: Optional HTML body
             reply_to: Optional reply-to email address
+            cc: Optional CC recipient(s) - string or list of strings
 
         Returns:
             True if sent successfully
@@ -77,7 +78,7 @@ class GmailService:
         # Try Resend first (Railway-approved, most reliable)
         if self._check_resend():
             try:
-                return self._send_via_resend(to, subject, body_text, body_html, reply_to)
+                return self._send_via_resend(to, subject, body_text, body_html, reply_to, cc)
             except Exception as e:
                 errors.append(f"Resend: {e}")
                 print(f"Resend failed, trying next provider: {e}")
@@ -85,7 +86,7 @@ class GmailService:
         # Try Brevo (300/day free)
         if self._check_brevo():
             try:
-                return self._send_via_brevo(to, subject, body_text, body_html, reply_to)
+                return self._send_via_brevo(to, subject, body_text, body_html, reply_to, cc)
             except Exception as e:
                 errors.append(f"Brevo: {e}")
                 print(f"Brevo failed, trying next provider: {e}")
@@ -93,7 +94,7 @@ class GmailService:
         # Try SendGrid (100/day free)
         if self._check_sendgrid():
             try:
-                return self._send_via_sendgrid(to, subject, body_text, body_html, reply_to)
+                return self._send_via_sendgrid(to, subject, body_text, body_html, reply_to, cc)
             except Exception as e:
                 errors.append(f"SendGrid: {e}")
                 print(f"SendGrid failed, trying next provider: {e}")
@@ -101,7 +102,7 @@ class GmailService:
         # Try SMTP
         if self._check_smtp():
             try:
-                return self._send_via_smtp(to, subject, body_text, body_html, reply_to)
+                return self._send_via_smtp(to, subject, body_text, body_html, reply_to, cc)
             except Exception as e:
                 errors.append(f"SMTP: {e}")
                 print(f"SMTP failed, trying next provider: {e}")
@@ -109,7 +110,7 @@ class GmailService:
         # Fall back to Gmail API
         if self._check_api():
             try:
-                return self._send_via_api(to, subject, body_text, body_html, reply_to)
+                return self._send_via_api(to, subject, body_text, body_html, reply_to, cc)
             except Exception as e:
                 errors.append(f"Gmail API: {e}")
 
@@ -117,7 +118,7 @@ class GmailService:
             raise Exception(f"All email providers failed: {'; '.join(errors)}")
         raise Exception("Email not configured. Set RESEND_API_KEY, BREVO_API_KEY, SENDGRID_API_KEY, SMTP_*, or GOOGLE_SERVICE_JSON.")
 
-    def _send_via_resend(self, to, subject, body_text, body_html=None, reply_to=None):
+    def _send_via_resend(self, to, subject, body_text, body_html=None, reply_to=None, cc=None):
         """Send email via Resend API"""
         api_key = os.environ.get('RESEND_API_KEY', '').strip()
 
@@ -134,6 +135,8 @@ class GmailService:
             payload["html"] = body_html
         if reply_to:
             payload["reply_to"] = reply_to
+        if cc:
+            payload["cc"] = [cc] if isinstance(cc, str) else cc
 
         data = json.dumps(payload).encode('utf-8')
 
@@ -149,7 +152,8 @@ class GmailService:
         )
 
         try:
-            print(f"Resend: sending from '{from_address}' to '{to}'")
+            cc_info = f", cc='{cc}'" if cc else ""
+            print(f"Resend: sending from '{from_address}' to '{to}'{cc_info}")
             with urllib.request.urlopen(req) as response:
                 result = json.loads(response.read().decode('utf-8'))
                 print(f"Resend email sent: {result.get('id')}")
@@ -159,7 +163,7 @@ class GmailService:
             print(f"Resend error - from: '{from_address}', to: '{to}', error: {error_body}")
             raise Exception(f"Resend API error: {e.code} - {error_body}")
 
-    def _send_via_brevo(self, to, subject, body_text, body_html=None, reply_to=None):
+    def _send_via_brevo(self, to, subject, body_text, body_html=None, reply_to=None, cc=None):
         """Send email via Brevo API (formerly Sendinblue) - 300/day free tier"""
         api_key = os.environ.get('BREVO_API_KEY', '').strip()
 
@@ -176,6 +180,9 @@ class GmailService:
             payload["htmlContent"] = body_html
         if reply_to:
             payload["replyTo"] = {"email": reply_to}
+        if cc:
+            cc_list = [cc] if isinstance(cc, str) else cc
+            payload["cc"] = [{"email": addr} for addr in cc_list]
 
         data = json.dumps(payload).encode('utf-8')
 
@@ -191,7 +198,8 @@ class GmailService:
         )
 
         try:
-            print(f"Brevo: sending to '{to}'")
+            cc_info = f", cc='{cc}'" if cc else ""
+            print(f"Brevo: sending to '{to}'{cc_info}")
             with urllib.request.urlopen(req) as response:
                 result = json.loads(response.read().decode('utf-8'))
                 print(f"Brevo email sent: {result.get('messageId')}")
@@ -201,7 +209,7 @@ class GmailService:
             print(f"Brevo error: {error_body}")
             raise Exception(f"Brevo API error: {e.code} - {error_body}")
 
-    def _send_via_sendgrid(self, to, subject, body_text, body_html=None, reply_to=None):
+    def _send_via_sendgrid(self, to, subject, body_text, body_html=None, reply_to=None, cc=None):
         """Send email via SendGrid API - 100/day free tier"""
         api_key = os.environ.get('SENDGRID_API_KEY', '').strip()
 
@@ -213,10 +221,15 @@ class GmailService:
         # Build recipients
         to_list = [to] if isinstance(to, str) else to
 
+        personalization = {
+            "to": [{"email": addr} for addr in to_list]
+        }
+        if cc:
+            cc_list = [cc] if isinstance(cc, str) else cc
+            personalization["cc"] = [{"email": addr} for addr in cc_list]
+
         payload = {
-            "personalizations": [{
-                "to": [{"email": addr} for addr in to_list]
-            }],
+            "personalizations": [personalization],
             "from": {
                 "email": self.sender_email,
                 "name": self.sender_name
@@ -240,7 +253,8 @@ class GmailService:
         )
 
         try:
-            print(f"SendGrid: sending to '{to}'")
+            cc_info = f", cc='{cc}'" if cc else ""
+            print(f"SendGrid: sending to '{to}'{cc_info}")
             with urllib.request.urlopen(req) as response:
                 # SendGrid returns 202 Accepted with empty body on success
                 print(f"SendGrid email sent successfully")
@@ -250,7 +264,7 @@ class GmailService:
             print(f"SendGrid error: {error_body}")
             raise Exception(f"SendGrid API error: {e.code} - {error_body}")
 
-    def _send_via_smtp(self, to, subject, body_text, body_html=None, reply_to=None):
+    def _send_via_smtp(self, to, subject, body_text, body_html=None, reply_to=None, cc=None):
         """Send email via SMTP (supports both TLS on 587 and SSL on 465)"""
         smtp_host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
         smtp_port = int(os.environ.get('SMTP_PORT', 465))
@@ -263,6 +277,9 @@ class GmailService:
         message['Subject'] = subject
         if reply_to:
             message['Reply-To'] = reply_to
+        if cc:
+            cc_list = [cc] if isinstance(cc, str) else cc
+            message['Cc'] = ', '.join(cc_list)
 
         # Add plain text part
         message.attach(MIMEText(body_text, 'plain'))
@@ -271,20 +288,26 @@ class GmailService:
         if body_html:
             message.attach(MIMEText(body_html, 'html'))
 
+        # Build full recipient list (To + Cc)
+        all_recipients = [to] if isinstance(to, str) else list(to)
+        if cc:
+            cc_list = [cc] if isinstance(cc, str) else cc
+            all_recipients.extend(cc_list)
+
         # Use SSL for port 465, STARTTLS for port 587
         if smtp_port == 465:
             with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
                 server.login(smtp_user, smtp_password)
-                server.sendmail(self.sender_email, to, message.as_string())
+                server.sendmail(self.sender_email, all_recipients, message.as_string())
         else:
             with smtplib.SMTP(smtp_host, smtp_port) as server:
                 server.starttls()
                 server.login(smtp_user, smtp_password)
-                server.sendmail(self.sender_email, to, message.as_string())
+                server.sendmail(self.sender_email, all_recipients, message.as_string())
 
         return True
 
-    def _send_via_api(self, to, subject, body_text, body_html=None, reply_to=None):
+    def _send_via_api(self, to, subject, body_text, body_html=None, reply_to=None, cc=None):
         """Send email via Gmail API (requires domain-wide delegation)"""
         creds_json = os.environ.get('GOOGLE_SERVICE_JSON')
         if not creds_json:
@@ -310,6 +333,9 @@ class GmailService:
             message['subject'] = subject
             if reply_to:
                 message['Reply-To'] = reply_to
+            if cc:
+                cc_list = [cc] if isinstance(cc, str) else cc
+                message['Cc'] = ', '.join(cc_list)
 
             message.attach(MIMEText(body_text, 'plain'))
             if body_html:
