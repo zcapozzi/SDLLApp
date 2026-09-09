@@ -384,9 +384,13 @@ def delegation_report(year=None, is_spring=None):
 
 
 @umpires_bp.route('/delegation/invoice-tieout')
-@login_required
 def invoice_tieout():
     """Invoice Tie-Out report for matching partner invoices.
+
+    Access control:
+    - Not logged in: Landing page with login link
+    - Logged in without permission: Redirect with error
+    - Logged in with permission: Full report
 
     Shows game-level detail for a specific partner and date range.
     Access: Umpire coordinators, admins, and treasurers.
@@ -394,6 +398,17 @@ def invoice_tieout():
     from flask_login import current_user
     from datetime import datetime, timedelta
 
+    # Check authentication - show landing page if not logged in
+    if not current_user.is_authenticated:
+        login_url = url_for('auth.login', next=request.url)
+        return render_template(
+            'treasurer/landing.html',
+            page_title='Invoice Tie-Outs',
+            description='Please log in to view the Invoice Tie-Outs report. This page helps match partner invoices against game records.',
+            login_url=login_url
+        )
+
+    # Check authorization
     if not (current_user.can_manage_umpires() or current_user.is_treasurer()):
         flash('You do not have permission to view this report.', 'error')
         return redirect(url_for('main.dashboard'))

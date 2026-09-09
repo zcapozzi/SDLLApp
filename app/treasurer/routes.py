@@ -1,7 +1,7 @@
 """Treasurer routes - financial reports for umpire payments."""
 
 from flask import render_template, request, redirect, url_for, flash
-from flask_login import login_required
+from flask_login import current_user
 from datetime import date
 from collections import defaultdict
 from decimal import Decimal
@@ -19,10 +19,13 @@ from . import treasurer_bp, treasurer_required, logger
 
 @treasurer_bp.route('/managed-umpires')
 @treasurer_bp.route('/managed-umpires/<int:year>/<int:is_spring>')
-@login_required
-@treasurer_required
 def managed_umpires(year=None, is_spring=None):
     """Report showing Academy umpire game counts and payments from Assignr.
+
+    Access control:
+    - Not logged in: Landing page with login link
+    - Logged in without permission: Redirect with error
+    - Logged in with permission: Full report
 
     Shows:
     - List of managed (Academy) umpires
@@ -32,6 +35,21 @@ def managed_umpires(year=None, is_spring=None):
     - Multiplier adjustments
     - Total owed per umpire
     """
+    # Check authentication - show landing page if not logged in
+    if not current_user.is_authenticated:
+        login_url = url_for('auth.login', next=request.url)
+        return render_template(
+            'treasurer/landing.html',
+            page_title='Managed Umpires',
+            description='Please log in to view the Managed Umpires report. This page shows Academy umpire game counts and payment calculations.',
+            login_url=login_url
+        )
+
+    # Check authorization
+    if not current_user.is_treasurer():
+        flash('You do not have permission to access treasurer functions.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     # Default to current season
     if year is None:
         current = OrgSeason.get_current_season()
