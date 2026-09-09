@@ -446,7 +446,7 @@ def invoice_tieout():
             db.func.upper(Game.umpire_override) == partner_code.upper()
         )
 
-    games = games_query.order_by(Game.game_date, Game.game_time).all()
+    games = games_query.order_by(Game.game_date).all()
 
     # Get partner rates
     default_rate_normal = 35.00
@@ -516,8 +516,8 @@ def invoice_tieout():
 
         game_rows.append({
             'id': game.ID,
-            'date': game.game_date,
-            'time': game.game_time,
+            'date': game.game_date.date() if game.game_date else None,
+            'time': game.game_date.time() if game.game_date else None,
             'league': league_name,
             'home_team': game.home_team.computed_display_name if game.home_team else 'TBD',
             'away_team': game.away_team.computed_display_name if game.away_team else 'TBD',
