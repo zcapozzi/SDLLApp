@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Managed Umpires Report{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0;">Managed Umpires Report</h2>
+        <div>
+            <select id="season-picker" class="form-control" style="width: auto; display: inline-block;">
+                {% for s in seasons %}
+                <option value="{{ s.year }}/{{ s.is_spring }}"
+                    {% if s.year == year and s.is_spring == is_spring %}selected{% endif %}>
+                    {{ 'Spring' if s.is_spring else 'Fall' }} {{ s.year }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <p class="text-muted">
+        Academy umpire game counts and payments for <strong>{{ season_name }}</strong>
+        {% if start_date and end_date %}
+        ({{ start_date.strftime('%b %d, %Y') }} - {{ end_date.strftime('%b %d, %Y') }})
+        {% endif %}
+    </p>
+
+    <div style="background: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+        <strong>Pay Rates (SDL Academy):</strong>
+        Regular Game: ${{ "%.2f"|format(rates.normal) }}/umpire |
+        NTL Game: ${{ "%.2f"|format(rates.ntl) }}/umpire
+    </div>
+
+    {% if umpire_data %}
+    <table>
+        <thead>
+            <tr>
+                <th>Umpire Name</th>
+                <th style="text-align: center;">Regular Games</th>
+                <th style="text-align: center;">NTL Games</th>
+                <th style="text-align: center;">Total Games</th>
+                <th style="text-align: right;">Base Pay</th>
+                <th style="text-align: right;">Adjustments</th>
+                <th style="text-align: right;">Total Owed</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for umpire in umpire_data %}
+            <tr id="umpire-{{ umpire.official_id }}">
+                <td>
+                    <a href="https://app.assignr.com/users/{{ umpire.official_id }}" target="_blank"
+                       title="View in Assignr">
+                        {{ umpire.full_name }}
+                    </a>
+                    {% if umpire.email %}
+                    <br><span class="text-small text-muted">{{ umpire.email }}</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: center;">{{ umpire.normal_games }}</td>
+                <td style="text-align: center;">{{ umpire.ntl_games }}</td>
+                <td style="text-align: center;"><strong>{{ umpire.total_games }}</strong></td>
+                <td style="text-align: right;">${{ "%.2f"|format(umpire.base_pay) }}</td>
+                <td style="text-align: right;">
+                    {% if umpire.adjustments > 0 %}
+                    <span style="color: green;">+${{ "%.2f"|format(umpire.adjustments) }}</span>
+                    {% elif umpire.adjustments < 0 %}
+                    <span style="color: red;">-${{ "%.2f"|format(umpire.adjustments|abs) }}</span>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td style="text-align: right;"><strong>${{ "%.2f"|format(umpire.total_pay) }}</strong></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot style="background: #f0f0f0; font-weight: bold;">
+            <tr>
+                <td>TOTAL ({{ umpire_data|length }} umpires)</td>
+                <td style="text-align: center;">{{ grand_total.games }}</td>
+                <td style="text-align: center;">{{ grand_total.ntl_games }}</td>
+                <td style="text-align: center;">{{ grand_total.games + grand_total.ntl_games }}</td>
+                <td style="text-align: right;">${{ "%.2f"|format(grand_total.base_pay) }}</td>
+                <td style="text-align: right;">
+                    {% if grand_total.adjustments > 0 %}
+                    <span style="color: green;">+${{ "%.2f"|format(grand_total.adjustments) }}</span>
+                    {% elif grand_total.adjustments < 0 %}
+                    <span style="color: red;">-${{ "%.2f"|format(grand_total.adjustments|abs) }}</span>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td style="text-align: right;">${{ "%.2f"|format(grand_total.total) }}</td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="mt-2 text-small text-muted">
+        <p><strong>Notes:</strong></p>
+        <ul>
+            <li>Only completed games (game date has passed) are included</li>
+            <li>Cancelled and rainout games are excluded</li>
+            <li>Only accepted assignments are counted</li>
+            <li>Click umpire name to view their Assignr profile</li>
+        </ul>
+    </div>
+    {% else %}
+    <p class="text-muted">No umpire game data found for this season.</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('season-picker').addEventListener('change', function() {
+    var parts = this.value.split('/');
+    window.location.href = '{{ url_for("treasurer.managed_umpires") }}/' + parts[0] + '/' + parts[1];
+});
+</script>
+{% endblock %}

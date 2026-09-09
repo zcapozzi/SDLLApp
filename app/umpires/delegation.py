@@ -174,10 +174,11 @@ def delete_override(id):
 @umpires_bp.route('/delegation/report')
 @umpires_bp.route('/delegation/report/<int:year>/<int:is_spring>')
 @login_required
-@umpire_coordinator_required
 def delegation_report(year=None, is_spring=None):
     """
     Report showing game counts and costs by umpire partner and league.
+
+    Access: Umpire coordinators, admins, and treasurers can view this report.
 
     Shows:
     - Game counts by league and partner (SDL, DIA, DYN, etc.)
@@ -185,6 +186,11 @@ def delegation_report(year=None, is_spring=None):
     - Blended rates per league
     - Accounts for 1-umpire vs 2-umpire games
     """
+    from flask_login import current_user
+    if not (current_user.can_manage_umpires() or current_user.is_treasurer()):
+        flash('You do not have permission to view this report.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     from app.models.league_season import LeagueSeason
 
     # Default to current season

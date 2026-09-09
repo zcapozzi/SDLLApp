@@ -4,7 +4,120 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Implemented Product Admin Usage Analytics Dashboard.
+Last session: Implemented treasurer features - managed umpires report and financial views.
+
+---
+
+## Session: September 9, 2026 - Treasurer Features Implementation
+
+### Overview
+Implemented treasurer-specific views for managing umpire payments as per the approved plan.
+
+### Files Created
+1. **app/models/umpire_game_payment.py** - New model for tracking game-specific payment multipliers (e.g., 2x incentive games)
+2. **app/treasurer/__init__.py** - New treasurer blueprint with `@treasurer_required` decorator
+3. **app/treasurer/routes.py** - Managed Umpires report route that:
+   - Fetches games from Assignr for the current season
+   - Filters out cancelled/rainout games
+   - Calculates pay based on SDL partner rates
+   - Supports payment multipliers for special games
+4. **app/templates/treasurer/managed_umpires.html** - Report template showing umpire game counts and payments
+5. **scripts/add_umpire_game_payments.sql** - Database migration script
+
+### Files Modified
+1. **app/__init__.py** - Registered treasurer blueprint at `/treasurer`
+2. **app/models/__init__.py** - Added import for UmpireGamePayment
+3. **app/umpires/delegation.py** - Updated `delegation_report` to allow treasurer access (not just umpire coordinators)
+4. **app/templates/base.html** - Added:
+   - Treasurer-only navigation (Dashboard + Umpires menu) for pure treasurers
+   - "Managed Umpires" link in existing Umpires dropdown for coordinators
+
+### Features
+- **Managed Umpires Report** (`/treasurer/managed-umpires`): Shows Academy umpire game counts and payments from Assignr
+  - Regular game count per umpire
+  - NTL (no time limit) game count per umpire
+  - Base pay calculations using SDL partner rates
+  - Support for payment multipliers (stored in `sdll_umpire_game_payments`)
+  - Grand totals for all umpires
+  - Season picker for viewing different seasons
+  - Links to Assignr profiles
+
+- **Access Control**:
+  - Treasurers (and admins) can access the new Managed Umpires report
+  - Treasurers (and admins) can now view the Delegation Report
+  - Pure treasurers see a simplified nav with only Umpires menu
+
+### Database Changes
+New table `sdll_umpire_game_payments`:
+- `id` - Primary key
+- `game_id` - Foreign key to sdll_games
+- `umpire_profile_id` - Foreign key to sdll_umpire_profiles
+- `assignr_official_id` - Assignr user ID for lookups
+- `multiplier` - Decimal(3,2), default 1.00 (e.g., 2.00 for double pay)
+- `notes` - Reason for multiplier
+- `created_at`, `created_by` - Audit fields
+
+### Testing
+- Verified all imports work correctly
+- Confirmed blueprint routes are registered
+- Created database table successfully
+- Ready for manual testing on localhost:8084
+
+---
+
+## Session: September 7, 2026 - Codebase Refactoring Analysis & Documentation
+
+### Overview
+Conducted a comprehensive evaluation of the codebase to identify technical debt and improvement opportunities. Documented findings as guidance for future contributors in CLAUDE.md.
+
+### Key Findings
+
+**1. Blueprint Size Issues**
+- `umpires/routes.py` at ~2,200 lines is too large and should be split
+- Recommended splitting into: management, assignments, availability, partners
+
+**2. Repeated Utility Patterns**
+- Date parsing duplicated across multiple routes
+- Form value extraction repeated in many places
+- Redirect-with-anchor logic duplicated
+
+**3. Dynamic Object Anti-Patterns**
+- Found uses of `type()` to create ad-hoc classes
+- Found `SimpleNamespace` usage for data transfer
+- Recommended dataclasses as alternative
+
+**4. Permission Decorator Inconsistency**
+- Multiple similar decorators doing role checks
+- Recommended consolidating on `@role_required()`
+
+**5. Service Layer Organization**
+- Some business logic in routes instead of services
+- Some services inline, some in services directory
+
+**6. Windows Compatibility**
+- `%l` format code doesn't work on Windows
+- Fixed in partner schedule with `%I` + `.lstrip('0')`
+
+### Documentation Updates
+
+Added new sections to CLAUDE.md under "Development Guidelines":
+- **Blueprint Size Guidelines** - Size limits, when to split, how to split
+- **Utility Extraction Patterns** - Date parsing, form parsing, redirects
+- **View Models and Data Transfer Objects** - Dataclass patterns
+- **Permission Decorator Standardization** - Consolidation approach
+- **Service Layer Organization** - What goes where
+- **Modular Scheduler Architecture** - Extension points
+- **Windows Compatibility** - Format string gotchas
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `CLAUDE.md` | Added 7 new Development Guidelines sections (~250 lines) |
+| `WORKING_NOTES.md` | Added this session entry |
+
+### Verification
+Run `git diff CLAUDE.md` to review the additions.
 
 ---
 

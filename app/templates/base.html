@@ -259,6 +259,7 @@
                     <a href="{{ url_for('umpires.partners') }}">Partners</a>
                     <a href="{{ url_for('umpires.delegation') }}">Delegation Rules</a>
                     <a href="{{ url_for('umpires.delegation_report') }}">Delegation Report</a>
+                    <a href="{{ url_for('treasurer.managed_umpires') }}">Managed Umpires</a>
                     <a href="{{ url_for('umpires.missing_umpire') }}">Missing Umpire</a>
                     <a href="{{ url_for('assignr.index') }}">Assignr</a>
                     <a href="{{ url_for('leagues.umpire_patterns') }}">Umpire Patterns</a>
@@ -305,6 +306,20 @@
             </div>
             {% endif %}
             {% endif %}{# End of can_edit_schedule/is_umpire check for full nav #}
+
+            {% if current_user.is_treasurer() and not current_user.can_edit_schedule() and not current_user.can_manage_umpires() %}
+            {# Treasurer-only nav: just Dashboard + Umpires menu #}
+            <div class="nav-item">
+                <a href="{{ url_for('main.dashboard') }}" class="nav-link">Dashboard</a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">Umpires ▾</a>
+                <div class="dropdown-menu">
+                    <a href="{{ url_for('umpires.delegation_report') }}">Umpire Partners</a>
+                    <a href="{{ url_for('treasurer.managed_umpires') }}">Managed Umpires</a>
+                </div>
+            </div>
+            {% endif %}
 
             <div class="nav-item">
                 <a href="{{ url_for('auth.logout') }}" class="nav-link">Logout</a>
