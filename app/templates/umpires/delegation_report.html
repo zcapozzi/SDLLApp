@@ -266,6 +266,10 @@
         padding: 40px;
         color: #666;
     }
+    abbr[title] {
+        text-decoration: underline dotted;
+        cursor: help;
+    }
 </style>
 {% endblock %}
 
@@ -377,7 +381,7 @@
             <h3>{{ partner.name }}</h3>
             <div class="partner-rates">
                 Normal: ${{ "{:,.0f}".format(partner.rate_normal) }}/ump |
-                NTL: ${{ "{:,.0f}".format(partner.rate_ntl) }}/ump
+                <abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr>: ${{ "{:,.0f}".format(partner.rate_ntl) }}/ump
             </div>
         </div>
 
@@ -388,10 +392,10 @@
                     <th>League</th>
                     <th class="number">Games</th>
                     <th class="number">Umpires</th>
-                    <th class="number">NTL Games</th>
-                    <th class="number">NTL Umpires</th>
+                    <th class="number"><abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr> Games</th>
+                    <th class="number"><abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr> Umpires</th>
                     <th class="currency">Normal Cost</th>
-                    <th class="currency">NTL Cost</th>
+                    <th class="currency"><abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr> Cost</th>
                     <th class="currency">Total</th>
                 </tr>
             </thead>

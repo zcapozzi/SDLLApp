@@ -299,7 +299,7 @@
                 <td>{{ game.game_date.strftime('%a') if game.game_date else '' }}</td>
                 <td style="white-space: nowrap;">
                     {{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
-                    {% if game.no_time_limit %}<span style="background: #7b1fa2; color: white; padding: 1px 4px; border-radius: 3px; font-size: 9px; margin-left: 3px;">NTL</span>{% endif %}
+                    {% if game.no_time_limit %}<span style="background: #7b1fa2; color: white; padding: 1px 4px; border-radius: 3px; font-size: 9px; margin-left: 3px;" title="No Time Limit - extended playoff-style games with higher pay rate">NTL</span>{% endif %}
                 </td>
                 <td>{{ game.league }}</td>
                 <td>

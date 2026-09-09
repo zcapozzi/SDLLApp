@@ -1,6 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Managed Umpires Report{% endblock %}
 
+{% block extra_css %}
+<style>
+    abbr[title] {
+        text-decoration: underline dotted;
+        cursor: help;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -27,7 +36,7 @@
     <div style="background: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
         <strong>Pay Rates (SDL Academy):</strong>
         Regular Game: ${{ "%.2f"|format(rates.normal) }}/umpire |
-        NTL Game: ${{ "%.2f"|format(rates.ntl) }}/umpire
+        <abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr> Game: ${{ "%.2f"|format(rates.ntl) }}/umpire
     </div>
 
     {% if umpire_data %}
@@ -36,7 +45,7 @@
             <tr>
                 <th>Umpire Name</th>
                 <th style="text-align: center;">Regular Games</th>
-                <th style="text-align: center;">NTL Games</th>
+                <th style="text-align: center;"><abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr> Games</th>
                 <th style="text-align: center;">Total Games</th>
                 <th style="text-align: right;">Base Pay</th>
                 <th style="text-align: right;">Adjustments</th>

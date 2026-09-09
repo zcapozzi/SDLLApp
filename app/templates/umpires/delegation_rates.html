@@ -70,6 +70,10 @@
         font-size: 14px;
         color: #666;
     }
+    abbr[title] {
+        text-decoration: underline dotted;
+        cursor: help;
+    }
 </style>
 {% endblock %}
 
@@ -81,7 +85,7 @@
     costs in the <a href="{{ url_for('umpires.delegation_report') }}">Delegation Report</a>.
     <br><br>
     <strong>Normal Rate:</strong> Standard games (typically 2 hours)<br>
-    <strong>NTL Rate:</strong> No Time Limit games (typically 3 hours)
+    <strong><abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr> Rate:</strong> No Time Limit games (typically 3 hours)
 </div>
 
 <div class="rates-container">
@@ -93,7 +97,7 @@
                 <tr>
                     <th>Partner</th>
                     <th>Normal Rate ($/ump)</th>
-                    <th>NTL Rate ($/ump)</th>
+                    <th><abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr> Rate ($/ump)</th>
                 </tr>
             </thead>
             <tbody>
