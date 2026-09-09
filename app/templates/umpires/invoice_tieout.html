@@ -68,6 +68,10 @@
     .clear-filter:hover {
         color: #c33;
     }
+    abbr[title] {
+        text-decoration: underline dotted;
+        cursor: help;
+    }
 </style>
 {% endblock %}
 
@@ -120,6 +124,10 @@
         <a href="#" id="clear-filter" class="clear-filter" style="display: none;" onclick="clearPartnerFilter(); return false;">Clear filter</a>
     </h3>
 
+    <p class="text-muted text-small" style="margin-bottom: 15px;">
+        Click a partner card to filter the game details table below to show only that partner's games.
+    </p>
+
     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; margin-bottom: 30px;">
         {% for ps in partner_summaries %}
         <div class="partner-card" data-partner="{{ ps.code }}" onclick="filterByPartner('{{ ps.code }}', '{{ ps.name }}')">
@@ -130,7 +138,7 @@
                     <span class="stat-value">{{ ps.games }} games / {{ ps.umpires }} umps</span>
                 </div>
                 <div class="stat">
-                    <span class="stat-label">NTL</span>
+                    <span class="stat-label"><abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr></span>
                     <span class="stat-value">{{ ps.ntl_games }} games / {{ ps.ntl_umpires }} umps</span>
                 </div>
                 <div class="stat">
@@ -151,7 +159,7 @@
                 <span class="stat-value">{{ totals.games }} games / {{ totals.umpires }} umpires = ${{ "%.2f"|format(totals.cost_normal) }}</span>
             </div>
             <div class="stat">
-                <span class="stat-label">NTL Games</span>
+                <span class="stat-label"><abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr> Games</span>
                 <span class="stat-value">{{ totals.ntl_games }} games / {{ totals.ntl_umpires }} umpires = ${{ "%.2f"|format(totals.cost_ntl) }}</span>
             </div>
             <div class="stat">
@@ -176,7 +184,7 @@
                     <th>Field</th>
                     <th>Partner</th>
                     <th style="text-align: center;">Umps</th>
-                    <th style="text-align: center;">NTL</th>
+                    <th style="text-align: center;"><abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr></th>
                     <th style="text-align: right;">Rate</th>
                     <th style="text-align: right;">Cost</th>
                 </tr>
