@@ -482,8 +482,9 @@ def invoice_tieout():
     else:
         partner_rates['SDL'] = {'normal': default_rate_normal, 'ntl': default_rate_ntl}
 
-    # Build game details
+    # Build game details and per-partner summaries
     game_rows = []
+    partner_summaries = {}  # {partner_code: {name, games, ntl_games, umpires, ntl_umpires, cost_normal, cost_ntl, cost_total}}
     totals = {
         'games': 0,
         'ntl_games': 0,
@@ -493,6 +494,10 @@ def invoice_tieout():
         'cost_ntl': 0,
         'cost_total': 0
     }
+
+    # Build partner name lookup
+    partner_names = {p.short_code: p.name for p in partners}
+    partner_names['SDL'] = 'SDLL Academy'
 
     for game in games:
         # Skip games without an umpire partner assigned
@@ -555,6 +560,31 @@ def invoice_tieout():
         totals['cost_ntl'] += cost if is_ntl else 0
         totals['cost_total'] += cost
 
+        # Update per-partner summary
+        if game_partner not in partner_summaries:
+            partner_summaries[game_partner] = {
+                'code': game_partner,
+                'name': partner_names.get(game_partner, game_partner),
+                'games': 0,
+                'ntl_games': 0,
+                'umpires': 0,
+                'ntl_umpires': 0,
+                'cost_normal': 0,
+                'cost_ntl': 0,
+                'cost_total': 0
+            }
+        ps = partner_summaries[game_partner]
+        ps['games'] += 0 if is_ntl else 1
+        ps['ntl_games'] += 1 if is_ntl else 0
+        ps['umpires'] += 0 if is_ntl else umpire_count
+        ps['ntl_umpires'] += umpire_count if is_ntl else 0
+        ps['cost_normal'] += 0 if is_ntl else cost
+        ps['cost_ntl'] += cost if is_ntl else 0
+        ps['cost_total'] += cost
+
+    # Sort partner summaries by name
+    partner_summaries_list = sorted(partner_summaries.values(), key=lambda x: x['name'])
+
     # Get selected partner name for display
     selected_partner_name = None
     if partner_code:
@@ -591,7 +621,8 @@ def invoice_tieout():
         game_rows=game_rows,
         totals=totals,
         partner_rates=partner_rates,
-        quick_ranges=quick_ranges
+        quick_ranges=quick_ranges,
+        partner_summaries=partner_summaries_list
     )
 
 

@@ -1,6 +1,76 @@
 {% extends "base.html" %}
 {% block title %}Invoice Tie-Out{% endblock %}
 
+{% block extra_css %}
+<style>
+    .partner-card {
+        background: #f9f9f9;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .partner-card:hover {
+        border-color: rgb(34, 139, 34);
+        background: #f0f8f0;
+    }
+    .partner-card.selected {
+        border-color: rgb(34, 139, 34);
+        background: #e8f5e9;
+        box-shadow: 0 2px 8px rgba(34, 139, 34, 0.2);
+    }
+    .partner-card h4 {
+        margin: 0 0 10px 0;
+        color: #333;
+    }
+    .partner-stats {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        font-size: 14px;
+    }
+    .partner-stats .stat {
+        display: flex;
+        flex-direction: column;
+    }
+    .partner-stats .stat-label {
+        color: #666;
+        font-size: 12px;
+    }
+    .partner-stats .stat-value {
+        font-weight: bold;
+        color: #333;
+    }
+    .partner-stats .stat-value.total {
+        color: rgb(34, 139, 34);
+        font-size: 1.1em;
+    }
+    .game-row.hidden {
+        display: none;
+    }
+    .filter-indicator {
+        display: inline-block;
+        padding: 4px 12px;
+        background: rgb(34, 139, 34);
+        color: white;
+        border-radius: 4px;
+        font-size: 14px;
+        margin-left: 10px;
+    }
+    .clear-filter {
+        margin-left: 10px;
+        color: #666;
+        text-decoration: none;
+        font-size: 14px;
+    }
+    .clear-filter:hover {
+        color: #c33;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="card">
     <h2>Invoice Tie-Out</h2>
@@ -9,17 +79,6 @@
     <!-- Filters -->
     <form method="GET" action="{{ url_for('umpires.invoice_tieout') }}" style="margin-bottom: 20px;">
         <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
-            <div class="form-group" style="margin-bottom: 0;">
-                <label for="partner">Partner</label>
-                <select name="partner" id="partner" class="form-control" style="width: auto; min-width: 150px;">
-                    <option value="">All Partners</option>
-                    {% for p in partners %}
-                    <option value="{{ p.short_code }}" {% if partner_code == p.short_code %}selected{% endif %}>
-                        {{ p.name }} ({{ p.short_code }})
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
             <div class="form-group" style="margin-bottom: 0;">
                 <label for="start_date">Start Date</label>
                 <input type="date" name="start_date" id="start_date" class="form-control"
@@ -30,7 +89,7 @@
                 <input type="date" name="end_date" id="end_date" class="form-control"
                        value="{{ end_date.strftime('%Y-%m-%d') }}" style="width: auto;">
             </div>
-            <button type="submit" class="btn btn-primary">Apply Filters</button>
+            <button type="submit" class="btn btn-primary">Apply Dates</button>
             <a href="{{ url_for('umpires.invoice_tieout') }}" class="btn btn-outline">Reset</a>
         </div>
     </form>
@@ -38,27 +97,75 @@
     <!-- Quick date range buttons -->
     <div style="margin-bottom: 20px;">
         <span class="text-muted text-small">Quick ranges:</span>
-        <a href="{{ url_for('umpires.invoice_tieout', partner=partner_code, start_date=quick_ranges['7days']['start'], end_date=quick_ranges['7days']['end']) }}" class="btn btn-sm btn-outline">Past 7 Days</a>
-        <a href="{{ url_for('umpires.invoice_tieout', partner=partner_code, start_date=quick_ranges['14days']['start'], end_date=quick_ranges['14days']['end']) }}" class="btn btn-sm btn-outline">Past 14 Days</a>
-        <a href="{{ url_for('umpires.invoice_tieout', partner=partner_code, start_date=quick_ranges['30days']['start'], end_date=quick_ranges['30days']['end']) }}" class="btn btn-sm btn-outline">Past 30 Days</a>
+        <a href="{{ url_for('umpires.invoice_tieout', start_date=quick_ranges['7days']['start'], end_date=quick_ranges['7days']['end']) }}" class="btn btn-sm btn-outline">Past 7 Days</a>
+        <a href="{{ url_for('umpires.invoice_tieout', start_date=quick_ranges['14days']['start'], end_date=quick_ranges['14days']['end']) }}" class="btn btn-sm btn-outline">Past 14 Days</a>
+        <a href="{{ url_for('umpires.invoice_tieout', start_date=quick_ranges['30days']['start'], end_date=quick_ranges['30days']['end']) }}" class="btn btn-sm btn-outline">Past 30 Days</a>
     </div>
 
     <!-- Report Header -->
-    <div style="background: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
-        <strong>Report:</strong>
-        {% if selected_partner_name %}
-        {{ selected_partner_name }}
-        {% else %}
-        All Partners
-        {% endif %}
-        |
+    <div style="background: #f0f0f0; padding: 12px 15px; border-radius: 6px; margin-bottom: 20px;">
         <strong>Date Range:</strong>
         {{ start_date.strftime('%b %d, %Y') }} - {{ end_date.strftime('%b %d, %Y') }}
-        |
-        <strong>Games:</strong> {{ game_rows|length }}
+        &nbsp;|&nbsp;
+        <strong>Total Games:</strong> {{ game_rows|length }}
+        &nbsp;|&nbsp;
+        <strong>Total:</strong> ${{ "%.2f"|format(totals.cost_total) }}
     </div>
 
+    {% if partner_summaries %}
+    <!-- Partner Invoice Summaries -->
+    <h3 style="margin-bottom: 15px;">
+        Invoice Summaries by Partner
+        <span id="filter-indicator" class="filter-indicator" style="display: none;"></span>
+        <a href="#" id="clear-filter" class="clear-filter" style="display: none;" onclick="clearPartnerFilter(); return false;">Clear filter</a>
+    </h3>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; margin-bottom: 30px;">
+        {% for ps in partner_summaries %}
+        <div class="partner-card" data-partner="{{ ps.code }}" onclick="filterByPartner('{{ ps.code }}', '{{ ps.name }}')">
+            <h4>{{ ps.name }} ({{ ps.code }})</h4>
+            <div class="partner-stats">
+                <div class="stat">
+                    <span class="stat-label">Regular</span>
+                    <span class="stat-value">{{ ps.games }} games / {{ ps.umpires }} umps</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">NTL</span>
+                    <span class="stat-value">{{ ps.ntl_games }} games / {{ ps.ntl_umpires }} umps</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Total</span>
+                    <span class="stat-value total">${{ "%.2f"|format(ps.cost_total) }}</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Grand Total -->
+    <div style="background: #e8f5e9; padding: 15px; border-radius: 6px; margin-bottom: 30px;">
+        <h4 style="margin: 0 0 10px 0;">Grand Total (All Partners)</h4>
+        <div class="partner-stats">
+            <div class="stat">
+                <span class="stat-label">Regular Games</span>
+                <span class="stat-value">{{ totals.games }} games / {{ totals.umpires }} umpires = ${{ "%.2f"|format(totals.cost_normal) }}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">NTL Games</span>
+                <span class="stat-value">{{ totals.ntl_games }} games / {{ totals.ntl_umpires }} umpires = ${{ "%.2f"|format(totals.cost_ntl) }}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Grand Total</span>
+                <span class="stat-value total" style="font-size: 1.3em;">${{ "%.2f"|format(totals.cost_total) }}</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     {% if game_rows %}
+    <!-- Game Details -->
+    <h3 style="margin-bottom: 15px;">Game Details <span id="game-count">({{ game_rows|length }} games)</span></h3>
+
     <div style="overflow-x: auto;">
         <table>
             <thead>
@@ -66,20 +173,17 @@
                     <th>Date</th>
                     <th>Time</th>
                     <th>League</th>
-                    <th>Matchup</th>
                     <th>Field</th>
-                    {% if not partner_code %}
                     <th>Partner</th>
-                    {% endif %}
                     <th style="text-align: center;">Umps</th>
                     <th style="text-align: center;">NTL</th>
                     <th style="text-align: right;">Rate</th>
                     <th style="text-align: right;">Cost</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="game-table-body">
                 {% for game in game_rows %}
-                <tr>
+                <tr class="game-row" data-partner="{{ game.partner }}">
                     <td>{{ game.date.strftime('%a %b %d') }}</td>
                     <td>
                         {% if game.time %}
@@ -88,9 +192,8 @@
                         TBD
                         {% endif %}
                     </td>
-                    <td>{{ game.league }}</td>
                     <td>
-                        <span class="text-small">{{ game.away_team }} @ {{ game.home_team }}</span>
+                        {{ game.league }}
                         {% if game.game_type == 'playoff' %}
                         <span class="badge badge-fall" style="font-size: 10px;">Playoff</span>
                         {% elif game.game_type == 'scrimmage' %}
@@ -98,9 +201,7 @@
                         {% endif %}
                     </td>
                     <td>{{ game.field }}</td>
-                    {% if not partner_code %}
                     <td>{{ game.partner }}</td>
-                    {% endif %}
                     <td style="text-align: center;">{{ game.umpire_count }}</td>
                     <td style="text-align: center;">
                         {% if game.is_ntl %}
@@ -114,50 +215,83 @@
                 </tr>
                 {% endfor %}
             </tbody>
-            <tfoot style="background: #f0f0f0; font-weight: bold;">
-                <tr>
-                    <td colspan="{% if not partner_code %}6{% else %}5{% endif %}">TOTALS</td>
-                    <td style="text-align: center;">{{ totals.umpires + totals.ntl_umpires }}</td>
-                    <td style="text-align: center;">{{ totals.ntl_games }}</td>
-                    <td style="text-align: right;">-</td>
-                    <td style="text-align: right;">${{ "%.2f"|format(totals.cost_total) }}</td>
-                </tr>
-            </tfoot>
-        </table>
-    </div>
-
-    <!-- Summary Box -->
-    <div style="margin-top: 20px; padding: 15px; background: #e8f5e9; border-radius: 6px;">
-        <h4 style="margin: 0 0 10px 0;">Invoice Summary</h4>
-        <table style="width: auto; background: transparent; box-shadow: none;">
-            <tr style="background: transparent;">
-                <td style="border: none; padding: 5px 20px 5px 0;">Regular Games:</td>
-                <td style="border: none; text-align: right;">{{ totals.games }} games</td>
-                <td style="border: none; text-align: right; padding-left: 20px;">{{ totals.umpires }} umpires</td>
-                <td style="border: none; text-align: right; padding-left: 20px;">${{ "%.2f"|format(totals.cost_normal) }}</td>
-            </tr>
-            <tr style="background: transparent;">
-                <td style="border: none; padding: 5px 20px 5px 0;">NTL Games:</td>
-                <td style="border: none; text-align: right;">{{ totals.ntl_games }} games</td>
-                <td style="border: none; text-align: right; padding-left: 20px;">{{ totals.ntl_umpires }} umpires</td>
-                <td style="border: none; text-align: right; padding-left: 20px;">${{ "%.2f"|format(totals.cost_ntl) }}</td>
-            </tr>
-            <tr style="background: transparent; font-weight: bold; border-top: 2px solid #228b22;">
-                <td style="border: none; padding: 10px 20px 5px 0;">TOTAL:</td>
-                <td style="border: none; text-align: right; padding-top: 10px;">{{ totals.games + totals.ntl_games }} games</td>
-                <td style="border: none; text-align: right; padding-left: 20px; padding-top: 10px;">{{ totals.umpires + totals.ntl_umpires }} umpires</td>
-                <td style="border: none; text-align: right; padding-left: 20px; padding-top: 10px; font-size: 1.2em;">${{ "%.2f"|format(totals.cost_total) }}</td>
-            </tr>
         </table>
     </div>
     {% else %}
-    <p class="text-muted">No games found for the selected filters.</p>
+    <p class="text-muted">No games found for the selected date range.</p>
     {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Import timedelta for template (passed from route)
+var currentFilter = null;
+
+function filterByPartner(partnerCode, partnerName) {
+    var rows = document.querySelectorAll('.game-row');
+    var cards = document.querySelectorAll('.partner-card');
+    var indicator = document.getElementById('filter-indicator');
+    var clearBtn = document.getElementById('clear-filter');
+    var gameCount = document.getElementById('game-count');
+
+    // If clicking the same partner, clear filter
+    if (currentFilter === partnerCode) {
+        clearPartnerFilter();
+        return;
+    }
+
+    currentFilter = partnerCode;
+    var visibleCount = 0;
+
+    // Filter rows
+    rows.forEach(function(row) {
+        if (row.dataset.partner === partnerCode) {
+            row.classList.remove('hidden');
+            visibleCount++;
+        } else {
+            row.classList.add('hidden');
+        }
+    });
+
+    // Highlight selected card
+    cards.forEach(function(card) {
+        if (card.dataset.partner === partnerCode) {
+            card.classList.add('selected');
+        } else {
+            card.classList.remove('selected');
+        }
+    });
+
+    // Show filter indicator
+    indicator.textContent = 'Showing: ' + partnerName;
+    indicator.style.display = 'inline-block';
+    clearBtn.style.display = 'inline';
+    gameCount.textContent = '(' + visibleCount + ' games)';
+}
+
+function clearPartnerFilter() {
+    var rows = document.querySelectorAll('.game-row');
+    var cards = document.querySelectorAll('.partner-card');
+    var indicator = document.getElementById('filter-indicator');
+    var clearBtn = document.getElementById('clear-filter');
+    var gameCount = document.getElementById('game-count');
+
+    currentFilter = null;
+
+    // Show all rows
+    rows.forEach(function(row) {
+        row.classList.remove('hidden');
+    });
+
+    // Deselect all cards
+    cards.forEach(function(card) {
+        card.classList.remove('selected');
+    });
+
+    // Hide filter indicator
+    indicator.style.display = 'none';
+    clearBtn.style.display = 'none';
+    gameCount.textContent = '({{ game_rows|length }} games)';
+}
 </script>
 {% endblock %}
