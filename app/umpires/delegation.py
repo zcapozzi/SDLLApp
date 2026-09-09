@@ -383,6 +383,203 @@ def delegation_report(year=None, is_spring=None):
     )
 
 
+@umpires_bp.route('/delegation/invoice-tieout')
+@login_required
+def invoice_tieout():
+    """Invoice Tie-Out report for matching partner invoices.
+
+    Shows game-level detail for a specific partner and date range.
+    Access: Umpire coordinators, admins, and treasurers.
+    """
+    from flask_login import current_user
+    from datetime import datetime, timedelta
+
+    if not (current_user.can_manage_umpires() or current_user.is_treasurer()):
+        flash('You do not have permission to view this report.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    # Get all active partners
+    partners = UmpirePartner.query.filter_by(active=True).order_by(UmpirePartner.name).all()
+
+    # Get filter parameters
+    partner_code = request.args.get('partner', '')
+    start_date_str = request.args.get('start_date', '')
+    end_date_str = request.args.get('end_date', '')
+
+    # Default to past 7 days if no dates specified
+    today = date.today()
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            end_date = today
+    else:
+        end_date = today
+
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            start_date = end_date - timedelta(days=6)
+    else:
+        start_date = end_date - timedelta(days=6)
+
+    # Build lookup for leagues (for umpire counts)
+    leagues = League.get_all_active()
+    league_lookup = {}
+    for l in leagues:
+        league_lookup[l.display_name.lower().strip()] = l
+        if l.fall_display_name:
+            league_lookup[l.fall_display_name.lower().strip()] = l
+
+    # Query games in date range
+    games_query = Game.query.filter(
+        Game.game_date >= start_date,
+        Game.game_date <= end_date,
+        Game.active == 1,
+        Game.game_type.in_(['regular', 'playoff', 'scrimmage'])
+    )
+
+    # Filter by partner if specified
+    if partner_code:
+        games_query = games_query.filter(
+            db.func.upper(Game.umpire_override) == partner_code.upper()
+        )
+
+    games = games_query.order_by(Game.game_date, Game.game_time).all()
+
+    # Get partner rates
+    default_rate_normal = 35.00
+    default_rate_ntl = 50.00
+    partner_rates = {}
+    for p in partners:
+        partner_rates[p.short_code] = {
+            'normal': float(p.rate_normal) if p.rate_normal else default_rate_normal,
+            'ntl': float(p.rate_ntl) if p.rate_ntl else default_rate_ntl
+        }
+    # Add SDL rates
+    sdl_partner = next((p for p in partners if p.short_code == 'SDL'), None)
+    if sdl_partner:
+        partner_rates['SDL'] = {
+            'normal': float(sdl_partner.rate_normal) if sdl_partner.rate_normal else default_rate_normal,
+            'ntl': float(sdl_partner.rate_ntl) if sdl_partner.rate_ntl else default_rate_ntl
+        }
+    else:
+        partner_rates['SDL'] = {'normal': default_rate_normal, 'ntl': default_rate_ntl}
+
+    # Build game details
+    game_rows = []
+    totals = {
+        'games': 0,
+        'ntl_games': 0,
+        'umpires': 0,
+        'ntl_umpires': 0,
+        'cost_normal': 0,
+        'cost_ntl': 0,
+        'cost_total': 0
+    }
+
+    for game in games:
+        # Skip games without an umpire partner assigned
+        if not game.umpire_override:
+            continue
+
+        # Skip games that were unassigned
+        if game.umpire_was_unassigned:
+            continue
+
+        game_partner = game.umpire_override.upper()
+        league_name = game.league or 'Unknown'
+
+        # Get umpire count
+        league_obj = league_lookup.get(league_name.lower().strip())
+        if game.umpire_count_override is not None:
+            umpire_count = game.umpire_count_override
+        elif league_obj:
+            is_playoff = game.game_type == 'playoff'
+            umpire_count = league_obj.get_umpire_count(is_playoff=is_playoff)
+        else:
+            umpire_count = 1
+
+        if umpire_count == 0:
+            umpire_count = 1
+
+        # Get rates for this partner
+        rates = partner_rates.get(game_partner, {'normal': default_rate_normal, 'ntl': default_rate_ntl})
+
+        # Calculate cost
+        is_ntl = game.no_time_limit
+        if is_ntl:
+            cost = umpire_count * rates['ntl']
+        else:
+            cost = umpire_count * rates['normal']
+
+        game_rows.append({
+            'id': game.ID,
+            'date': game.game_date,
+            'time': game.game_time,
+            'league': league_name,
+            'home_team': game.home_team.computed_display_name if game.home_team else 'TBD',
+            'away_team': game.away_team.computed_display_name if game.away_team else 'TBD',
+            'field': game.field_name or 'TBD',
+            'partner': game_partner,
+            'umpire_count': umpire_count,
+            'is_ntl': is_ntl,
+            'rate': rates['ntl'] if is_ntl else rates['normal'],
+            'cost': cost,
+            'game_type': game.game_type,
+            'status': game.status
+        })
+
+        # Update totals
+        totals['games'] += 0 if is_ntl else 1
+        totals['ntl_games'] += 1 if is_ntl else 0
+        totals['umpires'] += 0 if is_ntl else umpire_count
+        totals['ntl_umpires'] += umpire_count if is_ntl else 0
+        totals['cost_normal'] += 0 if is_ntl else cost
+        totals['cost_ntl'] += cost if is_ntl else 0
+        totals['cost_total'] += cost
+
+    # Get selected partner name for display
+    selected_partner_name = None
+    if partner_code:
+        for p in partners:
+            if p.short_code == partner_code.upper():
+                selected_partner_name = p.name
+                break
+        if not selected_partner_name and partner_code.upper() == 'SDL':
+            selected_partner_name = 'SDLL Academy'
+
+    # Calculate quick date range values for template
+    quick_ranges = {
+        '7days': {
+            'start': (today - timedelta(days=6)).strftime('%Y-%m-%d'),
+            'end': today.strftime('%Y-%m-%d')
+        },
+        '14days': {
+            'start': (today - timedelta(days=13)).strftime('%Y-%m-%d'),
+            'end': today.strftime('%Y-%m-%d')
+        },
+        '30days': {
+            'start': (today - timedelta(days=29)).strftime('%Y-%m-%d'),
+            'end': today.strftime('%Y-%m-%d')
+        }
+    }
+
+    return render_template(
+        'umpires/invoice_tieout.html',
+        partners=partners,
+        partner_code=partner_code,
+        selected_partner_name=selected_partner_name,
+        start_date=start_date,
+        end_date=end_date,
+        game_rows=game_rows,
+        totals=totals,
+        partner_rates=partner_rates,
+        quick_ranges=quick_ranges
+    )
+
+
 @umpires_bp.route('/delegation/rates', methods=['GET', 'POST'])
 @login_required
 @umpire_coordinator_required

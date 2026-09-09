@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Invoice Tie-Out{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Invoice Tie-Out</h2>
+    <p class="text-muted">Match partner invoices against game records for a specific date range.</p>
+
+    <!-- Filters -->
+    <form method="GET" action="{{ url_for('umpires.invoice_tieout') }}" style="margin-bottom: 20px;">
+        <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="partner">Partner</label>
+                <select name="partner" id="partner" class="form-control" style="width: auto; min-width: 150px;">
+                    <option value="">All Partners</option>
+                    {% for p in partners %}
+                    <option value="{{ p.short_code }}" {% if partner_code == p.short_code %}selected{% endif %}>
+                        {{ p.name }} ({{ p.short_code }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="start_date">Start Date</label>
+                <input type="date" name="start_date" id="start_date" class="form-control"
+                       value="{{ start_date.strftime('%Y-%m-%d') }}" style="width: auto;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="end_date">End Date</label>
+                <input type="date" name="end_date" id="end_date" class="form-control"
+                       value="{{ end_date.strftime('%Y-%m-%d') }}" style="width: auto;">
+            </div>
+            <button type="submit" class="btn btn-primary">Apply Filters</button>
+            <a href="{{ url_for('umpires.invoice_tieout') }}" class="btn btn-outline">Reset</a>
+        </div>
+    </form>
+
+    <!-- Quick date range buttons -->
+    <div style="margin-bottom: 20px;">
+        <span class="text-muted text-small">Quick ranges:</span>
+        <a href="{{ url_for('umpires.invoice_tieout', partner=partner_code, start_date=quick_ranges['7days']['start'], end_date=quick_ranges['7days']['end']) }}" class="btn btn-sm btn-outline">Past 7 Days</a>
+        <a href="{{ url_for('umpires.invoice_tieout', partner=partner_code, start_date=quick_ranges['14days']['start'], end_date=quick_ranges['14days']['end']) }}" class="btn btn-sm btn-outline">Past 14 Days</a>
+        <a href="{{ url_for('umpires.invoice_tieout', partner=partner_code, start_date=quick_ranges['30days']['start'], end_date=quick_ranges['30days']['end']) }}" class="btn btn-sm btn-outline">Past 30 Days</a>
+    </div>
+
+    <!-- Report Header -->
+    <div style="background: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+        <strong>Report:</strong>
+        {% if selected_partner_name %}
+        {{ selected_partner_name }}
+        {% else %}
+        All Partners
+        {% endif %}
+        |
+        <strong>Date Range:</strong>
+        {{ start_date.strftime('%b %d, %Y') }} - {{ end_date.strftime('%b %d, %Y') }}
+        |
+        <strong>Games:</strong> {{ game_rows|length }}
+    </div>
+
+    {% if game_rows %}
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>League</th>
+                    <th>Matchup</th>
+                    <th>Field</th>
+                    {% if not partner_code %}
+                    <th>Partner</th>
+                    {% endif %}
+                    <th style="text-align: center;">Umps</th>
+                    <th style="text-align: center;">NTL</th>
+                    <th style="text-align: right;">Rate</th>
+                    <th style="text-align: right;">Cost</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for game in game_rows %}
+                <tr>
+                    <td>{{ game.date.strftime('%a %b %d') }}</td>
+                    <td>
+                        {% if game.time %}
+                        {{ game.time.strftime('%I:%M %p').lstrip('0') }}
+                        {% else %}
+                        TBD
+                        {% endif %}
+                    </td>
+                    <td>{{ game.league }}</td>
+                    <td>
+                        <span class="text-small">{{ game.away_team }} @ {{ game.home_team }}</span>
+                        {% if game.game_type == 'playoff' %}
+                        <span class="badge badge-fall" style="font-size: 10px;">Playoff</span>
+                        {% elif game.game_type == 'scrimmage' %}
+                        <span class="badge" style="background: #666; color: white; font-size: 10px;">Scrimmage</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ game.field }}</td>
+                    {% if not partner_code %}
+                    <td>{{ game.partner }}</td>
+                    {% endif %}
+                    <td style="text-align: center;">{{ game.umpire_count }}</td>
+                    <td style="text-align: center;">
+                        {% if game.is_ntl %}
+                        <span style="color: green;">Yes</span>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right;">${{ "%.2f"|format(game.rate) }}</td>
+                    <td style="text-align: right;">${{ "%.2f"|format(game.cost) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot style="background: #f0f0f0; font-weight: bold;">
+                <tr>
+                    <td colspan="{% if not partner_code %}6{% else %}5{% endif %}">TOTALS</td>
+                    <td style="text-align: center;">{{ totals.umpires + totals.ntl_umpires }}</td>
+                    <td style="text-align: center;">{{ totals.ntl_games }}</td>
+                    <td style="text-align: right;">-</td>
+                    <td style="text-align: right;">${{ "%.2f"|format(totals.cost_total) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <!-- Summary Box -->
+    <div style="margin-top: 20px; padding: 15px; background: #e8f5e9; border-radius: 6px;">
+        <h4 style="margin: 0 0 10px 0;">Invoice Summary</h4>
+        <table style="width: auto; background: transparent; box-shadow: none;">
+            <tr style="background: transparent;">
+                <td style="border: none; padding: 5px 20px 5px 0;">Regular Games:</td>
+                <td style="border: none; text-align: right;">{{ totals.games }} games</td>
+                <td style="border: none; text-align: right; padding-left: 20px;">{{ totals.umpires }} umpires</td>
+                <td style="border: none; text-align: right; padding-left: 20px;">${{ "%.2f"|format(totals.cost_normal) }}</td>
+            </tr>
+            <tr style="background: transparent;">
+                <td style="border: none; padding: 5px 20px 5px 0;">NTL Games:</td>
+                <td style="border: none; text-align: right;">{{ totals.ntl_games }} games</td>
+                <td style="border: none; text-align: right; padding-left: 20px;">{{ totals.ntl_umpires }} umpires</td>
+                <td style="border: none; text-align: right; padding-left: 20px;">${{ "%.2f"|format(totals.cost_ntl) }}</td>
+            </tr>
+            <tr style="background: transparent; font-weight: bold; border-top: 2px solid #228b22;">
+                <td style="border: none; padding: 10px 20px 5px 0;">TOTAL:</td>
+                <td style="border: none; text-align: right; padding-top: 10px;">{{ totals.games + totals.ntl_games }} games</td>
+                <td style="border: none; text-align: right; padding-left: 20px; padding-top: 10px;">{{ totals.umpires + totals.ntl_umpires }} umpires</td>
+                <td style="border: none; text-align: right; padding-left: 20px; padding-top: 10px; font-size: 1.2em;">${{ "%.2f"|format(totals.cost_total) }}</td>
+            </tr>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted">No games found for the selected filters.</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Import timedelta for template (passed from route)
+</script>
+{% endblock %}

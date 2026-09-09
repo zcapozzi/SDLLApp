@@ -63,6 +63,24 @@ New table `sdll_umpire_game_payments`:
 - Created database table successfully
 - Ready for manual testing on localhost:8084
 
+### Invoice Tie-Outs Report (added same session)
+
+Added a new report at `/umpires/delegation/invoice-tieout` for matching partner invoices:
+
+**Features:**
+- Filter by partner (dropdown selector)
+- Date range selector with start/end date pickers
+- Defaults to past 7 days
+- Quick range buttons: Past 7 Days, Past 14 Days, Past 30 Days
+- Shows game-level detail: date, time, league, matchup, field, umpire count, NTL flag, rate, cost
+- Summary box with regular games, NTL games, and total cost
+- Access: Treasurer, admin, umpire coordinator
+
+**Files Modified:**
+- `app/umpires/delegation.py` - Added `invoice_tieout()` route
+- `app/templates/umpires/invoice_tieout.html` - New template
+- `app/templates/base.html` - Added nav links for coordinators and treasurers
+
 ---
 
 ## Session: September 7, 2026 - Codebase Refactoring Analysis & Documentation
