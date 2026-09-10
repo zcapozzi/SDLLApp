@@ -897,6 +897,56 @@ def cron_digest_reminders():
         }), 500
 
 
+@main_bp.route('/cron/game-changes-digest')
+def cron_game_changes_digest():
+    """
+    Cron endpoint to send game changes digest email.
+
+    Sends a summary of all game changes made in the past N hours to the
+    umpire coordinator and admin emails. Smart enough to detect "net changes" -
+    if a field was changed and then reverted within the window, it won't be reported.
+
+    Protected by CRON_SECRET token. Call with ?token=YOUR_SECRET&hours=2
+
+    Set up an external cron service to hit this every 2 hours:
+    https://your-app.railway.app/cron/game-changes-digest?token=YOUR_CRON_SECRET&hours=2
+    """
+    import os
+    from app.services.game_changes_digest_service import send_game_changes_digest
+
+    # Verify secret token
+    expected_token = os.environ.get('CRON_SECRET')
+    provided_token = request.args.get('token')
+
+    if not expected_token:
+        return jsonify({'error': 'CRON_SECRET not configured'}), 500
+
+    if provided_token != expected_token:
+        return jsonify({'error': 'Invalid token'}), 403
+
+    # Get hours parameter (default 2)
+    hours = request.args.get('hours', 2, type=int)
+    force = request.args.get('force', 'false').lower() == 'true'
+
+    try:
+        result = send_game_changes_digest(hours=hours, force=force)
+
+        return jsonify({
+            'status': 'ok',
+            'sent': result['sent'],
+            'game_count': result['game_count'],
+            'change_count': result['change_count'],
+            'recipients': result['recipients'],
+            'error': result.get('error')
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
 # ============================================================================
 # Master Schedule (Board View)
 # ============================================================================
