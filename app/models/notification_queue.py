@@ -34,9 +34,13 @@ class NotificationQueue(db.Model):
     # Grouping for batch sends
     batch_id = db.Column(db.String(50))
 
+    # Link to draft (for inbox-style workflow)
+    draft_id = db.Column(db.Integer, db.ForeignKey('sdll_notification_drafts.id', ondelete='SET NULL'))
+
     # Relationships
     game = db.relationship('Game', backref=db.backref('notifications', lazy='dynamic'))
     change = db.relationship('GameChange', backref=db.backref('notifications', lazy='dynamic'))
+    draft = db.relationship('NotificationDraft', backref=db.backref('notifications', lazy='dynamic'))
 
     def __repr__(self):
         return f'<NotificationQueue {self.id}: {self.recipient_type} - {self.status}>'

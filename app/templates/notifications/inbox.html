@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+
+{% block title %}Notification Inbox{% endblock %}
+
+{% block extra_css %}
+<style>
+    .inbox-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    .summary-card {
+        background: white;
+        border-radius: 8px;
+        padding: 15px;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        cursor: pointer;
+        transition: transform 0.1s;
+    }
+    .summary-card:hover {
+        transform: translateY(-2px);
+    }
+    .summary-card.active {
+        border: 2px solid rgb(34, 139, 34);
+    }
+    .summary-card h3 {
+        font-size: 28px;
+        margin: 0;
+        color: rgb(34, 139, 34);
+    }
+    .summary-card p {
+        margin: 5px 0 0 0;
+        color: #666;
+        font-size: 13px;
+    }
+    .summary-card.coach { border-top: 3px solid #1565c0; }
+    .summary-card.umpire { border-top: 3px solid #2e7d32; }
+    .summary-card.parent { border-top: 3px solid #e65100; }
+    .summary-card.admin { border-top: 3px solid #7b1fa2; }
+    .summary-card.partner { border-top: 3px solid #00838f; }
+
+    .draft-list {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    .draft-item {
+        display: flex;
+        align-items: center;
+        padding: 15px 20px;
+        border-bottom: 1px solid #eee;
+        cursor: pointer;
+        transition: background 0.1s;
+    }
+    .draft-item:hover {
+        background: #f9f9f9;
+    }
+    .draft-item:last-child {
+        border-bottom: none;
+    }
+    .draft-checkbox {
+        margin-right: 15px;
+    }
+    .draft-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 15px;
+        font-weight: 600;
+        color: white;
+    }
+    .draft-icon.coach { background: #1565c0; }
+    .draft-icon.umpire { background: #2e7d32; }
+    .draft-icon.parent { background: #e65100; }
+    .draft-icon.admin { background: #7b1fa2; }
+    .draft-icon.partner { background: #00838f; }
+
+    .draft-content {
+        flex: 1;
+        min-width: 0;
+    }
+    .draft-recipient {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 4px;
+    }
+    .draft-subject {
+        color: #555;
+        font-size: 14px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .draft-meta {
+        text-align: right;
+        font-size: 12px;
+        color: #888;
+        white-space: nowrap;
+    }
+    .draft-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 11px;
+        background: #e8f5e9;
+        color: #2e7d32;
+        margin-bottom: 4px;
+    }
+    .draft-actions {
+        display: flex;
+        gap: 8px;
+        margin-left: 15px;
+    }
+
+    .filter-bar {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        margin-bottom: 15px;
+        flex-wrap: wrap;
+    }
+    .status-tabs {
+        display: flex;
+        gap: 5px;
+        background: #f0f0f0;
+        padding: 4px;
+        border-radius: 6px;
+    }
+    .status-tab {
+        padding: 6px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        border: none;
+        background: transparent;
+        color: #666;
+    }
+    .status-tab.active {
+        background: white;
+        color: #333;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    .bulk-actions {
+        display: flex;
+        gap: 10px;
+        padding: 12px 20px;
+        background: #f5f5f5;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #888;
+    }
+    .empty-state h3 {
+        color: #666;
+        margin-bottom: 10px;
+    }
+
+    .warning-banner {
+        background: #fff3e0;
+        border-left: 4px solid #e65100;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Notification Inbox</h1>
+    <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline">Back to Dashboard</a>
+</div>
+
+{% if not is_configured %}
+<div class="warning-banner">
+    <strong>Email Service Not Configured</strong><br>
+    Set the <code>GOOGLE_SERVICE_JSON</code> environment variable to enable email sending.
+</div>
+{% endif %}
+
+<!-- Summary Cards -->
+<div class="inbox-summary">
+    <div class="summary-card {{ 'active' if not current_type }}" onclick="filterByType('')">
+        <h3>{{ draft_counts.values()|sum }}</h3>
+        <p>All Drafts</p>
+    </div>
+    <div class="summary-card coach {{ 'active' if current_type == 'coach' }}" onclick="filterByType('coach')">
+        <h3>{{ draft_counts.get('coach', 0) }}</h3>
+        <p>Coaches</p>
+    </div>
+    <div class="summary-card umpire {{ 'active' if current_type == 'umpire' }}" onclick="filterByType('umpire')">
+        <h3>{{ draft_counts.get('umpire', 0) }}</h3>
+        <p>Umpires</p>
+    </div>
+    <div class="summary-card parent {{ 'active' if current_type == 'parent' }}" onclick="filterByType('parent')">
+        <h3>{{ draft_counts.get('parent', 0) }}</h3>
+        <p>Parents</p>
+    </div>
+    <div class="summary-card partner {{ 'active' if current_type == 'partner' }}" onclick="filterByType('partner')">
+        <h3>{{ draft_counts.get('partner', 0) }}</h3>
+        <p>Partners</p>
+    </div>
+</div>
+
+<!-- Status Tabs -->
+<div class="filter-bar">
+    <div class="status-tabs">
+        <button class="status-tab {{ 'active' if current_status == 'draft' }}" onclick="filterByStatus('draft')">Drafts</button>
+        <button class="status-tab {{ 'active' if current_status == 'sent' }}" onclick="filterByStatus('sent')">Sent</button>
+        <button class="status-tab {{ 'active' if current_status == 'deleted' }}" onclick="filterByStatus('deleted')">Deleted</button>
+    </div>
+
+    <span style="margin-left: auto; color: #666;">
+        {{ drafts|length }} message{% if drafts|length != 1 %}s{% endif %}
+    </span>
+</div>
+
+<!-- Draft List -->
+<div class="draft-list">
+    {% if drafts %}
+        {% for draft in drafts %}
+        <div class="draft-item" onclick="window.location.href='{{ url_for('notifications.edit_draft', draft_id=draft.id) }}'">
+            <div class="draft-icon {{ draft.recipient_type }}">
+                {{ draft.recipient_name[0].upper() if draft.recipient_name else draft.recipient_email[0].upper() }}
+            </div>
+            <div class="draft-content">
+                <div class="draft-recipient">
+                    {{ draft.recipient_name or draft.recipient_email }}
+                    {% if draft.recipient_name %}
+                    <span style="font-weight: normal; color: #888; font-size: 13px;">&lt;{{ draft.recipient_email }}&gt;</span>
+                    {% endif %}
+                </div>
+                <div class="draft-subject">{{ draft.subject or '(No subject)' }}</div>
+            </div>
+            <div class="draft-meta">
+                <div class="draft-badge">{{ draft.notification_count }} change{% if draft.notification_count != 1 %}s{% endif %}</div>
+                <div>{{ draft.updated_at.strftime('%b %d, %I:%M %p') if draft.updated_at else '' }}</div>
+            </div>
+            {% if draft.status == 'draft' %}
+            <div class="draft-actions" onclick="event.stopPropagation();">
+                <form method="POST" action="{{ url_for('notifications.send_draft', draft_id=draft.id) }}" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-primary" {{ 'disabled' if not is_configured }}>Send</button>
+                </form>
+                <form method="POST" action="{{ url_for('notifications.delete_draft', draft_id=draft.id) }}" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline" onclick="return confirm('Delete this draft? The notifications will be marked as skipped.')">Delete</button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state">
+            {% if current_status == 'draft' %}
+                <h3>No drafts</h3>
+                <p>When schedule changes are made, notification drafts will appear here.</p>
+            {% elif current_status == 'sent' %}
+                <h3>No sent messages</h3>
+                <p>Messages you send will appear here.</p>
+            {% else %}
+                <h3>No deleted drafts</h3>
+                <p>Deleted drafts will appear here.</p>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+
+<script>
+function filterByType(type) {
+    var url = new URL(window.location.href);
+    if (type) {
+        url.searchParams.set('type', type);
+    } else {
+        url.searchParams.delete('type');
+    }
+    window.location.href = url.toString();
+}
+
+function filterByStatus(status) {
+    var url = new URL(window.location.href);
+    url.searchParams.set('status', status);
+    window.location.href = url.toString();
+}
+</script>
+{% endblock %}

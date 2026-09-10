@@ -1,0 +1,345 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Draft{% endblock %}
+
+{% block extra_css %}
+<style>
+    .draft-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 20px;
+        gap: 20px;
+    }
+    .draft-recipient-info {
+        flex: 1;
+    }
+    .draft-recipient-info h1 {
+        margin: 0 0 5px 0;
+        font-size: 24px;
+    }
+    .draft-recipient-info .email {
+        color: #666;
+        font-size: 14px;
+    }
+    .draft-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .draft-editor {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+    @media (max-width: 1200px) {
+        .draft-editor {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .editor-section {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    .editor-header {
+        background: rgb(34, 139, 34);
+        color: white;
+        padding: 12px 15px;
+        font-weight: 600;
+    }
+    .editor-content {
+        padding: 15px;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+    }
+    .form-group label {
+        display: block;
+        font-weight: 500;
+        margin-bottom: 5px;
+        color: #333;
+    }
+    .form-group input[type="text"],
+    .form-group textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 14px;
+    }
+    .form-group textarea {
+        min-height: 300px;
+        font-family: 'Monaco', 'Menlo', monospace;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+    .form-group textarea:focus,
+    .form-group input:focus {
+        outline: none;
+        border-color: rgb(34, 139, 34);
+    }
+
+    .preview-frame {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        min-height: 400px;
+        background: white;
+    }
+    .preview-frame iframe {
+        width: 100%;
+        height: 400px;
+        border: none;
+    }
+
+    .notification-list {
+        margin-top: 20px;
+    }
+    .notification-item {
+        background: #f9f9f9;
+        border-left: 3px solid #FF8C00;
+        padding: 10px 15px;
+        margin-bottom: 10px;
+        border-radius: 0 4px 4px 0;
+    }
+    .notification-item .game-info {
+        font-weight: 500;
+        color: #333;
+    }
+    .notification-item .change-info {
+        font-size: 13px;
+        color: #666;
+        margin-top: 4px;
+    }
+
+    .status-bar {
+        background: #f5f5f5;
+        padding: 10px 15px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .status-tag {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    .status-tag.draft { background: #fff3e0; color: #e65100; }
+    .status-tag.edited { background: #e3f2fd; color: #1565c0; }
+    .status-tag.auto { background: #f5f5f5; color: #666; }
+
+    .warning-banner {
+        background: #fff3e0;
+        border-left: 4px solid #e65100;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 4px;
+    }
+
+    .btn-danger {
+        background: #c62828;
+        color: white;
+    }
+    .btn-danger:hover {
+        background: #b71c1c;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="draft-header">
+    <div class="draft-recipient-info">
+        <h1>
+            {% if draft.recipient_name %}
+                {{ draft.recipient_name }}
+            {% else %}
+                {{ draft.recipient_email }}
+            {% endif %}
+        </h1>
+        <div class="email">{{ draft.recipient_email }}</div>
+    </div>
+    <div class="draft-actions">
+        <a href="{{ url_for('notifications.queue') }}" class="btn btn-outline">Back to Inbox</a>
+        <form method="POST" action="{{ url_for('notifications.regenerate_draft', draft_id=draft.id) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline" onclick="return confirm('Regenerate will overwrite your edits. Continue?')">Regenerate</button>
+        </form>
+        <form method="POST" action="{{ url_for('notifications.delete_draft', draft_id=draft.id) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-danger" onclick="return confirm('Delete this draft? The notifications will be marked as skipped.')">Delete</button>
+        </form>
+        <form method="POST" action="{{ url_for('notifications.send_draft', draft_id=draft.id) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-primary" {{ 'disabled' if not is_configured }}>Send Email</button>
+        </form>
+    </div>
+</div>
+
+{% if not is_configured %}
+<div class="warning-banner">
+    <strong>Email Service Not Configured</strong><br>
+    Set the <code>GOOGLE_SERVICE_JSON</code> environment variable to enable email sending.
+</div>
+{% endif %}
+
+<!-- Status Bar -->
+<div class="status-bar">
+    <div>
+        <span class="status-tag draft">Draft</span>
+        {% if draft.auto_generated %}
+            <span class="status-tag auto">Auto-generated</span>
+        {% else %}
+            <span class="status-tag edited">Edited</span>
+        {% endif %}
+    </div>
+    <div>
+        {{ notifications|length }} notification{% if notifications|length != 1 %}s{% endif %} &bull;
+        Updated {{ draft.updated_at.strftime('%b %d at %I:%M %p') if draft.updated_at else 'just now' }}
+    </div>
+</div>
+
+<!-- Editor -->
+<form method="POST" action="{{ url_for('notifications.save_draft', draft_id=draft.id) }}" id="draft-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="draft-editor">
+        <!-- Edit Panel -->
+        <div class="editor-section">
+            <div class="editor-header">Edit Email</div>
+            <div class="editor-content">
+                <div class="form-group">
+                    <label for="subject">Subject</label>
+                    <input type="text" id="subject" name="subject" value="{{ draft.subject }}" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="body_text">Message (Plain Text)</label>
+                    <textarea id="body_text" name="body_text" required>{{ draft.body_text }}</textarea>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" class="btn btn-outline">Save Draft</button>
+                    <button type="button" class="btn btn-outline" onclick="updatePreview()">Update Preview</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview Panel -->
+        <div class="editor-section">
+            <div class="editor-header">Preview</div>
+            <div class="editor-content">
+                <div class="preview-frame">
+                    <iframe id="preview-iframe" srcdoc="{{ draft.body_html|e }}"></iframe>
+                </div>
+
+                <!-- Hidden HTML field -->
+                <input type="hidden" id="body_html" name="body_html" value="{{ draft.body_html }}">
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- Linked Notifications -->
+{% if notifications %}
+<div class="notification-list">
+    <h3 style="margin-bottom: 15px;">Included Changes ({{ notifications|length }})</h3>
+    {% for notif in notifications %}
+    <div class="notification-item">
+        <div class="game-info">
+            {% if notif.game %}
+                {{ notif.game.league or '' }}:
+                {% if notif.game.home_team %}{{ notif.game.home_team.computed_display_name }}{% else %}TBD{% endif %}
+                vs
+                {% if notif.game.away_team %}{{ notif.game.away_team.computed_display_name }}{% else %}TBD{% endif %}
+            {% else %}
+                Game #{{ notif.game_id }}
+            {% endif %}
+        </div>
+        <div class="change-info">
+            {{ notif.subject }}
+            <span style="color: #999;">&bull; Created {{ notif.created_at.strftime('%b %d at %I:%M %p') }}</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<script>
+function updatePreview() {
+    // Convert plain text to basic HTML for preview
+    var text = document.getElementById('body_text').value;
+    var html = textToHtml(text);
+
+    // Update hidden field
+    document.getElementById('body_html').value = html;
+
+    // Update iframe
+    var iframe = document.getElementById('preview-iframe');
+    iframe.srcdoc = html;
+}
+
+function textToHtml(text) {
+    // Basic conversion of plain text to HTML
+    var lines = text.split('\n');
+    var html = '<!DOCTYPE html><html><head><style>';
+    html += 'body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; padding: 20px; }';
+    html += '.game-block { background: #f9f9f9; border-left: 4px solid #228B22; padding: 12px 15px; margin: 15px 0; }';
+    html += '</style></head><body>';
+
+    var inBlock = false;
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+
+        if (line.startsWith('---')) {
+            html += '<hr>';
+        } else if (line.startsWith('  ') && line.trim()) {
+            // Indented content - part of a game block
+            if (!inBlock) {
+                html += '<div class="game-block">';
+                inBlock = true;
+            }
+            if (line.includes('>>')) {
+                html += '<div style="margin-top: 8px; padding: 8px; background: #fff3e0; border-radius: 4px;">' +
+                        line.replace('>>', '').trim() + '</div>';
+            } else {
+                html += '<div>' + line.trim() + '</div>';
+            }
+        } else {
+            if (inBlock) {
+                html += '</div>';
+                inBlock = false;
+            }
+            if (line.trim()) {
+                html += '<p>' + line + '</p>';
+            }
+        }
+    }
+
+    if (inBlock) {
+        html += '</div>';
+    }
+
+    html += '</body></html>';
+    return html;
+}
+
+// Auto-save on change
+var saveTimeout;
+document.getElementById('body_text').addEventListener('input', function() {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(updatePreview, 500);
+});
+
+document.getElementById('subject').addEventListener('input', function() {
+    // Could auto-save here too
+});
+</script>
+{% endblock %}

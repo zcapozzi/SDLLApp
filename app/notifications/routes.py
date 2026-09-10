@@ -1,4 +1,4 @@
-"""Notification queue management routes"""
+"""Notification queue management routes - Inbox-style draft workflow"""
 
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -6,54 +6,226 @@ from flask import render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from app.notifications import notifications_bp
 from app.models.notification_queue import NotificationQueue
-from app.services.notification_service import NotificationService
+from app.models.notification_draft import NotificationDraft
+from app.services.notification_service import NotificationService, GmailService
 from app.extensions import db
 
 
 @notifications_bp.route('/queue')
 @login_required
 def queue():
-    """View and manage the notification queue"""
+    """
+    Inbox-style view of notification drafts.
+
+    Each draft is an email ready to be sent, edited, or deleted.
+    Drafts are auto-generated from pending notifications.
+    """
     if not current_user.can_edit_schedule():
         flash('You do not have permission to manage notifications.', 'error')
         return redirect(url_for('main.dashboard'))
 
+    # Auto-generate drafts from any pending notifications without a draft
+    drafts_created = NotificationDraft.generate_drafts_from_queue()
+    if drafts_created > 0:
+        flash(f'{drafts_created} new draft(s) created.', 'info')
+
     # Get filter parameters
     recipient_type = request.args.get('type')
-    status = request.args.get('status', 'pending')
+    status = request.args.get('status', 'draft')  # Default to drafts
 
-    # Date filter - parse cutoff date
-    date_filter = request.args.get('date_filter', '')
-    cutoff_date = None
-
-    if date_filter == 'today':
-        cutoff_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    elif date_filter == '3days':
-        cutoff_date = datetime.utcnow() - timedelta(days=3)
-    elif date_filter == '7days':
-        cutoff_date = datetime.utcnow() - timedelta(days=7)
-    elif date_filter == 'custom':
-        custom_date = request.args.get('cutoff_date', '')
-        if custom_date:
-            try:
-                cutoff_date = datetime.strptime(custom_date, '%Y-%m-%d')
-            except ValueError:
-                pass
-
-    # Get notifications
-    query = NotificationQueue.query
+    # Get drafts
+    query = NotificationDraft.query
 
     if status:
         query = query.filter_by(status=status)
     if recipient_type:
         query = query.filter_by(recipient_type=recipient_type)
-    if cutoff_date:
-        query = query.filter(NotificationQueue.created_at >= cutoff_date)
+
+    drafts = query.order_by(NotificationDraft.updated_at.desc()).limit(100).all()
+
+    # Get counts by status and type
+    draft_counts = _get_draft_counts()
+    service = NotificationService()
+
+    return render_template(
+        'notifications/inbox.html',
+        drafts=drafts,
+        draft_counts=draft_counts,
+        current_type=recipient_type,
+        current_status=status,
+        is_configured=service.is_configured
+    )
+
+
+def _get_draft_counts():
+    """Get count of drafts by recipient type."""
+    from sqlalchemy import func
+
+    results = db.session.query(
+        NotificationDraft.recipient_type,
+        func.count(NotificationDraft.id)
+    ).filter(NotificationDraft.status == 'draft').group_by(
+        NotificationDraft.recipient_type
+    ).all()
+
+    return {rtype: count for rtype, count in results}
+
+
+@notifications_bp.route('/drafts/<int:draft_id>')
+@login_required
+def edit_draft(draft_id):
+    """Edit a draft email before sending."""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to manage notifications.', 'error')
+        return redirect(url_for('notifications.queue'))
+
+    draft = NotificationDraft.query.get_or_404(draft_id)
+
+    if draft.status != 'draft':
+        flash('This draft has already been processed.', 'error')
+        return redirect(url_for('notifications.queue'))
+
+    # Get linked notifications for context
+    notifications = draft.notifications.filter_by(status='pending').all()
+
+    service = NotificationService()
+
+    return render_template(
+        'notifications/edit_draft.html',
+        draft=draft,
+        notifications=notifications,
+        is_configured=service.is_configured
+    )
+
+
+@notifications_bp.route('/drafts/<int:draft_id>/save', methods=['POST'])
+@login_required
+def save_draft(draft_id):
+    """Save edits to a draft."""
+    if not current_user.can_edit_schedule():
+        return jsonify({'success': False, 'message': 'Permission denied'}), 403
+
+    draft = NotificationDraft.query.get_or_404(draft_id)
+
+    if draft.status != 'draft':
+        return jsonify({'success': False, 'message': 'Draft already processed'}), 400
+
+    # Update draft content
+    draft.subject = request.form.get('subject', draft.subject)
+    draft.body_text = request.form.get('body_text', draft.body_text)
+    draft.body_html = request.form.get('body_html', draft.body_html)
+    draft.auto_generated = 0  # Mark as manually edited
+
+    db.session.commit()
+
+    flash('Draft saved.', 'success')
+    return redirect(url_for('notifications.edit_draft', draft_id=draft_id))
+
+
+@notifications_bp.route('/drafts/<int:draft_id>/send', methods=['POST'])
+@login_required
+def send_draft(draft_id):
+    """Send a draft email."""
+    if not current_user.can_edit_schedule():
+        flash('Permission denied.', 'error')
+        return redirect(url_for('notifications.queue'))
+
+    draft = NotificationDraft.query.get_or_404(draft_id)
+
+    if draft.status != 'draft':
+        flash('This draft has already been processed.', 'error')
+        return redirect(url_for('notifications.queue'))
+
+    # Send the email
+    gmail = GmailService()
+    if not gmail.is_configured:
+        flash('Email service not configured.', 'error')
+        return redirect(url_for('notifications.edit_draft', draft_id=draft_id))
+
+    try:
+        gmail.send_email(
+            to=draft.recipient_email,
+            subject=draft.subject,
+            body_text=draft.body_text,
+            body_html=draft.body_html
+        )
+
+        # Mark draft and notifications as sent
+        draft.mark_sent()
+
+        flash(f'Email sent to {draft.recipient_email}', 'success')
+
+    except Exception as e:
+        flash(f'Failed to send: {str(e)}', 'error')
+        return redirect(url_for('notifications.edit_draft', draft_id=draft_id))
+
+    return redirect(url_for('notifications.queue'))
+
+
+@notifications_bp.route('/drafts/<int:draft_id>/delete', methods=['POST'])
+@login_required
+def delete_draft(draft_id):
+    """Delete a draft (skip all its notifications)."""
+    if not current_user.can_edit_schedule():
+        flash('Permission denied.', 'error')
+        return redirect(url_for('notifications.queue'))
+
+    draft = NotificationDraft.query.get_or_404(draft_id)
+
+    if draft.status != 'draft':
+        flash('This draft has already been processed.', 'error')
+        return redirect(url_for('notifications.queue'))
+
+    # Mark draft and notifications as deleted/skipped
+    draft.mark_deleted()
+
+    flash(f'Draft deleted. Notifications for {draft.recipient_email} skipped.', 'info')
+    return redirect(url_for('notifications.queue'))
+
+
+@notifications_bp.route('/drafts/<int:draft_id>/regenerate', methods=['POST'])
+@login_required
+def regenerate_draft(draft_id):
+    """Regenerate draft content from its notifications."""
+    if not current_user.can_edit_schedule():
+        flash('Permission denied.', 'error')
+        return redirect(url_for('notifications.queue'))
+
+    draft = NotificationDraft.query.get_or_404(draft_id)
+
+    if draft.status != 'draft':
+        flash('This draft has already been processed.', 'error')
+        return redirect(url_for('notifications.queue'))
+
+    draft.regenerate_content()
+    flash('Draft content regenerated.', 'success')
+
+    return redirect(url_for('notifications.edit_draft', draft_id=draft_id))
+
+
+# ============================================================================
+# Legacy routes for backward compatibility
+# ============================================================================
+
+@notifications_bp.route('/queue/legacy')
+@login_required
+def queue_legacy():
+    """Legacy view showing individual notifications (for debugging)."""
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to manage notifications.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    recipient_type = request.args.get('type')
+    status = request.args.get('status', 'pending')
+
+    query = NotificationQueue.query
+    if status:
+        query = query.filter_by(status=status)
+    if recipient_type:
+        query = query.filter_by(recipient_type=recipient_type)
 
     notifications = query.order_by(NotificationQueue.created_at.desc()).limit(200).all()
-
-    # Get counts by type and status (with date filter if applied)
-    pending_counts = _get_pending_counts_filtered(cutoff_date)
+    pending_counts = _get_pending_counts_filtered(None)
     service = NotificationService()
 
     return render_template(
@@ -63,8 +235,8 @@ def queue():
         total_pending=sum(pending_counts.values()),
         current_type=recipient_type,
         current_status=status,
-        date_filter=date_filter,
-        cutoff_date=cutoff_date.strftime('%Y-%m-%d') if cutoff_date else '',
+        date_filter='',
+        cutoff_date='',
         is_configured=service.is_configured
     )
 
