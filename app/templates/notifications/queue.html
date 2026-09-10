@@ -92,6 +92,13 @@
         margin-bottom: 20px;
         border-radius: 4px;
     }
+    .date-quick-links {
+        display: flex;
+        gap: 8px;
+    }
+    .date-quick-links .btn {
+        padding: 4px 12px;
+    }
 </style>
 {% endblock %}
 
@@ -163,7 +170,7 @@
 <!-- Filters -->
 <div class="filter-bar">
     <label>Status:
-        <select onchange="window.location.href='?status=' + this.value + '{% if current_type %}&type={{ current_type }}{% endif %}'" class="form-control">
+        <select onchange="applyFilters()" id="status-filter" class="form-control">
             <option value="pending" {{ 'selected' if current_status == 'pending' }}>Pending</option>
             <option value="sent" {{ 'selected' if current_status == 'sent' }}>Sent</option>
             <option value="failed" {{ 'selected' if current_status == 'failed' }}>Failed</option>
@@ -172,7 +179,7 @@
         </select>
     </label>
     <label>Type:
-        <select onchange="window.location.href='?type=' + this.value + '{% if current_status %}&status={{ current_status }}{% endif %}'" class="form-control">
+        <select onchange="applyFilters()" id="type-filter" class="form-control">
             <option value="" {{ 'selected' if not current_type }}>All Types</option>
             <option value="admin" {{ 'selected' if current_type == 'admin' }}>Admin</option>
             <option value="coach" {{ 'selected' if current_type == 'coach' }}>Coach</option>
@@ -188,6 +195,25 @@
         <button type="submit" class="btn btn-secondary" {{ 'disabled' if not is_configured }}>Retry Failed</button>
     </form>
     {% endif %}
+</div>
+
+<!-- Date Filter -->
+<div class="filter-bar" style="background: #f9f9f9; padding: 12px; border-radius: 4px; margin-bottom: 15px;">
+    <span style="font-weight: 500; margin-right: 10px;">Date Filter:</span>
+    <div class="date-quick-links">
+        <button type="button" class="btn btn-sm {{ 'btn-primary' if date_filter == 'today' else 'btn-outline' }}" onclick="setDateFilter('today')">Today</button>
+        <button type="button" class="btn btn-sm {{ 'btn-primary' if date_filter == '3days' else 'btn-outline' }}" onclick="setDateFilter('3days')">Past 3 Days</button>
+        <button type="button" class="btn btn-sm {{ 'btn-primary' if date_filter == '7days' else 'btn-outline' }}" onclick="setDateFilter('7days')">Past Week</button>
+        <button type="button" class="btn btn-sm {{ 'btn-primary' if not date_filter else 'btn-outline' }}" onclick="setDateFilter('')">All Time</button>
+    </div>
+    <label style="margin-left: 15px;">
+        Custom:
+        <input type="date" id="custom-date" value="{{ cutoff_date }}" onchange="setDateFilter('custom')" class="form-control" style="display: inline-block; width: auto;">
+    </label>
+
+    <a href="{{ url_for('notifications.draft_email', date_filter=date_filter, cutoff_date=cutoff_date, type=current_type) }}" class="btn btn-secondary" style="margin-left: auto;" title="Generate a summary email draft based on current filters">
+        Draft Summary Email
+    </a>
 </div>
 
 <!-- Notifications Table -->
@@ -275,6 +301,39 @@ function submitBulkAction(action) {
 
     document.getElementById('bulk-action').value = action;
     document.getElementById('bulk-form').submit();
+}
+
+function applyFilters() {
+    var url = new URL(window.location.href);
+    var status = document.getElementById('status-filter').value;
+    var type = document.getElementById('type-filter').value;
+
+    if (status) url.searchParams.set('status', status);
+    else url.searchParams.delete('status');
+
+    if (type) url.searchParams.set('type', type);
+    else url.searchParams.delete('type');
+
+    window.location.href = url.toString();
+}
+
+function setDateFilter(filter) {
+    var url = new URL(window.location.href);
+
+    if (filter === 'custom') {
+        var customDate = document.getElementById('custom-date').value;
+        if (!customDate) return;
+        url.searchParams.set('date_filter', 'custom');
+        url.searchParams.set('cutoff_date', customDate);
+    } else if (filter) {
+        url.searchParams.set('date_filter', filter);
+        url.searchParams.delete('cutoff_date');
+    } else {
+        url.searchParams.delete('date_filter');
+        url.searchParams.delete('cutoff_date');
+    }
+
+    window.location.href = url.toString();
 }
 </script>
 {% endblock %}

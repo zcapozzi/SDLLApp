@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+
+{% block title %}Draft Summary Email{% endblock %}
+
+{% block extra_css %}
+<style>
+    .draft-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+    @media (max-width: 1200px) {
+        .draft-container {
+            grid-template-columns: 1fr;
+        }
+    }
+    .draft-section {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    .draft-header {
+        background: rgb(34, 139, 34);
+        color: white;
+        padding: 12px 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .draft-header h3 {
+        margin: 0;
+        font-size: 16px;
+    }
+    .draft-content {
+        padding: 15px;
+        max-height: 600px;
+        overflow-y: auto;
+    }
+    .email-preview {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 15px;
+        background: #fafafa;
+    }
+    .email-subject {
+        font-weight: bold;
+        padding: 10px;
+        background: #f0f0f0;
+        border-radius: 4px;
+        margin-bottom: 15px;
+    }
+    .email-body {
+        white-space: pre-wrap;
+        font-family: monospace;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+    .html-preview {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: white;
+    }
+    .html-preview iframe {
+        width: 100%;
+        height: 500px;
+        border: none;
+    }
+    .filter-summary {
+        background: #f5f5f5;
+        padding: 12px 15px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .filter-tag {
+        background: #e3f2fd;
+        color: #1565c0;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 13px;
+    }
+    .copy-toast {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #333;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 4px;
+        opacity: 0;
+        transition: opacity 0.3s;
+        z-index: 1000;
+    }
+    .copy-toast.show {
+        opacity: 1;
+    }
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    .summary-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    .stat-card {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .stat-card h4 {
+        font-size: 28px;
+        margin: 0;
+        color: rgb(34, 139, 34);
+    }
+    .stat-card p {
+        margin: 5px 0 0 0;
+        color: #666;
+        font-size: 13px;
+    }
+    .type-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+    .type-badge.admin { background: #f3e5f5; color: #7b1fa2; }
+    .type-badge.coach { background: #e3f2fd; color: #1565c0; }
+    .type-badge.umpire { background: #e8f5e9; color: #2e7d32; }
+    .type-badge.parent { background: #fff3e0; color: #e65100; }
+    .type-badge.partner { background: #e8f5e9; color: #2e7d32; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Draft Summary Email</h1>
+    <a href="{{ url_for('notifications.queue', date_filter=date_filter, cutoff_date=cutoff_date, type=current_type) }}" class="btn btn-outline">Back to Queue</a>
+</div>
+
+<!-- Filter Summary -->
+<div class="filter-summary">
+    <span><strong>Current Filters:</strong></span>
+    {% if date_filter == 'today' %}
+        <span class="filter-tag">Today only</span>
+    {% elif date_filter == '3days' %}
+        <span class="filter-tag">Past 3 days</span>
+    {% elif date_filter == '7days' %}
+        <span class="filter-tag">Past week</span>
+    {% elif cutoff_date %}
+        <span class="filter-tag">Since {{ cutoff_date }}</span>
+    {% else %}
+        <span class="filter-tag">All time</span>
+    {% endif %}
+
+    {% if current_type %}
+        <span class="filter-tag">Type: {{ current_type }}</span>
+    {% else %}
+        <span class="filter-tag">All types</span>
+    {% endif %}
+
+    <span style="margin-left: auto;">{{ notification_count }} notification(s)</span>
+</div>
+
+<!-- Summary Stats -->
+<div class="summary-stats">
+    {% for rtype, items in grouped.items() %}
+    <div class="stat-card">
+        <h4>{{ items|length }}</h4>
+        <p><span class="type-badge {{ rtype }}">{{ rtype }}</span> game(s)</p>
+    </div>
+    {% endfor %}
+    {% if not grouped %}
+    <div class="stat-card">
+        <h4>0</h4>
+        <p>No pending notifications</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Action Buttons -->
+<div class="action-buttons">
+    <button class="btn btn-primary" onclick="copyEmailBody()">Copy Email Body</button>
+    <button class="btn btn-outline" onclick="copySubject()">Copy Subject</button>
+    <button class="btn btn-outline" onclick="openInGmail()">Open in Gmail</button>
+</div>
+
+<!-- Email Preview -->
+<div class="draft-container">
+    <!-- Plain Text Version -->
+    <div class="draft-section">
+        <div class="draft-header">
+            <h3>Plain Text Version</h3>
+            <button class="btn btn-sm btn-outline" style="background: white;" onclick="copyEmailBody()">Copy</button>
+        </div>
+        <div class="draft-content">
+            <div class="email-subject">
+                <strong>Subject:</strong> {{ email_data.subject }}
+            </div>
+            <div class="email-preview">
+                <pre class="email-body" id="email-text">{{ email_data.body_text }}</pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- HTML Version -->
+    <div class="draft-section">
+        <div class="draft-header">
+            <h3>HTML Preview</h3>
+            <button class="btn btn-sm btn-outline" style="background: white;" onclick="copyHtmlBody()">Copy HTML</button>
+        </div>
+        <div class="draft-content">
+            <div class="email-subject">
+                <strong>Subject:</strong> {{ email_data.subject }}
+            </div>
+            <div class="html-preview">
+                <iframe id="html-preview-frame" srcdoc="{{ email_data.body_html|e }}"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden elements for copying -->
+<textarea id="subject-text" style="position: absolute; left: -9999px;">{{ email_data.subject }}</textarea>
+<textarea id="html-text" style="position: absolute; left: -9999px;">{{ email_data.body_html }}</textarea>
+
+<div id="copy-toast" class="copy-toast">Copied to clipboard!</div>
+
+<script>
+function showToast(message) {
+    var toast = document.getElementById('copy-toast');
+    toast.textContent = message || 'Copied to clipboard!';
+    toast.classList.add('show');
+    setTimeout(function() {
+        toast.classList.remove('show');
+    }, 2000);
+}
+
+function copyEmailBody() {
+    var text = document.getElementById('email-text').textContent;
+    navigator.clipboard.writeText(text).then(function() {
+        showToast('Email body copied!');
+    });
+}
+
+function copySubject() {
+    var text = document.getElementById('subject-text').value;
+    navigator.clipboard.writeText(text).then(function() {
+        showToast('Subject copied!');
+    });
+}
+
+function copyHtmlBody() {
+    var text = document.getElementById('html-text').value;
+    navigator.clipboard.writeText(text).then(function() {
+        showToast('HTML copied!');
+    });
+}
+
+function openInGmail() {
+    var subject = encodeURIComponent(document.getElementById('subject-text').value);
+    var body = encodeURIComponent(document.getElementById('email-text').textContent);
+    window.open('https://mail.google.com/mail/?view=cm&fs=1&su=' + subject + '&body=' + body, '_blank');
+}
+</script>
+{% endblock %}
