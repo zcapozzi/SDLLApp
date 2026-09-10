@@ -451,26 +451,56 @@ def _format_change_description(notifs, game):
     """
     # Collect all changes from the notification's linked GameChange records
     all_changes = {}
+    change_types = set()
 
     for notif in notifs:
-        if notif.change and notif.change.changes_dict:
-            changes_dict = notif.change.changes_dict
-            for field, vals in changes_dict.items():
-                if isinstance(vals, dict) and 'old' in vals and 'new' in vals:
-                    # Only keep the first old value and last new value per field
-                    if field not in all_changes:
-                        all_changes[field] = {'old': vals['old'], 'new': vals['new']}
-                    else:
-                        all_changes[field]['new'] = vals['new']
+        # Track change types from linked GameChange records
+        if notif.change:
+            change_types.add(notif.change.change_type)
+
+            if notif.change.changes_dict:
+                changes_dict = notif.change.changes_dict
+                for field, vals in changes_dict.items():
+                    if isinstance(vals, dict) and 'old' in vals and 'new' in vals:
+                        # Only keep the first old value and last new value per field
+                        if field not in all_changes:
+                            all_changes[field] = {'old': vals['old'], 'new': vals['new']}
+                        else:
+                            all_changes[field]['new'] = vals['new']
 
     if not all_changes:
-        # Fallback to parsing subject if no change data
+        # No detailed change data - try to infer from change_type or subject
+
+        # First check change_type from linked GameChange
+        if 'cancel' in change_types:
+            return "Game has been cancelled"
+        if 'create' in change_types:
+            return "New game added to schedule"
+        if 'reschedule' in change_types:
+            return "Game has been rescheduled"
+
+        # Fallback to parsing notification subject
         for notif in notifs:
-            subj = notif.subject
-            if 'cancel' in subj.lower():
+            subj = notif.subject.lower()
+            if 'cancel' in subj:
                 return "Game has been cancelled"
-            elif 'reschedul' in subj.lower():
+            elif 'postpone' in subj:
+                return "Game has been postponed"
+            elif 'reschedul' in subj:
                 return "Game has been rescheduled"
+            elif 'new game' in subj or 'game added' in subj or 'created' in subj:
+                return "New game added to schedule"
+            elif 'time' in subj and 'change' in subj:
+                return "Game time has been changed"
+            elif 'field' in subj and 'change' in subj:
+                return "Game location has been changed"
+            elif 'location' in subj and 'change' in subj:
+                return "Game location has been changed"
+
+        # Last resort - check if it's an update type
+        if 'update' in change_types:
+            return "Game details have been updated"
+
         return "Schedule updated"
 
     # Format time values nicely
