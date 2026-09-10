@@ -267,6 +267,121 @@ def _group_notifications_for_draft(notifications):
     return result
 
 
+def _format_change_description(notifs, game):
+    """
+    Extract and format human-readable change descriptions from notifications.
+
+    Returns a description like:
+    - "Time changed from 5:30 PM to 6:00 PM"
+    - "Moved from Field A to Field B"
+    - "Rescheduled from Monday, Sep 8 to Tuesday, Sep 9"
+    - "Time changed to 6:00 PM (was 5:30 PM) and moved to Field B (was Field A)"
+    """
+    # Collect all changes from the notification's linked GameChange records
+    all_changes = {}
+
+    for notif in notifs:
+        if notif.change and notif.change.changes_dict:
+            changes_dict = notif.change.changes_dict
+            for field, vals in changes_dict.items():
+                if isinstance(vals, dict) and 'old' in vals and 'new' in vals:
+                    # Only keep the first old value and last new value per field
+                    if field not in all_changes:
+                        all_changes[field] = {'old': vals['old'], 'new': vals['new']}
+                    else:
+                        all_changes[field]['new'] = vals['new']
+
+    if not all_changes:
+        # Fallback to parsing subject if no change data
+        for notif in notifs:
+            subj = notif.subject
+            if 'cancel' in subj.lower():
+                return "Game has been cancelled"
+            elif 'reschedul' in subj.lower():
+                return "Game has been rescheduled"
+        return "Schedule updated"
+
+    # Format time values nicely
+    def fmt_time(t):
+        if not t:
+            return None
+        try:
+            from datetime import datetime as dt
+            parsed = dt.strptime(t, '%H:%M')
+            return parsed.strftime('%I:%M %p').lstrip('0')
+        except (ValueError, TypeError):
+            return t
+
+    # Format date values nicely
+    def fmt_date(d):
+        if not d:
+            return None
+        try:
+            from datetime import datetime as dt
+            parsed = dt.strptime(d, '%Y-%m-%d')
+            return parsed.strftime('%A, %b %d').replace(' 0', ' ')
+        except (ValueError, TypeError):
+            return d
+
+    parts = []
+
+    # Check what changed
+    date_changed = 'date' in all_changes and all_changes['date']['old'] != all_changes['date']['new']
+    time_changed = 'time' in all_changes and all_changes['time']['old'] != all_changes['time']['new']
+    field_changed = ('field' in all_changes and all_changes['field']['old'] != all_changes['field']['new']) or \
+                    ('location' in all_changes and all_changes['location']['old'] != all_changes['location']['new'])
+
+    field_key = 'field' if 'field' in all_changes else 'location'
+
+    # Build natural language description
+    if date_changed:
+        old_date = fmt_date(all_changes['date']['old'])
+        new_date = fmt_date(all_changes['date']['new'])
+        if time_changed:
+            old_time = fmt_time(all_changes['time']['old'])
+            new_time = fmt_time(all_changes['time']['new'])
+            parts.append(f"Rescheduled to {new_date} at {new_time} (was {old_date} at {old_time})")
+        else:
+            parts.append(f"Rescheduled from {old_date} to {new_date}")
+
+    elif time_changed:
+        old_time = fmt_time(all_changes['time']['old'])
+        new_time = fmt_time(all_changes['time']['new'])
+        parts.append(f"Time changed from {old_time} to {new_time}")
+
+    if field_changed:
+        old_field = all_changes[field_key]['old']
+        new_field = all_changes[field_key]['new']
+        if date_changed or time_changed:
+            # Already have a time/date change, add field as additional info
+            parts.append(f"moved to {new_field} (was {old_field})")
+        else:
+            parts.append(f"Moved from {old_field} to {new_field}")
+
+    # Handle status changes
+    if 'status' in all_changes:
+        old_status = all_changes['status']['old']
+        new_status = all_changes['status']['new']
+        if new_status == 'cancelled':
+            return "Game has been cancelled"
+        elif new_status == 'postponed':
+            return "Game has been postponed"
+        elif old_status in ('cancelled', 'postponed') and new_status == 'scheduled':
+            parts.append("Game has been rescheduled (previously cancelled/postponed)")
+
+    if not parts:
+        return "Schedule updated"
+
+    # Join parts naturally
+    if len(parts) == 1:
+        return parts[0]
+    elif len(parts) == 2:
+        # Capitalize first part, lowercase connector for second
+        return f"{parts[0]}, {parts[1]}"
+    else:
+        return "; ".join(parts)
+
+
 def _generate_draft_email_content(grouped, cutoff_date=None):
     """Generate human-friendly email content from grouped notifications."""
     if not grouped:
@@ -291,7 +406,8 @@ def _generate_draft_email_content(grouped, cutoff_date=None):
         'body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; }',
         '.game-block { background: #f9f9f9; border-left: 4px solid #228B22; padding: 12px 15px; margin: 15px 0; border-radius: 0 4px 4px 0; }',
         '.game-info { font-weight: 600; color: #228B22; margin-bottom: 6px; }',
-        '.change-detail { color: #555; margin: 4px 0; }',
+        '.game-when { color: #555; margin: 4px 0; }',
+        '.change-detail { color: #333; margin: 8px 0 0 0; padding: 8px; background: #fff3e0; border-radius: 4px; }',
         '.section-title { color: #FF8C00; font-size: 16px; font-weight: 600; margin: 25px 0 10px 0; border-bottom: 2px solid #FF8C00; padding-bottom: 5px; }',
         '</style></head>',
         '<body>',
@@ -338,7 +454,7 @@ def _generate_draft_email_content(grouped, cutoff_date=None):
             if not game:
                 continue
 
-            # Format game date/time
+            # Format current game date/time (the new values)
             if game.game_date:
                 game_date_str = game.game_date.strftime('%A, %B %d').replace(' 0', ' ')
                 game_time_str = game.game_date.strftime('%I:%M %p').lstrip('0')
@@ -352,43 +468,28 @@ def _generate_draft_email_content(grouped, cutoff_date=None):
             # For umpires, don't show team matchup - just time/field/league
             if is_umpire_type:
                 game_title = f"{league} game on {game_date_str}"
-                game_subtitle = f"{game_time_str} at {field}" if game_time_str else f"at {field}"
+                game_when = f"{game_time_str} at {field}" if game_time_str else f"at {field}"
             else:
                 # For coaches/parents, show the matchup
                 home = game.home_team.computed_display_name if game.home_team else 'TBD'
                 away = game.away_team.computed_display_name if game.away_team else 'TBD'
                 game_title = f"{home} vs {away}"
-                game_subtitle = f"{game_date_str} at {game_time_str} - {field}"
+                game_when = f"{game_date_str} at {game_time_str} - {field}"
 
-            # Extract what changed from the notification
-            change_descriptions = []
-            for notif in notifs:
-                # Parse the subject to get a cleaner change description
-                subj = notif.subject
-                if ':' in subj:
-                    # e.g., "Game Time Changed: Mon Sep 8 at 6:00 PM" -> "Time changed"
-                    change_type = subj.split(':')[0].replace('Game ', '').strip()
-                    change_descriptions.append(change_type)
-                else:
-                    change_descriptions.append(subj)
-
-            # Dedupe and join changes
-            unique_changes = list(dict.fromkeys(change_descriptions))
-            changes_text = ", ".join(unique_changes[:3])
-            if len(unique_changes) > 3:
-                changes_text += f" (+{len(unique_changes) - 3} more)"
+            # Get human-readable change description
+            change_desc = _format_change_description(notifs, game)
 
             # HTML output
             html_parts.append('<div class="game-block">')
             html_parts.append(f'<div class="game-info">{game_title}</div>')
-            html_parts.append(f'<div class="change-detail">{game_subtitle}</div>')
-            html_parts.append(f'<div class="change-detail"><em>Change: {changes_text}</em></div>')
+            html_parts.append(f'<div class="game-when">{game_when}</div>')
+            html_parts.append(f'<div class="change-detail">{change_desc}</div>')
             html_parts.append('</div>')
 
             # Plain text output
             text_parts.append(f"  {game_title}")
-            text_parts.append(f"  {game_subtitle}")
-            text_parts.append(f"  Change: {changes_text}")
+            text_parts.append(f"  {game_when}")
+            text_parts.append(f"  >> {change_desc}")
             text_parts.append("")
 
     # Closing
