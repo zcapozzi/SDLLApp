@@ -290,6 +290,44 @@
     </div>
 </div>
 
+<!-- Top Team Schedules -->
+<div class="chart-container">
+    <h2>Top Team Schedules</h2>
+    <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+        Teams with the most fan engagement. Use this to identify active team communities and reach out to coaches.
+    </p>
+    {% if top_team_schedules %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Team</th>
+                <th>League</th>
+                <th>Views</th>
+                <th>Sessions</th>
+                <th>Trend</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for team in top_team_schedules %}
+            <tr>
+                <td><strong>{{ team.team_name }}</strong></td>
+                <td>{{ team.league }}</td>
+                <td>{{ team.views }}</td>
+                <td>{{ team.sessions }}</td>
+                <td>
+                    <span class="trend-badge {% if team.trend > 0 %}trend-up{% elif team.trend < 0 %}trend-down{% else %}trend-neutral{% endif %}">
+                        {% if team.trend > 0 %}+{% endif %}{{ team.trend }}%
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #666;">No team schedule views recorded for this period.</p>
+    {% endif %}
+</div>
+
 <!-- Device Breakdown -->
 <div class="chart-container">
     <h2>Device Breakdown</h2>

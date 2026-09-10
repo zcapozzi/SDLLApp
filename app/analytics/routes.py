@@ -315,6 +315,100 @@ def get_available_routes(days=90):
     return [r.page_type for r in results]
 
 
+def get_top_team_schedules(days=30, limit=20, excluded_user_ids=None):
+    """Get most viewed team schedules with team details.
+
+    Returns:
+        list of dicts with team_name, league, views, sessions, trend
+    """
+    from app.models.team import TeamSeason
+
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    prior_start = cutoff - timedelta(days=days)
+
+    # Build filters for team_schedule page type
+    filters = [
+        PageView.created_at >= cutoff,
+        PageView.page_type == 'team_schedule',
+        PageView.page_context.isnot(None)
+    ]
+    if excluded_user_ids:
+        filters.append(
+            or_(
+                PageView.user_id.is_(None),
+                ~PageView.user_id.in_(excluded_user_ids)
+            )
+        )
+
+    # Current period stats by page_context (team token)
+    current_results = db.session.query(
+        PageView.page_context,
+        func.count(PageView.ID).label('views'),
+        func.count(func.distinct(PageView.session_id)).label('sessions')
+    ).filter(*filters).group_by(PageView.page_context).order_by(desc('views')).limit(limit).all()
+
+    if not current_results:
+        return []
+
+    # Get prior period for trend calculation
+    prior_filters = [
+        PageView.created_at >= prior_start,
+        PageView.created_at < cutoff,
+        PageView.page_type == 'team_schedule',
+        PageView.page_context.isnot(None)
+    ]
+    if excluded_user_ids:
+        prior_filters.append(
+            or_(
+                PageView.user_id.is_(None),
+                ~PageView.user_id.in_(excluded_user_ids)
+            )
+        )
+
+    prior_views = {}
+    prior_results = db.session.query(
+        PageView.page_context,
+        func.count(PageView.ID).label('views')
+    ).filter(*prior_filters).group_by(PageView.page_context).all()
+
+    for r in prior_results:
+        prior_views[r.page_context] = r.views
+
+    # Look up team details by schedule_token
+    tokens = [r.page_context for r in current_results]
+    teams = TeamSeason.query.filter(
+        TeamSeason.schedule_token.in_(tokens),
+        TeamSeason.active == 1
+    ).all()
+
+    team_lookup = {t.schedule_token: t for t in teams}
+
+    results = []
+    for r in current_results:
+        team = team_lookup.get(r.page_context)
+        if team:
+            results.append({
+                'team_name': team.computed_display_name,
+                'league': team.league or 'Unknown',
+                'token': r.page_context,
+                'views': r.views,
+                'sessions': r.sessions,
+                'trend': calculate_pct_change(prior_views.get(r.page_context, 0), r.views)
+            })
+        else:
+            # Team not found (might be from a previous season or deleted)
+            results.append({
+                'team_name': f'Unknown ({r.page_context[:8]}...)',
+                'league': 'Unknown',
+                'token': r.page_context,
+                'views': r.views,
+                'sessions': r.sessions,
+                'trend': calculate_pct_change(prior_views.get(r.page_context, 0), r.views)
+            })
+
+    return results
+
+
 def format_time_ago(dt):
     """Format a datetime as a human-readable 'time ago' string."""
     if not dt:
@@ -359,6 +453,7 @@ def dashboard():
     top_routes = get_top_routes(days, excluded_user_ids=excluded_user_ids)
     top_users = get_top_users(days, route_filter=route_filter, excluded_user_ids=excluded_user_ids)
     devices = get_device_breakdown(days, route_filter, excluded_user_ids)
+    top_team_schedules = get_top_team_schedules(days, excluded_user_ids=excluded_user_ids)
 
     # Format last_active for users
     for user in top_users:
@@ -371,6 +466,7 @@ def dashboard():
         top_routes=top_routes,
         top_users=top_users,
         devices=devices,
+        top_team_schedules=top_team_schedules,
         days=days,
         route_filter=route_filter,
         available_routes=available_routes
