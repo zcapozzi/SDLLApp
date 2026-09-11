@@ -15,7 +15,48 @@ from flask import render_template, abort, request, make_response, jsonify, redir
 from flask_login import current_user
 from datetime import datetime, date, timedelta
 from sqlalchemy.orm import joinedload
+import hashlib
+import threading
 from app.public import public_bp
+
+
+# Simple in-memory cache for calendar ETags (TTL-based)
+# Key: (token, sync_type), Value: (etag, ics_content, expires_at)
+_ics_cache = {}
+_ics_cache_lock = threading.Lock()
+ICS_CACHE_TTL_SECONDS = 180  # Cache for 3 minutes
+
+
+def _get_cached_ics(token: str, sync_type: str):
+    """Get cached ETag and ICS content if still valid."""
+    key = (token, sync_type)
+    with _ics_cache_lock:
+        if key in _ics_cache:
+            etag, ics_content, expires_at = _ics_cache[key]
+            if datetime.utcnow() < expires_at:
+                return etag, ics_content
+            else:
+                del _ics_cache[key]
+    return None, None
+
+
+def _set_cached_ics(token: str, sync_type: str, etag: str, ics_content: str):
+    """Cache ETag and ICS content with TTL."""
+    key = (token, sync_type)
+    expires_at = datetime.utcnow() + timedelta(seconds=ICS_CACHE_TTL_SECONDS)
+    with _ics_cache_lock:
+        _ics_cache[key] = (etag, ics_content, expires_at)
+
+
+def invalidate_ics_cache(token: str = None):
+    """Invalidate ICS cache for a specific token or all tokens."""
+    with _ics_cache_lock:
+        if token:
+            keys_to_delete = [k for k in _ics_cache if k[0] == token]
+            for k in keys_to_delete:
+                del _ics_cache[k]
+        else:
+            _ics_cache.clear()
 from app.models.team import TeamSeason
 from app.models.game import Game
 from app.models.league_season import LeagueSeason
@@ -1666,6 +1707,10 @@ def team_schedule_ics(token):
     - All scheduled games (past and future)
     - Cancelled games marked with STATUS:CANCELLED
     - SEQUENCE numbers for change tracking
+
+    Caching:
+    - In-memory cache with 3-minute TTL to reduce database load
+    - ETag-based conditional GET support for 304 responses
     """
     from app.models.analytics import CalendarSubscription, PageView, generate_session_id
 
@@ -1677,7 +1722,36 @@ def team_schedule_ics(token):
     games_only = request.args.get('type') == 'games'
     sync_type = 'games' if games_only else 'full'
 
-    # Build query - include all games, optionally exclude practices
+    # Check If-None-Match header first
+    if_none_match = request.headers.get('If-None-Match')
+
+    # Try to get from cache first (avoids DB query if cache is valid)
+    cached_etag, cached_content = _get_cached_ics(token, sync_type)
+
+    if cached_etag and cached_content:
+        # Cache hit - check if client already has this version
+        if if_none_match and if_none_match == cached_etag:
+            # 304 Not Modified - still track access
+            try:
+                user_agent = request.headers.get('User-Agent', '')
+                CalendarSubscription.log_access(token, user_agent, sync_type)
+            except Exception:
+                pass
+            return Response(status=304)
+
+        # Return cached content without DB query
+        try:
+            user_agent = request.headers.get('User-Agent', '')
+            CalendarSubscription.log_access(token, user_agent, sync_type)
+        except Exception:
+            pass
+
+        response = Response(cached_content, mimetype='text/calendar')
+        response.headers['ETag'] = cached_etag
+        response.headers['Cache-Control'] = 'no-cache, must-revalidate'
+        return response
+
+    # Cache miss - query database
     query = Game.query.filter(
         Game.active == 1,
         Game.year == team.year,
@@ -1696,8 +1770,6 @@ def team_schedule_ics(token):
 
     # Calculate ETag based on a hash of all game details that affect the calendar
     # This ensures any change to time, date, field, or status triggers a refresh
-    import hashlib
-
     game_data_parts = []
     for g in games:
         # Include all fields that would change the calendar display
@@ -1709,15 +1781,16 @@ def team_schedule_ics(token):
     content_hash = hashlib.md5(combined.encode()).hexdigest()[:12]
     etag = f'"{team.team_ID}-{len(games)}-{content_hash}"'
 
-    # Check If-None-Match for conditional GET
-    if_none_match = request.headers.get('If-None-Match')
+    # Check If-None-Match for conditional GET (in case cache was stale but client has current)
     if if_none_match and if_none_match == etag:
-        # 304 Not Modified - still track in CalendarSubscription to update access_count
+        # 304 Not Modified - cache the result and track access
+        ics_content = _generate_ics_for_games(games, team, include_cancelled=True)
+        _set_cached_ics(token, sync_type, etag, ics_content)
         try:
             user_agent = request.headers.get('User-Agent', '')
             CalendarSubscription.log_access(token, user_agent, sync_type)
         except Exception:
-            pass  # Don't fail the request if tracking fails
+            pass
         return Response(status=304)
 
     # Log to CalendarSubscription table (tracks unique subscribers)
@@ -1738,7 +1811,9 @@ def team_schedule_ics(token):
     except Exception:
         pass  # Don't fail the request if tracking fails
 
+    # Generate ICS content and cache it
     ics_content = _generate_ics_for_games(games, team, include_cancelled=True)
+    _set_cached_ics(token, sync_type, etag, ics_content)
 
     response = Response(
         ics_content,
