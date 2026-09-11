@@ -153,7 +153,7 @@
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             z-index: 100;
-            min-width: 180px;
+            min-width: 200px;
             display: none;
         }
         .game-menu.show {
@@ -169,6 +169,7 @@
             cursor: pointer;
             font-size: 14px;
             color: #333;
+            text-decoration: none;
         }
         .game-menu-item:hover {
             background: #f5f5f5;
@@ -181,6 +182,18 @@
         }
         .game-menu-item:only-child {
             border-radius: 8px;
+        }
+        .game-menu-divider {
+            height: 1px;
+            background: #eee;
+            margin: 4px 0;
+        }
+        .game-menu-item svg {
+            width: 16px;
+            height: 16px;
+            vertical-align: middle;
+            margin-right: 8px;
+            fill: currentColor;
         }
 
         /* Game start form */
@@ -460,6 +473,126 @@
             letter-spacing: 0.5px;
         }
 
+        /* Calendar Instructions Panel */
+        .calendar-instructions {
+            display: none;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 12px;
+            font-size: 14px;
+        }
+        .calendar-instructions.show {
+            display: block;
+        }
+        .calendar-instructions ol {
+            margin: 0 0 12px 0;
+            padding-left: 20px;
+        }
+        .calendar-instructions li {
+            margin-bottom: 8px;
+        }
+        .calendar-instructions .warning {
+            background: #fff3e0;
+            border-left: 3px solid #FF8C00;
+            padding: 10px 12px;
+            margin: 12px 0;
+            border-radius: 0 4px 4px 0;
+            font-size: 13px;
+        }
+        .calendar-instructions .help-section {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .calendar-instructions .help-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #555;
+        }
+        .calendar-instructions .help-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 6px 12px;
+            font-size: 12px;
+        }
+        .calendar-instructions .app-name {
+            font-weight: 500;
+            color: #333;
+            white-space: nowrap;
+        }
+        .calendar-instructions .help-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .calendar-instructions .help-links a {
+            color: #1a73e8;
+            text-decoration: none;
+            padding: 2px 6px;
+            background: #e8f0fe;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+        .calendar-instructions .help-links a:hover {
+            background: #d2e3fc;
+        }
+        @media (max-width: 480px) {
+            .calendar-instructions .help-grid {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+            .calendar-instructions .app-name {
+                margin-bottom: 2px;
+            }
+        }
+
+        /* Calendar Actions */
+        .calendar-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .btn-calendar {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            text-decoration: none;
+            cursor: pointer;
+            border: none;
+            transition: background 0.2s, transform 0.1s;
+        }
+        .btn-calendar:active {
+            transform: scale(0.98);
+        }
+        .btn-calendar-primary {
+            background: rgb(34, 139, 34);
+            color: white;
+        }
+        .btn-calendar-primary:hover {
+            background: rgb(28, 120, 28);
+        }
+        .btn-calendar-outline {
+            background: white;
+            color: rgb(34, 139, 34);
+            border: 1px solid rgb(34, 139, 34);
+        }
+        .btn-calendar-outline:hover {
+            background: #f0f9f0;
+        }
+        .btn-calendar svg {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+
         /* Footer */
         .footer {
             text-align: center;
@@ -603,14 +736,103 @@
         {% if upcoming_games %}
         <div class="section">
             <div class="section-title">Upcoming Schedule</div>
+
+            <!-- Calendar Actions -->
+            <div class="calendar-actions">
+                <a href="{{ url_for('public.team_schedule_ics', token=team.schedule_token) }}" class="btn-calendar btn-calendar-primary" onclick="showCalendarInstructions()">
+                    <svg viewBox="0 0 24 24"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
+                    Add All to Calendar
+                </a>
+            </div>
+
+            <!-- Instructions Panel (shown after download) -->
+            <div id="calendar-instructions" class="calendar-instructions">
+                <ol>
+                    <li><strong>Open the downloaded file</strong> with your calendar app (Apple Calendar, Google Calendar, Outlook, etc.) to import the events.</li>
+                    <li class="warning">
+                        <strong>Important:</strong> This is a one-time import. If games are rescheduled, cancelled, or changed, your calendar will <em>not</em> update automatically. Always check <a href="{{ request.url }}">this schedule page</a> for the most current information.
+                    </li>
+                </ol>
+                <div class="help-section">
+                    <div class="help-title">Need help importing? Click below for instructions:</div>
+                    <div class="help-grid">
+                        <span class="app-name">Apple Calendar:</span>
+                        <span class="help-links">
+                            <a href="https://www.google.com/search?q=how+to+import+ics+file+to+apple+calendar+iphone" target="_blank">Google</a>
+                            <a href="https://chatgpt.com/?q=how+do+I+import+an+ics+file+to+Apple+Calendar" target="_blank">ChatGPT</a>
+                            <a href="https://claude.ai/new?q=how+do+I+import+an+ics+file+to+Apple+Calendar" target="_blank">Claude</a>
+                        </span>
+                        <span class="app-name">Google Calendar:</span>
+                        <span class="help-links">
+                            <a href="https://www.google.com/search?q=how+to+import+ics+file+to+google+calendar" target="_blank">Google</a>
+                            <a href="https://chatgpt.com/?q=how+do+I+import+an+ics+file+to+Google+Calendar" target="_blank">ChatGPT</a>
+                            <a href="https://claude.ai/new?q=how+do+I+import+an+ics+file+to+Google+Calendar" target="_blank">Claude</a>
+                        </span>
+                        <span class="app-name">Outlook:</span>
+                        <span class="help-links">
+                            <a href="https://www.google.com/search?q=how+to+import+ics+file+to+outlook+calendar" target="_blank">Google</a>
+                            <a href="https://chatgpt.com/?q=how+do+I+import+an+ics+file+to+Outlook" target="_blank">ChatGPT</a>
+                            <a href="https://claude.ai/new?q=how+do+I+import+an+ics+file+to+Outlook" target="_blank">Claude</a>
+                        </span>
+                        <span class="app-name">Samsung Calendar:</span>
+                        <span class="help-links">
+                            <a href="https://www.google.com/search?q=how+to+import+ics+file+to+samsung+calendar" target="_blank">Google</a>
+                            <a href="https://chatgpt.com/?q=how+do+I+import+an+ics+file+to+Samsung+Calendar" target="_blank">ChatGPT</a>
+                            <a href="https://claude.ai/new?q=how+do+I+import+an+ics+file+to+Samsung+Calendar" target="_blank">Claude</a>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
             {% for game in upcoming_games %}
             {% set is_recordable = game.ID in recordable_game_ids %}
             {% set existing_record = game_start_records.get(game.ID) if is_recordable else None %}
-            <div class="game-card {{ 'practice' if game.game_type == 'practice' else 'scrimmage' if game.is_scrimmage else 'game' }} {{ game.status }}" data-game-id="{{ game.ID if game.ID is number else '' }}">
-                {% if is_recordable %}
+            {% set has_valid_id = game.ID is number %}
+            {# Build Google Calendar URL components #}
+            {% if game.game_type == 'practice' %}
+                {% if game.is_league_practice %}
+                    {% set gcal_title = team.league ~ ' Division Practice' %}
+                {% else %}
+                    {% set gcal_title = team.computed_display_name ~ ' Practice' %}
+                {% endif %}
+            {% elif game.is_scrimmage %}
+                {% if game.home_ID == team.team_ID %}
+                    {% set gcal_title = 'Scrimmage vs ' ~ (game.away_team.computed_display_name if game.away_team else 'TBD') %}
+                {% else %}
+                    {% set gcal_title = 'Scrimmage @ ' ~ (game.home_team.computed_display_name if game.home_team else 'TBD') %}
+                {% endif %}
+            {% else %}
+                {% if game.home_ID == team.team_ID %}
+                    {% set gcal_title = 'vs ' ~ (game.away_team.computed_display_name if game.away_team else 'TBD') ~ ' (Home)' %}
+                {% else %}
+                    {% set gcal_title = '@ ' ~ (game.home_team.computed_display_name if game.home_team else 'TBD') ~ ' (Away)' %}
+                {% endif %}
+            {% endif %}
+            {% set gcal_location = game.field_name or 'TBD' %}
+            <div class="game-card {{ 'practice' if game.game_type == 'practice' else 'scrimmage' if game.is_scrimmage else 'game' }} {{ game.status }}" data-game-id="{{ game.ID if has_valid_id else '' }}"
+                 data-gcal-title="{{ gcal_title }}"
+                 data-gcal-location="{{ gcal_location }}"
+                 data-gcal-start="{{ game.game_date.strftime('%Y%m%dT%H%M%S') if game.game_date else '' }}"
+                 data-gcal-duration="{{ practice_duration if game.game_type == 'practice' else 120 }}">
+                {% if has_valid_id and game.game_date %}
                 <button class="game-menu-btn" onclick="toggleGameMenu(this)" aria-label="Game options">&#8942;</button>
                 <div class="game-menu">
-                    <button class="game-menu-item" onclick="showStartForm(this)">Record Game Start</button>
+                    {# Calendar options #}
+                    <a href="#" onclick="openGoogleCalendar(this); return false;" class="game-menu-item">
+                        <svg viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
+                        Add to Google Calendar
+                    </a>
+                    <a href="{{ url_for('public.team_schedule_game_ics', token=team.schedule_token, game_id=game.ID) }}" class="game-menu-item" onclick="showCalendarInstructions()">
+                        <svg viewBox="0 0 24 24"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
+                        Add to Apple/Outlook
+                    </a>
+                    {% if is_recordable %}
+                    <div class="game-menu-divider"></div>
+                    <button class="game-menu-item" onclick="showStartForm(this)">
+                        <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                        Record Game Start
+                    </button>
+                    {% endif %}
                 </div>
                 {% endif %}
                 <div class="game-date-box">
@@ -907,6 +1129,66 @@
             return true; // Allow the click to proceed
         };
     })();
+
+    // Calendar Functions
+    function showCalendarInstructions() {
+        // Show the instructions panel (stays visible until page reload)
+        var panel = document.getElementById('calendar-instructions');
+        if (panel) {
+            panel.classList.add('show');
+            // Scroll to show the instructions
+            setTimeout(function() {
+                panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 100);
+        }
+    }
+
+    function openGoogleCalendar(link) {
+        var card = link.closest('.game-card');
+        var title = card.dataset.gcalTitle;
+        var location = card.dataset.gcalLocation;
+        var startStr = card.dataset.gcalStart;
+        var duration = parseInt(card.dataset.gcalDuration) || 120;
+
+        if (!startStr) return;
+
+        // Parse start time and calculate end time
+        // startStr format: YYYYMMDDTHHMMSS
+        var year = parseInt(startStr.substr(0, 4));
+        var month = parseInt(startStr.substr(4, 2)) - 1;
+        var day = parseInt(startStr.substr(6, 2));
+        var hour = parseInt(startStr.substr(9, 2));
+        var minute = parseInt(startStr.substr(11, 2));
+
+        var startDate = new Date(year, month, day, hour, minute);
+        var endDate = new Date(startDate.getTime() + duration * 60 * 1000);
+
+        // Format dates for Google Calendar (YYYYMMDDTHHMMSS)
+        function formatDate(d) {
+            return d.getFullYear().toString() +
+                   String(d.getMonth() + 1).padStart(2, '0') +
+                   String(d.getDate()).padStart(2, '0') + 'T' +
+                   String(d.getHours()).padStart(2, '0') +
+                   String(d.getMinutes()).padStart(2, '0') + '00';
+        }
+
+        var dates = formatDate(startDate) + '/' + formatDate(endDate);
+        var details = 'SDLL {{ season_name }} - {{ team.league }}';
+        var timezone = '{{ org_timezone }}';
+
+        // Build Google Calendar URL with timezone
+        var url = 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+                  '&text=' + encodeURIComponent(title) +
+                  '&dates=' + dates +
+                  '&details=' + encodeURIComponent(details) +
+                  '&location=' + encodeURIComponent(location) +
+                  '&ctz=' + encodeURIComponent(timezone);
+
+        window.open(url, '_blank');
+
+        // Close the menu
+        card.querySelector('.game-menu').classList.remove('show');
+    }
 
     // Game Start Recording Functions
     function toggleGameMenu(btn) {

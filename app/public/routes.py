@@ -220,6 +220,10 @@ def team_schedule(token):
     # Prepare session ID for tracking (but don't track yet)
     session_id = _get_or_create_session_id()
 
+    # Get organization timezone for calendar links
+    from app.models.organization import Organization
+    org_timezone = Organization.get_default_timezone()
+
     # Initialize template variables
     template_vars = {
         'team': team,
@@ -235,6 +239,7 @@ def team_schedule(token):
         'shared_practices': {},  # game_id -> partner team name for shared practices
         'practice_duration': practice_duration,
         'timedelta': timedelta,
+        'org_timezone': org_timezone,
     }
 
     # Determine what games/practices to show
@@ -1623,6 +1628,267 @@ def division_schedule_csv(token):
         mimetype='text/csv',
         headers={'Content-Disposition': f'attachment; filename={filename}'}
     )
+
+
+@public_bp.route('/<token>/calendar/game/<int:game_id>.ics')
+def team_schedule_game_ics(token, game_id):
+    """Generate .ics file for a single game."""
+    team = TeamSeason.get_by_schedule_token(token)
+    if not team:
+        abort(404)
+
+    game = Game.query.get(game_id)
+    if not game:
+        abort(404)
+
+    # Verify this game belongs to this team
+    if game.home_ID != team.team_ID and game.away_ID != team.team_ID:
+        abort(404)
+
+    ics_content = _generate_ics_for_games([game], team)
+
+    return Response(
+        ics_content,
+        mimetype='text/calendar',
+        headers={'Content-Disposition': f'attachment; filename=sdll_game_{game_id}.ics'}
+    )
+
+
+@public_bp.route('/<token>/calendar/schedule.ics')
+def team_schedule_ics(token):
+    """Generate .ics file for the full team schedule."""
+    team = TeamSeason.get_by_schedule_token(token)
+    if not team:
+        abort(404)
+
+    today = date.today()
+
+    # Get all upcoming games
+    games = Game.query.filter(
+        Game.active == 1,
+        Game.year == team.year,
+        Game.is_spring == team.is_spring,
+        db.or_(Game.home_ID == team.team_ID, Game.away_ID == team.team_ID),
+        Game.status != 'cancelled'
+    ).order_by(Game.game_date).all()
+
+    # Filter to upcoming games only
+    upcoming = []
+    for game in games:
+        if game.game_date:
+            game_date = game.game_date.date() if hasattr(game.game_date, 'date') else game.game_date
+            if game_date >= today:
+                upcoming.append(game)
+
+    if not upcoming:
+        abort(404)
+
+    team_name_safe = team.computed_display_name.replace(' ', '_')
+    ics_content = _generate_ics_for_games(upcoming, team)
+
+    return Response(
+        ics_content,
+        mimetype='text/calendar',
+        headers={'Content-Disposition': f'attachment; filename=sdll_{team_name_safe}_schedule.ics'}
+    )
+
+
+def _generate_ics_for_games(games, team):
+    """Generate iCal (.ics) content for a list of games.
+
+    Args:
+        games: List of Game objects
+        team: TeamSeason object (the team viewing the schedule)
+
+    Returns:
+        String containing valid iCal format
+    """
+    from app.models.league import League
+    from app.models.organization import Organization
+
+    # Get practice duration for this team's league
+    league_obj = League.get_by_name(team.league)
+    practice_duration = league_obj.get_practice_duration() if league_obj else 90
+    game_duration = league_obj.game_duration_minutes if league_obj and league_obj.game_duration_minutes else 120
+
+    # Get timezone from organization settings
+    timezone_id = Organization.get_default_timezone()
+
+    lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//SDLL//Team Schedule//EN',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        f'X-WR-CALNAME:SDLL {team.computed_display_name}',
+        f'X-WR-TIMEZONE:{timezone_id}',
+    ]
+
+    # Add VTIMEZONE component for proper timezone handling
+    lines.extend(_get_vtimezone_lines(timezone_id))
+
+    for game in games:
+        if not game.game_date:
+            continue
+
+        # Format datetime as iCal format (YYYYMMDDTHHMMSS)
+        dt_start = game.game_date.strftime('%Y%m%dT%H%M%S')
+
+        # Calculate end time based on game type
+        if game.game_type == 'practice':
+            end_dt = game.game_date + timedelta(minutes=practice_duration)
+        else:
+            end_dt = game.game_date + timedelta(minutes=game_duration)
+        dt_end = end_dt.strftime('%Y%m%dT%H%M%S')
+
+        # Build event title
+        if game.game_type == 'practice':
+            if game.is_league_practice:
+                summary = f'{team.league} Division Practice'
+            else:
+                summary = f'{team.computed_display_name} Practice'
+        elif game.is_scrimmage:
+            if game.home_ID == team.team_ID:
+                opponent = game.away_team.computed_display_name if game.away_team else 'TBD'
+                summary = f'Scrimmage vs {opponent}'
+            else:
+                opponent = game.home_team.computed_display_name if game.home_team else 'TBD'
+                summary = f'Scrimmage @ {opponent}'
+        else:
+            if game.home_ID == team.team_ID:
+                opponent = game.away_team.computed_display_name if game.away_team else 'TBD'
+                summary = f'vs {opponent} (Home)'
+            else:
+                opponent = game.home_team.computed_display_name if game.home_team else 'TBD'
+                summary = f'@ {opponent} (Away)'
+
+        # Location
+        location = game.field_name or 'TBD'
+        # Get full address if available
+        if game.field_rel and game.field_rel.address:
+            location = f'{game.field_name}, {game.field_rel.address}'
+            if game.field_rel.city:
+                location += f', {game.field_rel.city}'
+                if game.field_rel.state:
+                    location += f', {game.field_rel.state}'
+
+        # Description
+        season_name = f'{"Spring" if team.is_spring else "Fall"} {team.year}'
+        description = f'SDLL {season_name} - {team.league}'
+        if game.game_type == 'playoff':
+            description += ' (Playoff)'
+
+        # Escape special characters for iCal
+        summary = _ics_escape(summary)
+        location = _ics_escape(location)
+        description = _ics_escape(description)
+
+        # Create unique ID
+        uid = f'game-{game.ID}@southdurhamlittleleague.org'
+
+        lines.extend([
+            'BEGIN:VEVENT',
+            f'UID:{uid}',
+            f'DTSTART;TZID={timezone_id}:{dt_start}',
+            f'DTEND;TZID={timezone_id}:{dt_end}',
+            f'SUMMARY:{summary}',
+            f'LOCATION:{location}',
+            f'DESCRIPTION:{description}',
+            'STATUS:CONFIRMED',
+            'END:VEVENT',
+        ])
+
+    lines.append('END:VCALENDAR')
+
+    return '\r\n'.join(lines)
+
+
+def _ics_escape(text):
+    """Escape text for iCal format."""
+    if not text:
+        return ''
+    # Escape backslashes first, then other special chars
+    text = text.replace('\\', '\\\\')
+    text = text.replace(',', '\\,')
+    text = text.replace(';', '\\;')
+    text = text.replace('\n', '\\n')
+    return text
+
+
+def _get_vtimezone_lines(timezone_id):
+    """Generate VTIMEZONE component lines for common US timezones.
+
+    Args:
+        timezone_id: IANA timezone identifier (e.g., 'America/New_York')
+
+    Returns:
+        List of iCal VTIMEZONE lines
+    """
+    # Timezone definitions for common US zones (all follow US DST rules)
+    tz_definitions = {
+        'America/New_York': {
+            'std_offset': '-0500', 'dst_offset': '-0400',
+            'std_name': 'EST', 'dst_name': 'EDT'
+        },
+        'America/Chicago': {
+            'std_offset': '-0600', 'dst_offset': '-0500',
+            'std_name': 'CST', 'dst_name': 'CDT'
+        },
+        'America/Denver': {
+            'std_offset': '-0700', 'dst_offset': '-0600',
+            'std_name': 'MST', 'dst_name': 'MDT'
+        },
+        'America/Los_Angeles': {
+            'std_offset': '-0800', 'dst_offset': '-0700',
+            'std_name': 'PST', 'dst_name': 'PDT'
+        },
+        'America/Phoenix': {
+            # Arizona doesn't observe DST
+            'std_offset': '-0700', 'dst_offset': '-0700',
+            'std_name': 'MST', 'dst_name': 'MST',
+            'no_dst': True
+        },
+    }
+
+    # Default to Eastern if unknown
+    tz_info = tz_definitions.get(timezone_id, tz_definitions['America/New_York'])
+
+    lines = [
+        'BEGIN:VTIMEZONE',
+        f'TZID:{timezone_id}',
+    ]
+
+    if tz_info.get('no_dst'):
+        # No DST - just standard time year-round
+        lines.extend([
+            'BEGIN:STANDARD',
+            f'TZOFFSETFROM:{tz_info["std_offset"]}',
+            f'TZOFFSETTO:{tz_info["std_offset"]}',
+            f'TZNAME:{tz_info["std_name"]}',
+            'DTSTART:19700101T000000',
+            'END:STANDARD',
+        ])
+    else:
+        # Standard US DST rules (2nd Sunday March, 1st Sunday November)
+        lines.extend([
+            'BEGIN:DAYLIGHT',
+            f'TZOFFSETFROM:{tz_info["std_offset"]}',
+            f'TZOFFSETTO:{tz_info["dst_offset"]}',
+            f'TZNAME:{tz_info["dst_name"]}',
+            'DTSTART:19700308T020000',
+            'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU',
+            'END:DAYLIGHT',
+            'BEGIN:STANDARD',
+            f'TZOFFSETFROM:{tz_info["dst_offset"]}',
+            f'TZOFFSETTO:{tz_info["std_offset"]}',
+            f'TZNAME:{tz_info["std_name"]}',
+            'DTSTART:19701101T020000',
+            'RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU',
+            'END:STANDARD',
+        ])
+
+    lines.append('END:VTIMEZONE')
+    return lines
 
 
 @public_bp.route('/division/<token>/request-access', methods=['POST'])
