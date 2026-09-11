@@ -110,7 +110,11 @@ class DayOfNotificationService:
         return filtered
 
     def get_coach_for_team(self, team_name: str, year: int) -> Optional[str]:
-        """Get head coach name for a team."""
+        """Get head coach name for a team.
+
+        First tries sdll_coach_seasons (head coach), then falls back to
+        coach_name field on sdll_team_seasons.
+        """
         if not team_name:
             return None
 
@@ -125,9 +129,14 @@ class DayOfNotificationService:
         ).first()
 
         if team:
+            # First try coach_seasons relationship
             for coach in team.coaches:
                 if coach.role == 'head':
                     return coach.name
+
+            # Fall back to coach_name field on team_seasons
+            if team.coach_name:
+                return team.coach_name
 
         return None
 
