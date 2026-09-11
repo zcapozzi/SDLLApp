@@ -1667,12 +1667,15 @@ def team_schedule_ics(token):
     - Cancelled games marked with STATUS:CANCELLED
     - SEQUENCE numbers for change tracking
     """
+    from app.models.analytics import CalendarSubscription, PageView, generate_session_id
+
     team = TeamSeason.get_by_schedule_token(token)
     if not team:
         abort(404)
 
     # Check if user wants games only (for fans) or full schedule (for parents)
     games_only = request.args.get('type') == 'games'
+    sync_type = 'games' if games_only else 'full'
 
     # Build query - include all games, optionally exclude practices
     query = Game.query.filter(
@@ -1703,7 +1706,31 @@ def team_schedule_ics(token):
     # Check If-None-Match for conditional GET
     if_none_match = request.headers.get('If-None-Match')
     if if_none_match and if_none_match == etag:
+        # 304 Not Modified - still track in CalendarSubscription to update access_count
+        try:
+            user_agent = request.headers.get('User-Agent', '')
+            CalendarSubscription.log_access(token, user_agent, sync_type)
+        except Exception:
+            pass  # Don't fail the request if tracking fails
         return Response(status=304)
+
+    # Log to CalendarSubscription table (tracks unique subscribers)
+    try:
+        user_agent = request.headers.get('User-Agent', '')
+        sub, is_new = CalendarSubscription.log_access(token, user_agent, sync_type)
+
+        # Only log to PageView for new subscriptions
+        # This keeps PageView table smaller while still tracking adoption
+        if is_new:
+            session_id = request.cookies.get('sdll_session', generate_session_id())
+            PageView.log_view(
+                page_type='calendar_sync_new',
+                page_context=f'{token}:{sync_type}',
+                request=request,
+                session_id=session_id
+            )
+    except Exception:
+        pass  # Don't fail the request if tracking fails
 
     ics_content = _generate_ics_for_games(games, team, include_cancelled=True)
 

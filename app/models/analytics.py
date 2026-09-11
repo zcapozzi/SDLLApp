@@ -292,3 +292,132 @@ class AdClick(db.Model):
 def generate_session_id():
     """Generate a new anonymous session ID."""
     return secrets.token_urlsafe(32)
+
+
+class CalendarSubscription(db.Model):
+    """Tracks unique calendar subscriptions (first access per token + device).
+
+    Used to estimate how many people have synced a team's calendar.
+    Only logs first access per unique token + user-agent-hash combo.
+
+    Privacy notes:
+    - user_agent_hash is SHA-256 of user agent, cannot identify specific users
+    - No PII stored
+    """
+    __tablename__ = 'sdll_calendar_subscriptions'
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    team_token = db.Column(db.String(50), nullable=False, index=True)
+    user_agent_hash = db.Column(db.String(64), nullable=False)  # SHA-256 of user agent
+    sync_type = db.Column(db.String(20))  # 'full' or 'games'
+    device_type = db.Column(db.String(20))  # 'mobile', 'tablet', 'desktop', or calendar app name
+    first_access_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    last_access_at = db.Column(db.DateTime, default=datetime.utcnow)
+    access_count = db.Column(db.Integer, default=1)
+
+    # Unique constraint: one row per token + user agent combo
+    __table_args__ = (
+        db.UniqueConstraint('team_token', 'user_agent_hash', name='uix_calendar_sub_token_ua'),
+    )
+
+    @classmethod
+    def log_access(cls, team_token, user_agent, sync_type='full'):
+        """Log a calendar access, creating or updating subscription record.
+
+        Args:
+            team_token: The team's schedule token
+            user_agent: Full user agent string (will be hashed)
+            sync_type: 'full' or 'games'
+
+        Returns:
+            tuple: (subscription, is_new) - the record and whether it's a new subscription
+        """
+        # Hash the user agent for privacy
+        ua_hash = hashlib.sha256(user_agent.encode()).hexdigest()
+
+        # Detect device/calendar app type
+        device_type = cls._detect_calendar_client(user_agent)
+
+        # Try to find existing subscription
+        existing = cls.query.filter_by(
+            team_token=team_token,
+            user_agent_hash=ua_hash
+        ).first()
+
+        if existing:
+            # Update last access time and count
+            existing.last_access_at = datetime.utcnow()
+            existing.access_count += 1
+            db.session.commit()
+            return existing, False
+        else:
+            # New subscription
+            sub = cls(
+                team_token=team_token,
+                user_agent_hash=ua_hash,
+                sync_type=sync_type,
+                device_type=device_type
+            )
+            db.session.add(sub)
+            db.session.commit()
+            return sub, True
+
+    @staticmethod
+    def _detect_calendar_client(user_agent):
+        """Detect calendar client from user agent."""
+        ua_lower = user_agent.lower()
+
+        # Calendar apps
+        if 'google-calendar' in ua_lower or 'googlebot' in ua_lower:
+            return 'google_calendar'
+        if 'apple-calendar' in ua_lower or 'dataaccessd' in ua_lower or 'calendarstore' in ua_lower:
+            return 'apple_calendar'
+        if 'microsoft outlook' in ua_lower or 'ms-office' in ua_lower:
+            return 'outlook'
+        if 'thunderbird' in ua_lower:
+            return 'thunderbird'
+
+        # Generic device detection
+        if 'iphone' in ua_lower or 'mobile' in ua_lower or 'android' in ua_lower:
+            return 'mobile'
+        if 'ipad' in ua_lower or 'tablet' in ua_lower:
+            return 'tablet'
+
+        return 'desktop'
+
+    @classmethod
+    def get_subscription_stats(cls, team_token=None):
+        """Get subscription statistics.
+
+        Args:
+            team_token: Optional - filter to specific team
+
+        Returns:
+            dict with stats
+        """
+        from sqlalchemy import func
+
+        query = cls.query
+
+        if team_token:
+            query = query.filter_by(team_token=team_token)
+
+        total = query.count()
+        by_type = db.session.query(
+            cls.sync_type, func.count(cls.id)
+        ).group_by(cls.sync_type).all()
+
+        by_device = db.session.query(
+            cls.device_type, func.count(cls.id)
+        ).group_by(cls.device_type).all()
+
+        unique_teams = db.session.query(
+            func.count(func.distinct(cls.team_token))
+        ).scalar()
+
+        return {
+            'total_subscriptions': total,
+            'unique_teams': unique_teams,
+            'by_sync_type': dict(by_type),
+            'by_device': dict(by_device)
+        }
