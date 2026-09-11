@@ -1189,12 +1189,6 @@
             currentCalendarUrl = baseUrl;
         }
 
-        // Debug: log to console
-        console.log('Base URL:', baseUrl);
-        console.log('Current URL:', currentCalendarUrl);
-        console.log('Origin:', window.location.origin);
-        console.log('Pathname:', window.location.pathname);
-
         // Show the instructions panel
         var panel = document.getElementById('calendar-instructions');
         var urlDisplay = document.getElementById('calendar-url');
@@ -1208,9 +1202,6 @@
         // Set the URL in the display element
         if (urlDisplay) {
             urlDisplay.textContent = currentCalendarUrl;
-            console.log('URL display element found, set to:', currentCalendarUrl);
-        } else {
-            console.log('URL display element NOT found');
         }
 
         // Show appropriate instructions based on device
