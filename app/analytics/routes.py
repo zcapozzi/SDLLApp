@@ -516,7 +516,7 @@ def dashboard():
     """Main analytics dashboard."""
     # Get query params
     days = request.args.get('days', 30, type=int)
-    if days not in [7, 30, 90]:
+    if days not in [1, 7, 30, 90]:
         days = 30
 
     route_filter = request.args.get('route', '').strip() or None

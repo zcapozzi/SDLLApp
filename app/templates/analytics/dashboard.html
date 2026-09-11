@@ -172,6 +172,7 @@
             </select>
         </div>
         <div class="period-selector">
+            <a href="{{ url_for('analytics.dashboard', days=1, route=route_filter or '') }}" class="period-btn {{ 'active' if days == 1 else '' }}">Today</a>
             <a href="{{ url_for('analytics.dashboard', days=7, route=route_filter or '') }}" class="period-btn {{ 'active' if days == 7 else '' }}">7 Days</a>
             <a href="{{ url_for('analytics.dashboard', days=30, route=route_filter or '') }}" class="period-btn {{ 'active' if days == 30 else '' }}">30 Days</a>
             <a href="{{ url_for('analytics.dashboard', days=90, route=route_filter or '') }}" class="period-btn {{ 'active' if days == 90 else '' }}">90 Days</a>
@@ -185,21 +186,21 @@
         <h3>Total Page Views</h3>
         <div class="summary-value">{{ summary.views | default(0) | int }}</div>
         <div class="summary-change {% if summary.views_change > 0 %}change-positive{% elif summary.views_change < 0 %}change-negative{% else %}change-neutral{% endif %}">
-            {% if summary.views_change > 0 %}+{% endif %}{{ summary.views_change }}% vs prior {{ days }} days
+            {% if summary.views_change > 0 %}+{% endif %}{{ summary.views_change }}% vs {% if days == 1 %}yesterday{% else %}prior {{ days }} days{% endif %}
         </div>
     </div>
     <div class="summary-card">
         <h3>Unique Sessions</h3>
         <div class="summary-value">{{ summary.sessions | default(0) | int }}</div>
         <div class="summary-change {% if summary.sessions_change > 0 %}change-positive{% elif summary.sessions_change < 0 %}change-negative{% else %}change-neutral{% endif %}">
-            {% if summary.sessions_change > 0 %}+{% endif %}{{ summary.sessions_change }}% vs prior {{ days }} days
+            {% if summary.views_change > 0 %}+{% endif %}{{ summary.sessions_change }}% vs {% if days == 1 %}yesterday{% else %}prior {{ days }} days{% endif %}
         </div>
     </div>
     <div class="summary-card">
         <h3>Active Users</h3>
         <div class="summary-value">{{ summary.active_users | default(0) | int }}</div>
         <div class="summary-change {% if summary.users_change > 0 %}change-positive{% elif summary.users_change < 0 %}change-negative{% else %}change-neutral{% endif %}">
-            {% if summary.users_change > 0 %}+{% endif %}{{ summary.users_change }}% vs prior {{ days }} days
+            {% if summary.users_change > 0 %}+{% endif %}{{ summary.users_change }}% vs {% if days == 1 %}yesterday{% else %}prior {{ days }} days{% endif %}
         </div>
     </div>
     <div class="summary-card">
@@ -213,7 +214,7 @@
 
 <!-- Traffic Trend Chart -->
 <div class="chart-container">
-    <h2>Daily Traffic (Last {{ days }} Days)</h2>
+    <h2>Daily Traffic ({% if days == 1 %}Today{% else %}Last {{ days }} Days{% endif %})</h2>
     <div id="traffic-chart" class="line-chart">
         <svg width="100%" height="200" id="traffic-svg"></svg>
     </div>
@@ -358,11 +359,11 @@
             <div class="summary-value">{{ calendar_subs.total | default(0) }}</div>
         </div>
         <div class="summary-card">
-            <h3>New (Last {{ days }} Days)</h3>
+            <h3>New ({% if days == 1 %}Today{% else %}Last {{ days }} Days{% endif %})</h3>
             <div class="summary-value">{{ calendar_subs.new_in_period | default(0) }}</div>
         </div>
         <div class="summary-card">
-            <h3>Active (Last {{ days }} Days)</h3>
+            <h3>Active ({% if days == 1 %}Today{% else %}Last {{ days }} Days{% endif %})</h3>
             <div class="summary-value">{{ calendar_subs.active_in_period | default(0) }}</div>
         </div>
     </div>
