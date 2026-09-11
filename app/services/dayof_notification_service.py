@@ -139,16 +139,25 @@ class DayOfNotificationService:
             )
         ).first()
 
-        if team:
-            # First try coach_seasons relationship
-            for coach in team.coaches:
-                if coach.role == 'head':
-                    return coach.name
+        if not team:
+            logger.warning(f"No team found for '{team_name}' in year {year}")
+            return None
 
-            # Fall back to coach_name field on team_seasons
-            if team.coach_name:
-                return team.coach_name
+        logger.info(f"Found team: team_ID={team.team_ID}, display_name='{team.display_name}', team_name='{team.team_name}', coach_name='{team.coach_name}'")
+        logger.info(f"Team has {len(team.coaches)} coach(es) in coach_seasons")
 
+        # First try coach_seasons relationship
+        for coach in team.coaches:
+            logger.info(f"  Coach: role='{coach.role}', name='{coach.name}'")
+            if coach.role == 'head':
+                return coach.name
+
+        # Fall back to coach_name field on team_seasons
+        if team.coach_name:
+            logger.info(f"Using fallback coach_name: '{team.coach_name}'")
+            return team.coach_name
+
+        logger.warning(f"No coach found for team '{team_name}'")
         return None
 
     def generate_notifications(
