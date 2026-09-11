@@ -1694,14 +1694,20 @@ def team_schedule_ics(token):
     if not games:
         abort(404)
 
-    # Calculate ETag based on most recent game modification
-    # Use max of date_added and updated_at across all games
-    latest_mod = None
+    # Calculate ETag based on a hash of all game details that affect the calendar
+    # This ensures any change to time, date, field, or status triggers a refresh
+    import hashlib
+
+    game_data_parts = []
     for g in games:
-        if g.date_added and (latest_mod is None or g.date_added > latest_mod):
-            latest_mod = g.date_added
-        # Games don't have updated_at, but we can use the game_date as part of etag
-    etag = f'"{team.team_ID}-{len(games)}-{latest_mod.isoformat() if latest_mod else "0"}"'
+        # Include all fields that would change the calendar display
+        game_str = f"{g.ID}|{g.game_date}|{g.field_id}|{g.status}|{g.home_ID}|{g.away_ID}"
+        game_data_parts.append(game_str)
+
+    # Create hash of all game data
+    combined = ";".join(sorted(game_data_parts))  # Sort for consistency
+    content_hash = hashlib.md5(combined.encode()).hexdigest()[:12]
+    etag = f'"{team.team_ID}-{len(games)}-{content_hash}"'
 
     # Check If-None-Match for conditional GET
     if_none_match = request.headers.get('If-None-Match')
