@@ -8,7 +8,7 @@ from sqlalchemy import func, desc, and_, or_
 
 from . import analytics_bp
 from app.extensions import db
-from app.models.analytics import PageView
+from app.models.analytics import PageView, CalendarSubscription
 from app.models.user import User
 from app.utils.auth import product_admin_required
 from app.utils.encryption import hash_for_lookup
@@ -429,6 +429,81 @@ def format_time_ago(dt):
         return 'Just now'
 
 
+def get_calendar_subscriptions(days):
+    """Get calendar subscription statistics for the analytics dashboard.
+
+    Returns subscription counts by device type and sync type.
+    """
+    from app.models.team import TeamSeason
+
+    cutoff = datetime.utcnow() - timedelta(days=days)
+
+    # Total subscriptions (all time)
+    total = CalendarSubscription.query.count()
+
+    # New subscriptions in time period
+    new_in_period = CalendarSubscription.query.filter(
+        CalendarSubscription.first_access_at >= cutoff
+    ).count()
+
+    # Active subscriptions (accessed in time period)
+    active_in_period = CalendarSubscription.query.filter(
+        CalendarSubscription.last_access_at >= cutoff
+    ).count()
+
+    # By device type
+    by_device = db.session.query(
+        CalendarSubscription.device_type,
+        func.count(CalendarSubscription.id)
+    ).filter(
+        CalendarSubscription.first_access_at >= cutoff
+    ).group_by(CalendarSubscription.device_type).all()
+
+    # By sync type
+    by_sync_type = db.session.query(
+        CalendarSubscription.sync_type,
+        func.count(CalendarSubscription.id)
+    ).filter(
+        CalendarSubscription.first_access_at >= cutoff
+    ).group_by(CalendarSubscription.sync_type).all()
+
+    # Top teams by subscriptions (new in period)
+    top_teams_raw = db.session.query(
+        CalendarSubscription.team_token,
+        func.count(CalendarSubscription.id).label('count')
+    ).filter(
+        CalendarSubscription.first_access_at >= cutoff
+    ).group_by(
+        CalendarSubscription.team_token
+    ).order_by(desc('count')).limit(10).all()
+
+    # Resolve team names
+    top_teams = []
+    for row in top_teams_raw:
+        team = TeamSeason.get_by_schedule_token(row.team_token)
+        if team:
+            top_teams.append({
+                'team_name': team.name,
+                'league': team.league,
+                'count': row.count
+            })
+        else:
+            top_teams.append({
+                'team_name': f'Unknown ({row.team_token[:8]}...)',
+                'league': 'Unknown',
+                'count': row.count
+            })
+
+    return {
+        'total': total,
+        'new_in_period': new_in_period,
+        'active_in_period': active_in_period,
+        'by_device': dict(by_device),
+        'by_sync_type': dict(by_sync_type),
+        'top_teams': top_teams
+    }
+
+
 @analytics_bp.route('/')
 @login_required
 @product_admin_required
@@ -454,6 +529,7 @@ def dashboard():
     top_users = get_top_users(days, route_filter=route_filter, excluded_user_ids=excluded_user_ids)
     devices = get_device_breakdown(days, route_filter, excluded_user_ids)
     top_team_schedules = get_top_team_schedules(days, excluded_user_ids=excluded_user_ids)
+    calendar_subs = get_calendar_subscriptions(days)
 
     # Format last_active for users
     for user in top_users:
@@ -467,6 +543,7 @@ def dashboard():
         top_users=top_users,
         devices=devices,
         top_team_schedules=top_team_schedules,
+        calendar_subs=calendar_subs,
         days=days,
         route_filter=route_filter,
         available_routes=available_routes
