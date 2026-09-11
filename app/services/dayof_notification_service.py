@@ -114,50 +114,35 @@ class DayOfNotificationService:
 
         return filtered
 
-    def get_coach_for_team(self, team_name: str, year: int) -> Optional[str]:
-        """Get head coach name for a team.
+    def get_coach_for_team_by_id(self, team_id: int) -> Optional[str]:
+        """Get head coach name for a team by team_ID.
 
-        Searches by team_name (mascot) or display_name (placeholder).
         First tries sdll_coach_seasons (head coach), then falls back to
         coach_name field on sdll_team_seasons.
         """
-        if not team_name:
+        if not team_id:
             return None
 
         from app.models.team import TeamSeason
         from sqlalchemy.orm import joinedload
-        from sqlalchemy import or_
 
-        # Search by team_name (mascot) or display_name (placeholder)
         team = TeamSeason.query.options(
             joinedload(TeamSeason.coaches)
-        ).filter(
-            TeamSeason.year == year,
-            or_(
-                TeamSeason.team_name == team_name,
-                TeamSeason.display_name == team_name
-            )
-        ).first()
+        ).filter_by(team_ID=team_id).first()
 
         if not team:
-            logger.warning(f"No team found for '{team_name}' in year {year}")
+            logger.warning(f"No team found for team_ID={team_id}")
             return None
-
-        logger.info(f"Found team: team_ID={team.team_ID}, display_name='{team.display_name}', team_name='{team.team_name}', coach_name='{team.coach_name}'")
-        logger.info(f"Team has {len(team.coaches)} coach(es) in coach_seasons")
 
         # First try coach_seasons relationship
         for coach in team.coaches:
-            logger.info(f"  Coach: role='{coach.role}', name='{coach.name}'")
             if coach.role == 'head':
                 return coach.name
 
         # Fall back to coach_name field on team_seasons
         if team.coach_name:
-            logger.info(f"Using fallback coach_name: '{team.coach_name}'")
             return team.coach_name
 
-        logger.warning(f"No coach found for team '{team_name}'")
         return None
 
     def generate_notifications(
@@ -240,10 +225,12 @@ class DayOfNotificationService:
                 league = local.get('league') or game.get('game_type', '')
                 home_team = local.get('home_team') or ''
                 away_team = local.get('away_team') or ''
+                home_team_id = local.get('home_team_id')
+                away_team_id = local.get('away_team_id')
 
-                # Get coach names
-                home_coach = self.get_coach_for_team(home_team, year)
-                away_coach = self.get_coach_for_team(away_team, year)
+                # Get coach names by team ID
+                home_coach = self.get_coach_for_team_by_id(home_team_id)
+                away_coach = self.get_coach_for_team_by_id(away_team_id)
 
                 # Generate email content
                 subject, body_html = self._render_email(

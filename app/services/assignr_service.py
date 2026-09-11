@@ -361,6 +361,8 @@ class AssignrService:
                     'league': local_game.league,
                     'home_team': local_game.home_team.computed_display_name if local_game.home_team else None,
                     'away_team': local_game.away_team.computed_display_name if local_game.away_team else None,
+                    'home_team_id': local_game.home_ID,
+                    'away_team_id': local_game.away_ID,
                     'field': local_game.field_name,
                     'status': local_game.status,
                     'umpire_override': local_game.umpire_override,
