@@ -777,6 +777,23 @@
                     </div>
                 </div>
 
+                <!-- Android warning (shown for Android users) -->
+                <div id="android-warning" style="display: none; background: #fff3e0; border: 2px solid #ff9800; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <strong style="color: #e65100; font-size: 16px;">For Android / Google Calendar users:</strong>
+                    <p style="margin: 10px 0 0 0; font-size: 14px;">
+                        Calendar sync is much easier to set up on a <strong>computer</strong> than on your phone.
+                        We recommend:
+                    </p>
+                    <ol style="margin: 10px 0 0 0; padding-left: 20px; font-size: 14px;">
+                        <li>Copy the URL below</li>
+                        <li>Text or email it to yourself</li>
+                        <li>Open it on a computer and follow the instructions there</li>
+                    </ol>
+                    <p style="margin: 10px 0 0 0; font-size: 13px; color: #666;">
+                        Once set up on your computer, the calendar will automatically sync to your phone.
+                    </p>
+                </div>
+
                 <!-- Desktop instructions (hidden by default, shown via JS) -->
                 <div id="desktop-instructions" style="display: none;">
                     <div style="background: #e3f2fd; padding: 12px 15px; border-radius: 6px; margin-bottom: 15px;">
@@ -1193,6 +1210,16 @@
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     }
 
+    // Detect if user is on Android (calendar sync is clunky, direct to computer)
+    function isAndroidDevice() {
+        return /Android/i.test(navigator.userAgent);
+    }
+
+    // Detect if user is on iPhone/iPad (webcal:// works well)
+    function isAppleDevice() {
+        return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    }
+
     function syncToCalendar(type) {
         // Build URL from current page path
         var baseUrl = window.location.origin + window.location.pathname + '/calendar/schedule.ics';
@@ -1209,6 +1236,7 @@
         var urlDisplay = document.getElementById('calendar-url');
         var mobileInstructions = document.getElementById('mobile-instructions');
         var desktopInstructions = document.getElementById('desktop-instructions');
+        var androidWarning = document.getElementById('android-warning');
 
         if (panel) {
             panel.classList.add('show');
@@ -1220,10 +1248,17 @@
         }
 
         // Show appropriate instructions based on device
-        if (isMobileDevice()) {
-            // Mobile: show mobile instructions, try webcal://
+        if (isAndroidDevice()) {
+            // Android: Show desktop instructions + warning to use computer
+            // Google Calendar on Android doesn't handle webcal:// well
+            if (mobileInstructions) mobileInstructions.style.display = 'none';
+            if (desktopInstructions) desktopInstructions.style.display = 'block';
+            if (androidWarning) androidWarning.style.display = 'block';
+        } else if (isAppleDevice()) {
+            // iPhone/iPad: webcal:// works well, try it
             if (mobileInstructions) mobileInstructions.style.display = 'block';
             if (desktopInstructions) desktopInstructions.style.display = 'none';
+            if (androidWarning) androidWarning.style.display = 'none';
 
             var webcalUrl = currentCalendarUrl.replace(/^https?:/, 'webcal:');
             window.location.href = webcalUrl;
@@ -1231,6 +1266,7 @@
             // Desktop: show desktop instructions with manual steps
             if (mobileInstructions) mobileInstructions.style.display = 'none';
             if (desktopInstructions) desktopInstructions.style.display = 'block';
+            if (androidWarning) androidWarning.style.display = 'none';
         }
 
         // Scroll to show the instructions

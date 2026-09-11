@@ -483,7 +483,7 @@ def get_calendar_subscriptions(days):
         team = TeamSeason.get_by_schedule_token(row.team_token)
         if team:
             top_teams.append({
-                'team_name': team.name,
+                'team_name': team.computed_display_name,
                 'league': team.league,
                 'count': row.count
             })
