@@ -117,6 +117,7 @@ class DayOfNotificationService:
     def get_coach_for_team(self, team_name: str, year: int) -> Optional[str]:
         """Get head coach name for a team.
 
+        Searches by team_name (mascot) or display_name (placeholder).
         First tries sdll_coach_seasons (head coach), then falls back to
         coach_name field on sdll_team_seasons.
         """
@@ -125,12 +126,17 @@ class DayOfNotificationService:
 
         from app.models.team import TeamSeason
         from sqlalchemy.orm import joinedload
+        from sqlalchemy import or_
 
+        # Search by team_name (mascot) or display_name (placeholder)
         team = TeamSeason.query.options(
             joinedload(TeamSeason.coaches)
         ).filter(
             TeamSeason.year == year,
-            TeamSeason.display_name == team_name
+            or_(
+                TeamSeason.team_name == team_name,
+                TeamSeason.display_name == team_name
+            )
         ).first()
 
         if team:
