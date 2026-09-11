@@ -732,13 +732,44 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
 
 ### 10.1 Team Schedule (Public)
 - **Access:** `public` (with token)
-- **Path:** `/s/team/<token>`
+- **Path:** `/s/<token>`
 - **Actions:**
   - View team's full schedule (games and practices)
   - See game details (date, time, field, opponent)
   - Color-coded by game type
   - Link to field directions
+  - Sync schedule to calendar (see 10.1a)
+  - Add individual games to Google Calendar
 - **Navigation:** Shared via URL/link from coach
+
+### 10.1a Calendar Sync (Public)
+- **Access:** `public` (with token)
+- **Path:** `/s/<token>/calendar/schedule.ics` or `/s/<token>/calendar/schedule.ics?type=games`
+- **Actions:**
+  - **Sync to Calendar** (full): Games + practices synced to calendar app
+  - **Games Only**: Just games, no practices (for fans)
+  - Calendar auto-updates when games are rescheduled or cancelled
+  - Cancelled games appear with "CANCELLED:" prefix
+  - Works with Apple Calendar, Google Calendar, Outlook, etc.
+- **How it works:**
+  - Uses webcal subscription (not one-time import)
+  - Calendar apps poll the URL periodically for updates
+  - Google Calendar: updates every 8-24 hours
+  - Apple Calendar: updates every 15-60 minutes
+- **Instructions provided for:**
+  - iPhone/iPad (automatic prompt or manual via Settings)
+  - Android (manual via Google Calendar web)
+  - Desktop (step-by-step for Google Calendar, Outlook)
+- **Navigation:** Team Schedule → "Sync to Calendar" or "Games Only" buttons
+
+### 10.1b Single Game Calendar Add
+- **Access:** `public` (with token)
+- **Path:** `/s/<token>/calendar/game/<game_id>.ics`
+- **Actions:**
+  - Download single game as .ics file
+  - Add to Apple Calendar or Outlook via download
+  - Add to Google Calendar via direct link (opens Google Calendar with pre-filled event)
+- **Navigation:** Team Schedule → Click game menu (⋮) → "Add to Google Calendar" or "Add to Apple/Outlook"
 
 ### 10.2 Division Schedule (Tiered Access)
 - **Access:** Tiered (see below)
@@ -1153,4 +1184,4 @@ When adding new routes or features:
 3. Update feature matrix if needed
 4. Update quick reference navigation paths
 
-Last updated: September 4, 2026
+Last updated: September 11, 2026
