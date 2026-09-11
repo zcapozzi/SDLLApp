@@ -184,8 +184,7 @@ class DayOfNotificationService:
                 if UmpireDayOfNotification.exists_for_game_umpire(
                     assignr_game_id, official_id
                 ):
-                    logger.debug(f"Notification already exists for game {assignr_game_id}, umpire {official_id}")
-                    continue
+                    continue  # Notification already exists for this game/umpire
 
                 # Get umpire email addresses from Assignr
                 umpire_details = self.assignr.get_official(official_id)
