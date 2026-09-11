@@ -309,7 +309,7 @@
         </thead>
         <tbody>
             {% for team in top_team_schedules %}
-            <tr class="team-row" {% if loop.index > 5 %}style="display: none;"{% endif %}>
+            <tr class="team-row" {% if not show_all_teams and loop.index > 5 %}style="display: none;"{% endif %}>
                 <td><strong>{{ team.team_name }}</strong></td>
                 <td>{{ team.league }}</td>
                 <td>{{ team.views }}</td>
@@ -323,10 +323,22 @@
             {% endfor %}
         </tbody>
     </table>
-    {% if top_team_schedules|length > 5 %}
-    <button id="toggle-teams-btn" onclick="toggleTeamRows()" style="margin-top: 10px; padding: 8px 16px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer;">
-        Show More ({{ top_team_schedules|length - 5 }} more)
-    </button>
+    {% if not show_all_teams and top_team_schedules|length > 5 %}
+    <div style="margin-top: 10px; display: flex; gap: 10px;">
+        <button id="toggle-teams-btn" onclick="toggleTeamRows()" style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer;">
+            Show More ({{ top_team_schedules|length - 5 }} more)
+        </button>
+        <a href="{{ url_for('analytics.dashboard', days=days, route=route_filter or '', show_all_teams='1') }}" style="padding: 8px 16px; border: 1px solid rgb(34, 139, 34); border-radius: 4px; background: white; color: rgb(34, 139, 34); text-decoration: none; cursor: pointer;">
+            Show All Teams
+        </a>
+    </div>
+    {% elif show_all_teams %}
+    <div style="margin-top: 10px;">
+        <a href="{{ url_for('analytics.dashboard', days=days, route=route_filter or '') }}" style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 4px; background: white; color: #333; text-decoration: none; cursor: pointer;">
+            Show Less
+        </a>
+        <span style="margin-left: 10px; color: #666; font-size: 13px;">Showing all {{ top_team_schedules|length }} teams</span>
+    </div>
     {% endif %}
     {% else %}
     <p style="color: #666;">No team schedule views recorded for this period.</p>

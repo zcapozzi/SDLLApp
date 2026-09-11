@@ -341,11 +341,16 @@ def get_top_team_schedules(days=30, limit=20, excluded_user_ids=None):
         )
 
     # Current period stats by page_context (team token)
-    current_results = db.session.query(
+    query = db.session.query(
         PageView.page_context,
         func.count(PageView.ID).label('views'),
         func.count(func.distinct(PageView.session_id)).label('sessions')
-    ).filter(*filters).group_by(PageView.page_context).order_by(desc('views')).limit(limit).all()
+    ).filter(*filters).group_by(PageView.page_context).order_by(desc('views'))
+
+    if limit:
+        query = query.limit(limit)
+
+    current_results = query.all()
 
     if not current_results:
         return []
@@ -515,6 +520,7 @@ def dashboard():
         days = 30
 
     route_filter = request.args.get('route', '').strip() or None
+    show_all_teams = request.args.get('show_all_teams') == '1'
 
     # Get excluded user IDs (product admins)
     excluded_user_ids = get_excluded_user_ids()
@@ -528,7 +534,8 @@ def dashboard():
     top_routes = get_top_routes(days, excluded_user_ids=excluded_user_ids)
     top_users = get_top_users(days, route_filter=route_filter, excluded_user_ids=excluded_user_ids)
     devices = get_device_breakdown(days, route_filter, excluded_user_ids)
-    top_team_schedules = get_top_team_schedules(days, excluded_user_ids=excluded_user_ids)
+    team_limit = None if show_all_teams else 20
+    top_team_schedules = get_top_team_schedules(days, limit=team_limit, excluded_user_ids=excluded_user_ids)
     calendar_subs = get_calendar_subscriptions(days)
 
     # Format last_active for users
@@ -546,5 +553,6 @@ def dashboard():
         calendar_subs=calendar_subs,
         days=days,
         route_filter=route_filter,
-        available_routes=available_routes
+        available_routes=available_routes,
+        show_all_teams=show_all_teams
     )
