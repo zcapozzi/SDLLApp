@@ -1671,12 +1671,14 @@ def team_schedule_ics(token):
     if not team:
         abort(404)
 
-    # Get ALL games for this team (including cancelled for proper sync)
+    # Get all games for this team (excluding practices, including cancelled for proper sync)
+    # Using negative filter on 'practice' so any future game types are automatically included
     games = Game.query.filter(
         Game.active == 1,
         Game.year == team.year,
         Game.is_spring == team.is_spring,
-        db.or_(Game.home_ID == team.team_ID, Game.away_ID == team.team_ID)
+        db.or_(Game.home_ID == team.team_ID, Game.away_ID == team.team_ID),
+        Game.game_type != 'practice'
     ).order_by(Game.game_date).all()
 
     if not games:
