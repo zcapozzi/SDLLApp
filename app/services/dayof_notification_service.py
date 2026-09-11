@@ -180,11 +180,27 @@ class DayOfNotificationService:
 
                 assignr_game_id = game.get('id')
 
-                # Check if notification already exists
+                # Check if notification already exists (draft or sent)
                 if UmpireDayOfNotification.exists_for_game_umpire(
                     assignr_game_id, official_id
                 ):
                     continue  # Notification already exists for this game/umpire
+
+                # Check for skipped notification that can be reactivated
+                existing_skipped = UmpireDayOfNotification.query.filter_by(
+                    assignr_game_id=assignr_game_id,
+                    assignr_official_id=official_id,
+                    status=UmpireDayOfNotification.STATUS_SKIPPED
+                ).first()
+
+                if existing_skipped:
+                    # Reactivate the skipped notification
+                    existing_skipped.status = UmpireDayOfNotification.STATUS_DRAFT
+                    existing_skipped.sent_at = None
+                    existing_skipped.sent_by = None
+                    notifications.append(existing_skipped)
+                    logger.info(f"Reactivated notification for {umpire_name} - game {assignr_game_id}")
+                    continue
 
                 # Get umpire email addresses from Assignr
                 umpire_details = self.assignr.get_official(official_id)

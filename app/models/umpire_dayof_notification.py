@@ -166,8 +166,12 @@ class UmpireDayOfNotification(db.Model):
 
     @classmethod
     def exists_for_game_umpire(cls, assignr_game_id, assignr_official_id):
-        """Check if a notification already exists for this game/umpire combo."""
-        return cls.query.filter_by(
-            assignr_game_id=assignr_game_id,
-            assignr_official_id=assignr_official_id
+        """Check if a sent or draft notification exists for this game/umpire combo.
+
+        Returns False for skipped notifications so they can be regenerated.
+        """
+        return cls.query.filter(
+            cls.assignr_game_id == assignr_game_id,
+            cls.assignr_official_id == assignr_official_id,
+            cls.status.in_([cls.STATUS_DRAFT, cls.STATUS_SENT])
         ).first() is not None
