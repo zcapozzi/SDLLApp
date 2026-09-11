@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Day-of Umpire Emails - {{ season_name }} - SDLL{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1>Day-of Umpire Emails</h1>
+        <p class="text-muted">Pregame information for Academy umpires with games today</p>
+    </div>
+
+    <!-- Date selector and actions -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="d-flex flex-wrap gap-3 align-items-center justify-content-between">
+                <div class="d-flex gap-2 align-items-center">
+                    <label for="target-date" class="form-label mb-0">Date:</label>
+                    <input type="date" id="target-date" class="form-control" style="width: auto;"
+                           value="{{ target_date.strftime('%Y-%m-%d') }}"
+                           onchange="changeDate(this.value)">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setToday()">Today</button>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <!-- Generate notifications -->
+                    <form method="POST" action="{{ url_for('umpires.generate_dayof_notifications', year=year, is_spring=is_spring) }}" class="d-inline">
+                        <input type="hidden" name="hours_ahead" value="7">
+                        <input type="hidden" name="hours_start" value="0">
+                        <button type="submit" class="btn btn-primary">
+                            Generate (Next 7 Hours)
+                        </button>
+                    </form>
+
+                    {% if draft_notifications %}
+                    <!-- Send all -->
+                    <form method="POST" action="{{ url_for('umpires.send_all_dayof', year=year, is_spring=is_spring) }}" class="d-inline">
+                        <button type="submit" class="btn btn-success"
+                                onclick="return confirm('Send {{ draft_notifications|length }} email(s)?')">
+                            Send All ({{ draft_notifications|length }})
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Draft notifications -->
+    {% if draft_notifications %}
+    <div class="card mb-4">
+        <div class="card-header bg-warning-subtle">
+            <h5 class="mb-0">Pending ({{ draft_notifications|length }})</h5>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Umpire</th>
+                        <th>Game</th>
+                        <th>Time</th>
+                        <th>Location</th>
+                        <th>Recipients</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for n in draft_notifications %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('umpires.dayof_preview', year=year, is_spring=is_spring, id=n.id) }}">
+                                {{ n.umpire_name }}
+                            </a>
+                        </td>
+                        <td>
+                            {% if n.home_team and n.away_team %}
+                                {{ n.home_team }} vs {{ n.away_team }}
+                            {% else %}
+                                {{ n.game_league or 'Game' }}
+                            {% endif %}
+                        </td>
+                        <td>{{ n.game_time_str }}</td>
+                        <td>{{ n.game_location }}</td>
+                        <td>
+                            <small class="text-muted">{{ n.recipient_emails_list|length }} email(s)</small>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{{ url_for('umpires.dayof_preview', year=year, is_spring=is_spring, id=n.id) }}"
+                                   class="btn btn-outline-primary">Preview</a>
+                                <form method="POST" action="{{ url_for('umpires.dayof_action', year=year, is_spring=is_spring, id=n.id) }}" class="d-inline">
+                                    <input type="hidden" name="action" value="send">
+                                    <button type="submit" class="btn btn-success">Send</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('umpires.dayof_action', year=year, is_spring=is_spring, id=n.id) }}" class="d-inline">
+                                    <input type="hidden" name="action" value="skip">
+                                    <button type="submit" class="btn btn-outline-secondary">Skip</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Sent notifications -->
+    {% if sent_notifications %}
+    <div class="card mb-4">
+        <div class="card-header bg-success-subtle">
+            <h5 class="mb-0">Sent ({{ sent_notifications|length }})</h5>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Umpire</th>
+                        <th>Game</th>
+                        <th>Time</th>
+                        <th>Location</th>
+                        <th>Sent At</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for n in sent_notifications %}
+                    <tr class="table-success">
+                        <td>{{ n.umpire_name }}</td>
+                        <td>
+                            {% if n.home_team and n.away_team %}
+                                {{ n.home_team }} vs {{ n.away_team }}
+                            {% else %}
+                                {{ n.game_league or 'Game' }}
+                            {% endif %}
+                        </td>
+                        <td>{{ n.game_time_str }}</td>
+                        <td>{{ n.game_location }}</td>
+                        <td>
+                            {% if n.sent_at %}
+                                {{ n.sent_at.strftime('%I:%M %p').lstrip('0') }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('umpires.dayof_preview', year=year, is_spring=is_spring, id=n.id) }}"
+                               class="btn btn-sm btn-outline-primary">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Skipped notifications -->
+    {% if skipped_notifications %}
+    <div class="card mb-4">
+        <div class="card-header bg-secondary-subtle">
+            <h5 class="mb-0">Skipped ({{ skipped_notifications|length }})</h5>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Umpire</th>
+                        <th>Game</th>
+                        <th>Time</th>
+                        <th>Location</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for n in skipped_notifications %}
+                    <tr class="table-secondary">
+                        <td>{{ n.umpire_name }}</td>
+                        <td>
+                            {% if n.home_team and n.away_team %}
+                                {{ n.home_team }} vs {{ n.away_team }}
+                            {% else %}
+                                {{ n.game_league or 'Game' }}
+                            {% endif %}
+                        </td>
+                        <td>{{ n.game_time_str }}</td>
+                        <td>{{ n.game_location }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Empty state -->
+    {% if not draft_notifications and not sent_notifications and not skipped_notifications %}
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <h5 class="text-muted">No day-of notifications for {{ target_date.strftime('%B %d, %Y') }}</h5>
+            <p class="text-muted mb-3">Click "Generate" to create notifications for Academy umpires with games in the next 7 hours.</p>
+            <form method="POST" action="{{ url_for('umpires.generate_dayof_notifications', year=year, is_spring=is_spring) }}">
+                <input type="hidden" name="hours_ahead" value="7">
+                <input type="hidden" name="hours_start" value="0">
+                <button type="submit" class="btn btn-primary">
+                    Generate Notifications
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function changeDate(dateStr) {
+    var url = new URL(window.location.href);
+    url.searchParams.set('date', dateStr);
+    window.location.href = url.toString();
+}
+
+function setToday() {
+    var today = new Date().toISOString().split('T')[0];
+    changeDate(today);
+}
+</script>
+{% endblock %}

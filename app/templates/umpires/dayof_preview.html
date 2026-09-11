@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Preview Day-of Email - {{ notification.umpire_name }} - SDLL{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item">
+                    <a href="{{ url_for('umpires.dayof_notifications', year=year, is_spring=is_spring) }}">Day-of Emails</a>
+                </li>
+                <li class="breadcrumb-item active">{{ notification.umpire_name }}</li>
+            </ol>
+        </nav>
+        <h1>Day-of Email Preview</h1>
+    </div>
+
+    <!-- Status and actions -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="d-flex flex-wrap gap-3 align-items-center justify-content-between">
+                <div>
+                    {% if notification.is_draft %}
+                        <span class="badge bg-warning text-dark fs-6">Draft</span>
+                    {% elif notification.is_sent %}
+                        <span class="badge bg-success fs-6">Sent</span>
+                        {% if notification.sent_at %}
+                            <span class="text-muted ms-2">
+                                {{ notification.sent_at.strftime('%B %d at %I:%M %p').replace(' 0', ' ') }}
+                            </span>
+                        {% endif %}
+                    {% elif notification.is_skipped %}
+                        <span class="badge bg-secondary fs-6">Skipped</span>
+                    {% endif %}
+                </div>
+
+                {% if notification.is_draft %}
+                <div class="d-flex gap-2">
+                    <form method="POST" class="d-inline">
+                        <input type="hidden" name="action" value="send">
+                        <button type="submit" class="btn btn-success">
+                            Send Email
+                        </button>
+                    </form>
+                    <form method="POST" class="d-inline">
+                        <input type="hidden" name="action" value="skip">
+                        <button type="submit" class="btn btn-outline-secondary">
+                            Skip
+                        </button>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Email details -->
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Details</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="mb-0">
+                        <dt>Umpire</dt>
+                        <dd>{{ notification.umpire_name }}</dd>
+
+                        <dt>Game</dt>
+                        <dd>
+                            {{ notification.game_date_display }}<br>
+                            {{ notification.game_time_str }} at {{ notification.game_location }}
+                        </dd>
+
+                        {% if notification.home_team and notification.away_team %}
+                        <dt>Teams</dt>
+                        <dd>{{ notification.home_team }} vs {{ notification.away_team }}</dd>
+                        {% endif %}
+
+                        {% if notification.game_league %}
+                        <dt>League</dt>
+                        <dd>{{ notification.game_league }}</dd>
+                        {% endif %}
+
+                        <dt>Recipients</dt>
+                        <dd>
+                            {% for email in notification.recipient_emails_list %}
+                                <span class="badge bg-light text-dark">{{ email }}</span>
+                            {% endfor %}
+                        </dd>
+
+                        <dt>Subject</dt>
+                        <dd>{{ notification.subject }}</dd>
+                    </dl>
+                </div>
+            </div>
+
+            <a href="{{ url_for('umpires.dayof_notifications', year=year, is_spring=is_spring) }}"
+               class="btn btn-outline-secondary">
+                Back to Inbox
+            </a>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Email Preview</h5>
+                </div>
+                <div class="card-body p-0">
+                    <iframe srcdoc="{{ notification.body_html|e }}"
+                            style="width: 100%; height: 600px; border: none;"
+                            title="Email preview"></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

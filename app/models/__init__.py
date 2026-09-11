@@ -38,3 +38,4 @@ from .game_start_record import GameStartRecord
 from .field_captain import FieldCaptain
 from .umpire_group_assignment import UmpireGroupAssignment
 from .umpire_game_payment import UmpireGamePayment
+from .umpire_dayof_notification import UmpireDayOfNotification
