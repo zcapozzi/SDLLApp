@@ -61,6 +61,17 @@
             color: rgb(34, 139, 34) !important;
         }
         .dropdown-divider { border-top: 1px solid #eee; margin: 8px 0; }
+        .dropdown-header {
+            padding: 8px 20px 4px 20px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-top: 1px solid #eee;
+            margin-top: 4px;
+        }
+        .dropdown-header:first-child { border-top: none; margin-top: 0; }
 
         /* Main content */
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
@@ -246,10 +257,11 @@
                     <a href="{{ url_for('umpire_portal.my_games') }}">My Games</a>
                     <a href="{{ url_for('umpire_portal.pay') }}">Pay History</a>
                     {% endif %}
-                    {% if current_user.is_umpire() and current_user.can_manage_umpires() %}
+                    {% if current_user.can_manage_umpires() %}
+                    {% if current_user.is_umpire() %}
                     <div class="dropdown-divider"></div>
                     {% endif %}
-                    {% if current_user.can_manage_umpires() %}
+                    <div class="dropdown-header">Managing</div>
                     {% if current_season_year %}
                     <a href="{{ url_for('umpires.umpire_calendar', year=current_season_year, is_spring=current_season_is_spring) }}">
                         <strong>Umpire Calendar</strong>
@@ -257,13 +269,15 @@
                     {% endif %}
                     <a href="{{ url_for('umpires.index') }}">Manage Umpires</a>
                     <a href="{{ url_for('umpires.partners') }}">Partners</a>
+                    <a href="{{ url_for('leagues.umpire_patterns') }}">Umpire Patterns</a>
+                    <a href="{{ url_for('umpires.missing_umpire') }}">Missing Umpire</a>
+                    <a href="{{ url_for('assignr.index') }}">Assignr</a>
+                    <div class="dropdown-header">Finance</div>
                     <a href="{{ url_for('umpires.delegation') }}">Delegation Rules</a>
                     <a href="{{ url_for('umpires.delegation_report') }}">Delegation Report</a>
                     <a href="{{ url_for('umpires.invoice_tieout') }}">Invoice Tie-Outs</a>
                     <a href="{{ url_for('treasurer.managed_umpires') }}">Managed Umpires</a>
-                    <a href="{{ url_for('umpires.missing_umpire') }}">Missing Umpire</a>
-                    <a href="{{ url_for('assignr.index') }}">Assignr</a>
-                    <a href="{{ url_for('leagues.umpire_patterns') }}">Umpire Patterns</a>
+                    <div class="dropdown-header">Communications</div>
                     {% if current_season_year %}
                     <a href="{{ url_for('umpires.weekly_digests', year=current_season_year, is_spring=current_season_is_spring) }}">Weekly Digests</a>
                     {% endif %}
