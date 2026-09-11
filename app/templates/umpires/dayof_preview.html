@@ -7,7 +7,7 @@
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb">
                 <li class="breadcrumb-item">
-                    <a href="{{ url_for('umpires.dayof_notifications', year=year, is_spring=is_spring) }}">Day-of Emails</a>
+                    <a href="{{ url_for('umpires.dayof_notifications') }}">Day-of Emails</a>
                 </li>
                 <li class="breadcrumb-item active">{{ notification.umpire_name }}</li>
             </ol>
@@ -95,7 +95,7 @@
                 </div>
             </div>
 
-            <a href="{{ url_for('umpires.dayof_notifications', year=year, is_spring=is_spring) }}"
+            <a href="{{ url_for('umpires.dayof_notifications') }}"
                class="btn btn-outline-secondary">
                 Back to Inbox
             </a>

@@ -18,13 +18,11 @@ from app.services.dayof_notification_service import DayOfNotificationService
 from . import umpires_bp, umpire_coordinator_required
 
 
-@umpires_bp.route('/<int:year>/<int:is_spring>/dayof')
+@umpires_bp.route('/dayof')
 @login_required
 @umpire_coordinator_required
-def dayof_notifications(year, is_spring):
+def dayof_notifications():
     """List day-of notifications inbox."""
-    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
-
     # Get target date from query param or default to today
     target_date_str = request.args.get('date')
     if target_date_str:
@@ -45,9 +43,6 @@ def dayof_notifications(year, is_spring):
 
     return render_template(
         'umpires/dayof_inbox.html',
-        year=year,
-        is_spring=is_spring,
-        season_name=season_name,
         target_date=target_date,
         draft_notifications=draft_notifications,
         sent_notifications=sent_notifications,
@@ -55,10 +50,10 @@ def dayof_notifications(year, is_spring):
     )
 
 
-@umpires_bp.route('/<int:year>/<int:is_spring>/dayof/generate', methods=['POST'])
+@umpires_bp.route('/dayof/generate', methods=['POST'])
 @login_required
 @umpire_coordinator_required
-def generate_dayof_notifications(year, is_spring):
+def generate_dayof_notifications():
     """Generate day-of notifications for upcoming games."""
     service = DayOfNotificationService()
 
@@ -80,30 +75,26 @@ def generate_dayof_notifications(year, is_spring):
     except Exception as e:
         flash(f'Error generating notifications: {e}', 'error')
 
-    return redirect(url_for('umpires.dayof_notifications', year=year, is_spring=is_spring))
+    return redirect(url_for('umpires.dayof_notifications'))
 
 
-@umpires_bp.route('/<int:year>/<int:is_spring>/dayof/<int:id>')
+@umpires_bp.route('/dayof/<int:id>')
 @login_required
 @umpire_coordinator_required
-def dayof_preview(year, is_spring, id):
+def dayof_preview(id):
     """Preview a specific day-of notification."""
     notification = UmpireDayOfNotification.query.get_or_404(id)
-    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
 
     return render_template(
         'umpires/dayof_preview.html',
-        year=year,
-        is_spring=is_spring,
-        season_name=season_name,
         notification=notification
     )
 
 
-@umpires_bp.route('/<int:year>/<int:is_spring>/dayof/<int:id>', methods=['POST'])
+@umpires_bp.route('/dayof/<int:id>', methods=['POST'])
 @login_required
 @umpire_coordinator_required
-def dayof_action(year, is_spring, id):
+def dayof_action(id):
     """Handle day-of notification actions: send, skip."""
     notification = UmpireDayOfNotification.query.get_or_404(id)
     action = request.form.get('action')
@@ -120,13 +111,13 @@ def dayof_action(year, is_spring, id):
         notification.mark_skipped()
         flash(f'Notification skipped for {notification.umpire_name}', 'success')
 
-    return redirect(url_for('umpires.dayof_preview', year=year, is_spring=is_spring, id=id))
+    return redirect(url_for('umpires.dayof_preview', id=id))
 
 
-@umpires_bp.route('/<int:year>/<int:is_spring>/dayof/send-all', methods=['POST'])
+@umpires_bp.route('/dayof/send-all', methods=['POST'])
 @login_required
 @umpire_coordinator_required
-def send_all_dayof(year, is_spring):
+def send_all_dayof():
     """Send all pending day-of notifications."""
     service = DayOfNotificationService()
 
@@ -139,4 +130,4 @@ def send_all_dayof(year, is_spring):
     if sent == 0 and failed == 0:
         flash('No pending notifications to send', 'info')
 
-    return redirect(url_for('umpires.dayof_notifications', year=year, is_spring=is_spring))
+    return redirect(url_for('umpires.dayof_notifications'))

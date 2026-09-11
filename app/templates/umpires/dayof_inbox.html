@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Day-of Umpire Emails - {{ season_name }} - SDLL{% endblock %}
+{% block title %}Day-of Umpire Emails - SDLL{% endblock %}
 
 {% block content %}
 <div class="container">
@@ -22,7 +22,7 @@
 
                 <div class="d-flex gap-2">
                     <!-- Generate notifications -->
-                    <form method="POST" action="{{ url_for('umpires.generate_dayof_notifications', year=year, is_spring=is_spring) }}" class="d-inline">
+                    <form method="POST" action="{{ url_for('umpires.generate_dayof_notifications') }}" class="d-inline">
                         <input type="hidden" name="hours_ahead" value="7">
                         <input type="hidden" name="hours_start" value="0">
                         <button type="submit" class="btn btn-primary">
@@ -32,7 +32,7 @@
 
                     {% if draft_notifications %}
                     <!-- Send all -->
-                    <form method="POST" action="{{ url_for('umpires.send_all_dayof', year=year, is_spring=is_spring) }}" class="d-inline">
+                    <form method="POST" action="{{ url_for('umpires.send_all_dayof') }}" class="d-inline">
                         <button type="submit" class="btn btn-success"
                                 onclick="return confirm('Send {{ draft_notifications|length }} email(s)?')">
                             Send All ({{ draft_notifications|length }})
@@ -66,7 +66,7 @@
                     {% for n in draft_notifications %}
                     <tr>
                         <td>
-                            <a href="{{ url_for('umpires.dayof_preview', year=year, is_spring=is_spring, id=n.id) }}">
+                            <a href="{{ url_for('umpires.dayof_preview', id=n.id) }}">
                                 {{ n.umpire_name }}
                             </a>
                         </td>
@@ -84,13 +84,13 @@
                         </td>
                         <td>
                             <div class="btn-group btn-group-sm">
-                                <a href="{{ url_for('umpires.dayof_preview', year=year, is_spring=is_spring, id=n.id) }}"
+                                <a href="{{ url_for('umpires.dayof_preview', id=n.id) }}"
                                    class="btn btn-outline-primary">Preview</a>
-                                <form method="POST" action="{{ url_for('umpires.dayof_action', year=year, is_spring=is_spring, id=n.id) }}" class="d-inline">
+                                <form method="POST" action="{{ url_for('umpires.dayof_action', id=n.id) }}" class="d-inline">
                                     <input type="hidden" name="action" value="send">
                                     <button type="submit" class="btn btn-success">Send</button>
                                 </form>
-                                <form method="POST" action="{{ url_for('umpires.dayof_action', year=year, is_spring=is_spring, id=n.id) }}" class="d-inline">
+                                <form method="POST" action="{{ url_for('umpires.dayof_action', id=n.id) }}" class="d-inline">
                                     <input type="hidden" name="action" value="skip">
                                     <button type="submit" class="btn btn-outline-secondary">Skip</button>
                                 </form>
@@ -141,7 +141,7 @@
                             {% endif %}
                         </td>
                         <td>
-                            <a href="{{ url_for('umpires.dayof_preview', year=year, is_spring=is_spring, id=n.id) }}"
+                            <a href="{{ url_for('umpires.dayof_preview', id=n.id) }}"
                                class="btn btn-sm btn-outline-primary">View</a>
                         </td>
                     </tr>
@@ -195,7 +195,7 @@
         <div class="card-body text-center py-5">
             <h5 class="text-muted">No day-of notifications for {{ target_date.strftime('%B %d, %Y') }}</h5>
             <p class="text-muted mb-3">Click "Generate" to create notifications for Academy umpires with games in the next 7 hours.</p>
-            <form method="POST" action="{{ url_for('umpires.generate_dayof_notifications', year=year, is_spring=is_spring) }}">
+            <form method="POST" action="{{ url_for('umpires.generate_dayof_notifications') }}">
                 <input type="hidden" name="hours_ahead" value="7">
                 <input type="hidden" name="hours_start" value="0">
                 <button type="submit" class="btn btn-primary">

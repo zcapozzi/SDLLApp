@@ -280,8 +280,8 @@
                     <div class="dropdown-header">Communications</div>
                     {% if current_season_year %}
                     <a href="{{ url_for('umpires.weekly_digests', year=current_season_year, is_spring=current_season_is_spring) }}">Weekly Digests</a>
-                    <a href="{{ url_for('umpires.dayof_notifications', year=current_season_year, is_spring=current_season_is_spring) }}">Day-of Emails</a>
                     {% endif %}
+                    <a href="{{ url_for('umpires.dayof_notifications') }}">Day-of Emails</a>
                     {% endif %}
                 </div>
             </div>
