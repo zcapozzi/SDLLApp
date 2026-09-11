@@ -1171,41 +1171,29 @@
     })();
 
     // Calendar Functions
-    // Build calendar URL from current page path (more reliable than Jinja in JS)
-    var calendarBaseUrl = window.location.origin + window.location.pathname + '/calendar/schedule.ics';
-    var currentCalendarUrl = calendarBaseUrl; // Will be updated based on user choice
-    var selectedSyncType = 'full'; // Track which type was selected
+    var currentCalendarUrl = ''; // Will be set when user clicks sync
 
     // Detect if user is on mobile device
     function isMobileDevice() {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     }
 
-    // Update the displayed URL based on selected type
-    function updateUrlDisplay() {
-        var urlDisplay = document.getElementById('calendar-url');
-        if (urlDisplay) {
-            if (selectedSyncType === 'games') {
-                currentCalendarUrl = calendarBaseUrl + '?type=games';
-            } else {
-                currentCalendarUrl = calendarBaseUrl;
-            }
-            urlDisplay.textContent = currentCalendarUrl;
-        }
-    }
-
     function syncToCalendar(type) {
-        selectedSyncType = type;
+        // Build URL from current page path
+        var baseUrl = window.location.origin + window.location.pathname + '/calendar/schedule.ics';
 
-        // Build URL based on type
+        // Add type parameter if games only
         if (type === 'games') {
-            currentCalendarUrl = calendarBaseUrl + '?type=games';
+            currentCalendarUrl = baseUrl + '?type=games';
         } else {
-            currentCalendarUrl = calendarBaseUrl;
+            currentCalendarUrl = baseUrl;
         }
 
         // Debug: log to console
-        console.log('Calendar URL:', currentCalendarUrl);
+        console.log('Base URL:', baseUrl);
+        console.log('Current URL:', currentCalendarUrl);
+        console.log('Origin:', window.location.origin);
+        console.log('Pathname:', window.location.pathname);
 
         // Show the instructions panel
         var panel = document.getElementById('calendar-instructions');
