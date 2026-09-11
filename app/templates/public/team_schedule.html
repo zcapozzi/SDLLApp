@@ -1174,19 +1174,38 @@
     // Build calendar URL from current page path (more reliable than Jinja in JS)
     var calendarBaseUrl = window.location.origin + window.location.pathname + '/calendar/schedule.ics';
     var currentCalendarUrl = calendarBaseUrl; // Will be updated based on user choice
+    var selectedSyncType = 'full'; // Track which type was selected
 
     // Detect if user is on mobile device
     function isMobileDevice() {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     }
 
+    // Update the displayed URL based on selected type
+    function updateUrlDisplay() {
+        var urlDisplay = document.getElementById('calendar-url');
+        if (urlDisplay) {
+            if (selectedSyncType === 'games') {
+                currentCalendarUrl = calendarBaseUrl + '?type=games';
+            } else {
+                currentCalendarUrl = calendarBaseUrl;
+            }
+            urlDisplay.textContent = currentCalendarUrl;
+        }
+    }
+
     function syncToCalendar(type) {
+        selectedSyncType = type;
+
         // Build URL based on type
         if (type === 'games') {
             currentCalendarUrl = calendarBaseUrl + '?type=games';
         } else {
             currentCalendarUrl = calendarBaseUrl;
         }
+
+        // Debug: log to console
+        console.log('Calendar URL:', currentCalendarUrl);
 
         // Show the instructions panel
         var panel = document.getElementById('calendar-instructions');
@@ -1196,10 +1215,14 @@
 
         if (panel) {
             panel.classList.add('show');
-            // Display the URL for manual use
-            if (urlDisplay) {
-                urlDisplay.textContent = currentCalendarUrl;
-            }
+        }
+
+        // Set the URL in the display element
+        if (urlDisplay) {
+            urlDisplay.textContent = currentCalendarUrl;
+            console.log('URL display element found, set to:', currentCalendarUrl);
+        } else {
+            console.log('URL display element NOT found');
         }
 
         // Show appropriate instructions based on device
