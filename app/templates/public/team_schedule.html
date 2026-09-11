@@ -1145,7 +1145,8 @@
     })();
 
     // Calendar Functions
-    var calendarBaseUrl = '{{ url_for("public.team_schedule_ics", token=team.schedule_token, _external=True) }}';
+    // Build calendar URL from current page path (more reliable than Jinja in JS)
+    var calendarBaseUrl = window.location.origin + window.location.pathname + '/calendar/schedule.ics';
     var currentCalendarUrl = calendarBaseUrl; // Will be updated based on user choice
 
     function syncToCalendar(type) {
