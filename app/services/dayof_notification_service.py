@@ -2,6 +2,7 @@
 
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Optional, Tuple
+import pytz
 
 from app.extensions import db
 from app.models.umpire_dayof_notification import UmpireDayOfNotification
@@ -13,6 +14,9 @@ from app.services.notification_service import GmailService
 from app.utils.logging import SDLLLogger
 
 logger = SDLLLogger('dayof_notification')
+
+# Timezone for SDLL (Durham, NC)
+EASTERN_TZ = pytz.timezone('America/New_York')
 
 
 # League display strings (more readable names)
@@ -85,11 +89,12 @@ class DayOfNotificationService:
         Returns:
             List of enriched game dicts from Assignr
         """
-        now = datetime.now()
+        # Use Eastern time (Durham, NC) regardless of server timezone
+        now = datetime.now(EASTERN_TZ)
         start_dt = now + timedelta(hours=hours_start)
         end_dt = now + timedelta(hours=hours_ahead)
 
-        logger.info(f"Fetching games from {start_dt} to {end_dt}")
+        logger.info(f"Fetching games from {start_dt.strftime('%Y-%m-%d %H:%M %Z')} to {end_dt.strftime('%Y-%m-%d %H:%M %Z')}")
 
         games = self.assignr.get_all_games(start_dt, end_dt)
 
