@@ -754,22 +754,48 @@
 
             <!-- Instructions Panel (shown after sync) -->
             <div id="calendar-instructions" class="calendar-instructions">
-                <div style="background: #e8f5e9; padding: 12px 15px; border-radius: 6px; margin-bottom: 15px;">
-                    <strong style="color: #2e7d32;">What happens next:</strong>
-                    <p style="margin: 8px 0 0 0;">Your phone or computer should ask you to add this calendar. Just tap <strong>"Subscribe"</strong> or <strong>"Add"</strong> when asked.</p>
+                <!-- Mobile instructions (shown by default, hidden on desktop via JS) -->
+                <div id="mobile-instructions">
+                    <div style="background: #e8f5e9; padding: 12px 15px; border-radius: 6px; margin-bottom: 15px;">
+                        <strong style="color: #2e7d32;">What happens next:</strong>
+                        <p style="margin: 8px 0 0 0;">Your phone should ask you to add this calendar. Just tap <strong>"Subscribe"</strong> or <strong>"Add"</strong> when asked.</p>
+                    </div>
+
+                    <div class="warning" style="margin-bottom: 15px;">
+                        <strong>Didn't get a prompt?</strong> Some phones need you to add the calendar manually. Copy the URL below, then go to your calendar app's settings and look for "Add Calendar" or "Subscribe to Calendar".
+                    </div>
+                </div>
+
+                <!-- Desktop instructions (hidden by default, shown via JS) -->
+                <div id="desktop-instructions" style="display: none;">
+                    <div style="background: #e3f2fd; padding: 12px 15px; border-radius: 6px; margin-bottom: 15px;">
+                        <strong style="color: #1565c0;">How to add this calendar:</strong>
+                        <ol style="margin: 10px 0 0 0; padding-left: 20px;">
+                            <li><strong>Copy the URL</strong> at the bottom of this box</li>
+                            <li><strong>Open your calendar app</strong> (Google Calendar, Outlook, Apple Calendar, etc.)</li>
+                            <li><strong>Find "Add Calendar"</strong> or "Subscribe" in the settings</li>
+                            <li><strong>Paste the URL</strong> and confirm</li>
+                        </ol>
+                    </div>
+
+                    <div style="margin-bottom: 15px; padding: 10px 12px; background: #fff3e0; border-radius: 6px;">
+                        <strong>Using Google Calendar?</strong>
+                        <ol style="margin: 8px 0 0 0; padding-left: 20px; font-size: 13px;">
+                            <li>Go to <a href="https://calendar.google.com" target="_blank">calendar.google.com</a></li>
+                            <li>Click the <strong>+</strong> next to "Other calendars" on the left</li>
+                            <li>Select <strong>"From URL"</strong></li>
+                            <li>Paste the URL and click "Add calendar"</li>
+                        </ol>
+                    </div>
                 </div>
 
                 <div style="margin-bottom: 15px;">
-                    <strong>Why sync instead of download?</strong>
-                    <p style="margin: 5px 0 0 0; color: #555;">When you sync, your calendar stays up to date automatically. If a game gets rescheduled or cancelled, your calendar will update on its own - you don't need to do anything.</p>
-                </div>
-
-                <div class="warning" style="margin-bottom: 15px;">
-                    <strong>Didn't get a prompt?</strong> Some phones need you to add the calendar manually. See the help links below, or copy the URL at the bottom and paste it into your calendar app's "Add Calendar" or "Subscribe" option.
+                    <strong>Why sync?</strong>
+                    <p style="margin: 5px 0 0 0; color: #555;">Your calendar stays up to date automatically. If a game gets rescheduled or cancelled, it updates on its own.</p>
                 </div>
 
                 <div class="help-section">
-                    <div class="help-title">Step-by-step help for your device:</div>
+                    <div class="help-title">Need more help?</div>
                     <div class="help-grid">
                         <span class="app-name">iPhone / iPad:</span>
                         <span class="help-links">
@@ -785,13 +811,13 @@
                         </span>
                         <span class="app-name">Computer:</span>
                         <span class="help-links">
-                            <a href="https://www.google.com/search?q=how+to+subscribe+to+calendar+on+computer" target="_blank">Google</a>
-                            <a href="https://chatgpt.com/?q=How+do+I+subscribe+to+a+calendar+URL+on+my+computer%3F+I+use+%5BOutlook%2FGoogle+Calendar%2FApple+Calendar%5D." target="_blank">ChatGPT</a>
-                            <a href="https://claude.ai/new?q=How+do+I+subscribe+to+a+calendar+URL+on+my+computer%3F+Give+me+simple+step+by+step+instructions." target="_blank">Claude</a>
+                            <a href="https://www.google.com/search?q=how+to+subscribe+to+calendar+url+google+outlook" target="_blank">Google</a>
+                            <a href="https://chatgpt.com/?q=How+do+I+subscribe+to+a+calendar+URL%3F+I+use+Google+Calendar+%2F+Outlook+%2F+Apple+Calendar." target="_blank">ChatGPT</a>
+                            <a href="https://claude.ai/new?q=How+do+I+subscribe+to+a+calendar+URL%3F+Give+me+step+by+step+instructions+for+Google+Calendar+and+Outlook." target="_blank">Claude</a>
                         </span>
                     </div>
                     <div style="margin-top: 15px; padding: 12px; background: #f5f5f5; border-radius: 6px; font-size: 13px;">
-                        <strong>Calendar URL (copy this if needed):</strong><br>
+                        <strong>Calendar URL:</strong><br>
                         <code id="calendar-url" style="display: block; word-break: break-all; font-size: 11px; margin: 8px 0; padding: 8px; background: white; border-radius: 4px; border: 1px solid #ddd;"></code>
                         <button onclick="copyCalendarUrl()" style="padding: 6px 12px; font-size: 12px; cursor: pointer; background: #228B22; color: white; border: none; border-radius: 4px;">Copy URL</button>
                     </div>
@@ -1149,6 +1175,11 @@
     var calendarBaseUrl = window.location.origin + window.location.pathname + '/calendar/schedule.ics';
     var currentCalendarUrl = calendarBaseUrl; // Will be updated based on user choice
 
+    // Detect if user is on mobile device
+    function isMobileDevice() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    }
+
     function syncToCalendar(type) {
         // Build URL based on type
         if (type === 'games') {
@@ -1157,12 +1188,12 @@
             currentCalendarUrl = calendarBaseUrl;
         }
 
-        // Convert to webcal:// for calendar app trigger
-        var webcalUrl = currentCalendarUrl.replace(/^https?:/, 'webcal:');
-
         // Show the instructions panel
         var panel = document.getElementById('calendar-instructions');
         var urlDisplay = document.getElementById('calendar-url');
+        var mobileInstructions = document.getElementById('mobile-instructions');
+        var desktopInstructions = document.getElementById('desktop-instructions');
+
         if (panel) {
             panel.classList.add('show');
             // Display the URL for manual use
@@ -1171,8 +1202,19 @@
             }
         }
 
-        // Open the webcal:// URL to trigger calendar sync
-        window.location.href = webcalUrl;
+        // Show appropriate instructions based on device
+        if (isMobileDevice()) {
+            // Mobile: show mobile instructions, try webcal://
+            if (mobileInstructions) mobileInstructions.style.display = 'block';
+            if (desktopInstructions) desktopInstructions.style.display = 'none';
+
+            var webcalUrl = currentCalendarUrl.replace(/^https?:/, 'webcal:');
+            window.location.href = webcalUrl;
+        } else {
+            // Desktop: show desktop instructions with manual steps
+            if (mobileInstructions) mobileInstructions.style.display = 'none';
+            if (desktopInstructions) desktopInstructions.style.display = 'block';
+        }
 
         // Scroll to show the instructions
         setTimeout(function() {
