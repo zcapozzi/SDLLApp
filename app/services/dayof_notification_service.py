@@ -506,3 +506,306 @@ Here are some resources that are good to have handy.<BR><BR>
                 failed += 1
 
         return sent, failed
+
+    def get_games_for_time_window(
+        self,
+        start_hour: int,
+        end_hour: int
+    ) -> List[Dict]:
+        """
+        Get games from Assignr within a specific time window today.
+
+        Args:
+            start_hour: Start hour (0-23) in Eastern time
+            end_hour: End hour (0-23) in Eastern time
+
+        Returns:
+            List of enriched game dicts from Assignr
+        """
+        now = datetime.now(EASTERN_TZ)
+        today = now.date()
+
+        # Create start and end datetimes for today
+        start_dt = EASTERN_TZ.localize(datetime.combine(today, datetime.min.time().replace(hour=start_hour)))
+        end_dt = EASTERN_TZ.localize(datetime.combine(today, datetime.min.time().replace(hour=end_hour)))
+
+        logger.info(f"Fetching games from {start_dt.strftime('%Y-%m-%d %H:%M %Z')} to {end_dt.strftime('%Y-%m-%d %H:%M %Z')}")
+
+        # Fetch all games for today
+        games = self.assignr.get_all_games(start_dt, end_dt)
+
+        # Filter out cancelled games
+        games = [g for g in games if not g.get('is_cancelled')]
+
+        # Enrich with local data
+        games = self.assignr.enrich_games_with_local_data(games)
+
+        # Filter out rainouts and cancelled local games
+        # Also filter by time window
+        filtered = []
+        for g in games:
+            local = g.get('_local')
+            if local and local.get('status') in ('cancelled', 'rainout'):
+                continue
+
+            game_date = g.get('_game_date')
+            if game_date:
+                # Make game_date timezone-aware if it isn't
+                if game_date.tzinfo is None:
+                    game_date = EASTERN_TZ.localize(game_date)
+                game_hour = game_date.hour
+                if start_hour <= game_hour < end_hour:
+                    filtered.append(g)
+
+        return filtered
+
+    def generate_notifications_for_time_window(
+        self,
+        start_hour: int,
+        end_hour: int
+    ) -> List[UmpireDayOfNotification]:
+        """
+        Generate day-of notifications for games within a specific time window.
+
+        Args:
+            start_hour: Start hour (0-23) in Eastern time
+            end_hour: End hour (0-23) in Eastern time
+
+        Returns:
+            List of created notification objects
+        """
+        year, is_spring = self.get_current_season()
+        games = self.get_games_for_time_window(start_hour, end_hour)
+
+        logger.info(f"Found {len(games)} games between {start_hour}:00 and {end_hour}:00")
+
+        notifications = []
+
+        for game in games:
+            # Get assignments for this game
+            assignments = game.get('_embedded', {}).get('assignments', []) or []
+
+            for assignment in assignments:
+                embedded = assignment.get('_embedded', {}) or {}
+                official = embedded.get('official', {}) or {}
+
+                official_id = official.get('id')
+                if not official_id:
+                    continue
+
+                first_name = official.get('first_name', '')
+                last_name = official.get('last_name', '')
+                umpire_name = f"{first_name} {last_name}".strip()
+
+                assignr_game_id = game.get('id')
+
+                # Check if notification already exists (draft or sent)
+                if UmpireDayOfNotification.exists_for_game_umpire(
+                    assignr_game_id, official_id
+                ):
+                    continue
+
+                # Check for skipped notification that can be reactivated
+                existing_skipped = UmpireDayOfNotification.query.filter_by(
+                    assignr_game_id=assignr_game_id,
+                    assignr_official_id=official_id,
+                    status=UmpireDayOfNotification.STATUS_SKIPPED
+                ).first()
+
+                if existing_skipped:
+                    existing_skipped.status = UmpireDayOfNotification.STATUS_DRAFT
+                    existing_skipped.sent_at = None
+                    existing_skipped.sent_by = None
+                    notifications.append(existing_skipped)
+                    logger.info(f"Reactivated notification for {umpire_name} - game {assignr_game_id}")
+                    continue
+
+                # Get umpire email addresses from Assignr
+                umpire_details = self.assignr.get_official(official_id)
+                if not umpire_details:
+                    logger.warning(f"Could not fetch details for official {official_id}")
+                    continue
+
+                email_addresses = umpire_details.get('email_addresses', [])
+                if not email_addresses:
+                    logger.warning(f"No email addresses for official {official_id}")
+                    continue
+
+                # Get game details
+                local = game.get('_local', {}) or {}
+                game_date = game.get('_game_date')
+                location = local.get('field') or game.get('venue_name', 'TBD')
+                league = local.get('league') or game.get('game_type', '')
+                home_team = local.get('home_team') or ''
+                away_team = local.get('away_team') or ''
+                home_team_id = local.get('home_team_id')
+                away_team_id = local.get('away_team_id')
+
+                # Get coach names by team ID
+                home_coach = self.get_coach_for_team_by_id(home_team_id)
+                away_coach = self.get_coach_for_team_by_id(away_team_id)
+
+                # Generate email content
+                subject, body_html = self._render_email(
+                    umpire_first_name=first_name,
+                    game_date=game_date,
+                    location=location,
+                    league=league,
+                    home_team=home_team,
+                    away_team=away_team,
+                    home_coach=home_coach,
+                    away_coach=away_coach
+                )
+
+                # Get local game ID if available
+                local_game_id = local.get('game_id') if local else None
+
+                # Create notification
+                notification = UmpireDayOfNotification(
+                    game_id=local_game_id,
+                    assignr_game_id=assignr_game_id,
+                    assignr_official_id=official_id,
+                    umpire_name=umpire_name,
+                    year=year,
+                    is_spring=is_spring,
+                    recipient_emails=str(email_addresses).replace("'", '"'),
+                    subject=subject,
+                    body_html=body_html,
+                    game_date=game_date,
+                    game_location=location,
+                    game_league=league,
+                    home_team=home_team,
+                    away_team=away_team,
+                    status=UmpireDayOfNotification.STATUS_DRAFT
+                )
+
+                db.session.add(notification)
+                notifications.append(notification)
+
+                logger.info(f"Created notification for {umpire_name} - game {assignr_game_id}")
+
+        db.session.commit()
+        return notifications
+
+    def generate_morning_notifications(self) -> List[UmpireDayOfNotification]:
+        """Generate notifications for games before 3pm (7am cron run)."""
+        return self.generate_notifications_for_time_window(0, 15)  # Midnight to 3pm
+
+    def generate_afternoon_notifications(self) -> List[UmpireDayOfNotification]:
+        """Generate notifications for games after 3pm (1pm cron run)."""
+        return self.generate_notifications_for_time_window(15, 24)  # 3pm to midnight
+
+    def notify_coordinator_of_drafts(
+        self,
+        notifications: List[UmpireDayOfNotification],
+        run_type: str = 'morning'
+    ) -> bool:
+        """
+        Send email to umpire coordinator about pending day-of notifications.
+
+        Args:
+            notifications: List of draft notifications generated
+            run_type: 'morning' or 'afternoon' to indicate which cron run
+
+        Returns:
+            True if notification sent successfully
+        """
+        if not notifications:
+            logger.info("No notifications to report to coordinator")
+            return True
+
+        from app.models.user import User
+
+        # Get umpire coordinators
+        coordinators = User.query.filter(
+            User.role.in_(['admin', 'umpire_coordinator'])
+        ).all()
+
+        if not coordinators:
+            logger.warning("No umpire coordinators found to notify")
+            return False
+
+        coordinator_emails = [u.email for u in coordinators if u.email]
+        if not coordinator_emails:
+            logger.warning("No coordinator emails found")
+            return False
+
+        # Build email content
+        now = datetime.now(EASTERN_TZ)
+        today_str = now.strftime('%A, %B %d')
+        time_window = "before 3pm" if run_type == 'morning' else "after 3pm"
+
+        subject = f"SDLL Day-of Umpire Emails Ready ({len(notifications)} drafts)"
+
+        # Build notification list HTML
+        notif_rows = []
+        base_url = "https://www.southdurhamlittleleague.org"
+
+        for n in notifications:
+            preview_url = f"{base_url}/umpires/dayof/{n.id}"
+            notif_rows.append(f"""
+            <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                    <a href="{preview_url}">{n.umpire_name}</a>
+                </td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                    {n.game_time_str} @ {n.game_location}
+                </td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                    {n.home_team} vs {n.away_team}
+                </td>
+            </tr>
+            """)
+
+        inbox_url = f"{base_url}/umpires/dayof"
+
+        body_html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #228B22;">Day-of Umpire Emails Ready</h2>
+            <p>
+                <strong>{len(notifications)}</strong> day-of notification(s) have been drafted
+                for games {time_window} on {today_str}.
+            </p>
+            <p>
+                <a href="{inbox_url}" style="display: inline-block; padding: 10px 20px;
+                   background-color: #228B22; color: white; text-decoration: none;
+                   border-radius: 4px; font-weight: bold;">
+                    Go to Day-of Inbox
+                </a>
+            </p>
+            <h3>Pending Notifications:</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr style="background-color: #f5f5f5;">
+                    <th style="padding: 8px; text-align: left;">Umpire</th>
+                    <th style="padding: 8px; text-align: left;">Game</th>
+                    <th style="padding: 8px; text-align: left;">Teams</th>
+                </tr>
+                {''.join(notif_rows)}
+            </table>
+            <p style="color: #666; font-size: 12px; margin-top: 20px;">
+                This is an automated notification from the SDLL Umpire System.
+            </p>
+        </div>
+        """
+
+        body_text = f"""Day-of Umpire Emails Ready
+
+{len(notifications)} day-of notification(s) have been drafted for games {time_window} on {today_str}.
+
+Go to Day-of Inbox: {inbox_url}
+
+Pending notifications:
+""" + "\n".join([f"- {n.umpire_name}: {n.game_time_str} @ {n.game_location}" for n in notifications])
+
+        try:
+            self.gmail.send_email(
+                to=coordinator_emails,
+                subject=subject,
+                body_text=body_text,
+                body_html=body_html
+            )
+            logger.info(f"Notified coordinators: {coordinator_emails}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to notify coordinators: {e}")
+            return False

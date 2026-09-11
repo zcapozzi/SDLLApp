@@ -947,6 +947,106 @@ def cron_game_changes_digest():
         }), 500
 
 
+@main_bp.route('/cron/dayof-morning')
+def cron_dayof_morning():
+    """
+    Cron endpoint to generate day-of umpire notifications for morning/early games.
+
+    Runs at 7am ET (11:00 or 12:00 UTC depending on DST).
+    Generates draft notifications for all games BEFORE 3pm today.
+    Sends notification email to umpire coordinator.
+
+    Protected by CRON_SECRET token. Call with ?token=YOUR_SECRET
+
+    Set up an external cron service to hit this at 7am ET daily:
+    https://your-app.railway.app/cron/dayof-morning?token=YOUR_CRON_SECRET
+    """
+    import os
+    from app.services.dayof_notification_service import DayOfNotificationService
+
+    # Verify secret token
+    expected_token = os.environ.get('CRON_SECRET')
+    provided_token = request.args.get('token')
+
+    if not expected_token:
+        return jsonify({'error': 'CRON_SECRET not configured'}), 500
+
+    if provided_token != expected_token:
+        return jsonify({'error': 'Invalid token'}), 403
+
+    try:
+        service = DayOfNotificationService()
+        notifications = service.generate_morning_notifications()
+
+        # Notify coordinator if there are drafts
+        notified = False
+        if notifications:
+            notified = service.notify_coordinator_of_drafts(notifications, 'morning')
+
+        return jsonify({
+            'status': 'ok',
+            'drafts_created': len(notifications),
+            'coordinator_notified': notified,
+            'umpires': [n.umpire_name for n in notifications]
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
+@main_bp.route('/cron/dayof-afternoon')
+def cron_dayof_afternoon():
+    """
+    Cron endpoint to generate day-of umpire notifications for afternoon/evening games.
+
+    Runs at 1pm ET (17:00 or 18:00 UTC depending on DST).
+    Generates draft notifications for all games AFTER 3pm today.
+    Sends notification email to umpire coordinator.
+
+    Protected by CRON_SECRET token. Call with ?token=YOUR_SECRET
+
+    Set up an external cron service to hit this at 1pm ET daily:
+    https://your-app.railway.app/cron/dayof-afternoon?token=YOUR_CRON_SECRET
+    """
+    import os
+    from app.services.dayof_notification_service import DayOfNotificationService
+
+    # Verify secret token
+    expected_token = os.environ.get('CRON_SECRET')
+    provided_token = request.args.get('token')
+
+    if not expected_token:
+        return jsonify({'error': 'CRON_SECRET not configured'}), 500
+
+    if provided_token != expected_token:
+        return jsonify({'error': 'Invalid token'}), 403
+
+    try:
+        service = DayOfNotificationService()
+        notifications = service.generate_afternoon_notifications()
+
+        # Notify coordinator if there are drafts
+        notified = False
+        if notifications:
+            notified = service.notify_coordinator_of_drafts(notifications, 'afternoon')
+
+        return jsonify({
+            'status': 'ok',
+            'drafts_created': len(notifications),
+            'coordinator_notified': notified,
+            'umpires': [n.umpire_name for n in notifications]
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
 # ============================================================================
 # Master Schedule (Board View)
 # ============================================================================
