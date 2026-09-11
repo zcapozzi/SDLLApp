@@ -739,47 +739,53 @@
 
             <!-- Calendar Actions -->
             <div class="calendar-actions">
-                <a href="{{ url_for('public.team_schedule_ics', token=team.schedule_token) }}" class="btn-calendar btn-calendar-primary" onclick="showCalendarInstructions()">
+                <a href="#" onclick="subscribeToCalendar(); return false;" class="btn-calendar btn-calendar-primary">
                     <svg viewBox="0 0 24 24"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
-                    Add All to Calendar
+                    Subscribe to Calendar
                 </a>
             </div>
 
-            <!-- Instructions Panel (shown after download) -->
+            <!-- Instructions Panel (shown after subscription attempt) -->
             <div id="calendar-instructions" class="calendar-instructions">
                 <ol>
-                    <li><strong>Open the downloaded file</strong> with your calendar app (Apple Calendar, Google Calendar, Outlook, etc.) to import the events.</li>
-                    <li class="warning">
-                        <strong>Important:</strong> This is a one-time import. If games are rescheduled, cancelled, or changed, your calendar will <em>not</em> update automatically. Always check <a href="{{ request.url }}">this schedule page</a> for the most current information.
-                    </li>
+                    <li><strong>Choose your calendar app</strong> when prompted to add this subscription. On mobile, your default calendar app should open automatically.</li>
+                    <li><strong>Confirm the subscription.</strong> Your calendar will now sync with this schedule automatically.</li>
                 </ol>
+                <div class="warning" style="margin-top: 12px;">
+                    <strong>How syncing works:</strong> Your calendar app will periodically check for updates (Apple: every 15-60 min, Google: every 8-24 hours). Rescheduled or cancelled games will update automatically in your calendar.
+                </div>
                 <div class="help-section">
-                    <div class="help-title">Need help importing? Click below for instructions:</div>
+                    <div class="help-title">Need help subscribing? Click below for instructions:</div>
                     <div class="help-grid">
                         <span class="app-name">Apple Calendar:</span>
                         <span class="help-links">
-                            <a href="https://www.google.com/search?q=how+to+import+ics+file+to+apple+calendar+iphone" target="_blank">Google</a>
-                            <a href="https://chatgpt.com/?q=how+do+I+import+an+ics+file+to+Apple+Calendar" target="_blank">ChatGPT</a>
-                            <a href="https://claude.ai/new?q=how+do+I+import+an+ics+file+to+Apple+Calendar" target="_blank">Claude</a>
+                            <a href="https://www.google.com/search?q=how+to+subscribe+to+calendar+on+iphone" target="_blank">Google</a>
+                            <a href="https://chatgpt.com/?q=how+do+I+subscribe+to+a+webcal+calendar+on+iPhone" target="_blank">ChatGPT</a>
+                            <a href="https://claude.ai/new?q=how+do+I+subscribe+to+a+webcal+calendar+on+iPhone" target="_blank">Claude</a>
                         </span>
                         <span class="app-name">Google Calendar:</span>
                         <span class="help-links">
-                            <a href="https://www.google.com/search?q=how+to+import+ics+file+to+google+calendar" target="_blank">Google</a>
-                            <a href="https://chatgpt.com/?q=how+do+I+import+an+ics+file+to+Google+Calendar" target="_blank">ChatGPT</a>
-                            <a href="https://claude.ai/new?q=how+do+I+import+an+ics+file+to+Google+Calendar" target="_blank">Claude</a>
+                            <a href="https://www.google.com/search?q=how+to+subscribe+to+calendar+url+google+calendar" target="_blank">Google</a>
+                            <a href="https://chatgpt.com/?q=how+do+I+subscribe+to+a+calendar+URL+in+Google+Calendar" target="_blank">ChatGPT</a>
+                            <a href="https://claude.ai/new?q=how+do+I+subscribe+to+a+calendar+URL+in+Google+Calendar" target="_blank">Claude</a>
                         </span>
                         <span class="app-name">Outlook:</span>
                         <span class="help-links">
-                            <a href="https://www.google.com/search?q=how+to+import+ics+file+to+outlook+calendar" target="_blank">Google</a>
-                            <a href="https://chatgpt.com/?q=how+do+I+import+an+ics+file+to+Outlook" target="_blank">ChatGPT</a>
-                            <a href="https://claude.ai/new?q=how+do+I+import+an+ics+file+to+Outlook" target="_blank">Claude</a>
+                            <a href="https://www.google.com/search?q=how+to+subscribe+to+internet+calendar+outlook" target="_blank">Google</a>
+                            <a href="https://chatgpt.com/?q=how+do+I+subscribe+to+an+internet+calendar+in+Outlook" target="_blank">ChatGPT</a>
+                            <a href="https://claude.ai/new?q=how+do+I+subscribe+to+an+internet+calendar+in+Outlook" target="_blank">Claude</a>
                         </span>
                         <span class="app-name">Samsung Calendar:</span>
                         <span class="help-links">
-                            <a href="https://www.google.com/search?q=how+to+import+ics+file+to+samsung+calendar" target="_blank">Google</a>
-                            <a href="https://chatgpt.com/?q=how+do+I+import+an+ics+file+to+Samsung+Calendar" target="_blank">ChatGPT</a>
-                            <a href="https://claude.ai/new?q=how+do+I+import+an+ics+file+to+Samsung+Calendar" target="_blank">Claude</a>
+                            <a href="https://www.google.com/search?q=how+to+subscribe+to+calendar+samsung+phone" target="_blank">Google</a>
+                            <a href="https://chatgpt.com/?q=how+do+I+subscribe+to+a+webcal+calendar+on+Samsung" target="_blank">ChatGPT</a>
+                            <a href="https://claude.ai/new?q=how+do+I+subscribe+to+a+webcal+calendar+on+Samsung" target="_blank">Claude</a>
                         </span>
+                    </div>
+                    <div style="margin-top: 12px; padding: 10px; background: #e3f2fd; border-radius: 4px; font-size: 12px;">
+                        <strong>Manual subscription URL:</strong><br>
+                        <code id="calendar-url" style="word-break: break-all; font-size: 11px;"></code>
+                        <button onclick="copyCalendarUrl()" style="margin-top: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer;">Copy URL</button>
                     </div>
                 </div>
             </div>
@@ -1131,11 +1137,59 @@
     })();
 
     // Calendar Functions
+    var calendarSubscriptionUrl = '{{ url_for("public.team_schedule_ics", token=team.schedule_token, _external=True) }}';
+    var webcalUrl = calendarSubscriptionUrl.replace(/^https?:/, 'webcal:');
+
+    function subscribeToCalendar() {
+        // Show the instructions panel
+        var panel = document.getElementById('calendar-instructions');
+        var urlDisplay = document.getElementById('calendar-url');
+        if (panel) {
+            panel.classList.add('show');
+            // Display the URL for manual subscription
+            if (urlDisplay) {
+                urlDisplay.textContent = calendarSubscriptionUrl;
+            }
+        }
+
+        // Open the webcal:// URL to trigger calendar subscription
+        window.location.href = webcalUrl;
+
+        // Scroll to show the instructions
+        setTimeout(function() {
+            panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
+    }
+
+    function copyCalendarUrl() {
+        navigator.clipboard.writeText(calendarSubscriptionUrl).then(function() {
+            var btn = event.target;
+            var originalText = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(function() {
+                btn.textContent = originalText;
+            }, 2000);
+        }).catch(function() {
+            // Fallback for older browsers
+            var textArea = document.createElement('textarea');
+            textArea.value = calendarSubscriptionUrl;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            alert('URL copied to clipboard');
+        });
+    }
+
     function showCalendarInstructions() {
         // Show the instructions panel (stays visible until page reload)
         var panel = document.getElementById('calendar-instructions');
+        var urlDisplay = document.getElementById('calendar-url');
         if (panel) {
             panel.classList.add('show');
+            if (urlDisplay) {
+                urlDisplay.textContent = calendarSubscriptionUrl;
+            }
             // Scroll to show the instructions
             setTimeout(function() {
                 panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });

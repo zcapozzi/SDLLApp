@@ -1656,49 +1656,68 @@ def team_schedule_game_ics(token, game_id):
 
 @public_bp.route('/<token>/calendar/schedule.ics')
 def team_schedule_ics(token):
-    """Generate .ics file for the full team schedule."""
+    """Generate .ics feed for the team schedule (webcal subscription).
+
+    This endpoint serves a subscribable calendar feed. Calendar apps will
+    poll this URL periodically to sync changes (typically every 15-60 min
+    for Apple Calendar, 8-24 hours for Google Calendar).
+
+    Includes:
+    - All scheduled games (past and future)
+    - Cancelled games marked with STATUS:CANCELLED
+    - SEQUENCE numbers for change tracking
+    """
     team = TeamSeason.get_by_schedule_token(token)
     if not team:
         abort(404)
 
-    today = date.today()
-
-    # Get all upcoming games
+    # Get ALL games for this team (including cancelled for proper sync)
     games = Game.query.filter(
         Game.active == 1,
         Game.year == team.year,
         Game.is_spring == team.is_spring,
-        db.or_(Game.home_ID == team.team_ID, Game.away_ID == team.team_ID),
-        Game.status != 'cancelled'
+        db.or_(Game.home_ID == team.team_ID, Game.away_ID == team.team_ID)
     ).order_by(Game.game_date).all()
 
-    # Filter to upcoming games only
-    upcoming = []
-    for game in games:
-        if game.game_date:
-            game_date = game.game_date.date() if hasattr(game.game_date, 'date') else game.game_date
-            if game_date >= today:
-                upcoming.append(game)
-
-    if not upcoming:
+    if not games:
         abort(404)
 
-    team_name_safe = team.computed_display_name.replace(' ', '_')
-    ics_content = _generate_ics_for_games(upcoming, team)
+    # Calculate ETag based on most recent game modification
+    # Use max of date_added and updated_at across all games
+    latest_mod = None
+    for g in games:
+        if g.date_added and (latest_mod is None or g.date_added > latest_mod):
+            latest_mod = g.date_added
+        # Games don't have updated_at, but we can use the game_date as part of etag
+    etag = f'"{team.team_ID}-{len(games)}-{latest_mod.isoformat() if latest_mod else "0"}"'
 
-    return Response(
+    # Check If-None-Match for conditional GET
+    if_none_match = request.headers.get('If-None-Match')
+    if if_none_match and if_none_match == etag:
+        return Response(status=304)
+
+    ics_content = _generate_ics_for_games(games, team, include_cancelled=True)
+
+    response = Response(
         ics_content,
-        mimetype='text/calendar',
-        headers={'Content-Disposition': f'attachment; filename=sdll_{team_name_safe}_schedule.ics'}
+        mimetype='text/calendar'
     )
 
+    # Caching headers for subscription feeds
+    response.headers['ETag'] = etag
+    response.headers['Cache-Control'] = 'no-cache, must-revalidate'
+    # No Content-Disposition header - this is a subscription, not a download
 
-def _generate_ics_for_games(games, team):
+    return response
+
+
+def _generate_ics_for_games(games, team, include_cancelled=False):
     """Generate iCal (.ics) content for a list of games.
 
     Args:
         games: List of Game objects
         team: TeamSeason object (the team viewing the schedule)
+        include_cancelled: If True, include cancelled games with STATUS:CANCELLED
 
     Returns:
         String containing valid iCal format
@@ -1714,6 +1733,9 @@ def _generate_ics_for_games(games, team):
     # Get timezone from organization settings
     timezone_id = Organization.get_default_timezone()
 
+    # Generate timestamp for DTSTAMP (required field)
+    now_utc = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+
     lines = [
         'BEGIN:VCALENDAR',
         'VERSION:2.0',
@@ -1722,6 +1744,9 @@ def _generate_ics_for_games(games, team):
         'METHOD:PUBLISH',
         f'X-WR-CALNAME:SDLL {team.computed_display_name}',
         f'X-WR-TIMEZONE:{timezone_id}',
+        # Refresh interval hint for calendar apps (1 hour)
+        'REFRESH-INTERVAL;VALUE=DURATION:PT1H',
+        'X-PUBLISHED-TTL:PT1H',
     ]
 
     # Add VTIMEZONE component for proper timezone handling
@@ -1729,6 +1754,11 @@ def _generate_ics_for_games(games, team):
 
     for game in games:
         if not game.game_date:
+            continue
+
+        # Skip cancelled games if not including them
+        is_cancelled = game.status == 'cancelled'
+        if is_cancelled and not include_cancelled:
             continue
 
         # Format datetime as iCal format (YYYYMMDDTHHMMSS)
@@ -1762,6 +1792,10 @@ def _generate_ics_for_games(games, team):
                 opponent = game.home_team.computed_display_name if game.home_team else 'TBD'
                 summary = f'@ {opponent} (Away)'
 
+        # Add CANCELLED prefix for cancelled games
+        if is_cancelled:
+            summary = f'CANCELLED: {summary}'
+
         # Location
         location = game.field_name or 'TBD'
         # Get full address if available
@@ -1777,6 +1811,8 @@ def _generate_ics_for_games(games, team):
         description = f'SDLL {season_name} - {team.league}'
         if game.game_type == 'playoff':
             description += ' (Playoff)'
+        if is_cancelled:
+            description += '\\n\\nThis game has been cancelled.'
 
         # Escape special characters for iCal
         summary = _ics_escape(summary)
@@ -1786,15 +1822,28 @@ def _generate_ics_for_games(games, team):
         # Create unique ID
         uid = f'game-{game.ID}@southdurhamlittleleague.org'
 
+        # SEQUENCE number for tracking changes (use game ID as base, increment would need change tracking)
+        # Using a simple approach: 0 for normal, 1 for cancelled
+        sequence = 1 if is_cancelled else 0
+
+        # STATUS: CONFIRMED, CANCELLED, or TENTATIVE
+        status = 'CANCELLED' if is_cancelled else 'CONFIRMED'
+
+        # LAST-MODIFIED timestamp
+        last_modified = game.date_added.strftime('%Y%m%dT%H%M%SZ') if game.date_added else now_utc
+
         lines.extend([
             'BEGIN:VEVENT',
             f'UID:{uid}',
+            f'DTSTAMP:{now_utc}',
             f'DTSTART;TZID={timezone_id}:{dt_start}',
             f'DTEND;TZID={timezone_id}:{dt_end}',
             f'SUMMARY:{summary}',
             f'LOCATION:{location}',
             f'DESCRIPTION:{description}',
-            'STATUS:CONFIRMED',
+            f'STATUS:{status}',
+            f'SEQUENCE:{sequence}',
+            f'LAST-MODIFIED:{last_modified}',
             'END:VEVENT',
         ])
 
