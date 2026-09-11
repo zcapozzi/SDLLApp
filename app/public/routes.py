@@ -1671,15 +1671,22 @@ def team_schedule_ics(token):
     if not team:
         abort(404)
 
-    # Get all games for this team (excluding practices, including cancelled for proper sync)
-    # Using negative filter on 'practice' so any future game types are automatically included
-    games = Game.query.filter(
+    # Check if user wants games only (for fans) or full schedule (for parents)
+    games_only = request.args.get('type') == 'games'
+
+    # Build query - include all games, optionally exclude practices
+    query = Game.query.filter(
         Game.active == 1,
         Game.year == team.year,
         Game.is_spring == team.is_spring,
-        db.or_(Game.home_ID == team.team_ID, Game.away_ID == team.team_ID),
-        Game.game_type != 'practice'
-    ).order_by(Game.game_date).all()
+        db.or_(Game.home_ID == team.team_ID, Game.away_ID == team.team_ID)
+    )
+
+    if games_only:
+        # Exclude practices - use negative filter so future game types are included
+        query = query.filter(Game.game_type != 'practice')
+
+    games = query.order_by(Game.game_date).all()
 
     if not games:
         abort(404)

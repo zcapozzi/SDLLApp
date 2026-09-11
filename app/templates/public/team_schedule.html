@@ -737,55 +737,63 @@
         <div class="section">
             <div class="section-title">Upcoming Schedule</div>
 
-            <!-- Calendar Actions -->
+            <!-- Calendar Sync Options -->
             <div class="calendar-actions">
-                <a href="#" onclick="subscribeToCalendar(); return false;" class="btn-calendar btn-calendar-primary">
+                <a href="#" onclick="syncToCalendar('full'); return false;" class="btn-calendar btn-calendar-primary">
                     <svg viewBox="0 0 24 24"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
-                    Subscribe to Calendar
+                    Sync to Calendar
+                </a>
+                <a href="#" onclick="syncToCalendar('games'); return false;" class="btn-calendar btn-calendar-outline">
+                    <svg viewBox="0 0 24 24"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
+                    Games Only
                 </a>
             </div>
+            <div style="font-size: 12px; color: #666; margin-top: -10px; margin-bottom: 15px;">
+                <strong>Sync to Calendar</strong> = games + practices (for team families) &nbsp;|&nbsp; <strong>Games Only</strong> = just games (for fans)
+            </div>
 
-            <!-- Instructions Panel (shown after subscription attempt) -->
+            <!-- Instructions Panel (shown after sync) -->
             <div id="calendar-instructions" class="calendar-instructions">
-                <ol>
-                    <li><strong>Choose your calendar app</strong> when prompted to add this subscription. On mobile, your default calendar app should open automatically.</li>
-                    <li><strong>Confirm the subscription.</strong> Your calendar will now sync with this schedule automatically.</li>
-                </ol>
-                <div class="warning" style="margin-top: 12px;">
-                    <strong>How syncing works:</strong> Your calendar app will periodically check for updates (Apple: every 15-60 min, Google: every 8-24 hours). Rescheduled or cancelled games will update automatically in your calendar.
+                <div style="background: #e8f5e9; padding: 12px 15px; border-radius: 6px; margin-bottom: 15px;">
+                    <strong style="color: #2e7d32;">What happens next:</strong>
+                    <p style="margin: 8px 0 0 0;">Your phone or computer should ask you to add this calendar. Just tap <strong>"Subscribe"</strong> or <strong>"Add"</strong> when asked.</p>
                 </div>
+
+                <div style="margin-bottom: 15px;">
+                    <strong>Why sync instead of download?</strong>
+                    <p style="margin: 5px 0 0 0; color: #555;">When you sync, your calendar stays up to date automatically. If a game gets rescheduled or cancelled, your calendar will update on its own - you don't need to do anything.</p>
+                </div>
+
+                <div class="warning" style="margin-bottom: 15px;">
+                    <strong>Didn't get a prompt?</strong> Some phones need you to add the calendar manually. See the help links below, or copy the URL at the bottom and paste it into your calendar app's "Add Calendar" or "Subscribe" option.
+                </div>
+
                 <div class="help-section">
-                    <div class="help-title">Need help subscribing? Click below for instructions:</div>
+                    <div class="help-title">Step-by-step help for your device:</div>
                     <div class="help-grid">
-                        <span class="app-name">Apple Calendar:</span>
+                        <span class="app-name">iPhone / iPad:</span>
                         <span class="help-links">
-                            <a href="https://www.google.com/search?q=how+to+subscribe+to+calendar+on+iphone" target="_blank">Google</a>
-                            <a href="https://chatgpt.com/?q=how+do+I+subscribe+to+a+webcal+calendar+on+iPhone" target="_blank">ChatGPT</a>
-                            <a href="https://claude.ai/new?q=how+do+I+subscribe+to+a+webcal+calendar+on+iPhone" target="_blank">Claude</a>
+                            <a href="https://www.google.com/search?q=how+to+add+calendar+subscription+on+iphone+step+by+step" target="_blank">Google</a>
+                            <a href="https://chatgpt.com/?q=How+do+I+add+a+calendar+subscription+on+my+iPhone%3F+Give+me+simple+step+by+step+instructions." target="_blank">ChatGPT</a>
+                            <a href="https://claude.ai/new?q=How+do+I+add+a+calendar+subscription+on+my+iPhone%3F+Give+me+simple+step+by+step+instructions." target="_blank">Claude</a>
                         </span>
-                        <span class="app-name">Google Calendar:</span>
+                        <span class="app-name">Android:</span>
                         <span class="help-links">
-                            <a href="https://www.google.com/search?q=how+to+subscribe+to+calendar+url+google+calendar" target="_blank">Google</a>
-                            <a href="https://chatgpt.com/?q=how+do+I+subscribe+to+a+calendar+URL+in+Google+Calendar" target="_blank">ChatGPT</a>
-                            <a href="https://claude.ai/new?q=how+do+I+subscribe+to+a+calendar+URL+in+Google+Calendar" target="_blank">Claude</a>
+                            <a href="https://www.google.com/search?q=how+to+add+calendar+subscription+on+android+step+by+step" target="_blank">Google</a>
+                            <a href="https://chatgpt.com/?q=How+do+I+add+a+calendar+subscription+on+my+Android+phone%3F+Give+me+simple+step+by+step+instructions." target="_blank">ChatGPT</a>
+                            <a href="https://claude.ai/new?q=How+do+I+add+a+calendar+subscription+on+my+Android+phone%3F+Give+me+simple+step+by+step+instructions." target="_blank">Claude</a>
                         </span>
-                        <span class="app-name">Outlook:</span>
+                        <span class="app-name">Computer:</span>
                         <span class="help-links">
-                            <a href="https://www.google.com/search?q=how+to+subscribe+to+internet+calendar+outlook" target="_blank">Google</a>
-                            <a href="https://chatgpt.com/?q=how+do+I+subscribe+to+an+internet+calendar+in+Outlook" target="_blank">ChatGPT</a>
-                            <a href="https://claude.ai/new?q=how+do+I+subscribe+to+an+internet+calendar+in+Outlook" target="_blank">Claude</a>
-                        </span>
-                        <span class="app-name">Samsung Calendar:</span>
-                        <span class="help-links">
-                            <a href="https://www.google.com/search?q=how+to+subscribe+to+calendar+samsung+phone" target="_blank">Google</a>
-                            <a href="https://chatgpt.com/?q=how+do+I+subscribe+to+a+webcal+calendar+on+Samsung" target="_blank">ChatGPT</a>
-                            <a href="https://claude.ai/new?q=how+do+I+subscribe+to+a+webcal+calendar+on+Samsung" target="_blank">Claude</a>
+                            <a href="https://www.google.com/search?q=how+to+subscribe+to+calendar+on+computer" target="_blank">Google</a>
+                            <a href="https://chatgpt.com/?q=How+do+I+subscribe+to+a+calendar+URL+on+my+computer%3F+I+use+%5BOutlook%2FGoogle+Calendar%2FApple+Calendar%5D." target="_blank">ChatGPT</a>
+                            <a href="https://claude.ai/new?q=How+do+I+subscribe+to+a+calendar+URL+on+my+computer%3F+Give+me+simple+step+by+step+instructions." target="_blank">Claude</a>
                         </span>
                     </div>
-                    <div style="margin-top: 12px; padding: 10px; background: #e3f2fd; border-radius: 4px; font-size: 12px;">
-                        <strong>Manual subscription URL:</strong><br>
-                        <code id="calendar-url" style="word-break: break-all; font-size: 11px;"></code>
-                        <button onclick="copyCalendarUrl()" style="margin-top: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer;">Copy URL</button>
+                    <div style="margin-top: 15px; padding: 12px; background: #f5f5f5; border-radius: 6px; font-size: 13px;">
+                        <strong>Calendar URL (copy this if needed):</strong><br>
+                        <code id="calendar-url" style="display: block; word-break: break-all; font-size: 11px; margin: 8px 0; padding: 8px; background: white; border-radius: 4px; border: 1px solid #ddd;"></code>
+                        <button onclick="copyCalendarUrl()" style="padding: 6px 12px; font-size: 12px; cursor: pointer; background: #228B22; color: white; border: none; border-radius: 4px;">Copy URL</button>
                     </div>
                 </div>
             </div>
@@ -1137,22 +1145,32 @@
     })();
 
     // Calendar Functions
-    var calendarSubscriptionUrl = '{{ url_for("public.team_schedule_ics", token=team.schedule_token, _external=True) }}';
-    var webcalUrl = calendarSubscriptionUrl.replace(/^https?:/, 'webcal:');
+    var calendarBaseUrl = '{{ url_for("public.team_schedule_ics", token=team.schedule_token, _external=True) }}';
+    var currentCalendarUrl = calendarBaseUrl; // Will be updated based on user choice
 
-    function subscribeToCalendar() {
+    function syncToCalendar(type) {
+        // Build URL based on type
+        if (type === 'games') {
+            currentCalendarUrl = calendarBaseUrl + '?type=games';
+        } else {
+            currentCalendarUrl = calendarBaseUrl;
+        }
+
+        // Convert to webcal:// for calendar app trigger
+        var webcalUrl = currentCalendarUrl.replace(/^https?:/, 'webcal:');
+
         // Show the instructions panel
         var panel = document.getElementById('calendar-instructions');
         var urlDisplay = document.getElementById('calendar-url');
         if (panel) {
             panel.classList.add('show');
-            // Display the URL for manual subscription
+            // Display the URL for manual use
             if (urlDisplay) {
-                urlDisplay.textContent = calendarSubscriptionUrl;
+                urlDisplay.textContent = currentCalendarUrl;
             }
         }
 
-        // Open the webcal:// URL to trigger calendar subscription
+        // Open the webcal:// URL to trigger calendar sync
         window.location.href = webcalUrl;
 
         // Scroll to show the instructions
@@ -1162,7 +1180,7 @@
     }
 
     function copyCalendarUrl() {
-        navigator.clipboard.writeText(calendarSubscriptionUrl).then(function() {
+        navigator.clipboard.writeText(currentCalendarUrl).then(function() {
             var btn = event.target;
             var originalText = btn.textContent;
             btn.textContent = 'Copied!';
@@ -1172,7 +1190,7 @@
         }).catch(function() {
             // Fallback for older browsers
             var textArea = document.createElement('textarea');
-            textArea.value = calendarSubscriptionUrl;
+            textArea.value = currentCalendarUrl;
             document.body.appendChild(textArea);
             textArea.select();
             document.execCommand('copy');
@@ -1182,13 +1200,13 @@
     }
 
     function showCalendarInstructions() {
-        // Show the instructions panel (stays visible until page reload)
+        // Show the instructions panel (for single-game downloads)
         var panel = document.getElementById('calendar-instructions');
         var urlDisplay = document.getElementById('calendar-url');
         if (panel) {
             panel.classList.add('show');
             if (urlDisplay) {
-                urlDisplay.textContent = calendarSubscriptionUrl;
+                urlDisplay.textContent = currentCalendarUrl;
             }
             // Scroll to show the instructions
             setTimeout(function() {
