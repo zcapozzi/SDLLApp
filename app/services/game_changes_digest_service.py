@@ -16,31 +16,41 @@ from app.models.game import Game
 from app.models.user import User
 
 
-# Default recipient email (umpire coordinator)
-DEFAULT_UMPIRE_COORDINATOR_EMAIL = 'sdll.umpires@gmail.com'
-
-
 def get_recipient_emails():
     """Get list of email addresses for game change digests.
 
-    Uses environment variables:
-    - GAME_CHANGES_DIGEST_EMAILS: comma-separated list (overrides default)
-    - ADMIN_EMAIL: master admin email (added to recipients if set)
-    - Or falls back to umpire coordinator only
+    Looks up recipients from the database based on user roles:
+    - Users with 'admin' role
+    - Users with 'umpire_coordinator' role
+
+    Can be overridden with GAME_CHANGES_DIGEST_EMAILS env var.
 
     Returns:
         List of email addresses
     """
+    # Allow env var override for flexibility
     env_emails = os.environ.get('GAME_CHANGES_DIGEST_EMAILS', '')
     if env_emails:
         return [e.strip() for e in env_emails.split(',') if e.strip()]
 
-    # Build recipient list: umpire coordinator + master admin (if configured)
-    recipients = [DEFAULT_UMPIRE_COORDINATOR_EMAIL]
+    # Look up recipients from database by role
+    recipients = []
 
-    admin_email = os.environ.get('ADMIN_EMAIL', '')
-    if admin_email and admin_email not in recipients:
-        recipients.append(admin_email)
+    try:
+        # Get active admins and umpire coordinators
+        users = User.query.filter(
+            User.active == 1,
+            User.role.in_(['admin', 'umpire_coordinator'])
+        ).all()
+
+        for user in users:
+            email = user.email
+            if email and email not in recipients:
+                recipients.append(email)
+
+    except Exception as e:
+        # If database lookup fails, log error but don't crash
+        print(f"[GAME_CHANGES_DIGEST] Error looking up recipients: {e}")
 
     return recipients
 
