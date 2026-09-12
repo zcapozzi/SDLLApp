@@ -16,8 +16,7 @@ from app.models.game import Game
 from app.models.user import User
 
 
-# Default recipient emails
-DEFAULT_ADMIN_EMAIL = 'zac@southdurhamlittleleague.org'
+# Default recipient email (umpire coordinator)
 DEFAULT_UMPIRE_COORDINATOR_EMAIL = 'sdll.umpires@gmail.com'
 
 
@@ -25,8 +24,9 @@ def get_recipient_emails():
     """Get list of email addresses for game change digests.
 
     Uses environment variables:
-    - GAME_CHANGES_DIGEST_EMAILS: comma-separated list (overrides defaults)
-    - Or falls back to admin + umpire coordinator defaults
+    - GAME_CHANGES_DIGEST_EMAILS: comma-separated list (overrides default)
+    - ADMIN_EMAIL: master admin email (added to recipients if set)
+    - Or falls back to umpire coordinator only
 
     Returns:
         List of email addresses
@@ -35,8 +35,14 @@ def get_recipient_emails():
     if env_emails:
         return [e.strip() for e in env_emails.split(',') if e.strip()]
 
-    # Default: admin and umpire coordinator
-    return [DEFAULT_ADMIN_EMAIL, DEFAULT_UMPIRE_COORDINATOR_EMAIL]
+    # Build recipient list: umpire coordinator + master admin (if configured)
+    recipients = [DEFAULT_UMPIRE_COORDINATOR_EMAIL]
+
+    admin_email = os.environ.get('ADMIN_EMAIL', '')
+    if admin_email and admin_email not in recipients:
+        recipients.append(admin_email)
+
+    return recipients
 
 
 def get_changes_with_net_effect(hours=2):
