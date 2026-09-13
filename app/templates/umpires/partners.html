@@ -9,7 +9,10 @@
 
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
     <h1>Umpire Partners</h1>
-    <a href="{{ url_for('umpires.add_partner') }}" class="btn btn-primary">Add Partner</a>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('umpires.delegation_rates') }}" class="btn btn-secondary">Manage Rates</a>
+        <a href="{{ url_for('umpires.add_partner') }}" class="btn btn-primary">Add Partner</a>
+    </div>
 </div>
 
 <p style="color: var(--text-muted); margin-bottom: 20px;">
@@ -103,6 +106,7 @@
         <li>Partners are external organizations that provide umpires (e.g., Diamond Sports Officials)</li>
         <li>When a game is delegated to a partner, they handle umpire assignment</li>
         <li>Configure delegation percentages in <a href="{{ url_for('umpires.delegation') }}">Delegation Rules</a></li>
+        <li>Set per-game payment rates in <a href="{{ url_for('umpires.delegation_rates') }}">Manage Rates</a></li>
         <li><strong>Schedule URLs</strong> allow partners to view their assigned games without logging in. They can also download as CSV.</li>
     </ul>
 </div>
