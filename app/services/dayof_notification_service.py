@@ -747,6 +747,9 @@ Here are some resources that are good to have handy.<BR><BR>
                 logger.warning(f"Could not fetch game {game_id} from Assignr")
                 return False
 
+            # Parse the game datetime (get_game returns raw data without _game_date)
+            game['_game_date'] = self.assignr._parse_game_datetime(game)
+
             # Enrich with local data
             enriched = self.assignr.enrich_games_with_local_data([game])
             if enriched:
