@@ -869,6 +869,132 @@ class AssignrService:
 
         return summary
 
+    # =========================================================================
+    # Webhook Management
+    # =========================================================================
+
+    def create_webhook_subscription(
+        self,
+        target_url: str,
+        event_types: List[str] = None
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
+        """
+        Create a webhook subscription in Assignr.
+
+        Args:
+            target_url: The URL to receive webhook events
+            event_types: List of event types to subscribe to
+                         Default: ['game.official.changed']
+
+        Returns:
+            Tuple of (success, secret, error_message)
+            The secret must be stored as ASSIGNR_WEBHOOK_SECRET
+        """
+        if event_types is None:
+            event_types = ['game.official.changed']
+
+        token = self._get_access_token(scope="write")
+        if not token:
+            return False, None, "Failed to obtain write access token"
+
+        # Note: The actual Assignr webhook API endpoint may vary.
+        # This is based on common patterns - adjust as needed.
+        url = f"{self.BASE_URL}/sites/{self.site_id}/webhook_subscriptions"
+
+        payload = {
+            "target_url": target_url,
+            "target_method": "POST",
+            "event_types": event_types
+        }
+
+        try:
+            import json
+            response = requests.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                },
+                json=payload,
+                timeout=30
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            # Extract the secret from the response
+            secret = data.get('secret')
+            logger.info(f"Created webhook subscription to {target_url}")
+            return True, secret, None
+
+        except requests.RequestException as e:
+            error_msg = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    error_msg = error_data.get('message', error_data.get('error', str(e)))
+                except Exception:
+                    error_msg = e.response.text[:200]
+            logger.error(f"Failed to create webhook subscription: {error_msg}")
+            return False, None, error_msg
+
+    def list_webhook_subscriptions(self) -> List[Dict]:
+        """
+        List all webhook subscriptions for this site.
+
+        Returns:
+            List of subscription dictionaries
+        """
+        if not self.site_id:
+            return []
+
+        url = f"{self.BASE_URL}/sites/{self.site_id}/webhook_subscriptions"
+        data = self._request(url)
+        if not data:
+            return []
+
+        return data.get('_embedded', {}).get('webhook_subscriptions', [])
+
+    def delete_webhook_subscription(self, subscription_id: int) -> Tuple[bool, Optional[str]]:
+        """
+        Delete a webhook subscription.
+
+        Args:
+            subscription_id: The ID of the subscription to delete
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        token = self._get_access_token(scope="write")
+        if not token:
+            return False, "Failed to obtain write access token"
+
+        url = f"{self.BASE_URL}/webhook_subscriptions/{subscription_id}"
+
+        try:
+            response = requests.delete(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json"
+                },
+                timeout=30
+            )
+            response.raise_for_status()
+            logger.info(f"Deleted webhook subscription {subscription_id}")
+            return True, None
+
+        except requests.RequestException as e:
+            error_msg = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    error_msg = error_data.get('message', error_data.get('error', str(e)))
+                except Exception:
+                    error_msg = e.response.text[:200]
+            logger.error(f"Failed to delete webhook subscription: {error_msg}")
+            return False, error_msg
+
 
 # Singleton instance
 _assignr_service = None

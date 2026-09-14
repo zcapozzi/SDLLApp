@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}Assignr Webhooks{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <h1 style="margin: 0;">Assignr Webhooks</h1>
+    <p style="color: var(--text-muted); margin: 5px 0 0 0;">Monitor incoming webhook events from Assignr</p>
+</div>
+
+{# Status Filter and Actions #}
+<div class="card" style="margin-bottom: 20px;">
+    <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+        <form method="GET" style="display: flex; gap: 10px; align-items: center;">
+            <label for="status" style="font-weight: 500;">Filter:</label>
+            <select name="status" id="status" class="form-control" onchange="this.form.submit()">
+                <option value="">All Status</option>
+                <option value="received" {% if status_filter == 'received' %}selected{% endif %}>Received</option>
+                <option value="processing" {% if status_filter == 'processing' %}selected{% endif %}>Processing</option>
+                <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Completed</option>
+                <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
+                <option value="ignored" {% if status_filter == 'ignored' %}selected{% endif %}>Ignored</option>
+            </select>
+        </form>
+
+        <div style="margin-left: auto; display: flex; gap: 10px;">
+            <form method="POST" action="{{ url_for('assignr.process_pending') }}" style="display: inline;">
+                <button type="submit" class="btn btn-primary" {% if status_counts.get('received', 0) == 0 %}disabled{% endif %}>
+                    Process Pending ({{ status_counts.get('received', 0) }})
+                </button>
+            </form>
+            <a href="{{ url_for('assignr.webhook_test') }}" class="btn btn-outline">Test Webhook</a>
+            <a href="{{ url_for('assignr.index') }}" class="btn btn-outline">Back to Dashboard</a>
+        </div>
+    </div>
+</div>
+
+{# Summary Stats #}
+<div class="stats-grid" style="margin-bottom: 20px;">
+    <div class="stat-card">
+        <div class="stat-value">{{ status_counts.get('completed', 0) }}</div>
+        <div class="stat-label">Completed</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--warning-color);">{{ status_counts.get('received', 0) }}</div>
+        <div class="stat-label">Pending</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--danger-color);">{{ status_counts.get('failed', 0) }}</div>
+        <div class="stat-label">Failed</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--text-muted);">{{ status_counts.get('ignored', 0) }}</div>
+        <div class="stat-label">Ignored</div>
+    </div>
+</div>
+
+{# Events Table #}
+<div class="card">
+    {% if events %}
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Event ID</th>
+                    <th>Topic</th>
+                    <th>Game ID</th>
+                    <th>Status</th>
+                    <th>Notification</th>
+                    <th>Received</th>
+                    <th>Processed</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in events %}
+                <tr>
+                    <td>{{ event.id }}</td>
+                    <td>{{ event.event_id }}</td>
+                    <td><code>{{ event.topic }}</code></td>
+                    <td>
+                        {% if event.assignr_game_id %}
+                        <a href="https://sdll.assignr.com/games/{{ event.assignr_game_id }}" target="_blank">
+                            {{ event.assignr_game_id }}
+                        </a>
+                        {% else %}
+                        <span style="color: var(--text-muted);">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if event.status == 'completed' %}
+                        <span class="badge badge-success">Completed</span>
+                        {% elif event.status == 'failed' %}
+                        <span class="badge badge-danger">Failed</span>
+                        {% elif event.status == 'ignored' %}
+                        <span class="badge badge-secondary">Ignored</span>
+                        {% elif event.status == 'processing' %}
+                        <span class="badge badge-warning">Processing</span>
+                        {% else %}
+                        <span class="badge badge-info">Received</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if event.notification_sent %}
+                        <span class="badge badge-success" title="{{ event.notification_reason }}">Sent</span>
+                        {% else %}
+                        <span style="color: var(--text-muted);">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span title="{{ event.received_at }}">
+                            {{ event.received_at.strftime('%m/%d %I:%M %p') if event.received_at else '-' }}
+                        </span>
+                    </td>
+                    <td>
+                        <span title="{{ event.processed_at }}">
+                            {{ event.processed_at.strftime('%m/%d %I:%M %p') if event.processed_at else '-' }}
+                        </span>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('assignr.webhook_detail', event_id=event.id) }}" class="btn btn-sm btn-outline">
+                            View
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="padding: 40px; text-align: center; color: var(--text-muted);">
+        <p>No webhook events found.</p>
+        <p style="font-size: 14px;">Events will appear here when Assignr sends webhook notifications.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

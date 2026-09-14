@@ -2212,3 +2212,85 @@ Verified that practices now generate correctly:
   - Updated legend to include P/G option
   - Updated JavaScript cycling to include 'both' option
   - Updated template to display 'P/G' for both days
+
+
+---
+
+## Session: September 14, 2026 - Assignr Webhook Integration
+
+### Overview
+
+Implemented Assignr webhook integration to receive real-time notifications when umpire assignments change. When an umpire accepts a game within 48 hours of start time, alert emails are sent to all umpire coordinators.
+
+### New Files Created
+
+1. **`scripts/add_assignr_webhooks.sql`**: Database migration for `sdll_assignr_webhook_events` table
+   - Stores all incoming webhooks for audit trail
+   - Tracks processing status, notifications sent, and local game references
+
+2. **`app/models/assignr_webhook_event.py`**: Model class for webhook events
+   - Methods for creating, querying, and updating events
+   - Helper methods like `mark_completed()`, `mark_failed()`, `mark_ignored()`
+
+3. **`app/services/assignr_webhook_service.py`**: Webhook processing service
+   - `verify_signature()`: HMAC-SHA256 signature verification
+   - `process_event()`: Fetches assignment details from Assignr API
+   - `_send_alert()`: Sends email to umpire coordinators for late acceptances
+   - Alert threshold: 48 hours before game start
+
+4. **`app/assignr/webhooks.py`**: Webhook routes
+   - `POST /assignr/webhook`: Public endpoint for Assignr webhooks
+   - `GET /assignr/webhooks`: Admin view of webhook events
+   - `GET /assignr/webhooks/<id>`: Webhook event detail view
+   - `POST /assignr/webhooks/<id>/retry`: Retry failed events
+   - `GET/POST /assignr/webhooks/test`: Test webhook processing
+
+5. **Templates**:
+   - `app/templates/assignr/webhooks.html`: List of webhook events
+   - `app/templates/assignr/webhook_detail.html`: Single event detail
+   - `app/templates/assignr/webhook_test.html`: Test form
+
+### Files Modified
+
+1. **`app/models/__init__.py`**: Added `AssignrWebhookEvent` import
+2. **`app/assignr/__init__.py`**: Added `webhooks` module import
+3. **`app/services/assignr_service.py`**: Added webhook management methods
+   - `create_webhook_subscription()`: Create new webhook subscription
+   - `list_webhook_subscriptions()`: List all subscriptions
+   - `delete_webhook_subscription()`: Remove a subscription
+4. **`.env.example`**: Added `ASSIGNR_WEBHOOK_SECRET` variable
+5. **`app/templates/assignr/index.html`**: Added "Webhooks" button in navigation
+
+### Webhook Signature Verification
+
+Assignr uses HMAC-SHA256 signatures with this format:
+- Header: `X-Hook0-Signature: t=<timestamp>,h=x-event-id x-event-type,v1=<signature>`
+- Signed string: `{timestamp}.x-event-id x-event-type.{event_id}.{topic}.{body}`
+- The secret is provided when you create a webhook subscription
+
+### Deployment Steps
+
+1. Run the migration:
+   ```bash
+   mysql -u user -p database < scripts/add_assignr_webhooks.sql
+   ```
+
+2. Deploy code to production (Railway)
+
+3. Create webhook subscription via Assignr API or admin panel:
+   - Target URL: `https://yourdomain.com/assignr/webhook`
+   - Event types: `['game.official.changed']`
+
+4. Save the returned secret to `ASSIGNR_WEBHOOK_SECRET` env var in Railway
+
+5. Verify by accepting an umpire assignment in Assignr and checking:
+   - `/assignr/webhooks` admin page shows the event
+   - Alert email sent if game is within 48 hours
+
+### Alert Email
+
+When an umpire accepts within 48 hours, an email is sent to all users with `admin` or `umpire_coordinator` roles containing:
+- Game details (league, date, time, field, teams)
+- Umpire name and position
+- Hours remaining until game
+

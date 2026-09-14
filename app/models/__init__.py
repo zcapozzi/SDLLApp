@@ -45,3 +45,6 @@ from .email_campaign_template import EmailCampaignTemplate
 from .email_campaign_instance import EmailCampaignInstance
 from .training_type import TrainingType
 from .training_completion import TrainingCompletion
+
+# Assignr webhook integration
+from .assignr_webhook_event import AssignrWebhookEvent

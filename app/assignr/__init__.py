@@ -5,3 +5,4 @@ from flask import Blueprint
 assignr_bp = Blueprint('assignr', __name__)
 
 from . import routes  # noqa: F401, E402
+from . import webhooks  # noqa: F401, E402

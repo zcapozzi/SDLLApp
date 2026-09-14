@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Test Webhook{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <h1 style="margin: 0;">Test Webhook Processing</h1>
+    <p style="color: var(--text-muted); margin: 5px 0 0 0;">
+        Simulate a webhook event to test the processing pipeline
+    </p>
+</div>
+
+<div class="card" style="max-width: 500px;">
+    <form method="POST">
+        <div class="form-group">
+            <label for="game_id">Assignr Game ID</label>
+            <input type="text" id="game_id" name="game_id" class="form-control"
+                   placeholder="Enter Assignr game ID (e.g., 12345)"
+                   required>
+            <small style="color: var(--text-muted);">
+                The game will be fetched from Assignr and processed as if a webhook was received.
+            </small>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button type="submit" class="btn btn-primary">
+                Process Test Event
+            </button>
+            <a href="{{ url_for('assignr.webhook_list') }}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<div class="card" style="margin-top: 20px; background: #f8f9fa;">
+    <h3>How This Works</h3>
+    <ol style="margin: 10px 0; padding-left: 20px;">
+        <li>Enter an Assignr game ID that has umpire assignments</li>
+        <li>The system will fetch the game and its assignments from Assignr</li>
+        <li>A test webhook event will be created and processed</li>
+        <li>If the game is within 48 hours AND has an accepted umpire, an alert email will be sent</li>
+    </ol>
+    <p style="color: var(--text-muted); font-size: 14px;">
+        <strong>Note:</strong> Test events are stored in the database like real webhooks,
+        but are marked with a generated event ID.
+    </p>
+</div>
+{% endblock %}
