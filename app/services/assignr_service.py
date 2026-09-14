@@ -752,12 +752,19 @@ class AssignrService:
                 continue  # Skip umpires with no games
 
             # Extract email addresses
+            # Assignr may return emails as strings or as dicts with 'email' key
             emails = []
             email_addresses = official.get('email_addresses', [])
             for email_obj in email_addresses:
-                email = email_obj.get('email')
-                if email:
-                    emails.append(email)
+                if isinstance(email_obj, str):
+                    # Direct email string
+                    if email_obj:
+                        emails.append(email_obj)
+                elif isinstance(email_obj, dict):
+                    # Dict with 'email' key
+                    email = email_obj.get('email')
+                    if email:
+                        emails.append(email)
 
             result.append({
                 'official': official,
