@@ -291,6 +291,22 @@ def games_list():
     # Get umpire partners for source dropdown
     partners = UmpirePartner.get_active()
 
+    # Filter to only SDL-managed games for summary stats
+    sdl_games = [
+        g for g in assignr_games
+        if g.get('_local') and g['_local'].get('umpire_override') == 'SDL'
+    ]
+
+    # Build summary based only on SDL-managed games
+    summary = service.get_umpire_summary(sdl_games)
+
+    # Sort umpires by game count for active umpire count
+    umpires_sorted = sorted(
+        summary['umpires'].items(),
+        key=lambda x: x[1]['games'],
+        reverse=True
+    )
+
     return render_template(
         'assignr/games.html',
         games=regular_games,
@@ -300,7 +316,9 @@ def games_list():
         league_filter=league_filter,
         start_date=start_date,
         end_date=end_date,
-        show_unpublished=show_unpublished
+        show_unpublished=show_unpublished,
+        summary=summary,
+        umpires=umpires_sorted
     )
 
 

@@ -11,6 +11,26 @@
     </p>
 </div>
 
+{# Summary Cards - SDL-managed games only #}
+<div class="stats-grid" style="margin-bottom: 20px;">
+    <div class="stat-card">
+        <div class="stat-value">{{ summary.total_games }}</div>
+        <div class="stat-label">SDL Games</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--success-color);">{{ summary.assigned_games }}</div>
+        <div class="stat-label">Assigned</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--danger-color);">{{ summary.unassigned_games }}</div>
+        <div class="stat-label">Unassigned</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ umpires|length }}</div>
+        <div class="stat-label">Active Umpires</div>
+    </div>
+</div>
+
 {# Urgent Games Alert #}
 {% if urgent_games %}
 <div class="card urgent-section" style="margin-bottom: 20px;">
