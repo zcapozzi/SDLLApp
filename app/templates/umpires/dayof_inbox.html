@@ -22,15 +22,27 @@
 
                 <div class="d-flex gap-2">
                     <!-- Generate notifications -->
-                    <form method="POST" action="{{ url_for('umpires.generate_dayof_notifications') }}" class="d-inline">
+                    <form method="POST" action="{{ url_for('umpires.generate_dayof_notifications') }}" class="d-inline" id="generate-form">
                         <input type="hidden" name="hours_ahead" value="7">
                         <input type="hidden" name="hours_start" value="0">
+                        <input type="hidden" name="regenerate_existing" id="regenerate-existing" value="0">
                         <button type="submit" class="btn btn-primary">
                             Generate (Next 7 Hours)
                         </button>
                     </form>
 
                     {% if draft_notifications %}
+                    <!-- Regenerate all drafts -->
+                    <form method="POST" action="{{ url_for('umpires.generate_dayof_notifications') }}" class="d-inline"
+                          onsubmit="return confirm('Regenerate {{ draft_notifications|length }} existing draft(s) with updated team names?')">
+                        <input type="hidden" name="hours_ahead" value="7">
+                        <input type="hidden" name="hours_start" value="0">
+                        <input type="hidden" name="regenerate_existing" value="1">
+                        <button type="submit" class="btn btn-outline-primary">
+                            Regenerate Drafts ({{ draft_notifications|length }})
+                        </button>
+                    </form>
+
                     <!-- Send all -->
                     <form method="POST" action="{{ url_for('umpires.send_all_dayof') }}" class="d-inline">
                         <button type="submit" class="btn btn-success"

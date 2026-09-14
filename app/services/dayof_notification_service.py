@@ -148,7 +148,8 @@ class DayOfNotificationService:
     def generate_notifications(
         self,
         hours_ahead: int = 7,
-        hours_start: int = 0
+        hours_start: int = 0,
+        regenerate_existing: bool = False
     ) -> List[UmpireDayOfNotification]:
         """
         Generate day-of notifications for upcoming games.
@@ -156,6 +157,7 @@ class DayOfNotificationService:
         Args:
             hours_ahead: Hours in the future to look
             hours_start: Hours from now to start looking
+            regenerate_existing: If True, regenerate existing draft notifications
 
         Returns:
             List of created notification objects
@@ -186,10 +188,29 @@ class DayOfNotificationService:
                 assignr_game_id = game.get('id')
 
                 # Check if notification already exists (draft or sent)
-                if UmpireDayOfNotification.exists_for_game_umpire(
-                    assignr_game_id, official_id
-                ):
-                    continue  # Notification already exists for this game/umpire
+                existing = UmpireDayOfNotification.query.filter_by(
+                    assignr_game_id=assignr_game_id,
+                    assignr_official_id=official_id
+                ).filter(
+                    UmpireDayOfNotification.status.in_([
+                        UmpireDayOfNotification.STATUS_DRAFT,
+                        UmpireDayOfNotification.STATUS_SENT
+                    ])
+                ).first()
+
+                if existing:
+                    if existing.is_sent:
+                        # Never overwrite sent notifications
+                        continue
+                    elif regenerate_existing:
+                        # Regenerate the draft notification
+                        if self.regenerate_notification(existing):
+                            notifications.append(existing)
+                            logger.info(f"Regenerated notification for {umpire_name} - game {assignr_game_id}")
+                        continue
+                    else:
+                        # Skip - draft exists and we're not regenerating
+                        continue
 
                 # Check for skipped notification that can be reactivated
                 existing_skipped = UmpireDayOfNotification.query.filter_by(
@@ -199,12 +220,10 @@ class DayOfNotificationService:
                 ).first()
 
                 if existing_skipped:
-                    # Reactivate the skipped notification
-                    existing_skipped.status = UmpireDayOfNotification.STATUS_DRAFT
-                    existing_skipped.sent_at = None
-                    existing_skipped.sent_by = None
-                    notifications.append(existing_skipped)
-                    logger.info(f"Reactivated notification for {umpire_name} - game {assignr_game_id}")
+                    # Reactivate and regenerate the skipped notification
+                    if self.regenerate_notification(existing_skipped):
+                        notifications.append(existing_skipped)
+                        logger.info(f"Reactivated notification for {umpire_name} - game {assignr_game_id}")
                     continue
 
                 # Get umpire email addresses from Assignr

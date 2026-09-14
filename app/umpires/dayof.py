@@ -60,15 +60,20 @@ def generate_dayof_notifications():
     # Get time window from form
     hours_ahead = int(request.form.get('hours_ahead', 7))
     hours_start = int(request.form.get('hours_start', 0))
+    regenerate_existing = request.form.get('regenerate_existing') == '1'
 
     try:
         notifications = service.generate_notifications(
             hours_ahead=hours_ahead,
-            hours_start=hours_start
+            hours_start=hours_start,
+            regenerate_existing=regenerate_existing
         )
 
         if notifications:
-            flash(f'Generated {len(notifications)} day-of notification(s)', 'success')
+            if regenerate_existing:
+                flash(f'Regenerated {len(notifications)} day-of notification(s)', 'success')
+            else:
+                flash(f'Generated {len(notifications)} day-of notification(s)', 'success')
         else:
             flash('No new notifications to generate', 'info')
 
