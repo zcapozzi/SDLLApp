@@ -131,12 +131,13 @@ class TeamSeason(db.Model):
                     TeamSeason.is_spring == self.is_spring,
                     db.or_(
                         TeamSeason.team_name.isnot(None),
+                        TeamSeason.gameChangerName.isnot(None),
                         TeamSeason.coach_name.isnot(None)
                     ),
                     TeamSeason.team_ID != self.team_ID
                 ).first()
                 if matching_team:
-                    TeamSeason._team_name_cache[cache_key] = matching_team.team_name or matching_team.coach_name
+                    TeamSeason._team_name_cache[cache_key] = matching_team.team_name or matching_team.gameChangerName or matching_team.coach_name
                 else:
                     TeamSeason._team_name_cache[cache_key] = None
 
