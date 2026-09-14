@@ -884,3 +884,112 @@ Good luck out there!
                 failed += 1
 
         return sent, failed
+
+    def regenerate_umpire_digest(self, digest):
+        """
+        Regenerate an individual umpire digest with fresh data.
+
+        Re-fetches the umpire's SDL games from Assignr and regenerates
+        the email content with the latest field/league information.
+
+        Args:
+            digest: UmpireDigest object to regenerate
+
+        Returns:
+            True if regenerated successfully, False otherwise
+        """
+        from datetime import timedelta
+        from app.models.umpire_digest import UmpireDigest
+        from app.models.umpire_profile import UmpireProfile
+        from app.services.assignr_service import AssignrService
+
+        if digest.status == UmpireDigest.STATUS_SENT:
+            logger.warning(f"Cannot regenerate sent digest {digest.id}")
+            return False
+
+        try:
+            # Get week bounds from digest
+            week_start = digest.week_start
+            if hasattr(week_start, 'date'):
+                week_start_dt = week_start
+            else:
+                week_start_dt = datetime.combine(week_start, datetime.min.time())
+            week_end_dt = week_start_dt + timedelta(days=6, hours=23, minutes=59)
+
+            # Fetch games from Assignr
+            assignr_service = AssignrService()
+            if not assignr_service.is_configured():
+                logger.warning("Assignr not configured")
+                return False
+
+            umpires_with_games = assignr_service.get_umpires_with_games(
+                week_start_dt, week_end_dt
+            )
+
+            # Find this umpire's data
+            umpire_data = None
+            for u in umpires_with_games:
+                if u['official_id'] == digest.assignr_official_id:
+                    umpire_data = u
+                    break
+
+            if not umpire_data:
+                logger.warning(f"Umpire {digest.assignr_official_id} not found in Assignr data")
+                return False
+
+            # Collect and enrich games
+            all_games = umpire_data['games']
+            enriched_games = assignr_service.enrich_games_with_local_data(all_games)
+            enriched_by_id = {g.get('id'): g for g in enriched_games}
+
+            # Filter to SDL games only
+            sdl_games = []
+            for game in all_games:
+                if not isinstance(game, dict):
+                    continue
+                game_id = game.get('id')
+                enriched = enriched_by_id.get(game_id, game)
+                if not isinstance(enriched, dict):
+                    continue
+                local = enriched.get('_local', {}) or {}
+                if local.get('umpire_override') == 'SDL':
+                    sdl_games.append(enriched)
+
+            if not sdl_games:
+                logger.info(f"No SDL games found for umpire {digest.umpire_name}")
+                digest.game_count = 0
+                digest.status = UmpireDigest.STATUS_DRAFT
+                db.session.commit()
+                return True
+
+            # Get local profile for parent emails
+            local_profile = None
+            if digest.umpire_profile_id:
+                local_profile = UmpireProfile.query.get(digest.umpire_profile_id)
+
+            # Get recipients
+            recipients = self.get_umpire_recipients(umpire_data, local_profile)
+
+            # Regenerate content
+            subject, body_html = self.render_umpire_digest_html(
+                digest.umpire_name, sdl_games, week_start
+            )
+
+            # Update digest
+            digest.recipient_emails = json.dumps(recipients)
+            digest.subject = subject
+            digest.body_html = body_html
+            digest.game_count = len(sdl_games)
+            if digest.status == UmpireDigest.STATUS_SKIPPED:
+                digest.status = UmpireDigest.STATUS_DRAFT
+                digest.sent_at = None
+                digest.sent_by = None
+
+            db.session.commit()
+            logger.info(f"Regenerated digest {digest.id} for {digest.umpire_name}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to regenerate digest {digest.id}: {e}")
+            db.session.rollback()
+            return False

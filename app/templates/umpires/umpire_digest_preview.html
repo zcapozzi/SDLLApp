@@ -79,6 +79,14 @@
     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
         <form method="POST" style="display: inline;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="regenerate">
+            <button type="submit" class="btn btn-outline"
+                    title="Refresh with latest game data from Assignr">
+                Regenerate
+            </button>
+        </form>
+        <form method="POST" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="skip">
             <button type="submit" class="btn btn-outline">Skip</button>
         </form>
@@ -92,6 +100,20 @@
             </button>
         </form>
         {% endif %}
+    </div>
+</div>
+{% elif digest.status == 'skipped' %}
+<div class="card" style="margin-bottom: 20px; background: #f8f9fa;">
+    <h3 style="margin-top: 0;">Actions</h3>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <form method="POST" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="regenerate">
+            <button type="submit" class="btn btn-primary"
+                    title="Refresh with latest game data and reactivate">
+                Regenerate &amp; Reactivate
+            </button>
+        </form>
     </div>
 </div>
 {% endif %}

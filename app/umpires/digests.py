@@ -228,6 +228,12 @@ def umpire_digest_action(year, is_spring, id):
         digest.mark_skipped()
         flash(f'Digest skipped for {digest.umpire_name}', 'success')
 
+    elif action == 'regenerate':
+        if service.regenerate_umpire_digest(digest):
+            flash(f'Digest regenerated for {digest.umpire_name}', 'success')
+        else:
+            flash('Failed to regenerate digest. Check that the umpire has games in Assignr.', 'error')
+
     return redirect(url_for('umpires.umpire_digest_preview', year=year, is_spring=is_spring, id=id))
 
 
