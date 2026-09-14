@@ -100,13 +100,18 @@ class TeamSeason(db.Model):
         """
         Get the display name for PUBLIC views:
         1. team_name if set (e.g., "Thunderbolts")
-        2. coach_name if set (e.g., "Smith")
-        3. Look for matching team with name in same league/season (cached)
-        4. display_name (placeholder) otherwise
+        2. gameChangerName if set (e.g., "Blue Thunder")
+        3. coach_name if set (e.g., "Smith")
+        4. Look for matching team with name in same league/season (cached)
+        5. display_name (placeholder) otherwise
         """
         # Prefer team/mascot name for public display
         if self.team_name:
             return self.team_name
+
+        # Fall back to GameChanger name if populated
+        if self.gameChangerName:
+            return self.gameChangerName
 
         # Fall back to coach name
         if self.coach_name:
