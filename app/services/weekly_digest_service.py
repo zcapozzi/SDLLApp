@@ -605,21 +605,22 @@ Here's your upcoming schedule of {game_count} SDLL game{'s' if game_count != 1 e
             html_parts.append(f'<tr><td><h3>{date_display} ({len(date_games)} {game_word})</h3></td></tr>')
 
             for game in date_games:
-                time_str = game.get('localized_time', '')
-                venue_name = game.get('venue_name', 'TBD')
-                league_name = game.get('league_name', '')
-                home_team = game.get('home_team', 'TBD')
-                away_team = game.get('away_team', 'TBD')
+                # Get time from game_date
+                game_dt = game.get('_game_date')
+                if game_dt:
+                    time_str = game_dt.strftime('%I:%M %p').lstrip('0').lower()
+                else:
+                    time_str = game.get('localized_time', '')
 
-                # Build matchup string
-                matchup = f"{home_team} vs {away_team}"
-                if league_name:
-                    matchup = f"({league_name}) {matchup}"
+                # Get field and league from local data (enriched from sdll_games)
+                local = game.get('_local', {}) or {}
+                field_name = local.get('field') or game.get('venue_name', 'TBD')
+                league_name = local.get('league') or game.get('league_name', '')
 
                 html_parts.append(
                     f'<tr><td style="border-bottom:solid 1px #eee;padding-left:10px">'
-                    f'<strong>{time_str}</strong> @ {venue_name}<br>'
-                    f'<span style="color:#666;font-size:14px">{matchup}</span>'
+                    f'<strong>{time_str}</strong> @ {field_name}'
+                    f'{f" ({league_name})" if league_name else ""}'
                     f'</td></tr>'
                 )
 
