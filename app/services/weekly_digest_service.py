@@ -695,6 +695,21 @@ Good luck out there!
             logger.info(f"No umpires with games for week of {week_start}")
             return []
 
+        # Collect all unique games and enrich with local data
+        # (get_umpires_with_games returns raw Assignr data without _local enrichment)
+        all_unique_games = []
+        seen_game_ids = set()
+        for umpire_data in umpires_with_games:
+            for game in umpire_data['games']:
+                game_id = game.get('id')
+                if game_id and game_id not in seen_game_ids:
+                    all_unique_games.append(game)
+                    seen_game_ids.add(game_id)
+
+        # Enrich games with local data (adds _local with umpire_override)
+        enriched_games = assignr_service.enrich_games_with_local_data(all_unique_games)
+        enriched_by_id = {g.get('id'): g for g in enriched_games}
+
         # Get local umpire profiles for parent emails
         local_profiles = UmpireProfile.query.filter(
             UmpireProfile.assignr_id.isnot(None)
@@ -710,12 +725,14 @@ Good luck out there!
                 all_games = umpire_data['games']
 
                 # Filter to only SDL-managed games
-                # Games have _local dict with umpire_override from enrichment
+                # Use enriched games which have _local dict with umpire_override
                 sdl_games = []
                 for game in all_games:
-                    local = game.get('_local', {}) or {}
+                    game_id = game.get('id')
+                    enriched = enriched_by_id.get(game_id, game)
+                    local = enriched.get('_local', {}) or {}
                     if local.get('umpire_override') == 'SDL':
-                        sdl_games.append(game)
+                        sdl_games.append(enriched)
 
                 # Skip umpires with no SDL games
                 if not sdl_games:
