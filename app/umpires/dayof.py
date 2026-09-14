@@ -111,6 +111,12 @@ def dayof_action(id):
         notification.mark_skipped()
         flash(f'Notification skipped for {notification.umpire_name}', 'success')
 
+    elif action == 'regenerate':
+        if service.regenerate_notification(notification):
+            flash(f'Notification regenerated for {notification.umpire_name}', 'success')
+        else:
+            flash('Failed to regenerate notification. Check that the game still exists in Assignr.', 'error')
+
     return redirect(url_for('umpires.dayof_preview', id=id))
 
 

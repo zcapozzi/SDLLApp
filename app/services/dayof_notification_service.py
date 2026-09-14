@@ -699,6 +699,101 @@ Here are some resources that are good to have handy.<BR><BR>
         """Generate notifications for games after 3pm (1pm cron run)."""
         return self.generate_notifications_for_time_window(15, 24)  # 3pm to midnight
 
+    def regenerate_notification(
+        self,
+        notification: UmpireDayOfNotification
+    ) -> bool:
+        """
+        Regenerate the email content for an existing notification.
+
+        Re-fetches game data from Assignr and re-renders the email template
+        with the latest team names and coach information.
+
+        Args:
+            notification: The notification to regenerate
+
+        Returns:
+            True if regenerated successfully
+        """
+        if notification.is_sent:
+            logger.warning(f"Cannot regenerate sent notification {notification.id}")
+            return False
+
+        try:
+            # Fetch game from Assignr
+            game_id = notification.assignr_game_id
+            game = self.assignr.get_game(game_id)
+
+            if not game:
+                logger.warning(f"Could not fetch game {game_id} from Assignr")
+                return False
+
+            # Enrich with local data
+            enriched = self.assignr.enrich_games_with_local_data([game])
+            if enriched:
+                game = enriched[0]
+
+            # Get game details
+            local = game.get('_local', {}) or {}
+            game_date = game.get('_game_date')
+            location = local.get('field') or game.get('venue_name', 'TBD')
+            league = local.get('league') or game.get('game_type', '')
+            home_team = local.get('home_team') or ''
+            away_team = local.get('away_team') or ''
+            home_team_id = local.get('home_team_id')
+            away_team_id = local.get('away_team_id')
+
+            # Get coach names by team ID
+            home_coach = self.get_coach_for_team_by_id(home_team_id)
+            away_coach = self.get_coach_for_team_by_id(away_team_id)
+
+            # Get umpire first name from assignments
+            umpire_first_name = ''
+            assignments = game.get('_embedded', {}).get('assignments', []) or []
+            for assignment in assignments:
+                embedded = assignment.get('_embedded', {}) or {}
+                official = embedded.get('official', {}) or {}
+                if official.get('id') == notification.assignr_official_id:
+                    umpire_first_name = official.get('first_name', '')
+                    break
+
+            # Generate new email content
+            subject, body_html = self._render_email(
+                umpire_first_name=umpire_first_name,
+                game_date=game_date,
+                location=location,
+                league=league,
+                home_team=home_team,
+                away_team=away_team,
+                home_coach=home_coach,
+                away_coach=away_coach
+            )
+
+            # Update notification
+            notification.subject = subject
+            notification.body_html = body_html
+            notification.game_date = game_date
+            notification.game_location = location
+            notification.game_league = league
+            notification.home_team = home_team
+            notification.away_team = away_team
+
+            # If skipped, reactivate
+            if notification.is_skipped:
+                notification.status = UmpireDayOfNotification.STATUS_DRAFT
+                notification.sent_at = None
+                notification.sent_by = None
+
+            db.session.commit()
+
+            logger.info(f"Regenerated notification {notification.id} for {notification.umpire_name}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to regenerate notification {notification.id}: {e}")
+            db.session.rollback()
+            return False
+
     def notify_coordinator_of_drafts(
         self,
         notifications: List[UmpireDayOfNotification],
