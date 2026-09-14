@@ -654,6 +654,83 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
   - Send weekly assignment summaries
 - **Navigation:** Dashboard → "Umpires" → "Weekly Digests"
 
+### 8.15 Umpire Leads Management
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** `/umpires/leads/<org_season_id>`
+- **Actions:**
+  - View prospective umpire leads by status (New, Contacted, Declined)
+  - See lead source (website form, referral, returning, manual)
+  - Mark leads as contacted
+  - Convert leads to active umpires
+  - Move leads to different seasons
+  - Delete prospective leads
+  - Auto-redirects to next season if training has passed
+- **Navigation:** Dashboard → "Umpires" → "Leads"
+
+### 8.16 Add Umpire Lead
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** `/umpires/leads/<org_season_id>/add`
+- **Actions:**
+  - Add prospective umpire manually
+  - Enter umpire contact info (email, phone)
+  - Enter parent/guardian contact info (name, email, phone)
+  - Select target season (defaults to season with upcoming training)
+  - Set lead source
+  - Add notes
+- **Navigation:** Leads → "Add Lead"
+
+### 8.17 Import Umpire Leads
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** POST `/umpires/leads/<org_season_id>/import`
+- **Actions:**
+  - Bulk import leads from CSV file
+  - Columns: first_name, last_name, email, phone, source, notes
+  - Validates required fields
+  - Reports import errors
+- **Navigation:** Leads → "Import CSV"
+
+### 8.18 Email Campaigns Dashboard
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** `/umpires/campaigns/<org_season_id>`
+- **Actions:**
+  - View all email campaigns for a season
+  - See campaign status (pending, draft, ready, sent, skipped)
+  - See trigger dates (based on season milestones)
+  - Generate campaigns from templates
+  - Access preview/edit/send for each campaign
+- **Navigation:** Dashboard → "Umpires" → "Campaigns"
+
+### 8.19 Preview Email Campaign
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** `/umpires/campaigns/<org_season_id>/<campaign_id>`
+- **Actions:**
+  - Preview email content with variables injected
+  - See recipient list
+  - Edit campaign content
+  - Send campaign
+  - Skip campaign
+  - Regenerate campaign (re-fetch recipients, re-render)
+- **Navigation:** Campaigns → Click campaign → "Preview"
+
+### 8.20 Edit Email Campaign
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** `/umpires/campaigns/<org_season_id>/<campaign_id>/edit`
+- **Actions:**
+  - Edit email subject
+  - Edit email body (HTML)
+  - Modify trigger date
+  - Save changes
+- **Navigation:** Campaign Preview → "Edit"
+
+### 8.21 Send Email Campaign
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** POST `/umpires/campaigns/<org_season_id>/<campaign_id>/send`
+- **Actions:**
+  - Send campaign to all recipients
+  - Records sent timestamp and count
+  - Updates campaign status to "sent"
+- **Navigation:** Campaign Preview → "Send"
+
 ---
 
 ## 9. Umpire Portal (Self-Service)
@@ -838,6 +915,18 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
   - Used for GameChanger integration
 - **Navigation:** Called programmatically
 
+### 10.9 Umpire Interest Form (Public)
+- **Access:** `public`
+- **Path:** `/umpire-interest`
+- **Actions:**
+  - Submit interest in becoming an SDLL umpire
+  - Enter umpire name, email, phone
+  - Enter parent/guardian info (for youth umpires)
+  - Select target season from available options
+  - Creates lead in umpire leads system
+  - Shows success page with next steps
+- **Navigation:** Public link shared on league website/social media
+
 ---
 
 ## 11. Reports
@@ -970,6 +1059,18 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
   - Validates email uniqueness (case-insensitive)
   - Creates accounts and optionally sends welcome emails
 - **Navigation:** Users → "Import Users"
+
+### 12.8 Manage Seasons
+- **Access:** `admin`
+- **Path:** `/admin/seasons`
+- **Actions:**
+  - View all org seasons (current and past)
+  - Create new season with custom label (e.g., "Fall 2026", "Summer 2027")
+  - Set a season as current
+  - Toggle setup mode on/off
+  - Set training date for each season
+  - Quick links to campaigns and leads for each season
+- **Navigation:** Dashboard → "Admin" → "Seasons"
 
 ---
 
@@ -1141,6 +1242,9 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
 | Field Schedules | Facilities/FieldCaptain | Facilities → "Field Schedules" |
 | Master Schedule | Board/Coordinators | "Master Schedule" in top nav |
 | Managed Umpires | Ump Coord+ | Umpires → "Add Managed" |
+| Umpire Leads | Ump Coord+ | Umpires → "Leads" |
+| Email Campaigns | Ump Coord+ | Umpires → "Campaigns" |
+| Manage Seasons | Admin | Admin → "Seasons" |
 | Analytics Dashboard | Product Admin | Direct URL `/analytics/` |
 
 ---
@@ -1154,6 +1258,9 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
 | Umpire Portal | - | - | ✓ | - | - | - | - | - |
 | Manage Umpire Assignments | - | - | - | ✓ | ✓ | - | - | ✓ |
 | Manage Managed Umpires | - | - | - | ✓ | - | - | - | ✓ |
+| Manage Umpire Leads | - | - | - | ✓ | - | - | - | ✓ |
+| Email Campaigns | - | - | - | ✓ | - | - | - | ✓ |
+| Manage Seasons | - | - | - | - | - | - | - | ✓ |
 | Edit Games | - | - | - | - | ✓ | - | - | ✓ |
 | Generate Schedule | - | - | - | - | ✓ | - | - | ✓ |
 | Manage Teams | - | - | - | - | ✓ | - | - | ✓ |
@@ -1184,4 +1291,4 @@ When adding new routes or features:
 3. Update feature matrix if needed
 4. Update quick reference navigation paths
 
-Last updated: September 11, 2026
+Last updated: September 14, 2026
