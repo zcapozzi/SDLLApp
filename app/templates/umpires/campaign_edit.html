@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Edit: {{ instance.template.name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <div>
+        <h1>Edit Campaign</h1>
+        <p style="color: var(--text-muted); margin: 5px 0 0 0;">{{ instance.template.name }} - {{ org_season.season_name }}</p>
+    </div>
+    <div>
+        <a href="{{ url_for('umpires.campaign_preview', org_season_id=org_season.ID, id=instance.id) }}" class="btn btn-outline">Cancel</a>
+    </div>
+</div>
+
+<form method="POST" action="{{ url_for('umpires.campaign_edit', org_season_id=org_season.ID, id=instance.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+        <!-- Main Content -->
+        <div>
+            <div class="card">
+                <h3 style="margin-top: 0;">Email Content</h3>
+
+                <div style="margin-bottom: 20px;">
+                    <label for="subject" style="display: block; margin-bottom: 5px; font-weight: 500;">Subject</label>
+                    <input type="text" id="subject" name="subject" value="{{ instance.subject }}"
+                           style="width: 100%; padding: 10px; font-size: 16px;">
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label for="body_html" style="display: block; margin-bottom: 5px; font-weight: 500;">Body (HTML)</label>
+                    <textarea id="body_html" name="body_html" rows="20"
+                              style="width: 100%; padding: 10px; font-family: monospace; font-size: 13px;">{{ instance.body_html }}</textarea>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label for="body_text" style="display: block; margin-bottom: 5px; font-weight: 500;">
+                        Plain Text Version
+                        <span style="color: var(--text-muted); font-weight: normal;">(optional)</span>
+                    </label>
+                    <textarea id="body_text" name="body_text" rows="10"
+                              style="width: 100%; padding: 10px; font-family: monospace; font-size: 13px;">{{ instance.body_text or '' }}</textarea>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <a href="{{ url_for('umpires.campaign_preview', org_season_id=org_season.ID, id=instance.id) }}" class="btn btn-outline">Cancel</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div>
+            <!-- Trigger Date -->
+            <div class="card" style="margin-bottom: 20px;">
+                <h3 style="margin-top: 0;">Trigger Date</h3>
+                <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">
+                    Default: {{ instance.template.timing_display }}
+                    {% if instance.trigger_date_was_overridden %}
+                    <br><span style="color: #2196F3;">(Currently overridden)</span>
+                    {% endif %}
+                </p>
+                <input type="date" name="trigger_date" value="{{ instance.trigger_date.strftime('%Y-%m-%d') }}"
+                       style="width: 100%; padding: 10px;">
+            </div>
+
+            <!-- Available Variables -->
+            <div class="card" style="margin-bottom: 20px;">
+                <h3 style="margin-top: 0;">Available Variables</h3>
+                <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 15px;">
+                    Use <code>{% raw %}{{variable_name}}{% endraw %}</code> syntax in your content.
+                </p>
+                <table style="width: 100%; font-size: 12px;">
+                    <tbody>
+                        {% for var_name, description in available_vars.items() %}
+                        <tr>
+                            <td style="padding: 3px 0;">
+                                <code style="background: var(--bg-color); padding: 2px 5px; border-radius: 3px;">
+                                    {% raw %}{{{% endraw %}{{ var_name }}{% raw %}}}{% endraw %}
+                                </code>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 0 0 8px 0; color: var(--text-muted);">
+                                {{ description }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Tips -->
+            <div class="card" style="background: var(--bg-color);">
+                <h3 style="margin-top: 0; font-size: 14px;">Tips</h3>
+                <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: var(--text-muted);">
+                    <li style="margin-bottom: 5px;">Variables are replaced when emails are sent</li>
+                    <li style="margin-bottom: 5px;">Use <code>{% raw %}{{recipient_name}}{% endraw %}</code> for personalization</li>
+                    <li style="margin-bottom: 5px;">Click "Regenerate" on preview to reset to template defaults</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}

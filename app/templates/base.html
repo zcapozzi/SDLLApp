@@ -282,6 +282,10 @@
                     <a href="{{ url_for('umpires.weekly_digests', year=current_season_year, is_spring=current_season_is_spring) }}">Weekly Digests</a>
                     {% endif %}
                     <a href="{{ url_for('umpires.dayof_notifications') }}">Day-of Emails</a>
+                    {% if current_season %}
+                    <a href="{{ url_for('umpires.campaigns', org_season_id=current_season.ID) }}">Email Campaigns</a>
+                    <a href="{{ url_for('umpires.leads', org_season_id=current_season.ID) }}">Prospective Leads</a>
+                    {% endif %}
                     {% endif %}
                 </div>
             </div>
@@ -316,6 +320,7 @@
                     {% if current_user.is_admin() %}
                     <div class="dropdown-divider"></div>
                     <a href="{{ url_for('admin.users') }}">Users</a>
+                    <a href="{{ url_for('admin.seasons') }}">Seasons</a>
                     <a href="#">Settings</a>
                     {% endif %}
                 </div>

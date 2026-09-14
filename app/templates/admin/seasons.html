@@ -1,0 +1,318 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Seasons{% endblock %}
+
+{% block extra_css %}
+<style>
+    .season-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 15px;
+        background: white;
+    }
+    .season-card.current {
+        border-color: #228B22;
+        border-width: 2px;
+    }
+    .season-card.setup-mode {
+        border-color: #FF8C00;
+        background: #fff8f0;
+    }
+    .season-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    .season-name {
+        font-size: 1.3em;
+        font-weight: 600;
+        color: #333;
+    }
+    .season-badges {
+        display: flex;
+        gap: 8px;
+    }
+    .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    .badge-current {
+        background-color: #228B22;
+        color: white;
+    }
+    .badge-setup {
+        background-color: #FF8C00;
+        color: white;
+    }
+    .season-details {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+    .detail-item {
+        font-size: 14px;
+    }
+    .detail-label {
+        color: #666;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .detail-value {
+        font-weight: 500;
+        color: #333;
+    }
+    .season-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+    }
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 13px;
+    }
+    .create-section {
+        background: #f8f9fa;
+        border: 2px dashed #ddd;
+        border-radius: 8px;
+        padding: 25px;
+        margin-bottom: 25px;
+    }
+    .create-section h3 {
+        margin-top: 0;
+        color: #333;
+    }
+    .create-form {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+    }
+    .form-group {
+        margin-bottom: 0;
+    }
+    .form-group label {
+        display: block;
+        font-size: 13px;
+        margin-bottom: 5px;
+        color: #555;
+    }
+    .form-group input, .form-group select {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    .checkbox-group {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+    }
+    .checkbox-group label {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 13px;
+        cursor: pointer;
+    }
+    .training-form {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-top: 10px;
+    }
+    .training-form input[type="date"] {
+        padding: 4px 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0;">Manage Seasons</h2>
+    </div>
+
+    <!-- Create New Season -->
+    <div class="create-section">
+        <h3>Create New Season</h3>
+        <form method="POST" class="create-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="create">
+
+            <div class="form-group">
+                <label for="season_label">Season Label</label>
+                <select id="season_label" name="season_label" onchange="toggleCustomLabel(this)">
+                    {% for label in season_labels %}
+                    <option value="{{ label }}" {% if label == suggested_label %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                    <option value="_custom">Other (custom)...</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="custom-label-group" style="display: none;">
+                <label for="custom_label">Custom Label</label>
+                <input type="text" id="custom_label" name="custom_label" placeholder="e.g., Summer, Winter, Tournament">
+            </div>
+
+            <div class="form-group">
+                <label for="year">Year</label>
+                <input type="number" id="year" name="year" value="{{ suggested_year }}" min="2020" max="2050" required>
+            </div>
+
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" name="set_as_current">
+                    Set as Current
+                </label>
+                <label>
+                    <input type="checkbox" name="setup_mode" checked>
+                    Setup Mode
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-sm">Create Season</button>
+        </form>
+        <p style="margin-top: 10px; font-size: 13px; color: #666;">
+            <strong>Setup Mode:</strong> Allows configuration while another season is current.
+            Email campaigns will be auto-generated for the new season.
+        </p>
+    </div>
+
+    <script>
+    function toggleCustomLabel(select) {
+        var customGroup = document.getElementById('custom-label-group');
+        var customInput = document.getElementById('custom_label');
+        if (select.value === '_custom') {
+            customGroup.style.display = 'block';
+            customInput.required = true;
+            customInput.focus();
+        } else {
+            customGroup.style.display = 'none';
+            customInput.required = false;
+            customInput.value = '';
+        }
+    }
+    </script>
+
+    <!-- Existing Seasons -->
+    <h3>Existing Seasons</h3>
+
+    {% if seasons %}
+        {% for season in seasons %}
+        <div class="season-card {% if current_season and season.ID == current_season.ID %}current{% endif %} {% if season.setup_mode %}setup-mode{% endif %}" id="season-{{ season.ID }}">
+            <div class="season-header">
+                <span class="season-name">{{ season.season_desc }}</span>
+                <div class="season-badges">
+                    {% if current_season and season.ID == current_season.ID %}
+                        <span class="badge badge-current">Current</span>
+                    {% endif %}
+                    {% if season.setup_mode %}
+                        <span class="badge badge-setup">Setup Mode</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="season-details">
+                <div class="detail-item">
+                    <div class="detail-label">Created</div>
+                    <div class="detail-value">
+                        {% if season.created_at %}
+                            {{ season.created_at.strftime('%b %d, %Y') }}
+                        {% else %}
+                            --
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Season Started</div>
+                    <div class="detail-value">
+                        {% if season.season_started_at %}
+                            {{ season.season_started_at.strftime('%b %d, %Y') }}
+                        {% else %}
+                            Not started
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Training Date</div>
+                    <div class="detail-value">
+                        {% set training = season.get_training_date() %}
+                        {% if season.training_date %}
+                            {{ season.training_date.strftime('%b %d, %Y') }}
+                        {% elif training %}
+                            {{ training.strftime('%b %d, %Y') }} <em style="color: #666; font-size: 12px;">(auto)</em>
+                        {% else %}
+                            Not set
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Season Ended</div>
+                    <div class="detail-value">
+                        {% if season.season_ended_at %}
+                            {{ season.season_ended_at.strftime('%b %d, %Y') }}
+                        {% else %}
+                            --
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Training Date Form -->
+            <form method="POST" class="training-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="update_training_date">
+                <input type="hidden" name="season_id" value="{{ season.ID }}">
+                <label style="font-size: 13px;">Set Training Date:</label>
+                <input type="date" name="training_date"
+                       value="{% if season.training_date %}{{ season.training_date.strftime('%Y-%m-%d') }}{% endif %}">
+                <button type="submit" class="btn btn-secondary btn-sm">Update</button>
+            </form>
+
+            <div class="season-actions">
+                {% if not current_season or season.ID != current_season.ID %}
+                    <form method="POST" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="set_current">
+                        <input type="hidden" name="season_id" value="{{ season.ID }}">
+                        <button type="submit" class="btn btn-primary btn-sm">Set as Current</button>
+                    </form>
+                {% endif %}
+
+                <form method="POST" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="toggle_setup_mode">
+                    <input type="hidden" name="season_id" value="{{ season.ID }}">
+                    <button type="submit" class="btn btn-secondary btn-sm">
+                        {% if season.setup_mode %}Exit Setup Mode{% else %}Enter Setup Mode{% endif %}
+                    </button>
+                </form>
+
+                <a href="{{ url_for('umpires.campaigns', org_season_id=season.ID) }}" class="btn btn-secondary btn-sm">
+                    Email Campaigns
+                </a>
+
+                <a href="{{ url_for('umpires.leads', org_season_id=season.ID) }}" class="btn btn-secondary btn-sm">
+                    Prospective Leads
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p style="color: #666; padding: 20px; text-align: center;">
+            No seasons found. Create your first season above.
+        </p>
+    {% endif %}
+</div>
+{% endblock %}

@@ -2121,3 +2121,88 @@ This request was submitted from the division schedule page.
         flash('There was an error sending your request. Please try again or contact scheduling@sdll.org directly.', 'error')
 
     return redirect(url_for('public.division_schedule', token=token))
+
+
+@public_bp.route('/umpire-interest', methods=['GET', 'POST'])
+def umpire_interest():
+    """Public signup form for prospective umpires.
+
+    Creates an UmpireProfile with status='prospective' and lead_source='website_form'.
+    """
+    from app.models.umpire_profile import UmpireProfile
+    from app.models.org_season import OrgSeason
+
+    # Get current season for context
+    current_season = OrgSeason.get_current_season()
+
+    if request.method == 'POST':
+        first_name = request.form.get('first_name', '').strip()
+        last_name = request.form.get('last_name', '').strip()
+        email = request.form.get('email', '').strip()
+        phone = request.form.get('phone', '').strip()
+        notes = request.form.get('message', '').strip()
+
+        errors = []
+        if not first_name:
+            errors.append('First name is required.')
+        if not last_name:
+            errors.append('Last name is required.')
+        if not email:
+            errors.append('Email is required.')
+
+        if errors:
+            return render_template(
+                'public/umpire_interest.html',
+                errors=errors,
+                current_season=current_season,
+                form_data={
+                    'first_name': first_name,
+                    'last_name': last_name,
+                    'email': email,
+                    'phone': phone,
+                    'message': notes
+                }
+            )
+
+        try:
+            # Create the lead
+            UmpireProfile.create_lead(
+                first_name=first_name,
+                last_name=last_name,
+                email=email,
+                phone=phone if phone else None,
+                lead_source=UmpireProfile.LEAD_SOURCE_WEBSITE,
+                lead_notes=notes if notes else None,
+                target_org_season_id=current_season.ID if current_season else None
+            )
+
+            flash('Thank you for your interest! We will be in touch soon.', 'success')
+            return redirect(url_for('public.umpire_interest_success'))
+
+        except Exception as e:
+            _log_tracking_error("umpire_interest_create", e)
+            _safe_rollback()
+            return render_template(
+                'public/umpire_interest.html',
+                errors=['There was an error submitting your information. Please try again.'],
+                current_season=current_season,
+                form_data={
+                    'first_name': first_name,
+                    'last_name': last_name,
+                    'email': email,
+                    'phone': phone,
+                    'message': notes
+                }
+            )
+
+    return render_template(
+        'public/umpire_interest.html',
+        current_season=current_season,
+        form_data={}
+    )
+
+
+@public_bp.route('/umpire-interest/success')
+def umpire_interest_success():
+    """Success page after submitting umpire interest form."""
+    return render_template('public/umpire_interest_success.html')

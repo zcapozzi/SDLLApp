@@ -111,6 +111,7 @@ def create_app(config_name=None):
 
             if current_season:
                 return {
+                    'current_season': current_season,  # Full OrgSeason object
                     'current_season_year': current_season.year,
                     'current_season_is_spring': current_season.is_spring,
                     'current_season_name': current_season.season_name
@@ -129,12 +130,14 @@ def create_app(config_name=None):
 
         if fallback:
             return {
+                'current_season': None,  # No OrgSeason object available in fallback
                 'current_season_year': fallback.year,
                 'current_season_is_spring': fallback.is_spring,
                 'current_season_name': f'{"Spring" if fallback.is_spring else "Fall"} {fallback.year}'
             }
 
         return {
+            'current_season': None,
             'current_season_year': None,
             'current_season_is_spring': None,
             'current_season_name': None

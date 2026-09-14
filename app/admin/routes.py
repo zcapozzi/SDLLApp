@@ -1,7 +1,8 @@
-"""Admin routes for user management"""
+"""Admin routes for user management and system settings"""
 
 import secrets
 import json
+from datetime import date
 from functools import wraps
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
@@ -9,6 +10,7 @@ from flask_login import login_required, current_user
 from app.extensions import db
 from app.models.user import User
 from app.models.coach import CoachUser
+from app.models.org_season import OrgSeason
 from app.services.notification_service import GmailService
 from app.utils.logging import SDLLLogger
 
@@ -577,3 +579,145 @@ def confirm_import():
         'errors': errors,
         'error_count': len(errors)
     })
+
+
+@admin_bp.route('/seasons', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def seasons():
+    """Manage organization seasons"""
+    from datetime import datetime
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        anchor = None
+
+        if action == 'create':
+            # Create a new season
+            year = int(request.form.get('year'))
+            season_label = request.form.get('season_label', '').strip()
+            custom_label = request.form.get('custom_label', '').strip()
+            set_as_current = request.form.get('set_as_current') == 'on'
+            setup_mode = request.form.get('setup_mode') == 'on'
+
+            # Use custom label if provided, otherwise use selected label
+            label = custom_label if custom_label else season_label
+            if not label:
+                flash('Season label is required.', 'error')
+            else:
+                # Build season_desc
+                season_desc = f'{label} {year}'
+
+                # Derive is_spring from label (spring-like = 1, otherwise = 0)
+                spring_keywords = ['spring', 'spr', 'spring/summer', 'ss']
+                is_spring = 1 if label.lower() in spring_keywords else 0
+
+                # Check if season already exists by description
+                existing = OrgSeason.query.filter_by(
+                    org_id=OrgSeason.DEFAULT_ORG_ID,
+                    season_desc=season_desc
+                ).first()
+
+                if existing:
+                    flash(f'Season "{season_desc}" already exists.', 'error')
+                else:
+                    season = OrgSeason.create_season(
+                        year=year,
+                        is_spring=is_spring,
+                        season_desc=season_desc,
+                        org_id=OrgSeason.DEFAULT_ORG_ID,
+                        set_as_current=set_as_current
+                    )
+                    if setup_mode and not set_as_current:
+                        season.setup_mode = 1
+                        db.session.commit()
+                    logger.info(f'Admin {current_user.ID} created season {season.season_name}')
+                    flash(f'Season "{season_desc}" created successfully.', 'success')
+                    anchor = f'season-{season.ID}'
+
+        elif action == 'set_current':
+            season_id = int(request.form.get('season_id'))
+            season = db.session.get(OrgSeason, season_id)
+            if season:
+                OrgSeason.set_current_season(season.year, season.is_spring, season.org_id)
+                logger.info(f'Admin {current_user.ID} set {season.season_name} as current')
+                flash(f'{season.season_name} is now the current season.', 'success')
+                anchor = f'season-{season_id}'
+
+        elif action == 'toggle_setup_mode':
+            season_id = int(request.form.get('season_id'))
+            season = db.session.get(OrgSeason, season_id)
+            if season:
+                season.setup_mode = 0 if season.setup_mode else 1
+                db.session.commit()
+                mode_str = 'enabled' if season.setup_mode else 'disabled'
+                logger.info(f'Admin {current_user.ID} {mode_str} setup mode for {season.season_name}')
+                flash(f'Setup mode {mode_str} for {season.season_name}.', 'success')
+                anchor = f'season-{season_id}'
+
+        elif action == 'update_training_date':
+            season_id = int(request.form.get('season_id'))
+            training_date_str = request.form.get('training_date', '').strip()
+            season = db.session.get(OrgSeason, season_id)
+            if season:
+                if training_date_str:
+                    season.training_date = datetime.strptime(training_date_str, '%Y-%m-%d').date()
+                else:
+                    season.training_date = None
+                db.session.commit()
+                logger.info(f'Admin {current_user.ID} updated training date for {season.season_name}')
+                flash(f'Training date updated for {season.season_name}.', 'success')
+                anchor = f'season-{season_id}'
+
+        redirect_url = url_for('admin.seasons')
+        if anchor:
+            redirect_url += f'#{anchor}'
+        return redirect(redirect_url)
+
+    # GET: List all seasons
+    all_seasons = OrgSeason.query.filter_by(
+        org_id=OrgSeason.DEFAULT_ORG_ID
+    ).order_by(
+        OrgSeason.year.desc(),
+        OrgSeason.is_spring.desc()
+    ).all()
+
+    current_season = OrgSeason.get_current_season()
+
+    # Get unique season descriptions used historically (for suggestions)
+    existing_descs = db.session.query(OrgSeason.season_desc).filter_by(
+        org_id=OrgSeason.DEFAULT_ORG_ID
+    ).distinct().all()
+    # Extract just the season type part (remove year) for suggestions
+    season_labels = set()
+    for (desc,) in existing_descs:
+        # Try to extract label by removing year (e.g., "Spring 2026" -> "Spring")
+        parts = desc.rsplit(' ', 1)
+        if len(parts) == 2 and parts[1].isdigit():
+            season_labels.add(parts[0])
+        else:
+            season_labels.add(desc)
+    # Add defaults if not present
+    season_labels.add('Spring')
+    season_labels.add('Fall')
+    season_labels = sorted(season_labels)
+
+    # Suggest next season
+    current_year = date.today().year
+    current_month = date.today().month
+    # If we're in fall (Aug-Dec), suggest next Spring; otherwise suggest next Fall
+    if current_month >= 8:
+        suggested_year = current_year + 1
+        suggested_label = 'Spring'
+    else:
+        suggested_year = current_year
+        suggested_label = 'Fall'
+
+    return render_template(
+        'admin/seasons.html',
+        seasons=all_seasons,
+        current_season=current_season,
+        suggested_year=suggested_year,
+        suggested_label=suggested_label,
+        season_labels=season_labels
+    )

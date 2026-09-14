@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Email Campaigns - {{ org_season.season_name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <div>
+        <h1>Email Campaigns</h1>
+        <p style="color: var(--text-muted); margin: 5px 0 0 0;">{{ org_season.season_name }}</p>
+    </div>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('umpires.leads', org_season_id=org_season.ID) }}" class="btn btn-outline">Manage Leads</a>
+        <form method="POST" action="{{ url_for('umpires.campaigns_generate', org_season_id=org_season.ID) }}" style="margin: 0;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-primary">Generate Campaigns</button>
+        </form>
+    </div>
+</div>
+
+<!-- Draft/Ready Campaigns (Action Required) -->
+{% if drafts %}
+<div class="card" style="margin-bottom: 20px; border-left: 4px solid var(--warning-color);">
+    <h3 style="margin-top: 0; color: var(--warning-color);">Action Required</h3>
+    <p style="color: var(--text-muted); margin-bottom: 15px;">
+        These campaigns are ready for review. Preview and send when ready.
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>Campaign</th>
+                <th>Category</th>
+                <th>Recipients</th>
+                <th>Trigger Date</th>
+                <th>Status</th>
+                <th style="width: 100px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for instance in drafts %}
+            <tr id="campaign-{{ instance.id }}">
+                <td>
+                    <strong>{{ instance.template.name }}</strong>
+                    {% if instance.trigger_date_was_overridden %}
+                    <span class="badge" style="background: #2196F3; color: white; margin-left: 5px; font-size: 10px;">Date Modified</span>
+                    {% endif %}
+                </td>
+                <td>{{ instance.template.category_display }}</td>
+                <td>{{ instance.recipient_count }}</td>
+                <td>{{ instance.trigger_date.strftime('%b %d, %Y') }}</td>
+                <td>
+                    <span class="status-badge status-{{ instance.status }}">
+                        {{ instance.status_display }}
+                    </span>
+                </td>
+                <td>
+                    <a href="{{ url_for('umpires.campaign_preview', org_season_id=org_season.ID, id=instance.id) }}"
+                       class="btn btn-primary" style="padding: 3px 10px;">
+                        Preview
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Pending Campaigns (Future) -->
+{% if pending %}
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-top: 0;">Upcoming Campaigns</h3>
+    <p style="color: var(--text-muted); margin-bottom: 15px;">
+        These campaigns will become active when their trigger date is reached.
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>Campaign</th>
+                <th>Category</th>
+                <th>Recipients</th>
+                <th>Trigger Date</th>
+                <th>Timing</th>
+                <th style="width: 100px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for instance in pending %}
+            <tr id="campaign-{{ instance.id }}">
+                <td><strong>{{ instance.template.name }}</strong></td>
+                <td>{{ instance.template.category_display }}</td>
+                <td>{{ instance.recipient_count }}</td>
+                <td>{{ instance.trigger_date.strftime('%b %d, %Y') }}</td>
+                <td style="color: var(--text-muted); font-size: 12px;">
+                    {{ instance.template.timing_display }}
+                </td>
+                <td>
+                    <a href="{{ url_for('umpires.campaign_preview', org_season_id=org_season.ID, id=instance.id) }}"
+                       class="btn btn-outline" style="padding: 3px 10px;">
+                        View
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Sent Campaigns -->
+{% if sent %}
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-top: 0;">Sent</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Campaign</th>
+                <th>Sent</th>
+                <th>Recipients</th>
+                <th>Results</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for instance in sent %}
+            <tr>
+                <td><strong>{{ instance.template.name }}</strong></td>
+                <td>{{ instance.sent_at.strftime('%b %d, %Y %I:%M %p') if instance.sent_at else '-' }}</td>
+                <td>{{ instance.recipient_count }}</td>
+                <td>
+                    <span style="color: var(--success-color);">{{ instance.sent_count }} sent</span>
+                    {% if instance.failed_count > 0 %}
+                    <span style="color: var(--error-color); margin-left: 10px;">{{ instance.failed_count }} failed</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Skipped Campaigns -->
+{% if skipped %}
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-top: 0; color: var(--text-muted);">Skipped</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Campaign</th>
+                <th>Category</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for instance in skipped %}
+            <tr style="opacity: 0.6;">
+                <td>{{ instance.template.name }}</td>
+                <td>{{ instance.template.category_display }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- No Campaigns -->
+{% if not drafts and not pending and not sent and not skipped %}
+<div class="card" style="text-align: center; padding: 40px;">
+    <p style="color: var(--text-muted); margin-bottom: 20px;">
+        No campaigns have been generated for {{ org_season.season_name }} yet.
+    </p>
+    <form method="POST" action="{{ url_for('umpires.campaigns_generate', org_season_id=org_season.ID) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-primary">Generate Campaigns</button>
+    </form>
+</div>
+{% endif %}
+
+<!-- Available Templates (not yet generated) -->
+{% if available_templates %}
+<div class="card" style="margin-top: 20px; border-left: 4px solid var(--text-muted);">
+    <h3 style="margin-top: 0; color: var(--text-muted);">Available Templates</h3>
+    <p style="color: var(--text-muted); margin-bottom: 15px;">
+        These templates can be generated for this season. Click "Generate Campaigns" to create them.
+    </p>
+    <ul style="margin: 0; padding-left: 20px;">
+        {% for template in available_templates %}
+        <li style="margin-bottom: 5px;">
+            <strong>{{ template.name }}</strong> - {{ template.timing_display }}
+            <span style="color: var(--text-muted);">({{ template.category_display }})</span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<style>
+.status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.status-pending {
+    background: var(--text-muted);
+    color: white;
+}
+.status-draft {
+    background: var(--warning-color);
+    color: white;
+}
+.status-ready {
+    background: #2196F3;
+    color: white;
+}
+.status-sent {
+    background: var(--success-color);
+    color: white;
+}
+.status-skipped {
+    background: #9e9e9e;
+    color: white;
+}
+</style>
+{% endblock %}
