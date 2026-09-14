@@ -549,6 +549,8 @@ This is an automated reminder.
         # Group games by date
         games_by_date = defaultdict(list)
         for game in games:
+            if not isinstance(game, dict):
+                continue
             game_date = game.get('_game_date')
             if game_date:
                 games_by_date[game_date.date()].append(game)
@@ -700,7 +702,14 @@ Good luck out there!
         all_unique_games = []
         seen_game_ids = set()
         for umpire_data in umpires_with_games:
-            for game in umpire_data['games']:
+            games_list = umpire_data.get('games', [])
+            if not isinstance(games_list, list):
+                logger.warning(f"Expected games list, got {type(games_list)}: {games_list}")
+                continue
+            for game in games_list:
+                if not isinstance(game, dict):
+                    logger.warning(f"Expected game dict, got {type(game)}: {game}")
+                    continue
                 game_id = game.get('id')
                 if game_id and game_id not in seen_game_ids:
                     all_unique_games.append(game)
@@ -728,8 +737,12 @@ Good luck out there!
                 # Use enriched games which have _local dict with umpire_override
                 sdl_games = []
                 for game in all_games:
+                    if not isinstance(game, dict):
+                        continue
                     game_id = game.get('id')
                     enriched = enriched_by_id.get(game_id, game)
+                    if not isinstance(enriched, dict):
+                        continue
                     local = enriched.get('_local', {}) or {}
                     if local.get('umpire_override') == 'SDL':
                         sdl_games.append(enriched)
