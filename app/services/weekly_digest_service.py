@@ -854,15 +854,22 @@ Good luck out there!
         body_text = self._html_to_text(digest.body_html)
 
         try:
-            # Send to each recipient
-            for recipient in recipients:
-                self.gmail.send_email(
-                    to=recipient,
-                    subject=digest.subject,
-                    body_text=body_text,
-                    body_html=digest.body_html
-                )
-                logger.info(f"Sent umpire digest {digest.id} to {recipient}")
+            # Send single email: first recipient as To, rest as CC
+            primary_recipient = recipients[0]
+            cc_recipients = recipients[1:] if len(recipients) > 1 else None
+
+            self.gmail.send_email(
+                to=primary_recipient,
+                subject=digest.subject,
+                body_text=body_text,
+                body_html=digest.body_html,
+                cc=cc_recipients
+            )
+
+            if cc_recipients:
+                logger.info(f"Sent umpire digest {digest.id} to {primary_recipient} (cc: {', '.join(cc_recipients)})")
+            else:
+                logger.info(f"Sent umpire digest {digest.id} to {primary_recipient}")
 
             # Mark as sent
             digest.mark_sent(sent_by_user_id)
