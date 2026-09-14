@@ -36,6 +36,18 @@ class WeeklyDigestService:
         return WeeklyDigestService.get_current_week_monday() + timedelta(days=7)
 
     @staticmethod
+    def get_default_week_monday():
+        """Get the default week for digest generation.
+
+        On Mondays, returns the current week (games this week).
+        Other days, returns next week (upcoming games).
+        """
+        today = date.today()
+        if today.weekday() == 0:  # Monday
+            return WeeklyDigestService.get_current_week_monday()
+        return WeeklyDigestService.get_next_week_monday()
+
+    @staticmethod
     def get_current_season():
         """Get the current active season (year, is_spring)."""
         config = LeagueSeason.query.filter_by(active=1).order_by(
@@ -884,6 +896,27 @@ Good luck out there!
                 failed += 1
 
         return sent, failed
+
+    def skip_all_umpire_digests(self, week_start):
+        """
+        Skip all pending umpire digests for a week.
+
+        Args:
+            week_start: Monday of the target week
+
+        Returns:
+            Number of digests skipped
+        """
+        from app.models.umpire_digest import UmpireDigest
+
+        pending = UmpireDigest.get_pending_for_week(week_start)
+        skipped = 0
+
+        for digest in pending:
+            digest.mark_skipped()
+            skipped += 1
+
+        return skipped
 
     def regenerate_umpire_digest(self, digest):
         """

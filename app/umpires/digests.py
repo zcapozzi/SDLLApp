@@ -144,15 +144,15 @@ def generate_digests(year, is_spring):
 
     service = WeeklyDigestService()
 
-    # Get target week from form or default to next week
+    # Get target week from form or default (current week on Mondays, next week otherwise)
     week_str = request.form.get('week_start')
     if week_str:
         try:
             week_start = datetime.strptime(week_str, '%Y-%m-%d').date()
         except ValueError:
-            week_start = service.get_next_week_monday()
+            week_start = service.get_default_week_monday()
     else:
-        week_start = service.get_next_week_monday()
+        week_start = service.get_default_week_monday()
 
     # Generate partner digests
     partner_digests = service.generate_all_digests(week_start, year, is_spring)
@@ -255,7 +255,7 @@ def send_all_umpire_digests(year, is_spring):
             flash('Invalid week date', 'error')
             return redirect(url_for('umpires.weekly_digests', year=year, is_spring=is_spring))
     else:
-        week_start = service.get_next_week_monday()
+        week_start = service.get_default_week_monday()
 
     sent, failed = service.send_all_umpire_digests(week_start, current_user.ID)
 
@@ -265,6 +265,36 @@ def send_all_umpire_digests(year, is_spring):
         flash(f'Failed to send {failed} digest(s)', 'error')
     if sent == 0 and failed == 0:
         flash('No pending Academy umpire digests to send', 'info')
+
+    return redirect(url_for('umpires.weekly_digests', year=year, is_spring=is_spring))
+
+
+@umpires_bp.route('/<int:year>/<int:is_spring>/digests/umpires/skip-all', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def skip_all_umpire_digests(year, is_spring):
+    """Skip all pending Academy umpire digests for a week."""
+    from app.services.weekly_digest_service import WeeklyDigestService
+
+    service = WeeklyDigestService()
+
+    # Get week from form
+    week_str = request.form.get('week_start')
+    if week_str:
+        try:
+            week_start = datetime.strptime(week_str, '%Y-%m-%d').date()
+        except ValueError:
+            flash('Invalid week date', 'error')
+            return redirect(url_for('umpires.weekly_digests', year=year, is_spring=is_spring))
+    else:
+        week_start = service.get_default_week_monday()
+
+    skipped = service.skip_all_umpire_digests(week_start)
+
+    if skipped > 0:
+        flash(f'Skipped {skipped} Academy umpire digest(s)', 'success')
+    else:
+        flash('No pending Academy umpire digests to skip', 'info')
 
     return redirect(url_for('umpires.weekly_digests', year=year, is_spring=is_spring))
 

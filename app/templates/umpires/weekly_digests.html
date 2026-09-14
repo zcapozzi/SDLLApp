@@ -97,14 +97,24 @@
         <h4 style="color: var(--text-muted); margin: 0;">Individual Umpires</h4>
         {% set pending_count = umpire_digests|selectattr('status', 'equalto', 'draft')|list|length %}
         {% if pending_count > 0 %}
-        <form method="POST" action="{{ url_for('umpires.send_all_umpire_digests', year=year, is_spring=is_spring) }}" style="display: inline;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="week_start" value="{{ week.strftime('%Y-%m-%d') }}">
-            <button type="submit" class="btn btn-sm btn-primary"
-                    onclick="return confirm('Send all {{ pending_count }} pending Academy umpire digests?')">
-                Send All ({{ pending_count }})
-            </button>
-        </form>
+        <div style="display: flex; gap: 8px;">
+            <form method="POST" action="{{ url_for('umpires.skip_all_umpire_digests', year=year, is_spring=is_spring) }}" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="week_start" value="{{ week.strftime('%Y-%m-%d') }}">
+                <button type="submit" class="btn btn-sm btn-outline"
+                        onclick="return confirm('Skip all {{ pending_count }} pending Academy umpire digests?')">
+                    Skip All
+                </button>
+            </form>
+            <form method="POST" action="{{ url_for('umpires.send_all_umpire_digests', year=year, is_spring=is_spring) }}" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="week_start" value="{{ week.strftime('%Y-%m-%d') }}">
+                <button type="submit" class="btn btn-sm btn-primary"
+                        onclick="return confirm('Send all {{ pending_count }} pending Academy umpire digests?')">
+                    Send All ({{ pending_count }})
+                </button>
+            </form>
+        </div>
         {% endif %}
     </div>
     <table>
