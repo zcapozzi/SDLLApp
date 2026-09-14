@@ -37,6 +37,10 @@ class UmpirePartner(db.Model):
     # Weekly digest settings
     auto_send_digest = db.Column(db.Boolean, default=False)  # Auto-send weekly digests without review
 
+    # Whether this org manages the umpires directly (SDL Academy = 1, external partners = 0)
+    # If 1, individual umpire digests are generated instead of a single partner digest
+    is_managed_by_org = db.Column(db.Boolean, default=False)
+
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

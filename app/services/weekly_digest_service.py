@@ -21,10 +21,6 @@ logger = SDLLLogger('weekly_digest')
 class WeeklyDigestService:
     """Service for managing weekly umpire partner digest emails."""
 
-    # Partner code for internal SDLL Academy
-    SDLL_ACADEMY_CODE = 'SDL'
-    SDLL_ACADEMY_NAME = 'SDLL Academy'
-
     def __init__(self):
         self.gmail = GmailService()
 
@@ -94,11 +90,6 @@ class WeeklyDigestService:
         """
         from app.models.partner_contact import PartnerContact
 
-        if partner_code == self.SDLL_ACADEMY_CODE:
-            # For SDLL Academy, could use a configured email or skip
-            # For now, return empty to indicate internal handling
-            return []
-
         partner = UmpirePartner.get_by_code(partner_code)
         if partner:
             return partner.get_emails_for_message_type(PartnerContact.MSG_WEEKLY_DIGEST)
@@ -114,9 +105,6 @@ class WeeklyDigestService:
         Returns:
             Tuple of (name, auto_send_digest)
         """
-        if partner_code == self.SDLL_ACADEMY_CODE:
-            return self.SDLL_ACADEMY_NAME, False
-
         partner = UmpirePartner.get_by_code(partner_code)
         if partner:
             auto_send = getattr(partner, 'auto_send_digest', False) or False
@@ -336,7 +324,11 @@ Here's your upcoming schedule of {game_count} SDLL game{'s' if game_count != 1 e
 
     def generate_all_digests(self, week_start=None, year=None, is_spring=None):
         """
-        Generate digests for all active partners.
+        Generate digests for all external partners (is_managed_by_org=0).
+
+        Partners where is_managed_by_org=1 (like SDL Academy) don't get partner
+        digests - their umpires receive individual digests instead via
+        generate_umpire_digests().
 
         Args:
             week_start: Monday of the target week (default: next week)
@@ -352,28 +344,21 @@ Here's your upcoming schedule of {game_count} SDLL game{'s' if game_count != 1 e
         if year is None or is_spring is None:
             year, is_spring = self.get_current_season()
 
-        # Get all partner codes that have games assigned
-        # Exclude SDLL Academy (SDL) since individual umpires get their own digests
-        partner_codes_with_games = db.session.query(Game.umpire_override).filter(
-            Game.umpire_override.isnot(None),
-            Game.umpire_override != self.SDLL_ACADEMY_CODE,
-            Game.year == year,
-            Game.is_spring == (is_spring == 1),
-            Game.active == 1
-        ).distinct().all()
-        partner_codes = [p[0] for p in partner_codes_with_games if p[0]]
+        # Get external partners (is_managed_by_org=0 or NULL)
+        # These are partners like Diamond and Dynamic that receive org-level digests
+        external_partners = UmpirePartner.query.filter(
+            UmpirePartner.active == True,
+            db.or_(
+                UmpirePartner.is_managed_by_org == False,
+                UmpirePartner.is_managed_by_org.is_(None)
+            )
+        ).all()
 
-        # Also include any active partners even if they have no games
-        # (so we can show "skipped" status) - but not SDLL Academy
-        active_partners = UmpirePartner.get_active()
-        for p in active_partners:
-            if p.short_code and p.short_code not in partner_codes:
-                if p.short_code != self.SDLL_ACADEMY_CODE:
-                    partner_codes.append(p.short_code)
+        external_codes = [p.short_code for p in external_partners if p.short_code]
 
-        # Generate digest for each partner (external orgs only)
+        # Generate digest for each external partner
         digests = []
-        for code in partner_codes:
+        for code in external_codes:
             try:
                 digest = self.generate_digest_for_partner(code, week_start, year, is_spring)
                 digests.append(digest)
@@ -662,10 +647,11 @@ Good luck out there!
         auto_send=False
     ):
         """
-        Generate digests for all umpires who have games in the upcoming week.
+        Generate digests for SDL Academy umpires who have games in the upcoming week.
 
-        All officials registered on our Assignr site are considered valid umpires.
-        If they have games assigned for the week, they get a digest.
+        Only generates digests for umpires assigned to SDL-managed games
+        (where umpire_override = 'SDL'). External partner umpires (Diamond,
+        Dynamic) get their schedules via partner digests, not individual ones.
 
         Args:
             week_start: Monday of the target week (default: next week)
@@ -715,13 +701,27 @@ Good luck out there!
         ).all()
         profiles_by_assignr_id = {p.assignr_id: p for p in local_profiles}
 
-        # Generate digest for each umpire
+        # Generate digest for each umpire with SDL games
         digests = []
         for umpire_data in umpires_with_games:
             try:
                 official_id = umpire_data['official_id']
                 umpire_name = umpire_data['full_name']
-                games = umpire_data['games']
+                all_games = umpire_data['games']
+
+                # Filter to only SDL-managed games
+                # Games have _local dict with umpire_override from enrichment
+                sdl_games = []
+                for game in all_games:
+                    local = game.get('_local', {}) or {}
+                    if local.get('umpire_override') == 'SDL':
+                        sdl_games.append(game)
+
+                # Skip umpires with no SDL games
+                if not sdl_games:
+                    continue
+
+                games = sdl_games
 
                 # Check for existing digest
                 existing = UmpireDigest.get_for_umpire_week(official_id, week_start)
