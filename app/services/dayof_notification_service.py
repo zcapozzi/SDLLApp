@@ -526,8 +526,12 @@ Here are some resources that are good to have handy.<BR><BR>
         today = now.date()
 
         # Create start and end datetimes for today
+        # Handle end_hour=24 as "end of day" (23:59:59)
         start_dt = EASTERN_TZ.localize(datetime.combine(today, datetime.min.time().replace(hour=start_hour)))
-        end_dt = EASTERN_TZ.localize(datetime.combine(today, datetime.min.time().replace(hour=end_hour)))
+        if end_hour >= 24:
+            end_dt = EASTERN_TZ.localize(datetime.combine(today, datetime.max.time()))  # 23:59:59.999999
+        else:
+            end_dt = EASTERN_TZ.localize(datetime.combine(today, datetime.min.time().replace(hour=end_hour)))
 
         logger.info(f"Fetching games from {start_dt.strftime('%Y-%m-%d %H:%M %Z')} to {end_dt.strftime('%Y-%m-%d %H:%M %Z')}")
 
