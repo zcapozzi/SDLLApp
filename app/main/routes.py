@@ -1051,12 +1051,15 @@ def cron_dayof_afternoon():
 @main_bp.route('/cron/check-due-campaigns')
 def cron_check_due_campaigns():
     """
-    Cron endpoint to check for email campaigns that are due.
+    Cron endpoint to auto-send email campaigns that are due.
 
     Protected by CRON_SECRET token. Call with ?token=YOUR_SECRET
 
     Set up an external cron service to hit this daily at 8am ET:
     https://your-app.railway.app/cron/check-due-campaigns?token=YOUR_CRON_SECRET
+
+    Campaigns with status='scheduled' and trigger_date <= today
+    will be sent automatically. Coordinators are notified of what was sent.
     """
     import os
     from app.services.email_campaign_service import EmailCampaignService
@@ -1074,17 +1077,23 @@ def cron_check_due_campaigns():
     try:
         service = EmailCampaignService()
 
-        # Check for due campaigns and prepare drafts
-        prepared = service.check_due_campaigns()
+        # Auto-send due campaigns
+        sent_campaigns = service.check_due_campaigns()
 
-        # Send reminder to coordinators if there are drafts
-        if prepared:
-            service.send_reminder_to_coordinators(prepared)
+        # Notify coordinators about what was sent
+        if sent_campaigns:
+            service.notify_coordinators_of_sent_campaigns(sent_campaigns)
+
+        # Calculate totals for response
+        total_sent = sum(c.sent_count for c in sent_campaigns)
+        total_failed = sum(c.failed_count for c in sent_campaigns)
 
         return jsonify({
             'status': 'ok',
-            'campaigns_prepared': len(prepared),
-            'campaign_names': [c.template.name for c in prepared if c.template]
+            'campaigns_sent': len(sent_campaigns),
+            'total_emails_sent': total_sent,
+            'total_emails_failed': total_failed,
+            'campaign_names': [c.template.name for c in sent_campaigns if c.template]
         }), 200
 
     except Exception as e:

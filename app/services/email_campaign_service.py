@@ -46,38 +46,25 @@ class EmailCampaignService:
             'coordinator_phone': os.environ.get('UMPIRE_COORDINATOR_PHONE', '773-420-6844'),
         }
 
-        # Get dates from LeagueSeason records
-        league_seasons = LeagueSeason.query.filter_by(
-            year=org_season.year,
-            is_spring=org_season.is_spring,
-            active=1
-        ).all()
-
-        # First practice date (earliest)
-        first_practices = [ls.first_practice_date for ls in league_seasons if ls.first_practice_date]
-        if first_practices:
-            earliest = min(first_practices)
-            variables['first_practice_date'] = earliest.strftime('%B %d, %Y')
+        # Get dates from OrgSeason (with fallback to LeagueSeason)
+        first_practice = org_season.get_first_practice_date()
+        if first_practice:
+            variables['first_practice_date'] = first_practice.strftime('%B %d, %Y')
         else:
             variables['first_practice_date'] = 'TBD'
 
-        # Opening day date (earliest)
-        opening_days = [ls.opening_day_date for ls in league_seasons if ls.opening_day_date]
-        if opening_days:
-            earliest = min(opening_days)
-            variables['opening_day_date'] = earliest.strftime('%B %d, %Y')
+        opening_day = org_season.get_opening_day_date()
+        if opening_day:
+            variables['opening_day_date'] = opening_day.strftime('%B %d, %Y')
         else:
             variables['opening_day_date'] = 'TBD'
 
-        # Season end date (latest)
-        season_ends = [ls.season_end_date for ls in league_seasons if ls.season_end_date]
-        if season_ends:
-            latest = max(season_ends)
-            variables['season_end_date'] = latest.strftime('%B %d, %Y')
+        season_end = org_season.get_season_end_date()
+        if season_end:
+            variables['season_end_date'] = season_end.strftime('%B %d, %Y')
         else:
             variables['season_end_date'] = 'TBD'
 
-        # Training date
         training_date = org_season.get_training_date()
         if training_date:
             variables['training_date'] = training_date.strftime('%B %d, %Y')
@@ -89,6 +76,8 @@ class EmailCampaignService:
     def get_milestone_date(self, org_season: OrgSeason, milestone: str) -> Optional[date]:
         """Get the date for a specific milestone.
 
+        Uses OrgSeason dates directly, with fallback to LeagueSeason dates.
+
         Args:
             org_season: The OrgSeason.
             milestone: Milestone code (first_practice, opening_day, training_date, season_end).
@@ -96,26 +85,17 @@ class EmailCampaignService:
         Returns:
             date object or None if not set.
         """
-        league_seasons = LeagueSeason.query.filter_by(
-            year=org_season.year,
-            is_spring=org_season.is_spring,
-            active=1
-        ).all()
-
         if milestone == EmailCampaignTemplate.MILESTONE_FIRST_PRACTICE:
-            dates = [ls.first_practice_date for ls in league_seasons if ls.first_practice_date]
-            return min(dates) if dates else None
+            return org_season.get_first_practice_date()
 
         elif milestone == EmailCampaignTemplate.MILESTONE_OPENING_DAY:
-            dates = [ls.opening_day_date for ls in league_seasons if ls.opening_day_date]
-            return min(dates) if dates else None
+            return org_season.get_opening_day_date()
 
         elif milestone == EmailCampaignTemplate.MILESTONE_TRAINING_DATE:
             return org_season.get_training_date()
 
         elif milestone == EmailCampaignTemplate.MILESTONE_SEASON_END:
-            dates = [ls.season_end_date for ls in league_seasons if ls.season_end_date]
-            return max(dates) if dates else None
+            return org_season.get_season_end_date()
 
         return None
 
@@ -229,8 +209,8 @@ class EmailCampaignService:
             users = User.query.filter(
                 User.active == 1,
                 db.or_(
-                    User.roles.like('%admin%'),
-                    User.roles.like('%scheduler%')
+                    User.role.like('%admin%'),
+                    User.role.like('%scheduler%')
                 )
             ).all()
             for user in users:
@@ -247,8 +227,8 @@ class EmailCampaignService:
             users = User.query.filter(
                 User.active == 1,
                 db.or_(
-                    User.roles.like('%admin%'),
-                    User.roles.like('%umpire_coordinator%')
+                    User.role.like('%admin%'),
+                    User.role.like('%umpire_coordinator%')
                 )
             ).all()
             for user in users:
@@ -422,17 +402,27 @@ class EmailCampaignService:
         instance.mark_draft_ready()
         return True
 
-    def send_campaign(self, instance: EmailCampaignInstance, user_id: int) -> Tuple[int, int]:
+    def send_campaign(self, instance: EmailCampaignInstance, user_id: int,
+                       force: bool = False) -> Tuple[int, int]:
         """Send a campaign to all recipients.
 
         Args:
             instance: The campaign instance to send.
             user_id: ID of user sending the campaign.
+            force: If True, bypass is_due check (for manual coordinator sends).
 
         Returns:
             Tuple of (sent_count, failed_count).
         """
-        if not instance.is_sendable:
+        # Check if campaign can be sent
+        # - Must be scheduled (not paused or already sent)
+        # - Must have recipients
+        # - Must be due (unless force=True for manual sends)
+        if not instance.is_scheduled:
+            return (0, 0)
+        if instance.recipient_count == 0:
+            return (0, 0)
+        if not force and not instance.is_due:
             return (0, 0)
 
         sent_count = 0
@@ -473,30 +463,43 @@ class EmailCampaignService:
         return (sent_count, failed_count)
 
     def check_due_campaigns(self) -> List[EmailCampaignInstance]:
-        """Check for campaigns that are due and prepare their drafts.
+        """Check for campaigns that are due and auto-send them.
 
-        This should be called by a daily cron job.
+        This should be called by a daily cron job at 8 AM.
+        Campaigns with status='scheduled' and trigger_date <= today
+        will be sent automatically.
 
         Returns:
-            List of campaigns that were prepared.
+            List of campaigns that were sent.
         """
         due_campaigns = EmailCampaignInstance.get_due_campaigns()
-        prepared = []
+        sent_campaigns = []
+
+        # Use a system user ID for auto-sent campaigns
+        # ID 0 indicates system-initiated send
+        system_user_id = 0
 
         for campaign in due_campaigns:
-            if self.prepare_draft(campaign):
-                prepared.append(campaign)
+            if campaign.recipient_count > 0:
+                # Regenerate content to ensure fresh data
+                self.regenerate_campaign(campaign)
 
-        return prepared
+                # Auto-send the campaign
+                sent_count, failed_count = self.send_campaign(campaign, system_user_id)
 
-    def send_reminder_to_coordinators(self, campaigns: List[EmailCampaignInstance]) -> bool:
-        """Send reminder email to coordinators about due campaigns.
+                if sent_count > 0 or failed_count > 0:
+                    sent_campaigns.append(campaign)
+
+        return sent_campaigns
+
+    def notify_coordinators_of_sent_campaigns(self, campaigns: List[EmailCampaignInstance]) -> bool:
+        """Notify coordinators about campaigns that were auto-sent.
 
         Args:
-            campaigns: List of campaigns that need attention.
+            campaigns: List of campaigns that were sent.
 
         Returns:
-            True if reminder sent successfully.
+            True if notification sent successfully.
         """
         if not campaigns:
             return False
@@ -505,8 +508,8 @@ class EmailCampaignService:
         coordinators = User.query.filter(
             User.active == 1,
             db.or_(
-                User.roles.like('%admin%'),
-                User.roles.like('%umpire_coordinator%')
+                User.role.like('%admin%'),
+                User.role.like('%umpire_coordinator%')
             )
         ).all()
 
@@ -515,25 +518,31 @@ class EmailCampaignService:
 
         # Build email content
         campaign_list = '\n'.join([
-            f"  - {c.template.name} ({c.recipient_count} recipients)"
+            f"  - {c.template.name}: {c.sent_count} sent, {c.failed_count} failed"
             for c in campaigns
         ])
 
-        subject = f"SDLL: {len(campaigns)} Email Campaign(s) Ready for Review"
-        body_text = f"""You have {len(campaigns)} email campaign(s) ready for review:
+        total_sent = sum(c.sent_count for c in campaigns)
+        total_failed = sum(c.failed_count for c in campaigns)
+
+        subject = f"SDLL: {len(campaigns)} Email Campaign(s) Auto-Sent"
+        body_text = f"""The following email campaign(s) were automatically sent:
 
 {campaign_list}
 
-Log in to the SDLL app to preview and send these campaigns.
+Total: {total_sent} emails sent, {total_failed} failed.
+
+Log in to the SDLL app to view campaign details.
 """
 
         body_html = f"""
-<h2>Email Campaigns Ready for Review</h2>
-<p>You have {len(campaigns)} email campaign(s) ready for review:</p>
+<h2>Email Campaigns Auto-Sent</h2>
+<p>The following email campaign(s) were automatically sent:</p>
 <ul>
-{''.join(f"<li>{c.template.name} ({c.recipient_count} recipients)</li>" for c in campaigns)}
+{''.join(f"<li><strong>{c.template.name}</strong>: {c.sent_count} sent, {c.failed_count} failed</li>" for c in campaigns)}
 </ul>
-<p>Log in to the SDLL app to preview and send these campaigns.</p>
+<p><strong>Total:</strong> {total_sent} emails sent, {total_failed} failed.</p>
+<p>Log in to the SDLL app to view campaign details.</p>
 """
 
         # Send to all coordinators
@@ -547,12 +556,11 @@ Log in to the SDLL app to preview and send these campaigns.
                         body_html=body_html
                     )
                 except Exception as e:
-                    print(f"Failed to send reminder to {coordinator.email}: {e}")
-
-        # Mark reminder sent on all campaigns
-        now = datetime.utcnow()
-        for campaign in campaigns:
-            campaign.reminder_sent_at = now
-        db.session.commit()
+                    print(f"Failed to send notification to {coordinator.email}: {e}")
 
         return True
+
+    # Legacy method for backwards compatibility
+    def send_reminder_to_coordinators(self, campaigns: List[EmailCampaignInstance]) -> bool:
+        """Legacy: Now calls notify_coordinators_of_sent_campaigns."""
+        return self.notify_coordinators_of_sent_campaigns(campaigns)

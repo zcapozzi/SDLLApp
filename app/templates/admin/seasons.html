@@ -134,6 +134,28 @@
         border: 1px solid #ddd;
         border-radius: 4px;
     }
+    .date-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .date-input {
+        padding: 6px 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        width: 100%;
+    }
+    .date-input:focus {
+        border-color: #228B22;
+        outline: none;
+    }
+    .dates-form details summary {
+        user-select: none;
+    }
+    .dates-form details[open] summary {
+        margin-bottom: 5px;
+    }
 </style>
 {% endblock %}
 
@@ -223,7 +245,65 @@
                 </div>
             </div>
 
-            <div class="season-details">
+            <!-- Milestone Dates Form -->
+            <form method="POST" class="dates-form" style="margin-bottom: 15px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="update_dates">
+                <input type="hidden" name="season_id" value="{{ season.ID }}">
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px;">
+                    <!-- Required Dates -->
+                    <div class="date-field">
+                        <label style="font-size: 11px; color: #666; text-transform: uppercase;">First Practice *</label>
+                        <input type="date" name="first_practice_date" class="date-input"
+                               value="{% if season.first_practice_date %}{{ season.first_practice_date.strftime('%Y-%m-%d') }}{% endif %}">
+                    </div>
+                    <div class="date-field">
+                        <label style="font-size: 11px; color: #666; text-transform: uppercase;">Opening Day *</label>
+                        <input type="date" name="opening_day_date" class="date-input"
+                               value="{% if season.opening_day_date %}{{ season.opening_day_date.strftime('%Y-%m-%d') }}{% endif %}">
+                    </div>
+                    <div class="date-field">
+                        <label style="font-size: 11px; color: #666; text-transform: uppercase;">Umpire Training</label>
+                        <input type="date" name="training_date" class="date-input"
+                               value="{% if season.training_date %}{{ season.training_date.strftime('%Y-%m-%d') }}{% endif %}"
+                               placeholder="Auto: 2 wks before opening">
+                    </div>
+                    <div class="date-field">
+                        <label style="font-size: 11px; color: #666; text-transform: uppercase;">Season End</label>
+                        <input type="date" name="season_end_date" class="date-input"
+                               value="{% if season.season_end_date %}{{ season.season_end_date.strftime('%Y-%m-%d') }}{% endif %}">
+                    </div>
+                </div>
+
+                <details style="margin-bottom: 12px;">
+                    <summary style="cursor: pointer; font-size: 13px; color: #666;">More dates (optional)</summary>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                        <div class="date-field">
+                            <label style="font-size: 11px; color: #666; text-transform: uppercase;">Registration Opens</label>
+                            <input type="date" name="registration_opens_date" class="date-input"
+                                   value="{% if season.registration_opens_date %}{{ season.registration_opens_date.strftime('%Y-%m-%d') }}{% endif %}">
+                        </div>
+                        <div class="date-field">
+                            <label style="font-size: 11px; color: #666; text-transform: uppercase;">Evaluations Day</label>
+                            <input type="date" name="evaluations_date" class="date-input"
+                                   value="{% if season.evaluations_date %}{{ season.evaluations_date.strftime('%Y-%m-%d') }}{% endif %}">
+                        </div>
+                        <div class="date-field">
+                            <label style="font-size: 11px; color: #666; text-transform: uppercase;">Draft Day</label>
+                            <input type="date" name="draft_date" class="date-input"
+                                   value="{% if season.draft_date %}{{ season.draft_date.strftime('%Y-%m-%d') }}{% endif %}">
+                        </div>
+                    </div>
+                </details>
+
+                <button type="submit" class="btn btn-secondary btn-sm">Save Dates</button>
+                {% if not season.first_practice_date or not season.opening_day_date %}
+                <span style="color: #d9534f; font-size: 12px; margin-left: 10px;">* Required dates not set - campaigns cannot be generated</span>
+                {% endif %}
+            </form>
+
+            <div class="season-details" style="padding-top: 10px; border-top: 1px solid #eee;">
                 <div class="detail-item">
                     <div class="detail-label">Created</div>
                     <div class="detail-value">
@@ -245,19 +325,6 @@
                     </div>
                 </div>
                 <div class="detail-item">
-                    <div class="detail-label">Training Date</div>
-                    <div class="detail-value">
-                        {% set training = season.get_training_date() %}
-                        {% if season.training_date %}
-                            {{ season.training_date.strftime('%b %d, %Y') }}
-                        {% elif training %}
-                            {{ training.strftime('%b %d, %Y') }} <em style="color: #666; font-size: 12px;">(auto)</em>
-                        {% else %}
-                            Not set
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="detail-item">
                     <div class="detail-label">Season Ended</div>
                     <div class="detail-value">
                         {% if season.season_ended_at %}
@@ -268,17 +335,6 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Training Date Form -->
-            <form method="POST" class="training-form">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="action" value="update_training_date">
-                <input type="hidden" name="season_id" value="{{ season.ID }}">
-                <label style="font-size: 13px;">Set Training Date:</label>
-                <input type="date" name="training_date"
-                       value="{% if season.training_date %}{{ season.training_date.strftime('%Y-%m-%d') }}{% endif %}">
-                <button type="submit" class="btn btn-secondary btn-sm">Update</button>
-            </form>
 
             <div class="season-actions">
                 {% if not current_season or season.ID != current_season.ID %}

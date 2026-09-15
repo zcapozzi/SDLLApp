@@ -8,7 +8,7 @@
         <h1>{{ instance.template.name }}</h1>
         <p style="color: var(--text-muted); margin: 5px 0 0 0;">
             {{ org_season.season_name }} &bull;
-            <span class="status-badge status-{{ instance.status }}">{{ instance.status_display }}</span>
+            <span class="status-badge status-{{ instance.effective_status }}">{{ instance.status_display }}</span>
         </p>
     </div>
     <div style="display: flex; gap: 10px;">
@@ -20,11 +20,11 @@
             <button type="submit" class="btn btn-outline">Regenerate</button>
         </form>
         {% endif %}
-        {% if instance.is_sendable %}
+        {% if instance.is_scheduled %}
         <form method="POST" action="{{ url_for('umpires.campaign_send', org_season_id=org_season.ID, id=instance.id) }}" style="margin: 0;"
-              onsubmit="return confirm('Send this campaign to {{ instance.recipient_count }} recipient(s)?');">
+              onsubmit="return confirm('Send this campaign NOW to {{ instance.recipient_count }} recipient(s)? This bypasses the scheduled auto-send.');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-primary">Send Campaign</button>
+            <button type="submit" class="btn btn-primary">Send Now</button>
         </form>
         {% endif %}
     </div>
@@ -77,13 +77,15 @@
                     </td>
                 </tr>
                 <tr>
-                    <td style="color: var(--text-muted); padding: 5px 0;">Timing:</td>
-                    <td style="padding: 5px 0;">{{ instance.template.timing_display }}</td>
+                    <td style="color: var(--text-muted); padding: 5px 0;">Status:</td>
+                    <td style="padding: 5px 0;">
+                        <span class="status-badge status-{{ instance.effective_status }}">{{ instance.status_display }}</span>
+                    </td>
                 </tr>
-                {% if instance.sent_at %}
+                {% if instance.effective_status == 'sent' and instance.sent_at %}
                 <tr>
                     <td style="color: var(--text-muted); padding: 5px 0;">Sent:</td>
-                    <td style="padding: 5px 0;">{{ instance.sent_at.strftime('%B %d, %Y %I:%M %p') }}</td>
+                    <td style="padding: 5px 0;">{{ instance.sent_at.strftime('%B %d, %Y %I:%M %p').lstrip('0') }}</td>
                 </tr>
                 <tr>
                     <td style="color: var(--text-muted); padding: 5px 0;">Results:</td>
@@ -122,17 +124,29 @@
         </div>
 
         <!-- Actions -->
-        {% if instance.is_editable %}
-        <div class="card" style="border-left: 4px solid var(--error-color);">
-            <h3 style="margin-top: 0; color: var(--text-muted);">Skip Campaign</h3>
+        {% if instance.is_scheduled %}
+        <div class="card" style="border-left: 4px solid var(--warning-color);">
+            <h3 style="margin-top: 0; color: var(--text-muted);">Pause Campaign</h3>
             <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">
-                If this campaign is no longer needed, you can skip it.
+                Pause this campaign to prevent it from auto-sending. You can resume it later.
             </p>
-            <form method="POST" action="{{ url_for('umpires.campaign_skip', org_season_id=org_season.ID, id=instance.id) }}"
-                  onsubmit="return confirm('Are you sure you want to skip this campaign?');">
+            <form method="POST" action="{{ url_for('umpires.campaign_pause', org_season_id=org_season.ID, id=instance.id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-outline" style="color: var(--error-color); border-color: var(--error-color);">
-                    Skip This Campaign
+                <button type="submit" class="btn btn-outline" style="color: var(--warning-color); border-color: var(--warning-color);">
+                    Pause This Campaign
+                </button>
+            </form>
+        </div>
+        {% elif instance.is_paused %}
+        <div class="card" style="border-left: 4px solid var(--success-color);">
+            <h3 style="margin-top: 0; color: var(--text-muted);">Resume Campaign</h3>
+            <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">
+                Resume this campaign to re-enable auto-send on its trigger date.
+            </p>
+            <form method="POST" action="{{ url_for('umpires.campaign_resume', org_season_id=org_season.ID, id=instance.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary">
+                    Resume This Campaign
                 </button>
             </form>
         </div>
@@ -148,24 +162,33 @@
     font-size: 12px;
     font-weight: 500;
 }
-.status-pending {
-    background: var(--text-muted);
+.status-scheduled {
+    background: var(--success-color);
     color: white;
 }
-.status-draft {
+.status-paused {
     background: var(--warning-color);
     color: white;
 }
-.status-ready {
-    background: #2196F3;
+.status-sent {
+    background: var(--text-muted);
     color: white;
 }
-.status-sent {
+/* Legacy status styles for backwards compatibility */
+.status-pending {
+    background: var(--success-color);
+    color: white;
+}
+.status-draft {
+    background: var(--success-color);
+    color: white;
+}
+.status-ready {
     background: var(--success-color);
     color: white;
 }
 .status-skipped {
-    background: #9e9e9e;
+    background: var(--warning-color);
     color: white;
 }
 </style>

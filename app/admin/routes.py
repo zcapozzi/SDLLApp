@@ -655,7 +655,33 @@ def seasons():
                 flash(f'Setup mode {mode_str} for {season.season_name}.', 'success')
                 anchor = f'season-{season_id}'
 
+        elif action == 'update_dates':
+            season_id = int(request.form.get('season_id'))
+            season = db.session.get(OrgSeason, season_id)
+            if season:
+                # Parse all date fields
+                date_fields = [
+                    'first_practice_date', 'opening_day_date', 'training_date',
+                    'season_end_date', 'registration_opens_date', 'evaluations_date', 'draft_date'
+                ]
+                for field in date_fields:
+                    date_str = request.form.get(field, '').strip()
+                    if date_str:
+                        setattr(season, field, datetime.strptime(date_str, '%Y-%m-%d').date())
+                    else:
+                        setattr(season, field, None)
+
+                db.session.commit()
+
+                # Regenerate campaigns if dates changed
+                season.ensure_campaigns()
+
+                logger.info(f'Admin {current_user.ID} updated dates for {season.season_name}')
+                flash(f'Dates updated for {season.season_name}.', 'success')
+                anchor = f'season-{season_id}'
+
         elif action == 'update_training_date':
+            # Legacy - redirect to update_dates
             season_id = int(request.form.get('season_id'))
             training_date_str = request.form.get('training_date', '').strip()
             season = db.session.get(OrgSeason, season_id)

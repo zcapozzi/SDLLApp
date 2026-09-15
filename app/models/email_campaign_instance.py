@@ -30,8 +30,11 @@ class EmailCampaignInstance(db.Model):
     # Recipients as JSON array
     _recipients = db.Column('recipients', db.Text, nullable=False)
 
-    # Workflow status
-    status = db.Column(db.Enum('pending', 'draft', 'ready', 'sent', 'skipped'), default='pending')
+    # Workflow status (simplified: scheduled -> paused or sent)
+    # Note: Database ENUM still has old values for backwards compatibility
+    # Old values map: pending/draft/ready -> scheduled, skipped -> paused
+    status = db.Column(db.Enum('pending', 'draft', 'ready', 'sent', 'skipped',
+                               'scheduled', 'paused'), default='scheduled')
     reminder_sent_at = db.Column(db.DateTime)
     sent_at = db.Column(db.DateTime)
     sent_by = db.Column(db.BigInteger)
@@ -44,20 +47,26 @@ class EmailCampaignInstance(db.Model):
     template = db.relationship('EmailCampaignTemplate', back_populates='instances')
     org_season = db.relationship('OrgSeason', backref='campaign_instances')
 
-    # Status constants
+    # Status constants (new simplified statuses)
+    STATUS_SCHEDULED = 'scheduled'
+    STATUS_PAUSED = 'paused'
+    STATUS_SENT = 'sent'
+
+    # Legacy status constants (for backwards compatibility)
     STATUS_PENDING = 'pending'
     STATUS_DRAFT = 'draft'
     STATUS_READY = 'ready'
-    STATUS_SENT = 'sent'
     STATUS_SKIPPED = 'skipped'
 
     STATUSES = [
-        (STATUS_PENDING, 'Pending'),
-        (STATUS_DRAFT, 'Draft Ready'),
-        (STATUS_READY, 'Ready to Send'),
+        (STATUS_SCHEDULED, 'Scheduled'),
+        (STATUS_PAUSED, 'Paused'),
         (STATUS_SENT, 'Sent'),
-        (STATUS_SKIPPED, 'Skipped'),
     ]
+
+    # Legacy statuses that map to new ones
+    LEGACY_SCHEDULED_STATUSES = ('pending', 'draft', 'ready')
+    LEGACY_PAUSED_STATUSES = ('skipped',)
 
     def __repr__(self):
         return f'<EmailCampaignInstance {self.id} template={self.template_id}>'
@@ -93,10 +102,20 @@ class EmailCampaignInstance(db.Model):
         return [r.get('email') for r in self.recipients if r.get('email')]
 
     @property
+    def effective_status(self):
+        """Get normalized status (maps legacy statuses to new ones)."""
+        if self.status in self.LEGACY_SCHEDULED_STATUSES:
+            return self.STATUS_SCHEDULED
+        if self.status in self.LEGACY_PAUSED_STATUSES:
+            return self.STATUS_PAUSED
+        return self.status
+
+    @property
     def status_display(self):
         """Human-readable status."""
+        effective = self.effective_status
         for code, label in self.STATUSES:
-            if code == self.status:
+            if code == effective:
                 return label
         return self.status
 
@@ -109,12 +128,24 @@ class EmailCampaignInstance(db.Model):
     @property
     def is_editable(self):
         """Check if campaign can still be edited."""
-        return self.status in (self.STATUS_PENDING, self.STATUS_DRAFT, self.STATUS_READY)
+        return self.effective_status in (self.STATUS_SCHEDULED, self.STATUS_PAUSED)
 
     @property
     def is_sendable(self):
-        """Check if campaign can be sent."""
-        return self.status in (self.STATUS_DRAFT, self.STATUS_READY) and self.recipient_count > 0
+        """Check if campaign can be sent (auto-send when due)."""
+        return (self.effective_status == self.STATUS_SCHEDULED and
+                self.is_due and
+                self.recipient_count > 0)
+
+    @property
+    def is_scheduled(self):
+        """Check if campaign is scheduled for auto-send."""
+        return self.effective_status == self.STATUS_SCHEDULED
+
+    @property
+    def is_paused(self):
+        """Check if campaign is paused."""
+        return self.effective_status == self.STATUS_PAUSED
 
     @property
     def trigger_date_was_overridden(self):
@@ -127,14 +158,14 @@ class EmailCampaignInstance(db.Model):
         self.trigger_date_override = 1
         db.session.commit()
 
-    def mark_draft_ready(self):
-        """Transition from pending to draft (content generated)."""
-        self.status = self.STATUS_DRAFT
+    def pause(self):
+        """Pause this campaign (prevent auto-send)."""
+        self.status = self.STATUS_PAUSED
         db.session.commit()
 
-    def mark_ready(self):
-        """Mark as ready to send (coordinator approved)."""
-        self.status = self.STATUS_READY
+    def resume(self):
+        """Resume this campaign (re-enable auto-send)."""
+        self.status = self.STATUS_SCHEDULED
         db.session.commit()
 
     def mark_sent(self, user_id, sent_count=0, failed_count=0):
@@ -146,10 +177,22 @@ class EmailCampaignInstance(db.Model):
         self.failed_count = failed_count
         db.session.commit()
 
+    # Legacy methods for backwards compatibility
+    def mark_draft_ready(self):
+        """Legacy: now just ensures status is scheduled."""
+        if self.effective_status != self.STATUS_SENT:
+            self.status = self.STATUS_SCHEDULED
+            db.session.commit()
+
+    def mark_ready(self):
+        """Legacy: now just ensures status is scheduled."""
+        if self.effective_status != self.STATUS_SENT:
+            self.status = self.STATUS_SCHEDULED
+            db.session.commit()
+
     def mark_skipped(self):
-        """Skip this campaign."""
-        self.status = self.STATUS_SKIPPED
-        db.session.commit()
+        """Legacy: now calls pause()."""
+        self.pause()
 
     def update_content(self, subject=None, body_html=None, body_text=None):
         """Update the campaign content."""
@@ -169,20 +212,28 @@ class EmailCampaignInstance(db.Model):
         ).all()
 
     @classmethod
-    def get_pending_for_season(cls, org_season_id):
-        """Get pending campaigns that haven't been actioned yet."""
-        return cls.query.filter_by(
-            org_season_id=org_season_id,
-            status=cls.STATUS_PENDING
+    def get_scheduled_for_season(cls, org_season_id):
+        """Get scheduled campaigns for a season."""
+        return cls.query.filter(
+            cls.org_season_id == org_season_id,
+            cls.status.in_([cls.STATUS_SCHEDULED] + list(cls.LEGACY_SCHEDULED_STATUSES))
+        ).order_by(cls.trigger_date).all()
+
+    @classmethod
+    def get_paused_for_season(cls, org_season_id):
+        """Get paused campaigns for a season."""
+        return cls.query.filter(
+            cls.org_season_id == org_season_id,
+            cls.status.in_([cls.STATUS_PAUSED] + list(cls.LEGACY_PAUSED_STATUSES))
         ).order_by(cls.trigger_date).all()
 
     @classmethod
     def get_due_campaigns(cls):
-        """Get all campaigns that are due (trigger_date <= today) and pending."""
+        """Get all campaigns that are due (trigger_date <= today) and scheduled."""
         from datetime import date
         return cls.query.filter(
             cls.trigger_date <= date.today(),
-            cls.status == cls.STATUS_PENDING
+            cls.status.in_([cls.STATUS_SCHEDULED] + list(cls.LEGACY_SCHEDULED_STATUSES))
         ).all()
 
     @classmethod
@@ -207,7 +258,7 @@ class EmailCampaignInstance(db.Model):
             body_html=body_html,
             body_text=body_text,
             recipients=recipients,
-            status=cls.STATUS_PENDING
+            status=cls.STATUS_SCHEDULED
         )
         db.session.add(instance)
         db.session.commit()

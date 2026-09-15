@@ -21,8 +21,18 @@ class OrgSeason(db.Model):
     setup_mode = db.Column(db.SmallInteger, default=0)  # Can set up while previous is current
     season_started_at = db.Column(db.DateTime)
     season_ended_at = db.Column(db.DateTime)
-    training_date = db.Column(db.Date)  # Umpire training session date
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+    # Org-wide milestone dates (required for campaign generation)
+    first_practice_date = db.Column(db.Date)  # Required - when practices begin
+    opening_day_date = db.Column(db.Date)     # Required - first games
+    training_date = db.Column(db.Date)        # Umpire training session date
+
+    # Optional milestone dates
+    registration_opens_date = db.Column(db.Date)  # When registration opens
+    evaluations_date = db.Column(db.Date)         # Player evaluations day
+    draft_date = db.Column(db.Date)               # Draft day
+    season_end_date = db.Column(db.Date)          # Last day of season
 
     # Relationship to organization
     organization = db.relationship('Organization', backref='seasons')
@@ -35,8 +45,62 @@ class OrgSeason(db.Model):
         """Return human-readable season name"""
         return f'{"Spring" if self.is_spring else "Fall"} {self.year}'
 
+    def get_first_practice_date(self):
+        """Get first practice date.
+
+        Returns org-level date, or falls back to earliest LeagueSeason date.
+        """
+        if self.first_practice_date:
+            return self.first_practice_date
+
+        # Fallback to LeagueSeason
+        from app.models.league_season import LeagueSeason
+        league_seasons = LeagueSeason.query.filter_by(
+            year=self.year, is_spring=self.is_spring, active=1
+        ).filter(LeagueSeason.first_practice_date.isnot(None)).all()
+
+        if league_seasons:
+            return min(ls.first_practice_date for ls in league_seasons)
+        return None
+
+    def get_opening_day_date(self):
+        """Get opening day date.
+
+        Returns org-level date, or falls back to earliest LeagueSeason date.
+        """
+        if self.opening_day_date:
+            return self.opening_day_date
+
+        # Fallback to LeagueSeason
+        from app.models.league_season import LeagueSeason
+        league_seasons = LeagueSeason.query.filter_by(
+            year=self.year, is_spring=self.is_spring, active=1
+        ).filter(LeagueSeason.opening_day_date.isnot(None)).all()
+
+        if league_seasons:
+            return min(ls.opening_day_date for ls in league_seasons)
+        return None
+
+    def get_season_end_date(self):
+        """Get season end date.
+
+        Returns org-level date, or falls back to latest LeagueSeason date.
+        """
+        if self.season_end_date:
+            return self.season_end_date
+
+        # Fallback to LeagueSeason
+        from app.models.league_season import LeagueSeason
+        league_seasons = LeagueSeason.query.filter_by(
+            year=self.year, is_spring=self.is_spring, active=1
+        ).filter(LeagueSeason.season_end_date.isnot(None)).all()
+
+        if league_seasons:
+            return max(ls.season_end_date for ls in league_seasons)
+        return None
+
     def get_training_date(self):
-        """Get training date with fallback to 2 weeks before earliest opening day.
+        """Get training date with fallback to 2 weeks before opening day.
 
         Returns:
             date object or None if no training date can be determined.
@@ -44,19 +108,11 @@ class OrgSeason(db.Model):
         if self.training_date:
             return self.training_date
 
-        # Fallback: 2 weeks before earliest opening_day_date from LeagueSeason
-        from app.models.league_season import LeagueSeason
+        # Fallback: 2 weeks before opening day
         from datetime import timedelta
-
-        league_seasons = LeagueSeason.query.filter_by(
-            year=self.year,
-            is_spring=self.is_spring,
-            active=1
-        ).filter(LeagueSeason.opening_day_date.isnot(None)).all()
-
-        if league_seasons:
-            earliest = min(ls.opening_day_date for ls in league_seasons)
-            return earliest - timedelta(days=14)
+        opening = self.get_opening_day_date()
+        if opening:
+            return opening - timedelta(days=14)
 
         return None
 
@@ -165,7 +221,10 @@ class OrgSeason(db.Model):
 
     @classmethod
     def create_season(cls, year, is_spring, org_id=None, set_as_current=False,
-                      generate_campaigns=True, season_desc=None):
+                      generate_campaigns=True, season_desc=None,
+                      first_practice_date=None, opening_day_date=None,
+                      training_date=None, season_end_date=None,
+                      registration_opens_date=None, evaluations_date=None, draft_date=None):
         """Create a new season for an organization.
 
         Args:
@@ -175,11 +234,23 @@ class OrgSeason(db.Model):
             set_as_current: If True, sets this as the current season.
             generate_campaigns: If True, generates email campaigns for the season.
             season_desc: Custom description. If None, generates from is_spring/year.
+            first_practice_date: When practices begin (required for campaigns)
+            opening_day_date: First games (required for campaigns)
+            training_date: Optional - umpire training date (auto-calculated if not set)
+            season_end_date: Optional - last day of season (auto-calculated if not set)
+            registration_opens_date: Optional - when registration opens
+            evaluations_date: Optional - player evaluations day
+            draft_date: Optional - draft day
 
         Returns:
             The created OrgSeason instance.
+
+        Note:
+            Campaigns will only be generated if first_practice_date and
+            opening_day_date are provided. These can be set later via the
+            admin seasons page.
         """
-        from datetime import datetime
+        from datetime import datetime, timedelta
 
         # Use default org if not specified
         if org_id is None:
@@ -189,13 +260,27 @@ class OrgSeason(db.Model):
         if season_desc is None:
             season_desc = f'{"Spring" if is_spring else "Fall"} {year}'
 
+        # Auto-calculate training_date and season_end_date if opening_day is provided
+        if opening_day_date:
+            if training_date is None:
+                training_date = opening_day_date - timedelta(days=14)
+            if season_end_date is None:
+                season_end_date = opening_day_date + timedelta(weeks=8)
+
         season = cls(
             org_id=org_id,
             year=year,
             season_desc=season_desc,
             is_spring=is_spring,
             is_current=1 if set_as_current else 0,
-            season_started_at=datetime.utcnow() if set_as_current else None
+            season_started_at=datetime.utcnow() if set_as_current else None,
+            first_practice_date=first_practice_date,
+            opening_day_date=opening_day_date,
+            training_date=training_date,
+            season_end_date=season_end_date,
+            registration_opens_date=registration_opens_date,
+            evaluations_date=evaluations_date,
+            draft_date=draft_date
         )
 
         if set_as_current:
@@ -205,8 +290,8 @@ class OrgSeason(db.Model):
         db.session.add(season)
         db.session.commit()
 
-        # Generate email campaigns for the new season
-        if generate_campaigns:
+        # Generate email campaigns for the new season (only if dates are set)
+        if generate_campaigns and first_practice_date and opening_day_date:
             season.ensure_campaigns()
 
         return season
