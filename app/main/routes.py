@@ -58,16 +58,27 @@ def assignr_webhook():
     topic = payload.get('topic')
 
     # Check for duplicate
-    existing = AssignrWebhookEvent.query.filter_by(external_id=str(event_id)).first()
+    existing = AssignrWebhookEvent.query.filter_by(event_id=event_id).first()
     if existing:
         return jsonify({'status': 'duplicate', 'message': 'Event already processed'}), 200
 
+    # Extract game and assignment IDs from payload if present
+    assignr_game_id = None
+    assignr_assignment_id = None
+    if 'game' in payload:
+        assignr_game_id = str(payload['game'].get('id', ''))
+    if 'assignment' in payload:
+        assignr_assignment_id = str(payload['assignment'].get('id', ''))
+
     # Store the event
+    import json
     event = AssignrWebhookEvent(
-        external_id=str(event_id),
+        event_id=event_id,
         topic=topic,
-        payload=payload,
-        status='pending'
+        payload=json.dumps(payload),
+        assignr_game_id=assignr_game_id,
+        assignr_assignment_id=assignr_assignment_id,
+        status='received'
     )
     db.session.add(event)
     db.session.commit()

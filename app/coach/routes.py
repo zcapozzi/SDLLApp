@@ -180,7 +180,8 @@ def postgame_form(game_id, team_id):
                            report=report,
                            is_kid_pitch=is_kid_pitch,
                            ratings=PostGameReport.RATINGS,
-                           rating_labels=PostGameReport.RATING_LABELS)
+                           rating_labels=PostGameReport.RATING_LABELS,
+                           form_data={})
 
 
 @coach_bp.route('/postgame/<int:game_id>/<int:team_id>/confirm', methods=['POST'])
