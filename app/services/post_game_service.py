@@ -439,49 +439,29 @@ def get_games_needing_emails(minutes_after_start=105):
     return results
 
 
-def send_postgame_email(game_id, team_id):
-    """Send post-game report email to coaches for a team.
+def generate_postgame_email(game_id, team_id, coach_first_name='Coach'):
+    """Generate the post-game email content.
+
+    This is the single source of truth for the email template.
+    Used by both send_postgame_email() and the preview route.
 
     Args:
         game_id: Game ID
         team_id: Team ID
+        coach_first_name: First name of the coach for greeting
 
     Returns:
-        tuple: (success: bool, message: str)
+        dict: {subject, text_body, html_body, report_url, not_played_url}
     """
-    from app.services.notification_service import GmailService
-
     game = Game.query.get(game_id)
-    if not game:
-        return False, "Game not found"
-
     team = TeamSeason.query.get(team_id)
-    if not team:
-        return False, "Team not found"
+
+    if not game or not team:
+        return None
 
     # Get opponent
     opponent_id = game.away_ID if team_id == game.home_ID else game.home_ID
     opponent = TeamSeason.query.get(opponent_id)
-
-    # Get coaches for this team
-    coaches = CoachSeason.get_for_team(team_id)
-    if not coaches:
-        return False, "No coaches found for team"
-
-    head_coach = next((c for c in coaches if c.is_head_coach), None)
-    assistant_coaches = [c for c in coaches if not c.is_head_coach]
-
-    if not head_coach:
-        # Use first coach as head
-        head_coach = coaches[0]
-        assistant_coaches = coaches[1:]
-
-    # Build email
-    to_email = head_coach.email
-    if not to_email:
-        return False, "Head coach has no email"
-
-    cc_emails = [c.email for c in assistant_coaches if c.email]
 
     # Generate secure URLs
     report_url = get_report_url(game_id, team_id, external=True)
@@ -489,12 +469,11 @@ def send_postgame_email(game_id, team_id):
 
     # Format game info
     game_date = game.game_date.strftime('%A, %B %d') if game.game_date else 'TBD'
-
-    subject = f"Post-Game Report: {team.computed_display_name} vs {opponent.computed_display_name if opponent else 'TBD'} - {game_date}"
-
     matchup = f"{team.computed_display_name} vs {opponent.computed_display_name if opponent else 'TBD'}"
 
-    body_text = f"""Hi {head_coach.name.split()[0] if head_coach.name else 'Coach'},
+    subject = f"Post-Game Report: {matchup} - {game_date}"
+
+    text_body = f"""Hi {coach_first_name},
 
 The league is moving our Google Sheets-based post-game data collection to the new SDLL OS website. Please submit the post-game report for today's game:
 
@@ -510,12 +489,12 @@ Thanks,
 SDLL
 """
 
-    body_html = f"""
+    html_body = f"""
 <html>
 <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
     <h2 style="color: #228B22;">Post-Game Report</h2>
 
-    <p>Hi {head_coach.name.split()[0] if head_coach.name else 'Coach'},</p>
+    <p>Hi {coach_first_name},</p>
 
     <p>The league is moving our Google Sheets-based post-game data collection to the new SDLL OS website. Please submit the post-game report for today's game:</p>
 
@@ -539,14 +518,70 @@ SDLL
 </html>
 """
 
+    return {
+        'subject': subject,
+        'text_body': text_body,
+        'html_body': html_body,
+        'report_url': report_url,
+        'not_played_url': not_played_url
+    }
+
+
+def send_postgame_email(game_id, team_id):
+    """Send post-game report email to coaches for a team.
+
+    Args:
+        game_id: Game ID
+        team_id: Team ID
+
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    from app.services.notification_service import GmailService
+
+    game = Game.query.get(game_id)
+    if not game:
+        return False, "Game not found"
+
+    team = TeamSeason.query.get(team_id)
+    if not team:
+        return False, "Team not found"
+
+    # Get coaches for this team
+    coaches = CoachSeason.get_for_team(team_id)
+    if not coaches:
+        return False, "No coaches found for team"
+
+    head_coach = next((c for c in coaches if c.is_head_coach), None)
+    assistant_coaches = [c for c in coaches if not c.is_head_coach]
+
+    if not head_coach:
+        # Use first coach as head
+        head_coach = coaches[0]
+        assistant_coaches = coaches[1:]
+
+    # Build email
+    to_email = head_coach.email
+    if not to_email:
+        return False, "Head coach has no email"
+
+    cc_emails = [c.email for c in assistant_coaches if c.email]
+
+    # Generate email content using shared function
+    coach_first_name = head_coach.name.split()[0] if head_coach.name else 'Coach'
+    email_content = generate_postgame_email(game_id, team_id, coach_first_name)
+
+    if not email_content:
+        return False, "Failed to generate email content"
+
     # Send email
     try:
         gmail = GmailService()
         gmail.send_email(
             to=to_email,
-            subject=subject,
-            body_text=body_text,
-            body_html=body_html,
+            subject=email_content['subject'],
+            body_text=email_content['text_body'],
+            body_html=email_content['html_body'],
             cc=cc_emails if cc_emails else None
         )
 

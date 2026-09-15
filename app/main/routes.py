@@ -1229,7 +1229,7 @@ def preview_postgame_email(game_id):
     from app.models.game import Game
     from app.models.team import TeamSeason
     from app.models.coach import CoachSeason
-    from app.services.post_game_service import get_report_url
+    from app.services.post_game_service import generate_postgame_email
 
     # Check permission
     if not current_user.has_role('admin', 'scheduler', 'DataManager'):
@@ -1261,84 +1261,29 @@ def preview_postgame_email(game_id):
         head_coach = next((c for c in coaches if c.is_head_coach), coaches[0] if coaches else None)
         assistant_coaches = [c for c in coaches if not c.is_head_coach] if coaches else []
 
-        # Generate URL (for display purposes)
-        report_url = get_report_url(game_id, team_id, external=True)
+        # Get coach first name for greeting
+        coach_first_name = head_coach.name.split()[0] if head_coach and head_coach.name else 'Coach'
 
-        # Format game info
-        game_date_fmt = game.game_date.strftime('%A, %B %d, %Y') if game.game_date else 'TBD'
-        game_time_fmt = game.game_date.strftime('%I:%M %p').lstrip('0') if game.game_date else 'TBD'
-        # CoachSeason has its own name/email properties (encrypted)
-        coach_name = head_coach.name.split()[0] if head_coach and head_coach.name else 'Coach'
-        team_name = team.computed_display_name if team else 'Your Team'
-        opponent_name = opponent.computed_display_name if opponent else 'Opponent'
-        field_name = game.field_rel.name if game.field_rel else 'TBD'
+        # Generate email content using shared function (single source of truth)
+        email_content = generate_postgame_email(game_id, team_id, coach_first_name)
 
-        # Generate email bodies (matching the template)
-        text_body = f"""Hi {coach_name},
-
-Please submit the post-game report for today's game:
-
-{team_name} vs {opponent_name}
-Date: {game_date_fmt}
-Time: {game_time_fmt}
-Field: {field_name}
-
-Click here to submit your report:
-{report_url}
-
-If the game was not played (rainout, cancelled, etc.), please indicate that on the form.
-
-Thanks,
-SDLL"""
-
-        html_body = f"""<html>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-    <h2 style="color: #228B22;">Post-Game Report</h2>
-
-    <p>Hi {coach_name},</p>
-
-    <p>Please submit the post-game report for today's game:</p>
-
-    <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-        <p><strong>{team_name}</strong> vs <strong>{opponent_name}</strong></p>
-        <p>Date: {game_date_fmt}<br>
-        Time: {game_time_fmt}<br>
-        Field: {field_name}</p>
-    </div>
-
-    <p style="text-align: center;">
-        <a href="{report_url}" style="display: inline-block; background: #228B22; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
-            Submit Post-Game Report
-        </a>
-    </p>
-
-    <p style="color: #666; font-size: 14px;">
-        If the game was not played (rainout, cancelled, etc.), please indicate that on the form.
-    </p>
-
-    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-    <p style="color: #888; font-size: 12px;">South Durham Little League</p>
-</body>
-</html>"""
+        if not email_content:
+            continue
 
         previews.append({
             'team': team,
-            'team_name': team_name,
+            'team_name': team.computed_display_name if team else 'Your Team',
             'opponent': opponent,
-            'opponent_name': opponent_name,
+            'opponent_name': opponent.computed_display_name if opponent else 'Opponent',
             'head_coach': head_coach,
             'assistant_coaches': assistant_coaches,
             'to_email': head_coach.email if head_coach and head_coach.email else 'No head coach email',
             'to_name': head_coach.name if head_coach else 'No head coach',
             'cc_emails': [c.email for c in assistant_coaches if c.email],
             'cc_names': [c.name for c in assistant_coaches if c.name],
-            'coach_name': coach_name,
-            'game_date': game_date_fmt,
-            'game_time': game_time_fmt,
-            'field_name': field_name,
-            'submit_url': report_url,
-            'text_body': text_body,
-            'html_body': html_body
+            'submit_url': email_content['report_url'],
+            'text_body': email_content['text_body'],
+            'html_body': email_content['html_body']
         })
 
     return render_template('main/preview_postgame_email.html',
