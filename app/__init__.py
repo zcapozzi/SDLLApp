@@ -95,6 +95,22 @@ def create_app(config_name=None):
     def load_user(user_id):
         return User.query.get(int(user_id))
 
+    # View-as role simulation for product admins
+    from .utils.auth import setup_view_as, get_view_as_role, is_product_admin
+
+    @app.before_request
+    def handle_view_as():
+        """Set up view-as role simulation if requested by product admin."""
+        setup_view_as()
+
+    @app.context_processor
+    def inject_view_as():
+        """Make view_as_role available to all templates."""
+        return {
+            'view_as_role': get_view_as_role(),
+            'is_product_admin': is_product_admin() if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated else False
+        }
+
     # Context processor for current season (used in navbar)
     @app.context_processor
     def inject_current_season():

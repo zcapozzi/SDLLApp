@@ -115,6 +115,38 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    {% if view_as_role %}
+    <div class="view-as-banner">
+        <span>👁 Viewing as: <strong>{{ view_as_role }}</strong></span>
+        <a href="{{ request.path }}" class="view-as-exit">Exit View-As</a>
+    </div>
+    <style>
+        .view-as-banner {
+            background: linear-gradient(90deg, #7b1fa2, #9c27b0);
+            color: white;
+            padding: 8px 20px;
+            font-size: 13px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            position: sticky;
+            top: 0;
+            z-index: 1001;
+        }
+        .view-as-exit {
+            color: white;
+            background: rgba(255,255,255,0.2);
+            padding: 4px 12px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 12px;
+        }
+        .view-as-exit:hover {
+            background: rgba(255,255,255,0.3);
+        }
+    </style>
+    {% endif %}
     {% if current_user.is_authenticated %}
     <nav class="navbar">
         <a href="{{ url_for('main.dashboard') }}" class="navbar-brand">SDLL</a>

@@ -130,7 +130,24 @@ class User(UserMixin, db.Model):
         return [r.strip() for r in self.role.split('|') if r.strip()]
 
     def has_role(self, *check_roles):
-        """Check if user has any of the specified roles."""
+        """Check if user has any of the specified roles.
+
+        If a product admin is using ?view_as=Role, this will check against
+        the simulated role instead of the user's actual roles.
+        """
+        # Check for view_as override (product admin role simulation)
+        try:
+            from flask import has_request_context
+            if has_request_context():
+                from app.utils.auth import get_view_as_role
+                view_as = get_view_as_role()
+                if view_as:
+                    # When simulating, check if simulated role matches
+                    return view_as in check_roles
+        except (ImportError, RuntimeError):
+            # Outside request context or circular import - use normal check
+            pass
+
         user_roles = self.roles_list
         return any(r in user_roles for r in check_roles)
 
