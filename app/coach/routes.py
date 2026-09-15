@@ -53,9 +53,9 @@ def postgame_entry(token):
     if not current_user.is_authenticated:
         return redirect(url_for('auth.login', next=request.url))
 
-    # Check if this is a "not played" link
-    not_played = request.args.get('not_played')
-    if not_played == '1':
+    # Check if this is a "not played" link (use 'skip' to avoid &not HTML entity issue)
+    skip = request.args.get('skip')
+    if skip == '1':
         return redirect(url_for('coach.postgame_not_played', game_id=game_id, team_id=team_id))
 
     # Redirect to the actual form

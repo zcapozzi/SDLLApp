@@ -87,9 +87,10 @@ def get_not_played_url(game_id, team_id, external=True):
         str: URL to the not-played form
     """
     token = create_report_token(game_id, team_id)
+    # Use 'skip' instead of 'not_played' to avoid &not being interpreted as HTML entity
     if external:
-        return url_for('coach.postgame_entry', token=token, g=game_id, t=team_id, not_played='1', _external=True)
-    return url_for('coach.postgame_entry', token=token, g=game_id, t=team_id, not_played='1')
+        return url_for('coach.postgame_entry', token=token, g=game_id, t=team_id, skip='1', _external=True)
+    return url_for('coach.postgame_entry', token=token, g=game_id, t=team_id, skip='1')
 
 
 def can_user_submit(user_id, game_id, team_id):
