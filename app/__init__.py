@@ -5,6 +5,7 @@ import sys
 import json
 import traceback
 from flask import Flask, jsonify, request, redirect, url_for, flash
+from flask_login import current_user
 from flask_wtf.csrf import CSRFError
 
 from .extensions import db, login_manager, limiter, csrf, sess
