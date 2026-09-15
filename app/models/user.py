@@ -47,7 +47,7 @@ class User(UserMixin, db.Model):
     ROLES = ['admin', 'BoardExec', 'BB_VP', 'SB_VP',
              'scheduler', 'umpire_coordinator', 'treasurer',
              'BBPlayerAgent', 'SBPlayerAgent', 'coaching_coordinator',
-             'facilities', 'fieldCaptain',
+             'DataManager', 'facilities', 'fieldCaptain',
              'umpire', 'coach', 'parent', 'partner_contact', 'viewer']
 
     def __repr__(self):
