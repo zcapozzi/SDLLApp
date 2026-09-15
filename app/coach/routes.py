@@ -62,7 +62,7 @@ def postgame_entry(token):
 def postgame_form(game_id, team_id):
     """Display and handle post-game report form."""
     # Check authorization
-    can_submit, role, error = post_game_service.can_user_submit(current_user.id, game_id, team_id)
+    can_submit, role, error = post_game_service.can_user_submit(current_user.ID, game_id, team_id)
     if not can_submit:
         flash(f'Access denied: {error}', 'error')
         return redirect(url_for('main.dashboard'))
@@ -188,7 +188,7 @@ def postgame_form(game_id, team_id):
 def postgame_confirm(game_id, team_id):
     """Final submission of post-game report."""
     # Check authorization
-    can_submit, role, error = post_game_service.can_user_submit(current_user.id, game_id, team_id)
+    can_submit, role, error = post_game_service.can_user_submit(current_user.ID, game_id, team_id)
     if not can_submit:
         flash(f'Access denied: {error}', 'error')
         return redirect(url_for('main.dashboard'))
@@ -205,7 +205,7 @@ def postgame_confirm(game_id, team_id):
     }
 
     # Submit report
-    success, report, error = post_game_service.submit_report(game_id, team_id, current_user.id, data)
+    success, report, error = post_game_service.submit_report(game_id, team_id, current_user.ID, data)
 
     if success:
         flash('Post-game report submitted successfully.', 'success')
@@ -220,7 +220,7 @@ def postgame_confirm(game_id, team_id):
 def postgame_not_played(game_id, team_id):
     """Mark game as not played."""
     # Check authorization
-    can_submit, role, error = post_game_service.can_user_submit(current_user.id, game_id, team_id)
+    can_submit, role, error = post_game_service.can_user_submit(current_user.ID, game_id, team_id)
     if not can_submit:
         flash(f'Access denied: {error}', 'error')
         return redirect(url_for('main.dashboard'))
@@ -262,7 +262,7 @@ def postgame_not_played(game_id, team_id):
                                    reason_labels=PostGameReport.REASON_LABELS)
 
         success, report, error = post_game_service.mark_not_played(
-            game_id, team_id, current_user.id, reason, notes
+            game_id, team_id, current_user.ID, reason, notes
         )
 
         if success:
@@ -306,7 +306,7 @@ def postgame_success(game_id, team_id):
 def postgame_edit(game_id, team_id):
     """Edit a submitted report within the 24-hour window."""
     # Check authorization
-    can_submit, role, error = post_game_service.can_user_submit(current_user.id, game_id, team_id)
+    can_submit, role, error = post_game_service.can_user_submit(current_user.ID, game_id, team_id)
     if not can_submit:
         flash(f'Access denied: {error}', 'error')
         return redirect(url_for('main.dashboard'))
@@ -337,7 +337,7 @@ def my_games():
     is_spring = current_season.is_spring if current_season else None
 
     # Find teams this user coaches
-    coach_user = CoachUser.get_by_user(current_user.id)
+    coach_user = CoachUser.get_by_user(current_user.ID)
 
     if not coach_user:
         flash('You are not registered as a coach.', 'info')

@@ -164,6 +164,11 @@
                             <a href="#" onclick="emailCoachesForGame({{ game.ID }}); return false;">
                                 <span class="action-icon">✉</span> Email Coaches
                             </a>
+                            {% if game.game_type != 'practice' %}
+                            <a href="{{ url_for('main.preview_postgame_email', game_id=game.ID) }}">
+                                <span class="action-icon">📋</span> Preview Post-Game Email
+                            </a>
+                            {% endif %}
                         </div>
                     </div>
                 </td>
@@ -209,6 +214,11 @@
                             <a href="#" onclick="emailCoachesForGame({{ game.ID }}); return false;">
                                 <span class="action-icon">✉</span> Email Coaches
                             </a>
+                            {% if game.game_type != 'practice' %}
+                            <a href="{{ url_for('main.preview_postgame_email', game_id=game.ID) }}">
+                                <span class="action-icon">📋</span> Preview Post-Game Email
+                            </a>
+                            {% endif %}
                         </div>
                     </div>
                     {% endif %}
@@ -338,6 +348,11 @@
                                 <a href="#" class="expand-action-btn" onclick="emailCoachesForGame({{ game.ID }}); return false;">
                                     <span class="action-icon">✉</span> Email Coaches
                                 </a>
+                                {% if game.game_type != 'practice' %}
+                                <a href="{{ url_for('main.preview_postgame_email', game_id=game.ID) }}" class="expand-action-btn">
+                                    <span class="action-icon">📋</span> Preview Post-Game Email
+                                </a>
+                                {% endif %}
                             </div>
                             {% endif %}
                         </div>

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Preview Post-Game Email{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <h1 style="margin: 0;">Preview Post-Game Email</h1>
+    <p style="color: var(--text-muted); margin: 5px 0 0 0;">
+        This shows what the post-game report email would look like for each team
+    </p>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-top: 0;">Game Details</h3>
+    <table style="width: auto;">
+        <tr>
+            <td style="font-weight: 600; padding-right: 20px;">Date:</td>
+            <td>{{ game.game_date.strftime('%A, %B %d, %Y') }}</td>
+        </tr>
+        <tr>
+            <td style="font-weight: 600; padding-right: 20px;">Time:</td>
+            <td>{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</td>
+        </tr>
+        <tr>
+            <td style="font-weight: 600; padding-right: 20px;">Matchup:</td>
+            <td>
+                {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                vs
+                {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+            </td>
+        </tr>
+        <tr>
+            <td style="font-weight: 600; padding-right: 20px;">Field:</td>
+            <td>{{ game.field_rel.name if game.field_rel else 'TBD' }}</td>
+        </tr>
+    </table>
+</div>
+
+{% if previews %}
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 20px;">
+    {% for preview in previews %}
+    <div class="card">
+        <h3 style="margin-top: 0; color: rgb(34, 139, 34);">
+            {{ preview.team_name }} - Email Preview
+        </h3>
+
+        <div style="background: #f5f5f5; padding: 10px 15px; border-radius: 5px; margin-bottom: 15px;">
+            <div style="margin-bottom: 8px;">
+                <strong>To:</strong>
+                {% if preview.to_name and preview.to_email %}
+                {{ preview.to_name }} &lt;{{ preview.to_email }}&gt;
+                {% else %}
+                <span style="color: #999;">No head coach assigned</span>
+                {% endif %}
+            </div>
+            {% if preview.cc_names %}
+            <div style="margin-bottom: 8px;">
+                <strong>CC:</strong>
+                {% for i in range(preview.cc_names|length) %}
+                {{ preview.cc_names[i] }}{% if preview.cc_emails[i] %} &lt;{{ preview.cc_emails[i] }}&gt;{% endif %}{% if not loop.last %}, {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+            <div>
+                <strong>Subject:</strong> Post-Game Report: {{ game.home_team.computed_display_name if game.home_team else 'TBD' }} vs {{ game.away_team.computed_display_name if game.away_team else 'TBD' }} - {{ game.game_date.strftime('%b %d, %Y') }}
+            </div>
+        </div>
+
+        <div style="border: 1px solid #ddd; border-radius: 5px; overflow: hidden;">
+            <div style="background: #f8f8f8; padding: 8px 15px; border-bottom: 1px solid #ddd; font-size: 12px; color: #666;">
+                HTML Email Body
+            </div>
+            <div style="padding: 0;">
+                <iframe srcdoc="{{ preview.html_body|e }}" style="width: 100%; height: 400px; border: none;"></iframe>
+            </div>
+        </div>
+
+        <div style="margin-top: 15px;">
+            <details>
+                <summary style="cursor: pointer; color: var(--primary); font-weight: 500;">View Plain Text Version</summary>
+                <pre style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin-top: 10px; white-space: pre-wrap; font-size: 13px; overflow-x: auto;">{{ preview.text_body }}</pre>
+            </details>
+        </div>
+
+        <div style="margin-top: 15px;">
+            <details>
+                <summary style="cursor: pointer; color: var(--primary); font-weight: 500;">View Submit URL</summary>
+                <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin-top: 10px; word-break: break-all; font-size: 13px;">
+                    <a href="{{ preview.submit_url }}" target="_blank">{{ preview.submit_url }}</a>
+                </div>
+            </details>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <p style="color: #666; text-align: center; padding: 40px;">
+        Unable to generate preview. Teams may not be assigned to this game.
+    </p>
+</div>
+{% endif %}
+
+<div style="margin-top: 20px;">
+    <a href="{{ url_for('main.master_schedule') }}" class="btn btn-outline">Back to Master Schedule</a>
+</div>
+{% endblock %}
