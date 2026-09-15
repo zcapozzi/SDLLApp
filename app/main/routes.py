@@ -97,6 +97,22 @@ def assignr_webhooks_redirect():
 
 
 # ============================================================================
+# Request Access Redirects (public blueprint uses /s prefix)
+# ============================================================================
+
+@main_bp.route('/request-access')
+def request_access_redirect():
+    """Redirect to the request-access landing page."""
+    return redirect(url_for('public.request_access_landing'))
+
+
+@main_bp.route('/request-access/<path:subpath>')
+def request_access_subpath_redirect(subpath):
+    """Redirect request-access subpaths to the public blueprint."""
+    return redirect(f'/s/request-access/{subpath}')
+
+
+# ============================================================================
 # Cron Job Endpoints (called by external scheduler)
 # ============================================================================
 
