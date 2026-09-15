@@ -75,6 +75,23 @@ def get_report_url(game_id, team_id, external=True):
     return url_for('coach.postgame_entry', token=token, g=game_id, t=team_id)
 
 
+def get_not_played_url(game_id, team_id, external=True):
+    """Generate the URL for marking a game as not played.
+
+    Args:
+        game_id: Game ID
+        team_id: Team ID
+        external: If True, generate full external URL
+
+    Returns:
+        str: URL to the not-played form
+    """
+    token = create_report_token(game_id, team_id)
+    if external:
+        return url_for('coach.postgame_entry', token=token, g=game_id, t=team_id, not_played='1', _external=True)
+    return url_for('coach.postgame_entry', token=token, g=game_id, t=team_id, not_played='1')
+
+
 def can_user_submit(user_id, game_id, team_id):
     """Check if user is authorized to submit a report for this team.
 
@@ -466,28 +483,28 @@ def send_postgame_email(game_id, team_id):
 
     cc_emails = [c.email for c in assistant_coaches if c.email]
 
-    # Generate secure URL
+    # Generate secure URLs
     report_url = get_report_url(game_id, team_id, external=True)
+    not_played_url = get_not_played_url(game_id, team_id, external=True)
 
     # Format game info
     game_date = game.game_date.strftime('%A, %B %d') if game.game_date else 'TBD'
-    game_time = game.game_date.strftime('%I:%M %p').lstrip('0') if game.game_date else 'TBD'
 
     subject = f"Post-Game Report: {team.computed_display_name} vs {opponent.computed_display_name if opponent else 'TBD'} - {game_date}"
 
+    matchup = f"{team.computed_display_name} vs {opponent.computed_display_name if opponent else 'TBD'}"
+
     body_text = f"""Hi {head_coach.name.split()[0] if head_coach.name else 'Coach'},
 
-Please submit the post-game report for today's game:
+The league is moving our Google Sheets-based post-game data collection to the new SDLL OS website. Please submit the post-game report for today's game:
 
-{team.computed_display_name} vs {opponent.computed_display_name if opponent else 'TBD'}
-Date: {game_date}
-Time: {game_time}
-Field: {game.field_name or 'TBD'}
+{matchup}
 
 Click here to submit your report:
 {report_url}
 
-If the game was not played (rainout, cancelled, etc.), please indicate that on the form.
+If the game was not played, click here instead:
+{not_played_url}
 
 Thanks,
 SDLL
@@ -500,23 +517,20 @@ SDLL
 
     <p>Hi {head_coach.name.split()[0] if head_coach.name else 'Coach'},</p>
 
-    <p>Please submit the post-game report for today's game:</p>
+    <p>The league is moving our Google Sheets-based post-game data collection to the new SDLL OS website. Please submit the post-game report for today's game:</p>
 
-    <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-        <p><strong>{team.computed_display_name}</strong> vs <strong>{opponent.computed_display_name if opponent else 'TBD'}</strong></p>
-        <p>Date: {game_date}<br>
-        Time: {game_time}<br>
-        Field: {game.field_name or 'TBD'}</p>
-    </div>
+    <p style="font-size: 18px; margin: 20px 0;">
+        <strong>{matchup}</strong>
+    </p>
 
-    <p style="text-align: center;">
+    <p style="text-align: center; margin: 25px 0;">
         <a href="{report_url}" style="display: inline-block; background: #228B22; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
             Submit Post-Game Report
         </a>
     </p>
 
-    <p style="color: #666; font-size: 14px;">
-        If the game was not played (rainout, cancelled, etc.), please indicate that on the form.
+    <p style="text-align: center;">
+        <a href="{not_played_url}" style="color: #666; font-size: 14px;">Game was not played</a>
     </p>
 
     <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
