@@ -43,9 +43,9 @@ class ReapportionmentService:
         start_date: datetime,
         end_date: datetime
     ) -> List[Dict]:
-        """Get assigned Academy games for a sport and date range.
+        """Get assigned games for a sport and date range.
 
-        Only includes games where the assigned umpire is an Academy member.
+        Filters to Academy members if the group exists, otherwise shows all assigned games.
 
         Args:
             sport: 'baseball' or 'softball'
@@ -61,51 +61,73 @@ class ReapportionmentService:
         # Enrich with local data (league info)
         all_games = self.assignr.enrich_games_with_local_data(all_games)
 
-        # Get Academy official IDs
+        # Get Academy official IDs (may be empty if group doesn't exist)
         academy_ids = self._get_academy_official_ids()
+        filter_by_academy = len(academy_ids) > 0
 
-        # Filter to Academy-assigned games for the specified sport
-        academy_games = []
+        if not filter_by_academy:
+            logger.warning("No Academy officials found - showing all assigned games")
+
+        # Filter to assigned games for the specified sport
+        filtered_games = []
         for game in all_games:
-            # Check sport via league name
+            # Check sport via league name from local data or Assignr league_name
             local = game.get('_local')
-            if not local:
-                continue
+            league = ''
+            if local:
+                league = local.get('league', '')
+            if not league:
+                # Fall back to Assignr league_name
+                league = game.get('league_name', '')
 
-            league = local.get('league', '')
             if not league:
                 continue
 
             # Determine sport from league name
-            game_sport = 'softball' if 'SB' in league or 'Softball' in league.lower() else 'baseball'
+            league_lower = league.lower()
+            if 'sb' in league_lower or 'softball' in league_lower:
+                game_sport = 'softball'
+            elif 'bb' in league_lower or 'baseball' in league_lower:
+                game_sport = 'baseball'
+            else:
+                # Can't determine sport, skip
+                continue
+
             if game_sport != sport:
                 continue
 
-            # Check if assigned umpire is Academy member
+            # Check if game has an assignment
             assignments = game.get('_embedded', {}).get('assignments', []) or []
-            academy_assignment = None
+            game_assignment = None
 
             for assignment in assignments:
                 embedded = assignment.get('_embedded', {}) or {}
                 official = embedded.get('official', {}) or {}
                 official_id = official.get('id')
 
-                if official_id and official_id in academy_ids:
-                    academy_assignment = {
-                        'assignment': assignment,
-                        'official': official,
-                        'official_id': official_id,
-                        'official_name': f"{official.get('first_name', '')} {official.get('last_name', '')}".strip(),
-                        'accepted': assignment.get('accepted') in [True, 'True']
-                    }
-                    break
+                if not official_id:
+                    continue
 
-            if academy_assignment:
-                game['_academy_assignment'] = academy_assignment
-                academy_games.append(game)
+                # If filtering by Academy, check membership
+                if filter_by_academy and official_id not in academy_ids:
+                    continue
 
-        logger.info(f"Found {len(academy_games)} Academy {sport} games")
-        return academy_games
+                game_assignment = {
+                    'assignment': assignment,
+                    'official': official,
+                    'official_id': official_id,
+                    'official_name': f"{official.get('first_name', '')} {official.get('last_name', '')}".strip(),
+                    'accepted': assignment.get('accepted') in [True, 'True'],
+                    'is_academy': official_id in academy_ids if filter_by_academy else None
+                }
+                break
+
+            if game_assignment:
+                game['_academy_assignment'] = game_assignment
+                filtered_games.append(game)
+
+        logger.info(f"Found {len(filtered_games)} {sport} games (Academy filter: {filter_by_academy})")
+        return filtered_games
 
     def get_umpire_game_counts(self, games: List[Dict]) -> Dict[int, Dict]:
         """Count games per umpire from a list of games.
@@ -208,16 +230,28 @@ class ReapportionmentService:
         # Filter to unassigned games for the specified sport
         unassigned_games = []
         for game in all_games:
-            # Check sport via league name
+            # Check sport via league name from local data or Assignr league_name
             local = game.get('_local')
-            if not local:
-                continue
+            league = ''
+            if local:
+                league = local.get('league', '')
+            if not league:
+                # Fall back to Assignr league_name
+                league = game.get('league_name', '')
 
-            league = local.get('league', '')
             if not league:
                 continue
 
-            game_sport = 'softball' if 'SB' in league or 'Softball' in league.lower() else 'baseball'
+            # Determine sport from league name
+            league_lower = league.lower()
+            if 'sb' in league_lower or 'softball' in league_lower:
+                game_sport = 'softball'
+            elif 'bb' in league_lower or 'baseball' in league_lower:
+                game_sport = 'baseball'
+            else:
+                # Can't determine sport, skip
+                continue
+
             if game_sport != sport:
                 continue
 
