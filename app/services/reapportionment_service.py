@@ -23,6 +23,40 @@ class ReapportionmentService:
     def __init__(self):
         self.assignr = get_assignr_service()
         self._academy_official_ids = None
+        self._managed_leagues = None  # Cache for leagues with managed partners
+
+    def _get_managed_leagues(self) -> set:
+        """Get set of league names that have managed umpire partners.
+
+        Only games from these leagues should appear in reapportionment.
+        Caches the result for the lifetime of the service instance.
+        """
+        if self._managed_leagues is not None:
+            return self._managed_leagues
+
+        from app.models.league import League
+        from app.models.umpire_partner import UmpirePartner
+
+        # Get all leagues with their default partners
+        leagues = League.query.filter(League.default_partner_id.isnot(None)).all()
+
+        # Filter to leagues where the partner is managed by org
+        managed_leagues = set()
+        for league in leagues:
+            partner = UmpirePartner.query.get(league.default_partner_id)
+            if partner and partner.is_managed_by_org:
+                managed_leagues.add(league.name)
+
+        logger.info(f"Found {len(managed_leagues)} leagues with managed partners: {managed_leagues}")
+        self._managed_leagues = managed_leagues
+        return self._managed_leagues
+
+    def _is_managed_league(self, league_name: str) -> bool:
+        """Check if a league name corresponds to a managed umpire partner."""
+        if not league_name:
+            return False
+        managed = self._get_managed_leagues()
+        return league_name in managed
 
     def _get_academy_official_ids(self) -> set:
         """Get set of official IDs that belong to the Academy group.
@@ -94,6 +128,10 @@ class ReapportionmentService:
                 continue
 
             if game_sport != sport:
+                continue
+
+            # Only include games from leagues with managed umpire partners
+            if not self._is_managed_league(league):
                 continue
 
             # Check if game has an assignment
@@ -298,6 +336,10 @@ class ReapportionmentService:
                 continue
 
             if game_sport != sport:
+                continue
+
+            # Only include games from leagues with managed umpire partners
+            if not self._is_managed_league(league):
                 continue
 
             # Check if unassigned (no accepted assignments)
