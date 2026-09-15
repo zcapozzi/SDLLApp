@@ -29,18 +29,11 @@ def reapportionment_dashboard(org_season_id):
     if sport not in ('baseball', 'softball'):
         sport = 'softball'
 
-    days_ahead = request.args.get('days', 30, type=int)
-    if days_ahead < 7:
-        days_ahead = 7
-    elif days_ahead > 90:
-        days_ahead = 90
-
-    # Get dashboard data
+    # Get dashboard data for the full season
     service = get_reapportionment_service()
     data = service.get_reapportionment_dashboard_data(
         sport=sport,
-        org_season=org_season,
-        days_ahead=days_ahead
+        org_season=org_season
     )
 
     # Get Academy umpires for the target dropdown
@@ -54,7 +47,6 @@ def reapportionment_dashboard(org_season_id):
         org_season_id=org_season_id,
         season_name=org_season.season_desc,
         sport=sport,
-        days_ahead=days_ahead,
         data=data,
         academy_umpires=academy_umpires
     )

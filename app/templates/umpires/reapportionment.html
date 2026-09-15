@@ -21,15 +21,6 @@
             </select>
         </div>
         <div>
-            <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px;">Days Ahead</label>
-            <select name="days" class="form-control" onchange="this.form.submit()">
-                <option value="14" {% if days_ahead == 14 %}selected{% endif %}>14 days</option>
-                <option value="30" {% if days_ahead == 30 %}selected{% endif %}>30 days</option>
-                <option value="60" {% if days_ahead == 60 %}selected{% endif %}>60 days</option>
-                <option value="90" {% if days_ahead == 90 %}selected{% endif %}>90 days</option>
-            </select>
-        </div>
-        <div>
             <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px;">Target Umpire</label>
             <select id="target-umpire" class="form-control" style="min-width: 200px;">
                 <option value="">-- Unassign Only --</option>
@@ -39,6 +30,9 @@
                 </option>
                 {% endfor %}
             </select>
+        </div>
+        <div style="font-size: 13px; color: var(--text-muted); padding-bottom: 8px;">
+            Showing games from {{ data.start_date.strftime('%b %d') }} to {{ data.end_date.strftime('%b %d, %Y') }}
         </div>
     </form>
 </div>

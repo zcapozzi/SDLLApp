@@ -403,23 +403,32 @@ class ReapportionmentService:
     def get_reapportionment_dashboard_data(
         self,
         sport: str,
-        org_season,
-        days_ahead: int = 30
+        org_season
     ) -> Dict[str, Any]:
         """Get all data needed for the reapportionment dashboard.
 
         Args:
             sport: 'baseball' or 'softball'
             org_season: OrgSeason object
-            days_ahead: Number of days ahead to look for games
 
         Returns:
             Dict with dashboard data
         """
-        # Calculate date range
-        today = datetime.now()
-        start_date = today
-        end_date = today + timedelta(days=days_ahead)
+        # Use season date range
+        start_date = org_season.get_opening_day_date()
+        end_date = org_season.get_season_end_date()
+
+        # Fallback if dates not set
+        if not start_date:
+            start_date = datetime.now()
+        if not end_date:
+            end_date = datetime.now() + timedelta(days=90)
+
+        # Convert date to datetime if needed
+        if hasattr(start_date, 'year') and not hasattr(start_date, 'hour'):
+            start_date = datetime.combine(start_date, datetime.min.time())
+        if hasattr(end_date, 'year') and not hasattr(end_date, 'hour'):
+            end_date = datetime.combine(end_date, datetime.max.time())
 
         # Get Academy games with counts and scores
         academy_games = self.get_academy_games(sport, start_date, end_date)
@@ -442,7 +451,6 @@ class ReapportionmentService:
             'org_season': org_season,
             'start_date': start_date,
             'end_date': end_date,
-            'days_ahead': days_ahead,
             'assigned_games': scored_games,
             'unassigned_games': unassigned_games,
             'umpires': umpires,
