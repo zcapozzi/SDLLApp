@@ -1512,6 +1512,7 @@ def api_users_by_role(role):
         'player_agents': ['BBPlayerAgent', 'SBPlayerAgent'],
         'umpire_coordinator': ['umpire_coordinator'],
         'coaching_coordinator': ['coaching_coordinator'],
+        'data_manager': ['DataManager'],
     }
 
     # Get target roles
