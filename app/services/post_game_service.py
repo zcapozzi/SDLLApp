@@ -473,6 +473,14 @@ def generate_postgame_email(game_id, team_id, coach_first_name='Coach'):
 
     subject = f"Post-Game Report: {matchup} - {game_date}"
 
+    # Base URL for request-access link
+    from flask import current_app
+    try:
+        base_url = current_app.config.get('BASE_URL', 'https://www.southdurhamlittleleague.org')
+    except RuntimeError:
+        base_url = 'https://www.southdurhamlittleleague.org'
+    request_access_url = f"{base_url}/request-access"
+
     text_body = f"""Hi {coach_first_name},
 
 The league is moving our Google Sheets-based post-game data collection to the new SDLL OS website. Please submit the post-game report for today's game:
@@ -484,6 +492,10 @@ Click here to submit your report:
 
 If the game was not played, click here instead:
 {not_played_url}
+
+Need an account? Request access here: {request_access_url}
+
+If you have any questions or issues logging in, just reply to this email.
 
 Thanks,
 SDLL
@@ -510,6 +522,14 @@ SDLL
 
     <p style="text-align: center;">
         <a href="{not_played_url}" style="color: #666; font-size: 14px;">Game was not played</a>
+    </p>
+
+    <p style="color: #666; font-size: 14px; margin-top: 25px;">
+        Need an account? <a href="{request_access_url}" style="color: #228B22;">Request access here</a>
+    </p>
+
+    <p style="color: #666; font-size: 14px;">
+        If you have any questions or issues logging in, just reply to this email.
     </p>
 
     <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
