@@ -1142,12 +1142,82 @@
             if (email === '') {
                 email = 'No changes to report.\n';
             } else {
-                // Add header
+                // Build summary section
+                var allChanges = newGames.concat(locationChanges, timeChanges, dateChanges, cancellations);
+                var totalChanges = allChanges.length;
+
+                // Count by league
+                var byLeague = {};
+                allChanges.forEach(function(g) {
+                    var league = g.league || 'Unknown';
+                    if (!byLeague[league]) {
+                        byLeague[league] = { total: 0, new: 0, location: 0, time: 0, date: 0, cancelled: 0 };
+                    }
+                    byLeague[league].total++;
+                });
+                newGames.forEach(function(g) { if (byLeague[g.league]) byLeague[g.league].new++; });
+                locationChanges.forEach(function(g) { if (byLeague[g.league]) byLeague[g.league].location++; });
+                timeChanges.forEach(function(g) { if (byLeague[g.league]) byLeague[g.league].time++; });
+                dateChanges.forEach(function(g) { if (byLeague[g.league]) byLeague[g.league].date++; });
+                cancellations.forEach(function(g) { if (byLeague[g.league]) byLeague[g.league].cancelled++; });
+
+                // Determine umpire impact
+                var hasUmpireImpact = locationChanges.length > 0 || dateChanges.length > 0;
+                var nonTeeBallChanges = allChanges.filter(function(g) {
+                    var league = (g.league || '').toLowerCase();
+                    return league.indexOf('tee') === -1 && league.indexOf('t-ball') === -1;
+                });
+                var hasNonTeeBallChanges = nonTeeBallChanges.length > 0;
+
+                // Add header with summary
                 var header = 'Schedule Changes for ' + partnerName + '\n';
                 if (changesSinceDate) {
                     header += 'Changes since: ' + changesSinceDate + '\n';
                 }
                 header += '\n';
+
+                // Summary box
+                header += '═══════════════════════════════════════\n';
+                header += 'SUMMARY: ' + totalChanges + ' change' + (totalChanges !== 1 ? 's' : '') + '\n';
+                header += '═══════════════════════════════════════\n\n';
+
+                // By change type
+                header += 'By Type:\n';
+                if (newGames.length > 0) header += '  • New games: ' + newGames.length + '\n';
+                if (locationChanges.length > 0) header += '  • Location changes: ' + locationChanges.length + ' ⚠️\n';
+                if (dateChanges.length > 0) header += '  • Date changes: ' + dateChanges.length + ' ⚠️\n';
+                if (timeChanges.length > 0) header += '  • Time changes: ' + timeChanges.length + '\n';
+                if (cancellations.length > 0) header += '  • Cancellations: ' + cancellations.length + '\n';
+                header += '\n';
+
+                // By league
+                header += 'By Division:\n';
+                var leagues = Object.keys(byLeague).sort();
+                leagues.forEach(function(league) {
+                    var info = byLeague[league];
+                    var details = [];
+                    if (info.new > 0) details.push(info.new + ' new');
+                    if (info.location > 0) details.push(info.location + ' location');
+                    if (info.date > 0) details.push(info.date + ' date');
+                    if (info.time > 0) details.push(info.time + ' time');
+                    if (info.cancelled > 0) details.push(info.cancelled + ' cancelled');
+                    header += '  • ' + league + ': ' + info.total + ' (' + details.join(', ') + ')\n';
+                });
+                header += '\n';
+
+                // Umpire impact note
+                if (!hasUmpireImpact && !hasNonTeeBallChanges) {
+                    header += '✓ No umpire impact - Tee Ball time changes only\n\n';
+                } else if (!hasUmpireImpact) {
+                    header += '✓ Low umpire impact - time changes only (no location/date moves)\n\n';
+                } else {
+                    header += '⚠️ Umpire impact likely - review location/date changes below\n\n';
+                }
+
+                header += '───────────────────────────────────────\n';
+                header += 'DETAILS\n';
+                header += '───────────────────────────────────────\n\n';
+
                 email = header + email;
             }
 
