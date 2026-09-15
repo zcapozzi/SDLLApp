@@ -500,6 +500,7 @@ tr.unpublished-row td {
 </style>
 
 <script>
+// v2 - Fixed timezone parsing for email dates
 function filterGames() {
     var leagueFilter = document.getElementById('league_select').value.toLowerCase();
     var statusFilter = document.getElementById('status_filter').value.toLowerCase();
@@ -612,8 +613,9 @@ function generateEmailContent() {
 
         dates.forEach(function(date) {
             var games = byDate[date];
-            // Parse date for day of week
-            var d = new Date(date);
+            // Parse date for day of week (manual parse to avoid timezone issues)
+            var parts = date.split('-');
+            var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
             var dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
             var dayName = dayNames[d.getDay()];
 
@@ -636,14 +638,13 @@ function generateEmailContent() {
 }
 
 function formatDisplayDate(dateStr) {
-    // Convert YYYY-MM-DD to "Day Mon DD" format (e.g., "Mon Sep 08")
-    var d = new Date(dateStr);
-    var days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    // Convert YYYY-MM-DD to "Sep 22" format (month and day only)
+    // Parse manually to avoid timezone issues (new Date('YYYY-MM-DD') is UTC)
+    var parts = dateStr.split('-');
+    var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
     var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    var day = d.getDate();
-    var dayStr = day < 10 ? '0' + day : day;
-    return days[d.getDay()] + ' ' + months[d.getMonth()] + ' ' + dayStr;
+    return months[d.getMonth()] + ' ' + d.getDate();
 }
 
 function copyEmailToClipboard() {
