@@ -200,7 +200,19 @@
              data-cancelled="{{ '1' if game.status == 'cancelled' else '0' }}">
             <div class="event-header">
                 <span class="event-date">{{ game.game_date.strftime('%a, %b %d') }}</span>
-                <span class="event-time">{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="event-time">{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</span>
+                    {% if current_user.is_authenticated and current_user.has_role('admin', 'scheduler', 'SBPlayerAgent', 'BBPlayerAgent') %}
+                    <div class="action-menu">
+                        <button class="action-btn" onclick="toggleActionMenu(this, event)">⋮</button>
+                        <div class="action-dropdown">
+                            <a href="#" onclick="emailCoachesForGame({{ game.ID }}); return false;">
+                                <span class="action-icon">✉</span> Email Coaches
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
             <div class="event-matchup">
                 {% if game.status == 'cancelled' %}
@@ -319,6 +331,13 @@
                             {% if game.status == 'cancelled' %}
                             <div class="expand-detail" style="color: #c33;">
                                 <strong>CANCELLED</strong>
+                            </div>
+                            {% endif %}
+                            {% if current_user.is_authenticated and current_user.has_role('admin', 'scheduler', 'SBPlayerAgent', 'BBPlayerAgent') %}
+                            <div class="expand-actions">
+                                <a href="#" class="expand-action-btn" onclick="emailCoachesForGame({{ game.ID }}); return false;">
+                                    <span class="action-icon">✉</span> Email Coaches
+                                </a>
                             </div>
                             {% endif %}
                         </div>
@@ -740,6 +759,26 @@
 .expand-label {
     color: #888;
     font-size: 12px;
+}
+
+/* Expand row actions */
+.expand-actions {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #e0e0e0;
+}
+.expand-action-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: #f0f0f0;
+    color: #333;
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 13px;
+}
+.expand-action-btn:hover {
+    background: #e0e0e0;
 }
 
 /* Mobile responsiveness */
