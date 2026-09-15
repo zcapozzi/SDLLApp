@@ -162,6 +162,9 @@
         .schedule-table tr.past-game td {
             opacity: 0.6;
         }
+        .schedule-table tr.past-game.hidden-past {
+            display: none !important;
+        }
 
         /* Cell styling */
         .cell-date {
@@ -509,6 +512,12 @@
                 <label for="changes_since">Changes Since:</label>
                 <input type="date" id="changes_since" value="{{ changes_since }}" onchange="applyFilters()">
             </div>
+            <div class="control-group">
+                <label class="change-type-checkbox" style="cursor: pointer;">
+                    <input type="checkbox" id="show-past-games" onchange="togglePastGames()" style="width: 16px; height: 16px;">
+                    <span>Show past games</span>
+                </label>
+            </div>
             <button id="clear-filters-btn" class="btn btn-outline" onclick="clearFilters()" style="display: none;">Clear Filters</button>
             <button id="change-type-filter-btn" class="btn btn-outline" onclick="toggleChangeTypeFilter()" title="Filter by change type" style="padding: 8px 10px;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
@@ -769,13 +778,14 @@
                 }
             });
 
-            // Update game count display
-            updateGameCount(visibleCount);
+            // Update game count display (accounts for hidden past games)
+            updateVisibleGameCount();
 
             // Show/hide clear filters button
             var clearBtn = document.getElementById('clear-filters-btn');
+            var showPastGames = document.getElementById('show-past-games').checked;
             if (clearBtn) {
-                clearBtn.style.display = (fieldFilter || leagueFilter || dateFilter || changesSince || anyChangeTypeFilter) ? 'inline-block' : 'none';
+                clearBtn.style.display = (fieldFilter || leagueFilter || dateFilter || changesSince || anyChangeTypeFilter || showPastGames) ? 'inline-block' : 'none';
             }
         }
 
@@ -836,6 +846,9 @@
             document.getElementById('filter-time-change').checked = false;
             document.getElementById('filter-date-change').checked = false;
             document.getElementById('filter-location-change').checked = false;
+            // Reset past games toggle to default (hidden)
+            document.getElementById('show-past-games').checked = false;
+            togglePastGames();
             // If changes_since was set, need to reload
             if ('{{ changes_since }}') {
                 var url = new URL(window.location.href);
@@ -848,6 +861,76 @@
             }
             applyFilters();
         }
+
+        // Past games toggle
+        function togglePastGames() {
+            var showPast = document.getElementById('show-past-games').checked;
+            var pastRows = document.querySelectorAll('.schedule-table tbody tr.past-game');
+
+            pastRows.forEach(function(row) {
+                if (showPast) {
+                    row.classList.remove('hidden-past');
+                } else {
+                    row.classList.add('hidden-past');
+                }
+            });
+
+            // Save preference to localStorage
+            try {
+                localStorage.setItem('sdll_partner_show_past_games', showPast ? '1' : '0');
+            } catch (e) {
+                // localStorage not available
+            }
+
+            // Update game count
+            updateVisibleGameCount();
+        }
+
+        function updateVisibleGameCount() {
+            var allRows = document.querySelectorAll('.schedule-table tbody tr');
+            var visibleCount = 0;
+            allRows.forEach(function(row) {
+                if (row.style.display !== 'none' && !row.classList.contains('hidden-past')) {
+                    visibleCount++;
+                }
+            });
+            updateGameCount(visibleCount);
+        }
+
+        // Initialize past games visibility on page load
+        function initPastGamesToggle() {
+            var showPast = false;
+            try {
+                showPast = localStorage.getItem('sdll_partner_show_past_games') === '1';
+            } catch (e) {
+                // localStorage not available, default to hiding past games
+            }
+
+            var checkbox = document.getElementById('show-past-games');
+            if (checkbox) {
+                checkbox.checked = showPast;
+            }
+
+            // Apply initial visibility
+            var pastRows = document.querySelectorAll('.schedule-table tbody tr.past-game');
+            pastRows.forEach(function(row) {
+                if (!showPast) {
+                    row.classList.add('hidden-past');
+                }
+            });
+
+            // Update game count after hiding past games
+            updateVisibleGameCount();
+
+            // Update clear button visibility if past games are shown
+            var clearBtn = document.getElementById('clear-filters-btn');
+            if (clearBtn && showPast) {
+                clearBtn.style.display = 'inline-block';
+            }
+        }
+
+        // Run on page load
+        document.addEventListener('DOMContentLoaded', initPastGamesToggle);
 
         // Change Type Filter functions
         function toggleChangeTypeFilter() {
@@ -919,10 +1002,10 @@
             var textarea = document.getElementById('email-text');
             var rows = document.querySelectorAll('.schedule-table tbody tr');
 
-            // Get visible game IDs
+            // Get visible game IDs (excludes hidden past games)
             var visibleGameIds = new Set();
             rows.forEach(function(row) {
-                if (row.style.display !== 'none') {
+                if (row.style.display !== 'none' && !row.classList.contains('hidden-past')) {
                     var gameId = row.dataset.gameId;
                     if (gameId) {
                         visibleGameIds.add(gameId);
