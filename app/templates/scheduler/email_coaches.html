@@ -118,24 +118,14 @@
         padding: 10px;
         cursor: pointer;
     }
-    .schedule-dropdown {
-        position: relative;
-        display: inline-block;
-    }
-    .schedule-dropdown-content {
+    .schedule-panel {
         display: none;
-        position: absolute;
-        bottom: 100%;
-        left: 0;
-        background: white;
-        border-radius: 4px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        padding: 10px;
-        z-index: 100;
-        min-width: 280px;
-        margin-bottom: 5px;
+        background: #f5f5f5;
+        border-radius: 8px;
+        padding: 15px;
+        margin-top: 15px;
     }
-    .schedule-dropdown:hover .schedule-dropdown-content {
+    .schedule-panel.active {
         display: block;
     }
     .header-row {
@@ -247,26 +237,35 @@
 
     <div class="card">
         <div style="display: flex; gap: 15px; align-items: center;">
-            <div class="schedule-dropdown">
-                <button type="submit" name="action" value="send_now" class="btn btn-primary"
-                        onclick="return confirmSend()">
-                    Send Now
-                </button>
-                <div class="schedule-dropdown-content">
-                    <div class="form-group" style="margin-bottom: 10px;">
-                        <label style="font-size: 13px;">Schedule for later</label>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <input type="date" name="schedule_date" class="form-control" style="width: 140px;">
-                        <input type="time" name="schedule_time" class="form-control" style="width: 100px;">
-                    </div>
-                    <button type="submit" name="action" value="schedule" class="btn btn-secondary btn-sm"
-                            style="margin-top: 10px; width: 100%;">
-                        Schedule
-                    </button>
-                </div>
-            </div>
+            <button type="submit" name="action" value="send_now" class="btn btn-primary"
+                    onclick="return confirmSend()">
+                Send Now
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="toggleSchedulePanel()">
+                Schedule Email
+            </button>
             <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline">Cancel</a>
+        </div>
+
+        <div class="schedule-panel" id="schedule-panel">
+            <h4 style="margin-top: 0; margin-bottom: 15px;">Schedule for Later</h4>
+            <div style="display: flex; gap: 15px; align-items: flex-end;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 13px;">Date</label>
+                    <input type="date" name="schedule_date" id="schedule_date" class="form-control" style="width: 150px;">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 13px;">Time (Eastern)</label>
+                    <input type="time" name="schedule_time" id="schedule_time" class="form-control" style="width: 120px;">
+                </div>
+                <button type="submit" name="action" value="schedule" class="btn btn-primary"
+                        onclick="return confirmSchedule()">
+                    Schedule
+                </button>
+                <button type="button" class="btn btn-outline" onclick="toggleSchedulePanel()">
+                    Cancel
+                </button>
+            </div>
         </div>
     </div>
 </form>
@@ -433,6 +432,53 @@
         var coachCount = parseInt(document.getElementById('recipient-count').textContent) || 0;
         var totalCount = coachCount + manualCount;
         return confirm('Send this email to ' + totalCount + ' recipient(s)?');
+    }
+
+    function toggleSchedulePanel() {
+        var panel = document.getElementById('schedule-panel');
+        panel.classList.toggle('active');
+    }
+
+    function confirmSchedule() {
+        var scheduleDate = document.getElementById('schedule_date').value;
+        var scheduleTime = document.getElementById('schedule_time').value;
+
+        if (!scheduleDate || !scheduleTime) {
+            alert('Please select both date and time for scheduling.');
+            return false;
+        }
+
+        var selectedLeagues = document.querySelectorAll('input[name="leagues"]:checked').length;
+        var manualCount = getManualRecipientCount();
+
+        if (selectedLeagues === 0 && manualCount === 0) {
+            alert('Please select at least one league or enter manual recipients.');
+            return false;
+        }
+
+        var subject = document.querySelector('input[name="subject"]').value.trim();
+        if (!subject) {
+            alert('Please enter a subject.');
+            return false;
+        }
+
+        var content = quill.getText().trim();
+        if (!content) {
+            alert('Please enter a message.');
+            return false;
+        }
+
+        var coachCount = parseInt(document.getElementById('recipient-count').textContent) || 0;
+        var totalCount = coachCount + manualCount;
+
+        // Format time for display
+        var dateObj = new Date(scheduleDate + 'T' + scheduleTime);
+        var timeStr = dateObj.toLocaleString('en-US', {
+            month: 'short', day: 'numeric',
+            hour: 'numeric', minute: '2-digit', hour12: true
+        });
+
+        return confirm('Schedule this email to ' + totalCount + ' recipient(s) for ' + timeStr + ' Eastern?');
     }
 </script>
 {% endblock %}

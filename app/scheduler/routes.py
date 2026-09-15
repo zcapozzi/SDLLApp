@@ -15,6 +15,7 @@ from app.models.league import League
 from app.models.league_season import LeagueSeason
 from app.models.field_slot import FieldSlot
 from app.models.schedule_proposal import ScheduleProposal
+from app.models.organization import Organization
 from app.extensions import db
 from app.utils.scheduler import ScheduleGenerator, ScheduleValidator
 from app.utils.logging import SDLLLogger
@@ -1343,11 +1344,13 @@ def email_coaches():
         # Get reply-to from current user
         reply_to = current_user.email or 'scheduler@sdll.org'
 
-        # Parse scheduled time
+        # Parse scheduled time (user enters Eastern time, convert to UTC for storage)
         scheduled_for = None
         if action == 'schedule' and schedule_date and schedule_time:
             try:
-                scheduled_for = datetime.strptime(f'{schedule_date} {schedule_time}', '%Y-%m-%d %H:%M')
+                local_dt = datetime.strptime(f'{schedule_date} {schedule_time}', '%Y-%m-%d %H:%M')
+                # Convert from Eastern time to UTC for storage
+                scheduled_for = Organization.local_to_utc(local_dt)
             except ValueError:
                 flash('Invalid schedule date/time format.', 'error')
                 return redirect(url_for('scheduler.email_coaches'))
@@ -1379,7 +1382,9 @@ def email_coaches():
             else:
                 flash(f'Email failed to send: {email_record.error_message}', 'error')
         else:
-            flash(f'Email scheduled for {scheduled_for.strftime("%b %d, %Y at %I:%M %p")}!', 'success')
+            # Show the local time in the flash message (convert back from UTC)
+            display_time = Organization.utc_to_local(scheduled_for)
+            flash(f'Email scheduled for {display_time.strftime("%b %d, %Y at %I:%M %p")} Eastern!', 'success')
 
         return redirect(url_for('scheduler.email_coaches_history'))
 

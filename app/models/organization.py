@@ -112,3 +112,35 @@ class Organization(db.Model):
         if local_dt is None:
             return ''
         return local_dt.strftime(fmt)
+
+    @classmethod
+    def local_to_utc(cls, local_dt, tz_name=None):
+        """
+        Convert a local datetime to UTC.
+
+        Use this when receiving user input in local time that needs to be
+        stored as UTC in the database.
+
+        Args:
+            local_dt: datetime object (assumed local if naive)
+            tz_name: IANA timezone name (e.g., 'America/New_York'). If None, uses home org timezone.
+
+        Returns:
+            datetime object in UTC
+        """
+        if local_dt is None:
+            return None
+
+        if tz_name is None:
+            tz_name = cls.get_default_timezone()
+
+        try:
+            local_tz = ZoneInfo(tz_name)
+        except Exception:
+            local_tz = ZoneInfo('America/New_York')
+
+        # If naive datetime, assume it's in the specified local timezone
+        if local_dt.tzinfo is None:
+            local_dt = local_dt.replace(tzinfo=local_tz)
+
+        return local_dt.astimezone(tz.utc)
