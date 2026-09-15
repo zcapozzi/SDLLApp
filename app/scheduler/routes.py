@@ -1494,3 +1494,45 @@ def api_game_coach_emails(game_id):
         'emails': unique_emails,
         'email_string': '\n'.join(unique_emails)
     })
+
+
+@scheduler_bp.route('/api/users-by-role/<role>')
+@login_required
+def api_users_by_role(role):
+    """Get users with a specific role for quick-add functionality."""
+    if not can_email_coaches():
+        return jsonify({'error': 'Permission denied'}), 403
+
+    from app.models.user import User
+
+    # Define role groups for convenience
+    role_groups = {
+        'board': ['admin', 'BoardExec', 'BB_VP', 'SB_VP', 'treasurer'],
+        'scheduler': ['scheduler'],
+        'player_agents': ['BBPlayerAgent', 'SBPlayerAgent'],
+        'umpire_coordinator': ['umpire_coordinator'],
+        'coaching_coordinator': ['coaching_coordinator'],
+    }
+
+    # Get target roles
+    if role in role_groups:
+        target_roles = role_groups[role]
+    else:
+        target_roles = [role]
+
+    # Find users with any of the target roles
+    users = User.query.filter(User.active == 1).all()
+
+    results = []
+    for user in users:
+        if user.has_role(*target_roles) and user.email:
+            results.append({
+                'name': user.name or user.email,
+                'email': user.email,
+                'role': user.get_highest_role()
+            })
+
+    return jsonify({
+        'users': results,
+        'emails': [u['email'] for u in results]
+    })

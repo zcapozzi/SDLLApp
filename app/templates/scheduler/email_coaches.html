@@ -134,6 +134,49 @@
         align-items: center;
         margin-bottom: 20px;
     }
+    /* Quick add buttons */
+    .quick-add-section {
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+    }
+    .quick-add-label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: #666;
+        margin-bottom: 8px;
+    }
+    .quick-add-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .quick-add-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 6px 12px;
+        font-size: 13px;
+        background: #f5f5f5;
+        border: 1px solid #ddd;
+        border-radius: 16px;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .quick-add-btn:hover {
+        background: #e8e8e8;
+        border-color: #ccc;
+    }
+    .quick-add-btn.added {
+        background: #e8f5e9;
+        border-color: #4caf50;
+        color: #2e7d32;
+    }
+    .quick-add-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
 </style>
 {% endblock %}
 
@@ -184,6 +227,26 @@
                       placeholder="Enter additional emails, one per line or comma-separated"
                       onchange="updateTotalCount()">{{ prefill_recipients or '' }}</textarea>
             <small class="text-muted">Can be used alone or added to coach recipients above</small>
+        </div>
+        <div class="quick-add-section">
+            <label class="quick-add-label">Quick Add:</label>
+            <div class="quick-add-buttons">
+                <button type="button" class="quick-add-btn" onclick="quickAddRole('scheduler')" title="Add Scheduler">
+                    📅 Scheduler
+                </button>
+                <button type="button" class="quick-add-btn" onclick="quickAddRole('player_agents')" title="Add Player Agents">
+                    👥 Player Agents
+                </button>
+                <button type="button" class="quick-add-btn" onclick="quickAddRole('umpire_coordinator')" title="Add Umpire Coordinator">
+                    ⚾ Umpire Coord
+                </button>
+                <button type="button" class="quick-add-btn" onclick="quickAddRole('coaching_coordinator')" title="Add Coaching Coordinator">
+                    🏆 Coaching Coord
+                </button>
+                <button type="button" class="quick-add-btn" onclick="quickAddRole('board')" title="Add Board Members">
+                    🏛️ Board
+                </button>
+            </div>
         </div>
     </div>
 
@@ -306,6 +369,65 @@
             cb.checked = false;
         });
         updatePreview();
+    }
+
+    // Quick add users by role
+    function quickAddRole(role) {
+        var btn = event.target.closest('.quick-add-btn');
+        btn.disabled = true;
+        btn.textContent = 'Adding...';
+
+        fetch('/scheduler/api/users-by-role/' + role)
+            .then(function(response) {
+                if (!response.ok) throw new Error('Failed to fetch users');
+                return response.json();
+            })
+            .then(function(data) {
+                if (data.emails && data.emails.length > 0) {
+                    var textarea = document.getElementById('manual_recipients');
+                    var currentEmails = textarea.value.trim();
+                    var newEmails = data.emails;
+
+                    // Parse existing emails to avoid duplicates
+                    var existingSet = new Set();
+                    if (currentEmails) {
+                        currentEmails.split(/[\n,]+/).forEach(function(e) {
+                            existingSet.add(e.trim().toLowerCase());
+                        });
+                    }
+
+                    // Add only new emails
+                    var addedCount = 0;
+                    newEmails.forEach(function(email) {
+                        if (!existingSet.has(email.toLowerCase())) {
+                            if (currentEmails) currentEmails += '\n';
+                            currentEmails += email;
+                            existingSet.add(email.toLowerCase());
+                            addedCount++;
+                        }
+                    });
+
+                    textarea.value = currentEmails;
+                    updateTotalCount();
+
+                    // Update button state
+                    btn.classList.add('added');
+                    btn.innerHTML = '✓ Added (' + data.emails.length + ')';
+                    btn.disabled = false;
+
+                    if (addedCount === 0) {
+                        btn.innerHTML = '✓ Already added';
+                    }
+                } else {
+                    btn.textContent = 'No users found';
+                    btn.disabled = false;
+                }
+            })
+            .catch(function(error) {
+                btn.textContent = 'Error';
+                btn.disabled = false;
+                console.error(error);
+            });
     }
 
     var recipientData = null;
