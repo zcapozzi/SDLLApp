@@ -1,0 +1,357 @@
+{% extends 'base.html' %}
+
+{% block title %}Game Reapportionment - {{ season_name }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <h1 style="margin: 0;">Game Reapportionment</h1>
+    <p style="color: var(--text-muted); margin: 5px 0 0 0;">
+        Redistribute Academy umpire games - {{ season_name }}
+    </p>
+</div>
+
+<!-- Filters -->
+<div class="card" style="margin-bottom: 20px;">
+    <form method="GET" style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end;">
+        <div>
+            <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px;">Sport</label>
+            <select name="sport" class="form-control" onchange="this.form.submit()">
+                <option value="softball" {% if sport == 'softball' %}selected{% endif %}>Softball</option>
+                <option value="baseball" {% if sport == 'baseball' %}selected{% endif %}>Baseball</option>
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px;">Days Ahead</label>
+            <select name="days" class="form-control" onchange="this.form.submit()">
+                <option value="14" {% if days_ahead == 14 %}selected{% endif %}>14 days</option>
+                <option value="30" {% if days_ahead == 30 %}selected{% endif %}>30 days</option>
+                <option value="60" {% if days_ahead == 60 %}selected{% endif %}>60 days</option>
+                <option value="90" {% if days_ahead == 90 %}selected{% endif %}>90 days</option>
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px;">Target Umpire</label>
+            <select id="target-umpire" class="form-control" style="min-width: 200px;">
+                <option value="">-- Unassign Only --</option>
+                {% for umpire in academy_umpires %}
+                <option value="{{ umpire.id }}">
+                    {{ umpire.first_name }} {{ umpire.last_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+</div>
+
+<!-- Summary Stats -->
+<div class="card" style="margin-bottom: 20px;">
+    <div style="display: flex; gap: 40px; flex-wrap: wrap;">
+        <div>
+            <span style="font-size: 28px; font-weight: 600; color: var(--primary);">{{ data.total_assigned }}</span>
+            <div style="font-size: 13px; color: var(--text-muted);">Assigned Games</div>
+        </div>
+        <div>
+            <span style="font-size: 28px; font-weight: 600; color: #ff8c00;">{{ data.total_unassigned }}</span>
+            <div style="font-size: 13px; color: var(--text-muted);">Unassigned Games</div>
+        </div>
+        <div>
+            <span style="font-size: 28px; font-weight: 600;">{{ data.umpires|length }}</span>
+            <div style="font-size: 13px; color: var(--text-muted);">Active Umpires</div>
+        </div>
+        <div>
+            <span style="font-size: 28px; font-weight: 600;">{{ data.avg_games_per_umpire }}</span>
+            <div style="font-size: 13px; color: var(--text-muted);">Avg Games/Umpire</div>
+        </div>
+    </div>
+</div>
+
+<!-- Umpire Distribution -->
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-top: 0;">Umpire Game Distribution</h3>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+        {% for umpire in data.umpires %}
+        <div style="
+            background: {% if umpire.count >= data.avg_games_per_umpire * 1.5 %}rgba(255,100,100,0.15){% elif umpire.count <= data.avg_games_per_umpire * 0.5 %}rgba(100,255,100,0.15){% else %}#f5f5f5{% endif %};
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+        ">
+            <strong>{{ umpire.name }}</strong>
+            <span style="
+                display: inline-block;
+                background: {% if umpire.count >= data.avg_games_per_umpire * 1.5 %}#c33{% elif umpire.count <= data.avg_games_per_umpire * 0.5 %}#228B22{% else %}#666{% endif %};
+                color: white;
+                padding: 2px 8px;
+                border-radius: 10px;
+                margin-left: 6px;
+                font-size: 12px;
+            ">{{ umpire.count }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    <p style="font-size: 12px; color: var(--text-muted); margin-top: 15px; margin-bottom: 0;">
+        <span style="background: rgba(255,100,100,0.15); padding: 2px 6px; border-radius: 3px;">Red</span> = Above average (good candidates to take games from)
+        &nbsp;|&nbsp;
+        <span style="background: rgba(100,255,100,0.15); padding: 2px 6px; border-radius: 3px;">Green</span> = Below average (need more games)
+    </p>
+</div>
+
+<!-- Assigned Games (Candidates) -->
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-top: 0;">Assigned Games (Candidates for Reassignment)</h3>
+    {% if data.assigned_games %}
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 60px;">Score</th>
+                <th>Date</th>
+                <th>Time</th>
+                <th>League</th>
+                <th>Field</th>
+                <th>Umpire</th>
+                <th style="width: 180px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in data.assigned_games %}
+            {% set assignment = game._academy_assignment %}
+            <tr id="game-{{ game.id }}" data-game-id="{{ game.id }}">
+                <td>
+                    <span class="score-badge" style="
+                        display: inline-block;
+                        padding: 4px 8px;
+                        border-radius: 4px;
+                        font-weight: 600;
+                        font-size: 12px;
+                        {% if game._score >= 1.5 %}
+                        background: rgba(34, 139, 34, 0.2);
+                        color: #228B22;
+                        {% elif game._score >= 1.0 %}
+                        background: rgba(255, 140, 0, 0.2);
+                        color: #ff8c00;
+                        {% else %}
+                        background: #f0f0f0;
+                        color: #666;
+                        {% endif %}
+                    ">{{ game._score }}</span>
+                </td>
+                <td>{{ game.localized_date }}</td>
+                <td>{{ game.localized_time }}</td>
+                <td>{{ game._local.league if game._local else '-' }}</td>
+                <td>{{ game._embedded.venue.name if game._embedded and game._embedded.venue else '-' }}</td>
+                <td>
+                    <strong>{{ assignment.official_name }}</strong>
+                    <span style="
+                        display: inline-block;
+                        background: {% if game._umpire_game_count >= data.avg_games_per_umpire * 1.5 %}#c33{% else %}#666{% endif %};
+                        color: white;
+                        padding: 1px 6px;
+                        border-radius: 8px;
+                        font-size: 11px;
+                        margin-left: 4px;
+                    ">{{ game._umpire_game_count }}</span>
+                    {% if assignment.accepted %}
+                    <span style="color: #228B22; font-size: 11px; margin-left: 4px;" title="Accepted">&#10003;</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline" onclick="unassignGame({{ game.id }})" title="Remove umpire from game">
+                        Unassign
+                    </button>
+                    <button class="btn btn-sm btn-primary" onclick="reassignGame({{ game.id }})" title="Reassign to target umpire">
+                        Reassign
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: var(--text-muted); text-align: center; padding: 30px;">
+        No assigned Academy games found for the selected criteria.
+    </p>
+    {% endif %}
+</div>
+
+<!-- Unassigned Games -->
+<div class="card">
+    <h3 style="margin-top: 0;">Unassigned Games (Available for Assignment)</h3>
+    {% if data.unassigned_games %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>League</th>
+                <th>Field</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in data.unassigned_games %}
+            <tr>
+                <td>{{ game.localized_date }}</td>
+                <td>{{ game.localized_time }}</td>
+                <td>{{ game._local.league if game._local else '-' }}</td>
+                <td>{{ game._embedded.venue.name if game._embedded and game._embedded.venue else '-' }}</td>
+                <td>
+                    <span style="color: #ff8c00; font-weight: 500;">Open</span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: var(--text-muted); text-align: center; padding: 30px;">
+        No unassigned games found for the selected criteria.
+    </p>
+    {% endif %}
+</div>
+
+<!-- Notification Modal -->
+<div id="notification-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="background: white; max-width: 500px; margin: 100px auto; padding: 25px; border-radius: 8px;">
+        <h3 style="margin-top: 0;">Send Notification</h3>
+        <p style="color: var(--text-muted); font-size: 14px;">
+            Send a message to the umpire about this reassignment.
+        </p>
+
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; font-weight: 600; margin-bottom: 5px;">Message Template</label>
+            <select id="message-template" class="form-control" onchange="applyTemplate()">
+                <option value="">-- Select a template --</option>
+                <option value="reassign">Game Reassigned (with replacement suggestions)</option>
+                <option value="unassign">Game Unassigned</option>
+                <option value="custom">Custom Message</option>
+            </select>
+        </div>
+
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; font-weight: 600; margin-bottom: 5px;">Message</label>
+            <textarea id="notification-message" class="form-control" rows="5" placeholder="Enter your message..."></textarea>
+        </div>
+
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button class="btn btn-outline" onclick="closeNotificationModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="sendNotification()">Send & Execute</button>
+            <button class="btn btn-outline" onclick="executeWithoutNotification()">Execute Without Notification</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.score-badge {
+    min-width: 40px;
+    text-align: center;
+}
+</style>
+
+<script>
+var pendingAction = null;
+
+function unassignGame(gameId) {
+    pendingAction = {
+        type: 'unassign',
+        gameId: gameId
+    };
+    document.getElementById('notification-modal').style.display = 'block';
+}
+
+function reassignGame(gameId) {
+    var targetUmpire = document.getElementById('target-umpire').value;
+    if (!targetUmpire) {
+        alert('Please select a target umpire from the dropdown, or use "Unassign" to remove the current assignment.');
+        return;
+    }
+
+    pendingAction = {
+        type: 'reassign',
+        gameId: gameId,
+        newOfficialId: targetUmpire
+    };
+    document.getElementById('notification-modal').style.display = 'block';
+}
+
+function closeNotificationModal() {
+    document.getElementById('notification-modal').style.display = 'none';
+    pendingAction = null;
+}
+
+function applyTemplate() {
+    var template = document.getElementById('message-template').value;
+    var textarea = document.getElementById('notification-message');
+
+    if (template === 'reassign') {
+        textarea.value = 'Hi,\n\nWe need to reassign your upcoming game to balance umpire workloads this season.\n\nPlease check Assignr for available games you can pick up as a replacement.\n\nThank you for your understanding.\n\nSDLL Umpire Coordinator';
+    } else if (template === 'unassign') {
+        textarea.value = 'Hi,\n\nYour assignment to an upcoming game has been removed. This is to help balance umpire workloads across the season.\n\nThank you for your understanding.\n\nSDLL Umpire Coordinator';
+    } else if (template === 'custom') {
+        textarea.value = '';
+    }
+}
+
+function executeWithoutNotification() {
+    executeAction(false);
+}
+
+function sendNotification() {
+    executeAction(true);
+}
+
+function executeAction(sendNotification) {
+    if (!pendingAction) return;
+
+    var message = document.getElementById('notification-message').value;
+
+    var payload = {
+        game_id: pendingAction.gameId,
+        send_notification: sendNotification,
+        notification_message: message
+    };
+
+    if (pendingAction.type === 'reassign') {
+        payload.new_official_id = pendingAction.newOfficialId;
+    }
+
+    fetch('{{ url_for("umpires.reapportion_execute") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        closeNotificationModal();
+
+        if (data.success) {
+            // Remove the row from the table
+            var row = document.getElementById('game-' + pendingAction.gameId);
+            if (row) {
+                row.style.background = '#90EE90';
+                setTimeout(function() {
+                    row.remove();
+                }, 500);
+            }
+
+            // Show success message
+            var msg = data.message;
+            if (data.notifications && data.notifications.length > 0) {
+                msg += '\n\nNotifications: ';
+                data.notifications.forEach(function(n) {
+                    msg += '\n- ' + n.umpire + ': ' + (n.success ? 'Sent' : n.message);
+                });
+            }
+            alert(msg);
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        closeNotificationModal();
+        alert('Request failed: ' + error);
+    });
+}
+</script>
+{% endblock %}

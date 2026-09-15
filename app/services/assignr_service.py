@@ -995,6 +995,167 @@ class AssignrService:
             logger.error(f"Failed to delete webhook subscription: {error_msg}")
             return False, error_msg
 
+    # =========================================================================
+    # Game Assignment Management
+    # =========================================================================
+
+    def unassign_game(self, game_id: int) -> Tuple[bool, Optional[str]]:
+        """
+        Remove all officials from a game (unassign).
+
+        Uses PUT /v2/games/{id}/unassign endpoint.
+
+        Args:
+            game_id: Assignr game ID
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        token = self._get_access_token(scope="write")
+        if not token:
+            return False, "Failed to obtain write access token"
+
+        url = f"{self.BASE_URL}/games/{game_id}/unassign"
+
+        try:
+            response = requests.put(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                data={},  # Empty body for unassign
+                timeout=30
+            )
+            response.raise_for_status()
+            logger.info(f"Unassigned all officials from game {game_id}")
+            return True, None
+
+        except requests.RequestException as e:
+            error_msg = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    error_msg = error_data.get('message', error_data.get('error', str(e)))
+                except Exception:
+                    error_msg = e.response.text[:200]
+            logger.error(f"Failed to unassign game {game_id}: {error_msg}")
+            return False, error_msg
+
+    def assign_official_to_game(
+        self,
+        game_id: int,
+        official_id: int,
+        position_id: int = None
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Assign an official to a game.
+
+        Args:
+            game_id: Assignr game ID
+            official_id: Assignr official (user) ID
+            position_id: Optional position ID (e.g., Plate, Base)
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        token = self._get_access_token(scope="write")
+        if not token:
+            return False, "Failed to obtain write access token"
+
+        url = f"{self.BASE_URL}/games/{game_id}/assignments"
+
+        payload = {
+            "official_id": official_id
+        }
+        if position_id:
+            payload["position_id"] = position_id
+
+        try:
+            response = requests.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                },
+                json=payload,
+                timeout=30
+            )
+            response.raise_for_status()
+            logger.info(f"Assigned official {official_id} to game {game_id}")
+            return True, None
+
+        except requests.RequestException as e:
+            error_msg = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    error_msg = error_data.get('message', error_data.get('error', str(e)))
+                except Exception:
+                    error_msg = e.response.text[:200]
+            logger.error(f"Failed to assign official to game: {error_msg}")
+            return False, error_msg
+
+    def send_message(
+        self,
+        recipient_ids: List[int],
+        subject: str,
+        body: str
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Send a message to officials via Assignr.
+
+        Args:
+            recipient_ids: List of official (user) IDs to message
+            subject: Message subject
+            body: Message body text
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        if not self.site_id:
+            return False, "Assignr site ID not configured"
+
+        token = self._get_access_token(scope="write")
+        if not token:
+            return False, "Failed to obtain write access token"
+
+        url = f"{self.BASE_URL}/sites/{self.site_id}/messages"
+
+        payload = {
+            "recipient_ids": recipient_ids,
+            "subject": subject,
+            "body": body
+        }
+
+        try:
+            response = requests.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                },
+                json=payload,
+                timeout=30
+            )
+            response.raise_for_status()
+            logger.info(f"Sent message to {len(recipient_ids)} recipients: {subject}")
+            return True, None
+
+        except requests.RequestException as e:
+            error_msg = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    error_msg = error_data.get('message', error_data.get('error', str(e)))
+                except Exception:
+                    error_msg = e.response.text[:200]
+            logger.error(f"Failed to send message: {error_msg}")
+            return False, error_msg
+
 
 # Singleton instance
 _assignr_service = None
