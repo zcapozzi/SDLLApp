@@ -324,16 +324,14 @@ class ReapportionmentService:
     def get_reapportionment_dashboard_data(
         self,
         sport: str,
-        year: int,
-        is_spring: bool,
+        org_season,
         days_ahead: int = 30
     ) -> Dict[str, Any]:
         """Get all data needed for the reapportionment dashboard.
 
         Args:
             sport: 'baseball' or 'softball'
-            year: Season year
-            is_spring: True for spring, False for fall
+            org_season: OrgSeason object
             days_ahead: Number of days ahead to look for games
 
         Returns:
@@ -362,8 +360,7 @@ class ReapportionmentService:
 
         return {
             'sport': sport,
-            'year': year,
-            'is_spring': is_spring,
+            'org_season': org_season,
             'start_date': start_date,
             'end_date': end_date,
             'days_ahead': days_ahead,

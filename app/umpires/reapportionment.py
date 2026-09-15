@@ -17,11 +17,13 @@ from app.utils.logging import SDLLLogger
 logger = SDLLLogger('umpires.reapportionment')
 
 
-@umpires_bp.route('/<int:year>/<int:is_spring>/reapportion')
+@umpires_bp.route('/reapportion/<int:org_season_id>')
 @login_required
 @umpire_coordinator_required
-def reapportionment_dashboard(year, is_spring):
+def reapportionment_dashboard(org_season_id):
     """Main reapportionment dashboard - view umpire game distribution."""
+    org_season = OrgSeason.query.get_or_404(org_season_id)
+
     # Get sport from query param, default to softball
     sport = request.args.get('sport', 'softball')
     if sport not in ('baseball', 'softball'):
@@ -37,8 +39,7 @@ def reapportionment_dashboard(year, is_spring):
     service = get_reapportionment_service()
     data = service.get_reapportionment_dashboard_data(
         sport=sport,
-        year=year,
-        is_spring=bool(is_spring),
+        org_season=org_season,
         days_ahead=days_ahead
     )
 
@@ -47,13 +48,11 @@ def reapportionment_dashboard(year, is_spring):
     academy_umpires = assignr.get_officials_by_group_name("SDLL Academy")
     academy_umpires.sort(key=lambda u: f"{u.get('first_name', '')} {u.get('last_name', '')}")
 
-    season_name = f"{'Spring' if is_spring else 'Fall'} {year}"
-
     return render_template(
         'umpires/reapportionment.html',
-        year=year,
-        is_spring=is_spring,
-        season_name=season_name,
+        org_season=org_season,
+        org_season_id=org_season_id,
+        season_name=org_season.name,
         sport=sport,
         days_ahead=days_ahead,
         data=data,
