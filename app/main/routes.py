@@ -28,6 +28,64 @@ def health():
 
 
 # ============================================================================
+# Assignr Webhook (public endpoint for Assignr to call)
+# ============================================================================
+
+@main_bp.route('/assignr/webhook', methods=['POST'])
+def assignr_webhook():
+    """
+    Public webhook endpoint for Assignr.
+
+    This is a convenience route that forwards to the main webhook handler
+    at /umpires/assignr/webhook. Allows using the simpler /assignr/webhook URL.
+    """
+    from app.services.assignr_webhook_service import get_webhook_service
+    from app.models.assignr_webhook_event import AssignrWebhookEvent
+
+    service = get_webhook_service()
+
+    # Verify signature
+    is_valid, error = service.verify_signature(request)
+    if not is_valid:
+        return jsonify({'error': error}), 401
+
+    # Parse payload
+    payload, error = service.parse_webhook_payload(request)
+    if not payload:
+        return jsonify({'error': error}), 400
+
+    event_id = payload.get('id')
+    topic = payload.get('topic')
+
+    # Check for duplicate
+    existing = AssignrWebhookEvent.query.filter_by(external_id=str(event_id)).first()
+    if existing:
+        return jsonify({'status': 'duplicate', 'message': 'Event already processed'}), 200
+
+    # Store the event
+    event = AssignrWebhookEvent(
+        external_id=str(event_id),
+        topic=topic,
+        payload=payload,
+        status='pending'
+    )
+    db.session.add(event)
+    db.session.commit()
+
+    # Process the event
+    service.process_event(event)
+
+    return jsonify({'status': 'ok', 'event_id': event.id}), 200
+
+
+@main_bp.route('/assignr/webhooks')
+@login_required
+def assignr_webhooks_redirect():
+    """Redirect to the full webhook admin page."""
+    return redirect(url_for('assignr.webhook_list'))
+
+
+# ============================================================================
 # Cron Job Endpoints (called by external scheduler)
 # ============================================================================
 
