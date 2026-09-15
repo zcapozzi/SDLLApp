@@ -103,6 +103,9 @@
                 <th class="sortable" data-sort="division">Division <span class="sort-icon"></span></th>
                 <th class="sortable" data-sort="matchup">Matchup <span class="sort-icon"></span></th>
                 <th class="sortable" data-sort="location">Location <span class="sort-icon"></span></th>
+                {% if current_user.is_authenticated and current_user.has_role('admin', 'scheduler', 'SBPlayerAgent', 'BBPlayerAgent') %}
+                <th class="actions-col"></th>
+                {% endif %}
             </tr>
         </thead>
         <tbody>
@@ -117,7 +120,8 @@
                 data-location="{{ game.field_rel.name if game.field_rel else '' }}"
                 data-field-id="{{ game.field_rel.ID if game.field_rel else '' }}"
                 data-event-type="{{ event_type }}"
-                data-cancelled="{{ '1' if game.status == 'cancelled' else '0' }}">
+                data-cancelled="{{ '1' if game.status == 'cancelled' else '0' }}"
+                data-game-id="{{ game.ID }}">
                 <td>{{ game.game_date.strftime('%a, %b %d') }}</td>
                 <td>{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</td>
                 <td>{{ game.league or '-' }}</td>
@@ -152,6 +156,18 @@
                     {% endif %}
                 </td>
                 <td>{{ game.field_rel.name if game.field_rel else '-' }}</td>
+                {% if current_user.is_authenticated and current_user.has_role('admin', 'scheduler', 'SBPlayerAgent', 'BBPlayerAgent') %}
+                <td class="actions-cell">
+                    <div class="action-menu">
+                        <button class="action-btn" onclick="toggleActionMenu(this, event)">⋮</button>
+                        <div class="action-dropdown">
+                            <a href="#" onclick="emailCoachesForGame({{ game.ID }}); return false;">
+                                <span class="action-icon">✉</span> Email Coaches
+                            </a>
+                        </div>
+                    </div>
+                </td>
+                {% endif %}
             </tr>
             {% endfor %}
         </tbody>
@@ -507,6 +523,71 @@
     color: #999;
 }
 
+/* Action menu */
+.actions-col {
+    width: 40px;
+}
+.actions-cell {
+    text-align: center;
+    position: relative;
+}
+.action-menu {
+    position: relative;
+    display: inline-block;
+}
+.action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    color: #666;
+    padding: 4px 8px;
+    border-radius: 4px;
+    line-height: 1;
+}
+.action-btn:hover {
+    background: #f0f0f0;
+    color: #333;
+}
+.action-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    min-width: 160px;
+    z-index: 100;
+}
+.action-dropdown.show {
+    display: block;
+}
+.action-dropdown a {
+    display: block;
+    padding: 10px 14px;
+    color: #333;
+    text-decoration: none;
+    font-size: 14px;
+    white-space: nowrap;
+}
+.action-dropdown a:hover {
+    background: #f5f5f5;
+}
+.action-dropdown a:first-child {
+    border-radius: 6px 6px 0 0;
+}
+.action-dropdown a:last-child {
+    border-radius: 0 0 6px 6px;
+}
+.action-dropdown a:only-child {
+    border-radius: 6px;
+}
+.action-icon {
+    margin-right: 8px;
+}
+
 /* Sortable table headers */
 .sortable {
     cursor: pointer;
@@ -699,6 +780,61 @@ function toggleProgress() {
         expanded.classList.add('show');
         toggle.textContent = '-';
     }
+}
+
+// Action menu toggle
+var currentOpenMenu = null;
+
+function toggleActionMenu(btn, event) {
+    event.stopPropagation();
+    var dropdown = btn.nextElementSibling;
+
+    // Close any other open menu
+    if (currentOpenMenu && currentOpenMenu !== dropdown) {
+        currentOpenMenu.classList.remove('show');
+    }
+
+    // Toggle this menu
+    dropdown.classList.toggle('show');
+    currentOpenMenu = dropdown.classList.contains('show') ? dropdown : null;
+}
+
+// Close menu when clicking elsewhere
+document.addEventListener('click', function() {
+    if (currentOpenMenu) {
+        currentOpenMenu.classList.remove('show');
+        currentOpenMenu = null;
+    }
+});
+
+// Email coaches for a specific game
+function emailCoachesForGame(gameId) {
+    // Close menu
+    if (currentOpenMenu) {
+        currentOpenMenu.classList.remove('show');
+        currentOpenMenu = null;
+    }
+
+    // Fetch coach emails for this game
+    fetch('/scheduler/api/game/' + gameId + '/coach-emails')
+        .then(function(response) {
+            if (!response.ok) {
+                throw new Error('Failed to get coach emails');
+            }
+            return response.json();
+        })
+        .then(function(data) {
+            if (data.emails && data.emails.length > 0) {
+                // Redirect to email coaches page with pre-filled recipients
+                var emailString = data.emails.join('\n');
+                window.location.href = '/scheduler/email-coaches?to=' + encodeURIComponent(emailString);
+            } else {
+                alert('No coach emails found for this event. Make sure coaches are assigned to the teams.');
+            }
+        })
+        .catch(function(error) {
+            alert('Error: ' + error.message);
+        });
 }
 
 // Mobile view toggle

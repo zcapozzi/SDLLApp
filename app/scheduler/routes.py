@@ -1388,13 +1388,17 @@ def email_coaches():
 
         return redirect(url_for('scheduler.email_coaches_history'))
 
+    # Check for pre-filled recipients (e.g., from master schedule "Email Coaches" action)
+    prefill_recipients = request.args.get('to', '')
+
     return render_template(
         'scheduler/email_coaches.html',
         year=year,
         is_spring=is_spring,
         season_name=season_name,
         leagues=leagues,
-        user_email=current_user.email or 'scheduler@sdll.org'
+        user_email=current_user.email or 'scheduler@sdll.org',
+        prefill_recipients=prefill_recipients
     )
 
 
@@ -1451,3 +1455,42 @@ def api_coach_email_preview():
         response['recipients'] = coaches
 
     return jsonify(response)
+
+
+@scheduler_bp.route('/api/game/<int:game_id>/coach-emails')
+@login_required
+def api_game_coach_emails(game_id):
+    """Get coach emails for teams in a specific game."""
+    if not can_email_coaches():
+        return jsonify({'error': 'Permission denied'}), 403
+
+    from app.models.game import Game
+    from app.models.coach import CoachSeason
+
+    game = Game.query.get(game_id)
+    if not game:
+        return jsonify({'error': 'Game not found'}), 404
+
+    emails = []
+
+    # Get coaches for home team
+    if game.home_ID:
+        home_coaches = CoachSeason.get_for_team(game.home_ID)
+        for coach in home_coaches:
+            if coach.email:
+                emails.append(coach.email)
+
+    # Get coaches for away team
+    if game.away_ID:
+        away_coaches = CoachSeason.get_for_team(game.away_ID)
+        for coach in away_coaches:
+            if coach.email:
+                emails.append(coach.email)
+
+    # Return unique emails
+    unique_emails = list(set(emails))
+
+    return jsonify({
+        'emails': unique_emails,
+        'email_string': '\n'.join(unique_emails)
+    })

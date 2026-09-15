@@ -182,7 +182,7 @@
         <div class="form-group">
             <textarea name="manual_recipients" id="manual_recipients" class="form-control" rows="2"
                       placeholder="Enter additional emails, one per line or comma-separated"
-                      onchange="updateTotalCount()"></textarea>
+                      onchange="updateTotalCount()">{{ prefill_recipients or '' }}</textarea>
             <small class="text-muted">Can be used alone or added to coach recipients above</small>
         </div>
     </div>
