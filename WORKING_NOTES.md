@@ -4,7 +4,90 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Implemented treasurer features - managed umpires report and financial views.
+Last session: Implemented self-service access request feature with three workflows (Parent/Coach/Admin).
+
+---
+
+## Session: September 15, 2026 - Access Request Feature Implementation
+
+### Overview
+Implemented a comprehensive self-service access request system that allows users to request different types of access to SDLL:
+
+1. **Parent/Fan** - Auto-approve with email verification (instant access)
+2. **Coach** - Admin approval required, with team assignment
+3. **League Admin** - Admin approval required, with role assignment
+
+### Files Created
+1. **app/models/access_request.py** - New model for access requests with:
+   - Encrypted PII (same pattern as User model)
+   - Verification token support for email verification
+   - Status tracking (email_pending, pending, approved, rejected, expired)
+   - Helper methods for creating, verifying, and processing requests
+
+2. **app/services/access_request_service.py** - Service layer with:
+   - Email template rendering with variable substitution
+   - Verification email sending
+   - Welcome email sending (customized per request type)
+   - Admin notification emails
+   - Rejection email sending
+   - User account creation from approved requests
+   - Daily parent digest for admins
+
+3. **scripts/add_access_requests_table.sql** - MySQL-compatible migration
+
+4. **scripts/seed_system_email_templates.sql** - Seed data for 7 system email templates:
+   - verify_email, welcome_parent, welcome_coach, welcome_admin
+   - access_request_pending, access_request_rejected, daily_parent_digest
+
+5. **app/templates/public/request_access_landing.html** - Landing page with 3 cards
+6. **app/templates/public/request_access_parent.html** - Parent form
+7. **app/templates/public/request_access_coach.html** - Coach form with team dropdown
+8. **app/templates/public/request_access_admin.html** - Admin form with roles textarea
+9. **app/templates/public/request_access_pending.html** - Confirmation page
+10. **app/templates/admin/access_requests.html** - Admin review interface
+
+### Files Modified
+1. **app/models/__init__.py** - Added AccessRequest import
+2. **app/models/email_campaign_template.py** - Added:
+   - CATEGORY_SYSTEM constant
+   - RECIPIENT_ACCESS_REQUESTER and RECIPIENT_SITE_ADMIN constants
+   - Variables for access request templates in get_available_variables()
+3. **app/public/routes.py** - Added 6 routes:
+   - `/request-access` - Landing page
+   - `/request-access/parent` - Parent form
+   - `/request-access/coach` - Coach form
+   - `/request-access/admin` - Admin form
+   - `/request-access/verify/<token>` - Email verification
+   - `/request-access/pending` - Confirmation page
+4. **app/admin/routes.py** - Added admin review route at `/admin/access-requests`
+5. **app/templates/auth/login.html** - Added "Request Access" link
+
+### Features
+- **Parent Flow**: Submit form -> receive verification email -> click link -> account auto-created -> welcome email with password setup
+- **Coach Flow**: Submit form -> admins notified -> admin approves/rejects -> welcome email sent
+- **Admin Flow**: Submit form -> admins notified -> admin assigns roles and approves -> welcome email sent
+- **Admin Review UI**: View pending requests, approve with team/role assignment, reject with optional reason
+- **Email Templates**: All emails use editable templates in the EmailCampaignTemplate system (category=system)
+- **Duplicate Prevention**: Checks for existing users and pending requests with same email
+
+### Routes
+- Public: `/s/request-access`, `/s/request-access/parent`, `/s/request-access/coach`, `/s/request-access/admin`, `/s/request-access/verify/<token>`, `/s/request-access/pending`
+- Admin: `/admin/access-requests`
+
+### Database Changes Required
+Run these migrations on production:
+```sql
+-- Create access_requests table
+scripts/add_access_requests_table.sql
+
+-- Seed system email templates
+scripts/seed_system_email_templates.sql
+```
+
+### Next Steps
+1. Run database migrations
+2. Test full flows (parent verification, coach approval, admin approval)
+3. Consider adding daily digest cron job for parent account notifications
 
 ---
 

@@ -45,12 +45,14 @@ class EmailCampaignTemplate(db.Model):
     CATEGORY_PROSPECTIVE = 'prospective'
     CATEGORY_RETURNING = 'returning'
     CATEGORY_ADMIN_MARKETING = 'admin_marketing'
+    CATEGORY_SYSTEM = 'system'  # System emails (verification, welcome, notifications)
 
     CATEGORIES = [
         (CATEGORY_PARTNER, 'Partner Coordination'),
         (CATEGORY_PROSPECTIVE, 'Prospective Umpire'),
         (CATEGORY_RETURNING, 'Returning Umpire'),
         (CATEGORY_ADMIN_MARKETING, 'League Admin Marketing'),
+        (CATEGORY_SYSTEM, 'System Emails'),
     ]
 
     # Milestone constants
@@ -72,6 +74,8 @@ class EmailCampaignTemplate(db.Model):
     RECIPIENT_ACTIVE_UMPIRE = 'active_umpire'
     RECIPIENT_LEAGUE_ADMIN = 'league_admin'
     RECIPIENT_COORDINATOR = 'coordinator'
+    RECIPIENT_ACCESS_REQUESTER = 'access_requester'  # Person requesting access
+    RECIPIENT_SITE_ADMIN = 'site_admin'  # Site administrators for notifications
 
     def __repr__(self):
         return f'<EmailCampaignTemplate {self.code}>'
@@ -165,6 +169,20 @@ class EmailCampaignTemplate(db.Model):
             variables['recipient_name'] = 'Partner contact name'
         elif self.recipient_type in (self.RECIPIENT_LEAD, self.RECIPIENT_ACTIVE_UMPIRE):
             variables['recipient_name'] = 'Umpire name'
+        elif self.recipient_type == self.RECIPIENT_ACCESS_REQUESTER:
+            variables['first_name'] = 'Requester first name'
+            variables['last_name'] = 'Requester last name'
+            variables['verify_url'] = 'Email verification URL'
+            variables['reset_url'] = 'Password reset/setup URL'
+            variables['team_name'] = 'Team name (for coach requests)'
+            variables['roles'] = 'Assigned roles (for admin requests)'
+            variables['reason'] = 'Rejection reason'
+        elif self.recipient_type == self.RECIPIENT_SITE_ADMIN:
+            variables['requester_name'] = 'Name of person requesting access'
+            variables['request_type'] = 'Type of request (Parent, Coach, Admin)'
+            variables['review_url'] = 'URL to review the request'
+            variables['team_name'] = 'Team name (for coach requests)'
+            variables['requested_roles'] = 'Requested roles description (for admin requests)'
         else:
             variables['recipient_name'] = 'Recipient name'
 

@@ -747,3 +747,100 @@ def seasons():
         suggested_label=suggested_label,
         season_labels=season_labels
     )
+
+
+# =============================================================================
+# ACCESS REQUESTS - Review and approve/reject user access requests
+# =============================================================================
+
+@admin_bp.route('/access-requests', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def access_requests():
+    """Review and process access requests from prospective users."""
+    from app.models.access_request import AccessRequest
+    from app.models.team import TeamSeason
+    from app.models.org_season import OrgSeason
+    from app.services.access_request_service import AccessRequestService
+
+    service = AccessRequestService()
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        request_id = request.form.get('request_id', type=int)
+
+        if not request_id:
+            flash('Request ID is required.', 'error')
+            return redirect(url_for('admin.access_requests'))
+
+        access_request = db.session.get(AccessRequest, request_id)
+        if not access_request:
+            flash('Request not found.', 'error')
+            return redirect(url_for('admin.access_requests'))
+
+        if action == 'approve_coach':
+            # Approve coach request
+            team_id = request.form.get('team_id', type=int)
+            success, message, user = service.approve_coach_request(
+                request_id, current_user.ID, team_id
+            )
+            flash(message, 'success' if success else 'error')
+
+        elif action == 'approve_admin':
+            # Approve admin request with selected roles
+            roles = request.form.getlist('roles')
+            if not roles:
+                flash('Please select at least one role.', 'error')
+                return redirect(url_for('admin.access_requests'))
+
+            success, message, user = service.approve_admin_request(
+                request_id, current_user.ID, roles
+            )
+            flash(message, 'success' if success else 'error')
+
+        elif action == 'reject':
+            # Reject request
+            reason = request.form.get('rejection_reason', '').strip()
+            send_email = request.form.get('send_rejection_email') == 'on'
+            success, message = service.reject_request(
+                request_id, current_user.ID, reason, send_email
+            )
+            flash(message, 'success' if success else 'error')
+
+        return redirect(url_for('admin.access_requests'))
+
+    # GET: Display pending requests
+    pending_requests = AccessRequest.get_pending_requests()
+
+    # Group by type for easier display
+    coach_requests = [r for r in pending_requests if r.request_type == AccessRequest.TYPE_COACH]
+    admin_requests = [r for r in pending_requests if r.request_type == AccessRequest.TYPE_ADMIN]
+
+    # Get teams for coach assignment dropdown
+    current_season = OrgSeason.get_current_season()
+    teams = []
+    if current_season:
+        teams = TeamSeason.query.filter_by(
+            year=current_season.year,
+            is_spring=current_season.is_spring,
+            active=1,
+            is_placeholder=0
+        ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+
+    # Get available roles for admin assignment
+    available_roles = User.ROLES
+
+    # Get recent processed requests for reference
+    recent_processed = AccessRequest.query.filter(
+        AccessRequest.status.in_([AccessRequest.STATUS_APPROVED, AccessRequest.STATUS_REJECTED])
+    ).order_by(AccessRequest.processed_at.desc()).limit(20).all()
+
+    return render_template(
+        'admin/access_requests.html',
+        coach_requests=coach_requests,
+        admin_requests=admin_requests,
+        pending_count=len(pending_requests),
+        teams=teams,
+        available_roles=available_roles,
+        recent_processed=recent_processed
+    )

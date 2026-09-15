@@ -1,0 +1,404 @@
+{% extends 'base.html' %}
+
+{% block title %}Access Requests{% endblock %}
+
+{% block extra_css %}
+<style>
+    .request-section {
+        margin-bottom: 30px;
+    }
+    .request-section h3 {
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .count-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        background: #dc3545;
+        color: white;
+    }
+    .request-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 15px;
+        background: white;
+    }
+    .request-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 15px;
+    }
+    .request-info h4 {
+        margin: 0 0 5px 0;
+        color: #333;
+    }
+    .request-info p {
+        margin: 0;
+        color: #666;
+        font-size: 14px;
+    }
+    .request-meta {
+        text-align: right;
+        font-size: 13px;
+        color: #999;
+    }
+    .request-details {
+        background: #f8f9fa;
+        border-radius: 6px;
+        padding: 12px;
+        margin-bottom: 15px;
+        font-size: 14px;
+    }
+    .request-details label {
+        font-weight: 600;
+        color: #333;
+        display: block;
+        margin-bottom: 4px;
+    }
+    .request-details p {
+        margin: 0;
+        color: #666;
+    }
+    .request-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+    }
+    .action-form {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+    }
+    .form-group-inline {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .form-group-inline label {
+        font-size: 12px;
+        font-weight: 500;
+        color: #666;
+    }
+    .form-group-inline select,
+    .form-group-inline input {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    .roles-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 8px;
+        margin-bottom: 15px;
+    }
+    .role-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+    }
+    .role-checkbox input {
+        margin: 0;
+    }
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 13px;
+    }
+    .btn-approve {
+        background: #228B22;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .btn-approve:hover {
+        background: #1a6a1a;
+    }
+    .btn-reject {
+        background: #dc3545;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .btn-reject:hover {
+        background: #a71d2a;
+    }
+    .no-requests {
+        text-align: center;
+        padding: 40px;
+        color: #666;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+    .rejection-form {
+        display: none;
+        margin-top: 15px;
+        padding: 15px;
+        background: #fff5f5;
+        border: 1px solid #f5c6cb;
+        border-radius: 6px;
+    }
+    .rejection-form.active {
+        display: block;
+    }
+    .rejection-form textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin-bottom: 10px;
+        resize: vertical;
+        min-height: 80px;
+    }
+    .recent-section {
+        margin-top: 40px;
+    }
+    .recent-section h3 {
+        margin-bottom: 15px;
+        color: #666;
+    }
+    .recent-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .recent-table th,
+    .recent-table td {
+        padding: 10px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+    }
+    .recent-table th {
+        background: #f8f9fa;
+        font-weight: 600;
+        font-size: 13px;
+    }
+    .status-approved {
+        color: #228B22;
+        font-weight: 500;
+    }
+    .status-rejected {
+        color: #dc3545;
+        font-weight: 500;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>Access Requests</h2>
+        {% if pending_count > 0 %}
+        <span class="count-badge">{{ pending_count }} pending</span>
+        {% endif %}
+    </div>
+
+    {% if pending_count == 0 %}
+    <div class="no-requests">
+        <h4>No pending requests</h4>
+        <p>All access requests have been processed.</p>
+    </div>
+    {% else %}
+
+    <!-- Coach Requests -->
+    {% if coach_requests %}
+    <div class="request-section">
+        <h3>
+            Coach Requests
+            <span class="count-badge" style="background: #20c997;">{{ coach_requests|length }}</span>
+        </h3>
+
+        {% for req in coach_requests %}
+        <div class="request-card" id="request-{{ req.id }}">
+            <div class="request-header">
+                <div class="request-info">
+                    <h4>{{ req.full_name }}</h4>
+                    <p>{{ req.email }}{% if req.phone %} | {{ req.phone }}{% endif %}</p>
+                </div>
+                <div class="request-meta">
+                    Submitted {{ req.created_at.strftime('%b %d, %Y at %I:%M %p') }}
+                </div>
+            </div>
+
+            {% if req.team %}
+            <div class="request-details">
+                <label>Requested Team</label>
+                <p>{{ req.team.league }} - {{ req.team.computed_display_name }}</p>
+            </div>
+            {% endif %}
+
+            <form method="POST" class="action-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="request_id" value="{{ req.id }}">
+                <input type="hidden" name="action" value="approve_coach">
+
+                <div class="form-group-inline">
+                    <label for="team_id_{{ req.id }}">Assign to Team</label>
+                    <select name="team_id" id="team_id_{{ req.id }}">
+                        <option value="">-- Select team --</option>
+                        {% for team in teams %}
+                        <option value="{{ team.team_ID }}" {% if req.team_id == team.team_ID %}selected{% endif %}>
+                            {{ team.league }} - {{ team.computed_display_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-sm btn-approve">Approve</button>
+                <button type="button" class="btn btn-sm btn-reject" onclick="showRejectForm({{ req.id }})">Reject</button>
+            </form>
+
+            <div class="rejection-form" id="reject-form-{{ req.id }}">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="request_id" value="{{ req.id }}">
+                    <input type="hidden" name="action" value="reject">
+
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">Rejection Reason (optional)</label>
+                    <textarea name="rejection_reason" placeholder="Enter a reason for rejection..."></textarea>
+
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px;">
+                            <input type="checkbox" name="send_rejection_email" checked>
+                            Send rejection email
+                        </label>
+                        <button type="submit" class="btn btn-sm btn-reject">Confirm Rejection</button>
+                        <button type="button" class="btn btn-sm" onclick="hideRejectForm({{ req.id }})" style="background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Admin Requests -->
+    {% if admin_requests %}
+    <div class="request-section">
+        <h3>
+            League Admin Requests
+            <span class="count-badge" style="background: #dc3545;">{{ admin_requests|length }}</span>
+        </h3>
+
+        {% for req in admin_requests %}
+        <div class="request-card" id="request-{{ req.id }}">
+            <div class="request-header">
+                <div class="request-info">
+                    <h4>{{ req.full_name }}</h4>
+                    <p>{{ req.email }}{% if req.phone %} | {{ req.phone }}{% endif %}</p>
+                </div>
+                <div class="request-meta">
+                    Submitted {{ req.created_at.strftime('%b %d, %Y at %I:%M %p') }}
+                </div>
+            </div>
+
+            {% if req.requested_roles %}
+            <div class="request-details">
+                <label>Requested Responsibilities</label>
+                <p>{{ req.requested_roles }}</p>
+            </div>
+            {% endif %}
+
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="request_id" value="{{ req.id }}">
+                <input type="hidden" name="action" value="approve_admin">
+
+                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Assign Roles</label>
+                <div class="roles-grid">
+                    {% for role in available_roles %}
+                    <label class="role-checkbox">
+                        <input type="checkbox" name="roles" value="{{ role }}">
+                        {{ role|replace('_', ' ')|title }}
+                    </label>
+                    {% endfor %}
+                </div>
+
+                <div class="request-actions">
+                    <button type="submit" class="btn btn-sm btn-approve">Approve with Selected Roles</button>
+                    <button type="button" class="btn btn-sm btn-reject" onclick="showRejectForm({{ req.id }})">Reject</button>
+                </div>
+            </form>
+
+            <div class="rejection-form" id="reject-form-{{ req.id }}">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="request_id" value="{{ req.id }}">
+                    <input type="hidden" name="action" value="reject">
+
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">Rejection Reason (optional)</label>
+                    <textarea name="rejection_reason" placeholder="Enter a reason for rejection..."></textarea>
+
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px;">
+                            <input type="checkbox" name="send_rejection_email" checked>
+                            Send rejection email
+                        </label>
+                        <button type="submit" class="btn btn-sm btn-reject">Confirm Rejection</button>
+                        <button type="button" class="btn btn-sm" onclick="hideRejectForm({{ req.id }})" style="background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% endif %}
+
+    <!-- Recent Processed -->
+    {% if recent_processed %}
+    <div class="recent-section">
+        <h3>Recently Processed</h3>
+        <table class="recent-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Processed</th>
+                    <th>By</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in recent_processed %}
+                <tr>
+                    <td>{{ req.full_name }}</td>
+                    <td>{{ req.type_display }}</td>
+                    <td>
+                        {% if req.status == 'approved' %}
+                        <span class="status-approved">Approved</span>
+                        {% else %}
+                        <span class="status-rejected">Rejected</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ req.processed_at.strftime('%b %d, %Y') if req.processed_at else 'N/A' }}</td>
+                    <td>{{ req.processor.name if req.processor else 'N/A' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function showRejectForm(requestId) {
+    document.getElementById('reject-form-' + requestId).classList.add('active');
+}
+
+function hideRejectForm(requestId) {
+    document.getElementById('reject-form-' + requestId).classList.remove('active');
+}
+</script>
+{% endblock %}

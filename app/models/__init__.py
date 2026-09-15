@@ -48,3 +48,6 @@ from .training_completion import TrainingCompletion
 
 # Assignr webhook integration
 from .assignr_webhook_event import AssignrWebhookEvent
+
+# Access request system
+from .access_request import AccessRequest

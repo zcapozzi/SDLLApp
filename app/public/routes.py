@@ -2206,3 +2206,300 @@ def umpire_interest():
 def umpire_interest_success():
     """Success page after submitting umpire interest form."""
     return render_template('public/umpire_interest_success.html')
+
+
+# =============================================================================
+# ACCESS REQUEST ROUTES - Self-service account creation
+# =============================================================================
+
+@public_bp.route('/request-access')
+def request_access_landing():
+    """Landing page for access requests - choose between Parent, Coach, Admin."""
+    return render_template('public/request_access_landing.html')
+
+
+@public_bp.route('/request-access/parent', methods=['GET', 'POST'])
+def request_access_parent():
+    """Parent/Fan access request form - requires email verification."""
+    from app.models.access_request import AccessRequest
+    from app.models.user import User
+    from app.services.access_request_service import AccessRequestService
+
+    if request.method == 'POST':
+        first_name = request.form.get('first_name', '').strip()
+        last_name = request.form.get('last_name', '').strip()
+        email = request.form.get('email', '').strip().lower()
+
+        errors = []
+        if not first_name:
+            errors.append('First name is required.')
+        if not last_name:
+            errors.append('Last name is required.')
+        if not email:
+            errors.append('Email is required.')
+        elif '@' not in email or '.' not in email:
+            errors.append('Please enter a valid email address.')
+
+        if errors:
+            return render_template(
+                'public/request_access_parent.html',
+                errors=errors,
+                form_data={'first_name': first_name, 'last_name': last_name, 'email': email}
+            )
+
+        # Check if user already exists
+        existing_user = User.get_by_email(email)
+        if existing_user:
+            return render_template(
+                'public/request_access_parent.html',
+                errors=['An account with this email already exists. Please log in instead.'],
+                form_data={'first_name': first_name, 'last_name': last_name, 'email': email}
+            )
+
+        # Check for pending request
+        pending = AccessRequest.get_pending_by_email(email)
+        if pending:
+            return render_template(
+                'public/request_access_parent.html',
+                errors=['A request with this email is already pending. Please check your email for the verification link.'],
+                form_data={'first_name': first_name, 'last_name': last_name, 'email': email}
+            )
+
+        try:
+            # Create the request
+            access_request = AccessRequest.create_parent_request(
+                first_name=first_name,
+                last_name=last_name,
+                email=email
+            )
+
+            # Send verification email
+            service = AccessRequestService()
+            service.send_verification_email(access_request)
+
+            return redirect(url_for('public.request_access_pending', type='parent'))
+
+        except Exception as e:
+            _log_tracking_error("request_access_parent", e)
+            _safe_rollback()
+            return render_template(
+                'public/request_access_parent.html',
+                errors=['There was an error submitting your request. Please try again.'],
+                form_data={'first_name': first_name, 'last_name': last_name, 'email': email}
+            )
+
+    return render_template('public/request_access_parent.html', form_data={})
+
+
+@public_bp.route('/request-access/coach', methods=['GET', 'POST'])
+def request_access_coach():
+    """Coach access request form - requires admin approval."""
+    from app.models.access_request import AccessRequest
+    from app.models.user import User
+    from app.models.team import TeamSeason
+    from app.models.org_season import OrgSeason
+    from app.services.access_request_service import AccessRequestService
+
+    # Get current season teams for dropdown
+    current_season = OrgSeason.get_current_season()
+    teams = []
+    if current_season:
+        teams = TeamSeason.query.filter_by(
+            year=current_season.year,
+            is_spring=current_season.is_spring,
+            active=1,
+            is_placeholder=0
+        ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+
+    if request.method == 'POST':
+        first_name = request.form.get('first_name', '').strip()
+        last_name = request.form.get('last_name', '').strip()
+        email = request.form.get('email', '').strip().lower()
+        phone = request.form.get('phone', '').strip()
+        team_id = request.form.get('team_id', type=int)
+
+        errors = []
+        if not first_name:
+            errors.append('First name is required.')
+        if not last_name:
+            errors.append('Last name is required.')
+        if not email:
+            errors.append('Email is required.')
+        elif '@' not in email or '.' not in email:
+            errors.append('Please enter a valid email address.')
+
+        if errors:
+            return render_template(
+                'public/request_access_coach.html',
+                errors=errors,
+                teams=teams,
+                form_data={'first_name': first_name, 'last_name': last_name, 'email': email, 'phone': phone, 'team_id': team_id}
+            )
+
+        # Check if user already exists
+        existing_user = User.get_by_email(email)
+        if existing_user:
+            return render_template(
+                'public/request_access_coach.html',
+                errors=['An account with this email already exists. Please log in and request coach access from your profile.'],
+                teams=teams,
+                form_data={'first_name': first_name, 'last_name': last_name, 'email': email, 'phone': phone, 'team_id': team_id}
+            )
+
+        # Check for pending request
+        pending = AccessRequest.get_pending_by_email(email)
+        if pending:
+            return render_template(
+                'public/request_access_coach.html',
+                errors=['A request with this email is already pending review.'],
+                teams=teams,
+                form_data={'first_name': first_name, 'last_name': last_name, 'email': email, 'phone': phone, 'team_id': team_id}
+            )
+
+        try:
+            # Create the request
+            access_request = AccessRequest.create_coach_request(
+                first_name=first_name,
+                last_name=last_name,
+                email=email,
+                phone=phone if phone else None,
+                team_id=team_id if team_id else None
+            )
+
+            # Notify admins
+            service = AccessRequestService()
+            service.notify_admins_of_new_request(access_request)
+
+            return redirect(url_for('public.request_access_pending', type='coach'))
+
+        except Exception as e:
+            _log_tracking_error("request_access_coach", e)
+            _safe_rollback()
+            return render_template(
+                'public/request_access_coach.html',
+                errors=['There was an error submitting your request. Please try again.'],
+                teams=teams,
+                form_data={'first_name': first_name, 'last_name': last_name, 'email': email, 'phone': phone, 'team_id': team_id}
+            )
+
+    return render_template('public/request_access_coach.html', teams=teams, form_data={})
+
+
+@public_bp.route('/request-access/admin', methods=['GET', 'POST'])
+def request_access_admin():
+    """League Admin access request form - requires admin approval."""
+    from app.models.access_request import AccessRequest
+    from app.models.user import User
+    from app.services.access_request_service import AccessRequestService
+
+    if request.method == 'POST':
+        first_name = request.form.get('first_name', '').strip()
+        last_name = request.form.get('last_name', '').strip()
+        email = request.form.get('email', '').strip().lower()
+        phone = request.form.get('phone', '').strip()
+        requested_roles = request.form.get('requested_roles', '').strip()
+
+        errors = []
+        if not first_name:
+            errors.append('First name is required.')
+        if not last_name:
+            errors.append('Last name is required.')
+        if not email:
+            errors.append('Email is required.')
+        elif '@' not in email or '.' not in email:
+            errors.append('Please enter a valid email address.')
+
+        if errors:
+            return render_template(
+                'public/request_access_admin.html',
+                errors=errors,
+                form_data={'first_name': first_name, 'last_name': last_name, 'email': email, 'phone': phone, 'requested_roles': requested_roles}
+            )
+
+        # Check if user already exists
+        existing_user = User.get_by_email(email)
+        if existing_user:
+            return render_template(
+                'public/request_access_admin.html',
+                errors=['An account with this email already exists. Please log in and contact an admin to request additional roles.'],
+                form_data={'first_name': first_name, 'last_name': last_name, 'email': email, 'phone': phone, 'requested_roles': requested_roles}
+            )
+
+        # Check for pending request
+        pending = AccessRequest.get_pending_by_email(email)
+        if pending:
+            return render_template(
+                'public/request_access_admin.html',
+                errors=['A request with this email is already pending review.'],
+                form_data={'first_name': first_name, 'last_name': last_name, 'email': email, 'phone': phone, 'requested_roles': requested_roles}
+            )
+
+        try:
+            # Create the request
+            access_request = AccessRequest.create_admin_request(
+                first_name=first_name,
+                last_name=last_name,
+                email=email,
+                phone=phone if phone else None,
+                requested_roles=requested_roles if requested_roles else None
+            )
+
+            # Notify admins
+            service = AccessRequestService()
+            service.notify_admins_of_new_request(access_request)
+
+            return redirect(url_for('public.request_access_pending', type='admin'))
+
+        except Exception as e:
+            _log_tracking_error("request_access_admin", e)
+            _safe_rollback()
+            return render_template(
+                'public/request_access_admin.html',
+                errors=['There was an error submitting your request. Please try again.'],
+                form_data={'first_name': first_name, 'last_name': last_name, 'email': email, 'phone': phone, 'requested_roles': requested_roles}
+            )
+
+    return render_template('public/request_access_admin.html', form_data={})
+
+
+@public_bp.route('/request-access/verify/<token>')
+def request_access_verify(token):
+    """Verify parent email and create account."""
+    from app.services.access_request_service import AccessRequestService
+
+    service = AccessRequestService()
+    success, message, user = service.process_parent_verification(token)
+
+    if success:
+        flash(message, 'success')
+        return redirect(url_for('auth.login'))
+    else:
+        flash(message, 'error')
+        return redirect(url_for('public.request_access_landing'))
+
+
+@public_bp.route('/request-access/pending')
+def request_access_pending():
+    """Confirmation page after submitting request."""
+    request_type = request.args.get('type', 'parent')
+
+    messages = {
+        'parent': {
+            'title': 'Check Your Email',
+            'message': 'We sent a verification link to your email address. Please click the link to verify your email and complete your account setup.',
+            'note': 'The verification link expires in 24 hours.'
+        },
+        'coach': {
+            'title': 'Request Submitted',
+            'message': 'Your coach access request has been submitted and is pending review by a league administrator.',
+            'note': 'You will receive an email once your request has been reviewed.'
+        },
+        'admin': {
+            'title': 'Request Submitted',
+            'message': 'Your admin access request has been submitted and is pending review by a league administrator.',
+            'note': 'You will receive an email once your request has been reviewed.'
+        }
+    }
+
+    content = messages.get(request_type, messages['parent'])
+    return render_template('public/request_access_pending.html', **content)

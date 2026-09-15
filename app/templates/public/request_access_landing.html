@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Request Access - SDLL</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, rgb(34, 139, 34) 0%, rgb(28, 112, 28) 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-width: 700px;
+            width: 100%;
+            padding: 40px;
+        }
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: rgb(34, 139, 34);
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 32px;
+            font-weight: bold;
+        }
+        h1 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 15px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 25px 20px;
+            text-align: center;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+        }
+        .card:hover {
+            border-color: rgb(34, 139, 34);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .card-icon {
+            width: 50px;
+            height: 50px;
+            background: rgb(34, 139, 34);
+            border-radius: 50%;
+            margin: 0 auto 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+        }
+        .card h3 {
+            color: #333;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        .card p {
+            color: #666;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .card .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+        .badge-auto {
+            background: #d4edda;
+            color: #155724;
+        }
+        .badge-approval {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .footer {
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #999;
+            font-size: 13px;
+            text-align: center;
+        }
+        .footer a {
+            color: rgb(34, 139, 34);
+            text-decoration: none;
+        }
+        .login-link {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #e8f5e9;
+            border-radius: 6px;
+        }
+        .login-link a {
+            color: rgb(34, 139, 34);
+            font-weight: 500;
+        }
+        @media (max-width: 600px) {
+            .cards {
+                grid-template-columns: 1fr;
+            }
+            .container {
+                padding: 25px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">SDLL</div>
+        <h1>Request Access</h1>
+        <p class="subtitle">Choose the type of access you need for South Durham Little League</p>
+
+        <div class="login-link">
+            Already have an account? <a href="{{ url_for('auth.login') }}">Log in here</a>
+        </div>
+
+        <div class="cards">
+            <a href="{{ url_for('public.request_access_parent') }}" class="card">
+                <div class="card-icon">P</div>
+                <h3>Parent / Fan</h3>
+                <p>View team schedules and league information</p>
+                <span class="badge badge-auto">Instant Access</span>
+            </a>
+
+            <a href="{{ url_for('public.request_access_coach') }}" class="card">
+                <div class="card-icon">C</div>
+                <h3>Coach</h3>
+                <p>Manage your team's roster and schedule</p>
+                <span class="badge badge-approval">Requires Approval</span>
+            </a>
+
+            <a href="{{ url_for('public.request_access_admin') }}" class="card">
+                <div class="card-icon">A</div>
+                <h3>League Admin</h3>
+                <p>Board members and league administrators</p>
+                <span class="badge badge-approval">Requires Approval</span>
+            </a>
+        </div>
+
+        <div class="footer">
+            <p>South Durham Little League</p>
+            <p><a href="https://southdurhamlittleleague.org">southdurhamlittleleague.org</a></p>
+        </div>
+    </div>
+</body>
+</html>
