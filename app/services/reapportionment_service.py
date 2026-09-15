@@ -108,6 +108,11 @@ class ReapportionmentService:
                 if not official_id:
                     continue
 
+                # Only include ACCEPTED assignments to avoid duplicates with unassigned list
+                is_accepted = assignment.get('accepted') in [True, 'True']
+                if not is_accepted:
+                    continue
+
                 # If filtering by Academy, check membership
                 if filter_by_academy and official_id not in academy_ids:
                     continue
@@ -117,7 +122,7 @@ class ReapportionmentService:
                     'official': official,
                     'official_id': official_id,
                     'official_name': f"{official.get('first_name', '')} {official.get('last_name', '')}".strip(),
-                    'accepted': assignment.get('accepted') in [True, 'True'],
+                    'accepted': True,  # We only get here if accepted
                     'is_academy': official_id in academy_ids if filter_by_academy else None
                 }
                 break
@@ -165,10 +170,14 @@ class ReapportionmentService:
     ) -> List[Dict]:
         """Score games by reassignment value.
 
-        Higher scores mean the game is a better candidate for reassignment
-        (i.e., assigned to an umpire with many games).
+        Higher scores mean the game is a better candidate for reassignment.
 
-        Score = umpire_game_count / avg_game_count
+        Factors:
+        - Base score: umpire_game_count / avg_game_count (more games = higher score)
+        - Back-to-back penalty: -0.5 if umpire has another game same day/field
+
+        Single games at a field are better candidates because taking them
+        doesn't disrupt a back-to-back schedule.
 
         Args:
             games: List of games with _academy_assignment
@@ -185,6 +194,23 @@ class ReapportionmentService:
         num_umpires = len(umpire_counts)
         avg_count = total_games / num_umpires if num_umpires > 0 else 1
 
+        # Build index of games by umpire, date, and field for back-to-back detection
+        umpire_day_field_games = defaultdict(list)
+        for game in games:
+            assignment = game.get('_academy_assignment', {})
+            official_id = assignment.get('official_id')
+            if not official_id:
+                continue
+
+            # Get date and field
+            game_date = game.get('localized_date', '')[:10]  # YYYY-MM-DD
+            venue = game.get('_embedded', {}).get('venue', {})
+            field_id = venue.get('id') if venue else None
+
+            if game_date and field_id:
+                key = (official_id, game_date, field_id)
+                umpire_day_field_games[key].append(game.get('id'))
+
         # Score each game
         scored_games = []
         for game in games:
@@ -193,12 +219,31 @@ class ReapportionmentService:
 
             if official_id and official_id in umpire_counts:
                 umpire_count = umpire_counts[official_id]['count']
-                score = umpire_count / avg_count if avg_count > 0 else 0
+                base_score = umpire_count / avg_count if avg_count > 0 else 0
             else:
-                score = 0
+                base_score = 0
+
+            # Check for back-to-back games (same umpire, same day, same field)
+            game_date = game.get('localized_date', '')[:10]
+            venue = game.get('_embedded', {}).get('venue', {})
+            field_id = venue.get('id') if venue else None
+
+            is_back_to_back = False
+            if official_id and game_date and field_id:
+                key = (official_id, game_date, field_id)
+                games_at_location = umpire_day_field_games.get(key, [])
+                is_back_to_back = len(games_at_location) > 1
+
+            # Apply back-to-back penalty (reduce score by 0.5)
+            # Single games are better candidates for reassignment
+            if is_back_to_back:
+                score = max(0, base_score - 0.5)
+            else:
+                score = base_score
 
             game['_score'] = round(score, 2)
             game['_umpire_game_count'] = umpire_counts.get(official_id, {}).get('count', 0)
+            game['_is_back_to_back'] = is_back_to_back
             scored_games.append(game)
 
         # Sort by score descending
