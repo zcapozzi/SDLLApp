@@ -393,7 +393,7 @@ def get_top_team_schedules(days=30, limit=20, excluded_user_ids=None):
         team = team_lookup.get(r.page_context)
         if team:
             results.append({
-                'team_name': team.computed_display_name,
+                'team_name': team.get_display_name('coach'),
                 'league': team.league or 'Unknown',
                 'token': r.page_context,
                 'views': r.views,
@@ -488,7 +488,7 @@ def get_calendar_subscriptions(days):
         team = TeamSeason.get_by_schedule_token(row.team_token)
         if team:
             top_teams.append({
-                'team_name': team.computed_display_name,
+                'team_name': team.get_display_name('coach'),
                 'league': team.league,
                 'count': row.count
             })

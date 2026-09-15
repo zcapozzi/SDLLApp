@@ -166,6 +166,50 @@ class TeamSeason(db.Model):
             return self.team_name
         return self.display_name
 
+    def get_display_name(self, style='default'):
+        """
+        Get display name with configurable style.
+
+        Args:
+            style: One of:
+                - 'default': Public-facing name (team_name → gameChangerName → coach_name)
+                - 'coach': Head coach's last name from sdll_coach_seasons
+                - 'scheduler': Admin view (coach_name → team_name)
+                - 'mascot': Team/mascot name only, falls back to placeholder
+
+        Returns:
+            Display name string based on selected style
+        """
+        if style == 'default':
+            return self.computed_display_name
+
+        elif style == 'scheduler':
+            return self.scheduler_display_name
+
+        elif style == 'mascot':
+            return self.team_name or self.display_name
+
+        elif style == 'coach':
+            # Look up head coach from sdll_coach_seasons
+            from app.models.coach import CoachSeason
+            head_coach = CoachSeason.get_head_coach(self.team_ID)
+            if head_coach and head_coach.name:
+                # Extract last name (assume "First Last" format)
+                name_parts = head_coach.name.strip().split()
+                if name_parts:
+                    return name_parts[-1]  # Return last name
+
+            # Fall back to coach_name field on team
+            if self.coach_name:
+                return self.coach_name
+
+            # Fall back to default
+            return self.computed_display_name
+
+        else:
+            # Unknown style, use default
+            return self.computed_display_name
+
     @property
     def display_name_with_org(self):
         """Get display name with organization suffix for external teams"""
