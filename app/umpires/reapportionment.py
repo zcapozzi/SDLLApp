@@ -52,7 +52,7 @@ def reapportionment_dashboard(org_season_id):
         'umpires/reapportionment.html',
         org_season=org_season,
         org_season_id=org_season_id,
-        season_name=org_season.name,
+        season_name=org_season.season_desc,
         sport=sport,
         days_ahead=days_ahead,
         data=data,
