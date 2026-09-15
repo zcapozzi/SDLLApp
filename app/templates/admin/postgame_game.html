@@ -1,0 +1,218 @@
+{% extends 'base.html' %}
+
+{% block title %}Game Report Details{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 900px;">
+    <a href="{{ url_for('admin.postgame_reports') }}" style="color: rgb(34, 139, 34); text-decoration: none; margin-bottom: 20px; display: inline-block;">
+        &larr; Back to Reports
+    </a>
+
+    <h1 style="color: rgb(34, 139, 34); margin-bottom: 10px;">Game Report Details</h1>
+
+    <!-- Game Info Card -->
+    <div class="card" style="background: linear-gradient(to right, rgba(34, 139, 34, 0.1), rgba(255, 140, 0, 0.1)); border-left: 4px solid rgb(34, 139, 34);">
+        <h2 style="margin: 0 0 15px 0; font-size: 20px;">
+            {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+            vs
+            {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+        </h2>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+            <div>
+                <strong style="color: #888; font-size: 12px; text-transform: uppercase;">Date</strong><br>
+                {{ game.game_date.strftime('%A, %B %d, %Y') if game.game_date else 'TBD' }}
+            </div>
+            <div>
+                <strong style="color: #888; font-size: 12px; text-transform: uppercase;">Time</strong><br>
+                {{ game.game_date.strftime('%I:%M %p').lstrip('0') if game.game_date else 'TBD' }}
+            </div>
+            <div>
+                <strong style="color: #888; font-size: 12px; text-transform: uppercase;">Field</strong><br>
+                {{ game.field_name or 'TBD' }}
+            </div>
+            <div>
+                <strong style="color: #888; font-size: 12px; text-transform: uppercase;">League</strong><br>
+                {{ game.league }}
+            </div>
+        </div>
+    </div>
+
+    {% if score_dispute %}
+    <div class="flash-message flash-error">
+        <strong>Score Dispute:</strong> The teams reported different scores. Please review and resolve below.
+    </div>
+    {% endif %}
+
+    {% if game.has_score %}
+    <div class="card" style="text-align: center; margin-bottom: 20px;">
+        <h3 style="margin: 0 0 10px 0;">Official Score</h3>
+        <div style="font-size: 36px; font-weight: bold;">
+            <span style="color: rgb(34, 139, 34);">{{ game.home_score }}</span>
+            <span style="color: #888;"> - </span>
+            <span style="color: rgb(255, 140, 0);">{{ game.away_score }}</span>
+        </div>
+        <div style="color: #666; font-size: 14px;">
+            {{ game.home_team.computed_display_name if game.home_team else 'Home' }} -
+            {{ game.away_team.computed_display_name if game.away_team else 'Away' }}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Side-by-Side Reports -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <!-- Home Team Report -->
+        <div class="card">
+            <h3 style="margin-top: 0; color: rgb(34, 139, 34); border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">
+                {{ game.home_team.computed_display_name if game.home_team else 'Home Team' }}
+            </h3>
+
+            {% if home_report %}
+            <p><strong>Status:</strong>
+                {% if home_report.status == 'submitted' %}
+                <span class="badge" style="background: rgb(34, 139, 34); color: white;">Submitted</span>
+                {% elif home_report.status == 'not_played' %}
+                <span class="badge" style="background: #888; color: white;">{{ home_report.not_played_reason_display }}</span>
+                {% else %}
+                <span class="badge" style="background: rgb(255, 140, 0); color: white;">Pending</span>
+                {% endif %}
+            </p>
+
+            {% if home_report.status == 'submitted' %}
+            <p><strong>Score Reported:</strong> {{ home_report.our_score }} - {{ home_report.opponent_score }}</p>
+            <p><strong>Innings:</strong> Batted {{ home_report.innings_batted }}, Fielded {{ home_report.innings_fielded }}</p>
+
+            <hr>
+
+            <h4>Umpire Evaluation</h4>
+            <p><strong>Name:</strong> {{ home_report.umpire_name or 'N/A' }}</p>
+            <p><strong>Rating:</strong>
+                <span class="badge" style="
+                    {% if home_report.umpire_rating == 'excellent' %}background: rgb(34, 139, 34);{% endif %}
+                    {% if home_report.umpire_rating == 'good' %}background: rgb(100, 180, 100);{% endif %}
+                    {% if home_report.umpire_rating == 'ok' %}background: rgb(255, 140, 0);{% endif %}
+                    {% if home_report.umpire_rating == 'poor' %}background: rgb(200, 50, 50);{% endif %}
+                    color: white;">
+                    {{ home_report.rating_display }}
+                </span>
+                {% if home_report.is_flagged %}
+                <span style="color: #c33; font-size: 12px;"> (Flagged: {{ home_report.flag_reason }})</span>
+                {% endif %}
+            </p>
+            {% if home_report.umpire_comments %}
+            <p><strong>Comments:</strong><br>
+            <em style="color: #666;">"{{ home_report.umpire_comments }}"</em></p>
+            {% endif %}
+
+            <hr>
+
+            <p style="color: #888; font-size: 12px;">
+                Submitted by: {{ home_report.submitted_by.full_name if home_report.submitted_by else 'Unknown' }}
+                ({{ home_report.submitted_by_role }})<br>
+                at {{ home_report.submitted_at.strftime('%B %d, %Y at %I:%M %p').replace(' 0', ' ') if home_report.submitted_at else 'Unknown' }}
+            </p>
+            {% elif home_report.status == 'not_played' %}
+            <p><strong>Reason:</strong> {{ home_report.not_played_reason_display }}</p>
+            {% if home_report.not_played_notes %}
+            <p><strong>Notes:</strong> {{ home_report.not_played_notes }}</p>
+            {% endif %}
+            {% endif %}
+
+            {% else %}
+            <p style="color: #888; text-align: center; padding: 30px;">
+                No report submitted yet.
+            </p>
+            {% endif %}
+        </div>
+
+        <!-- Away Team Report -->
+        <div class="card">
+            <h3 style="margin-top: 0; color: rgb(255, 140, 0); border-bottom: 2px solid rgb(255, 140, 0); padding-bottom: 10px;">
+                {{ game.away_team.computed_display_name if game.away_team else 'Away Team' }}
+            </h3>
+
+            {% if away_report %}
+            <p><strong>Status:</strong>
+                {% if away_report.status == 'submitted' %}
+                <span class="badge" style="background: rgb(34, 139, 34); color: white;">Submitted</span>
+                {% elif away_report.status == 'not_played' %}
+                <span class="badge" style="background: #888; color: white;">{{ away_report.not_played_reason_display }}</span>
+                {% else %}
+                <span class="badge" style="background: rgb(255, 140, 0); color: white;">Pending</span>
+                {% endif %}
+            </p>
+
+            {% if away_report.status == 'submitted' %}
+            <p><strong>Score Reported:</strong> {{ away_report.our_score }} - {{ away_report.opponent_score }}</p>
+            <p><strong>Innings:</strong> Batted {{ away_report.innings_batted }}, Fielded {{ away_report.innings_fielded }}</p>
+
+            <hr>
+
+            <h4>Umpire Evaluation</h4>
+            <p><strong>Name:</strong> {{ away_report.umpire_name or 'N/A' }}</p>
+            <p><strong>Rating:</strong>
+                <span class="badge" style="
+                    {% if away_report.umpire_rating == 'excellent' %}background: rgb(34, 139, 34);{% endif %}
+                    {% if away_report.umpire_rating == 'good' %}background: rgb(100, 180, 100);{% endif %}
+                    {% if away_report.umpire_rating == 'ok' %}background: rgb(255, 140, 0);{% endif %}
+                    {% if away_report.umpire_rating == 'poor' %}background: rgb(200, 50, 50);{% endif %}
+                    color: white;">
+                    {{ away_report.rating_display }}
+                </span>
+                {% if away_report.is_flagged %}
+                <span style="color: #c33; font-size: 12px;"> (Flagged: {{ away_report.flag_reason }})</span>
+                {% endif %}
+            </p>
+            {% if away_report.umpire_comments %}
+            <p><strong>Comments:</strong><br>
+            <em style="color: #666;">"{{ away_report.umpire_comments }}"</em></p>
+            {% endif %}
+
+            <hr>
+
+            <p style="color: #888; font-size: 12px;">
+                Submitted by: {{ away_report.submitted_by.full_name if away_report.submitted_by else 'Unknown' }}
+                ({{ away_report.submitted_by_role }})<br>
+                at {{ away_report.submitted_at.strftime('%B %d, %Y at %I:%M %p').replace(' 0', ' ') if away_report.submitted_at else 'Unknown' }}
+            </p>
+            {% elif away_report.status == 'not_played' %}
+            <p><strong>Reason:</strong> {{ away_report.not_played_reason_display }}</p>
+            {% if away_report.not_played_notes %}
+            <p><strong>Notes:</strong> {{ away_report.not_played_notes }}</p>
+            {% endif %}
+            {% endif %}
+
+            {% else %}
+            <p style="color: #888; text-align: center; padding: 30px;">
+                No report submitted yet.
+            </p>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if score_dispute %}
+    <!-- Score Resolution Form -->
+    <div class="card" style="margin-top: 20px;">
+        <h3 style="margin-top: 0; color: #c33;">Resolve Score Dispute</h3>
+        <p style="color: #666;">
+            Home reported: <strong>{{ home_report.our_score if home_report else '?' }} - {{ home_report.opponent_score if home_report else '?' }}</strong><br>
+            Away reported: <strong>{{ away_report.our_score if away_report else '?' }} - {{ away_report.opponent_score if away_report else '?' }}</strong>
+        </p>
+
+        <form method="POST" action="{{ url_for('admin.postgame_resolve_score', game_id=game.ID) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 15px; align-items: flex-end;">
+                <div class="form-group">
+                    <label>{{ game.home_team.computed_display_name if game.home_team else 'Home' }} Score</label>
+                    <input type="number" name="home_score" class="form-control" min="0" max="99" required>
+                </div>
+                <div class="form-group">
+                    <label>{{ game.away_team.computed_display_name if game.away_team else 'Away' }} Score</label>
+                    <input type="number" name="away_score" class="form-control" min="0" max="99" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Set Official Score</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

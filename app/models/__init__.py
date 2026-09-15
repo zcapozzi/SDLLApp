@@ -51,3 +51,6 @@ from .assignr_webhook_event import AssignrWebhookEvent
 
 # Access request system
 from .access_request import AccessRequest
+
+# Post-game reporting
+from .post_game_report import PostGameReport

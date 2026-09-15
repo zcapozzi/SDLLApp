@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+
+{% block title %}Post-Game Report Settings{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 style="color: rgb(34, 139, 34); margin-bottom: 10px;">Post-Game Report Settings</h1>
+    <p style="color: #666; margin-bottom: 30px;">
+        Enable or disable post-game reporting for each league. When enabled, coaches will receive
+        emails after games to submit scores and umpire evaluations.
+    </p>
+
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2 style="margin: 0;">{{ current_season.season_name }} Leagues</h2>
+            <div style="display: flex; gap: 10px;">
+                <form method="POST" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="enable_all">
+                    <button type="submit" class="btn btn-primary btn-sm">Enable All</button>
+                </form>
+                <form method="POST" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="disable_all">
+                    <button type="submit" class="btn btn-outline btn-sm">Disable All</button>
+                </form>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>League</th>
+                    <th>Teams</th>
+                    <th>Post-Game Reports</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for league in leagues %}
+                <tr id="league-{{ league.ID }}">
+                    <td>
+                        <strong>{{ league.league }}</strong>
+                    </td>
+                    <td>{{ league.actual_playoff_teams }}</td>
+                    <td>
+                        {% if league.postgame_enabled %}
+                        <span class="badge" style="background: rgb(34, 139, 34); color: white;">Enabled</span>
+                        {% else %}
+                        <span class="badge" style="background: #888; color: white;">Disabled</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" style="display: inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="toggle">
+                            <input type="hidden" name="league_id" value="{{ league.ID }}">
+                            {% if league.postgame_enabled %}
+                            <button type="submit" class="btn btn-outline btn-sm" style="border-color: #c33; color: #c33;">
+                                Disable
+                            </button>
+                            {% else %}
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                Enable
+                            </button>
+                            {% endif %}
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h3 style="margin-top: 0;">How Post-Game Reports Work</h3>
+        <ol style="color: #666; line-height: 1.8;">
+            <li><strong>Email Trigger:</strong> 105 minutes after a game's scheduled start time, emails are sent to coaches</li>
+            <li><strong>Form Submission:</strong> Head coach receives email (assistants CC'd) with a secure link</li>
+            <li><strong>Report Contents:</strong> Coaches submit final score, innings played, and umpire evaluation</li>
+            <li><strong>Score Reconciliation:</strong> When both teams report matching scores, the game is marked complete</li>
+            <li><strong>Edit Window:</strong> Coaches can edit their report within 24 hours of submission</li>
+        </ol>
+    </div>
+
+    <div style="margin-top: 20px;">
+        <a href="{{ url_for('admin.postgame_reports') }}" class="btn btn-outline">View Reports</a>
+        <a href="{{ url_for('admin.postgame_summary') }}" class="btn btn-outline">View Summary</a>
+    </div>
+</div>
+{% endblock %}

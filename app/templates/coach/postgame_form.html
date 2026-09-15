@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+
+{% block title %}Post-Game Report{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 700px;">
+    <h1 style="color: rgb(34, 139, 34); margin-bottom: 10px;">Post-Game Report</h1>
+
+    <!-- Game Info Card -->
+    <div class="card" style="background: linear-gradient(to right, rgba(34, 139, 34, 0.1), rgba(255, 140, 0, 0.1)); border-left: 4px solid rgb(34, 139, 34);">
+        <h2 style="margin: 0 0 15px 0; font-size: 18px;">
+            {{ team.computed_display_name }} vs {{ opponent.computed_display_name if opponent else 'TBD' }}
+        </h2>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+            <div>
+                <strong style="color: #888; font-size: 12px; text-transform: uppercase;">Date</strong><br>
+                {{ game.game_date.strftime('%A, %B %d, %Y') if game.game_date else 'TBD' }}
+            </div>
+            <div>
+                <strong style="color: #888; font-size: 12px; text-transform: uppercase;">Time</strong><br>
+                {{ game.game_date.strftime('%I:%M %p').lstrip('0') if game.game_date else 'TBD' }}
+            </div>
+            <div>
+                <strong style="color: #888; font-size: 12px; text-transform: uppercase;">Field</strong><br>
+                {{ game.field_name or 'TBD' }}
+            </div>
+        </div>
+    </div>
+
+    {% if report and report.status == 'submitted' %}
+    <div class="flash-message flash-info">
+        <strong>Already Submitted:</strong> You submitted this report on {{ report.submitted_at.strftime('%B %d at %I:%M %p').replace(' 0', ' ') if report.submitted_at else 'unknown' }}.
+        {% if report.is_editable %}
+        You can still make changes within 24 hours of submission.
+        {% else %}
+        The edit window has expired.
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Post-Game Form -->
+    <div class="card">
+        <form method="POST" action="{{ url_for('coach.postgame_form', game_id=game.ID, team_id=team.team_ID) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <!-- Score Section -->
+            <h3 style="margin-top: 0; border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Final Score</h3>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                <div class="form-group">
+                    <label for="our_score">{{ team.computed_display_name }} (Your Team)</label>
+                    <input type="number" id="our_score" name="our_score" class="form-control"
+                           min="0" max="99" required
+                           value="{{ form_data.get('our_score', report.our_score if report else '') }}">
+                </div>
+                <div class="form-group">
+                    <label for="opponent_score">{{ opponent.computed_display_name if opponent else 'Opponent' }}</label>
+                    <input type="number" id="opponent_score" name="opponent_score" class="form-control"
+                           min="0" max="99" required
+                           value="{{ form_data.get('opponent_score', report.opponent_score if report else '') }}">
+                </div>
+            </div>
+
+            <!-- Innings Section -->
+            <h3 style="border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Innings Played</h3>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                <div class="form-group">
+                    <label for="innings_batted">Innings Batted</label>
+                    <select id="innings_batted" name="innings_batted" class="form-control" required>
+                        <option value="">Select...</option>
+                        {% for i in range(1, 8) %}
+                        <option value="{{ i }}" {% if (form_data.get('innings_batted')|string == i|string) or (report and report.innings_batted == i) %}selected{% endif %}>{{ i }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="innings_fielded">Innings in Field</label>
+                    <select id="innings_fielded" name="innings_fielded" class="form-control" required>
+                        <option value="">Select...</option>
+                        {% for i in range(1, 8) %}
+                        <option value="{{ i }}" {% if (form_data.get('innings_fielded')|string == i|string) or (report and report.innings_fielded == i) %}selected{% endif %}>{{ i }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Umpire Section -->
+            <h3 style="border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Umpire Evaluation</h3>
+
+            <div class="form-group">
+                <label for="umpire_name">Umpire Name</label>
+                <input type="text" id="umpire_name" name="umpire_name" class="form-control"
+                       placeholder="Enter the umpire's name" required
+                       value="{{ form_data.get('umpire_name', report.umpire_name if report else '') }}">
+            </div>
+
+            <div class="form-group">
+                <label for="umpire_rating">Rating</label>
+                <select id="umpire_rating" name="umpire_rating" class="form-control" required>
+                    <option value="">Select a rating...</option>
+                    {% for rating in ratings %}
+                    <option value="{{ rating }}" {% if (form_data.get('umpire_rating') == rating) or (report and report.umpire_rating == rating) %}selected{% endif %}>{{ rating_labels[rating] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="umpire_comments">Comments (optional)</label>
+                <textarea id="umpire_comments" name="umpire_comments" class="form-control"
+                          rows="3" placeholder="Any additional feedback about the umpire's performance...">{{ form_data.get('umpire_comments', report.umpire_comments if report else '') }}</textarea>
+            </div>
+
+            {% if is_kid_pitch %}
+            <div style="background: rgba(255, 140, 0, 0.1); padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid rgb(255, 140, 0);">
+                <strong>Pitch Count Tracking:</strong> Coming soon. For now, please track pitch counts separately per Little League rules.
+            </div>
+            {% endif %}
+
+            <!-- Actions -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+                <button type="submit" name="action" value="not_played" class="btn btn-outline" style="border-color: #888; color: #888;">
+                    Game Was Not Played
+                </button>
+                <button type="submit" name="action" value="review" class="btn btn-primary" style="padding: 12px 30px;">
+                    Review & Submit
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

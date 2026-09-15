@@ -45,6 +45,9 @@ class LeagueSeason(db.Model):
     # Division schedule token for public access
     schedule_token = db.Column(db.String(32), unique=True, index=True)
 
+    # Post-game reporting settings
+    postgame_enabled = db.Column(db.Boolean, default=False)  # Enable post-game reports for this league
+
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
     updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(),
                           onupdate=db.func.current_timestamp())

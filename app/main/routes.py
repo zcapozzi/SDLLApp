@@ -1103,6 +1103,51 @@ def cron_check_due_campaigns():
         }), 500
 
 
+@main_bp.route('/cron/postgame-emails')
+def cron_postgame_emails():
+    """
+    Cron endpoint to send post-game report reminder emails.
+
+    Finds games that ended 105+ minutes ago and sends emails to coaches
+    asking them to submit post-game reports (score, umpire evaluation).
+
+    Only sends to leagues with postgame_enabled=True.
+
+    Protected by CRON_SECRET token. Call with ?token=YOUR_SECRET
+
+    Set up an external cron service to hit this every 15 minutes:
+    https://your-app.railway.app/cron/postgame-emails?token=YOUR_CRON_SECRET
+    """
+    import os
+    from app.services.post_game_service import send_pending_postgame_emails
+
+    # Verify secret token
+    expected_token = os.environ.get('CRON_SECRET')
+    provided_token = request.args.get('token')
+
+    if not expected_token:
+        return jsonify({'error': 'CRON_SECRET not configured'}), 500
+
+    if provided_token != expected_token:
+        return jsonify({'error': 'Invalid token'}), 403
+
+    try:
+        results = send_pending_postgame_emails()
+
+        return jsonify({
+            'status': 'ok',
+            'emails_sent': results['sent'],
+            'emails_failed': results['failed'],
+            'errors': results['errors'][:10] if results['errors'] else []  # Limit error list
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
 # ============================================================================
 # Master Schedule (Board View)
 # ============================================================================

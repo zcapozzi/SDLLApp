@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block title %}Game Not Played{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 600px;">
+    <h1 style="color: rgb(34, 139, 34); margin-bottom: 10px;">Game Not Played</h1>
+
+    <!-- Game Info Card -->
+    <div class="card" style="background: linear-gradient(to right, rgba(34, 139, 34, 0.1), rgba(255, 140, 0, 0.1)); border-left: 4px solid rgb(34, 139, 34);">
+        <h2 style="margin: 0 0 15px 0; font-size: 18px;">
+            {{ team.computed_display_name }} vs {{ opponent.computed_display_name if opponent else 'TBD' }}
+        </h2>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+            <div>
+                <strong style="color: #888; font-size: 12px; text-transform: uppercase;">Date</strong><br>
+                {{ game.game_date.strftime('%A, %B %d, %Y') if game.game_date else 'TBD' }}
+            </div>
+            <div>
+                <strong style="color: #888; font-size: 12px; text-transform: uppercase;">Time</strong><br>
+                {{ game.game_date.strftime('%I:%M %p').lstrip('0') if game.game_date else 'TBD' }}
+            </div>
+            <div>
+                <strong style="color: #888; font-size: 12px; text-transform: uppercase;">Field</strong><br>
+                {{ game.field_name or 'TBD' }}
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <p style="color: #666;">If this game was not played, please select a reason below. This only marks the game as not played for <strong>your team's report</strong>.</p>
+
+        <form method="POST" action="{{ url_for('coach.postgame_not_played', game_id=game.ID, team_id=team.team_ID) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-group">
+                <label for="reason">Reason</label>
+                <select id="reason" name="reason" class="form-control" required>
+                    <option value="">Select a reason...</option>
+                    {% for reason in reasons %}
+                    <option value="{{ reason }}">{{ reason_labels[reason] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="notes">Additional Notes (optional)</label>
+                <textarea id="notes" name="notes" class="form-control" rows="3"
+                          placeholder="Any additional details about why the game wasn't played..."></textarea>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+                <a href="{{ url_for('coach.postgame_form', game_id=game.ID, team_id=team.team_ID) }}" class="btn btn-outline">
+                    Back to Report Form
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    Submit
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

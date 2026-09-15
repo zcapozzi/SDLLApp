@@ -844,3 +844,234 @@ def access_requests():
         available_roles=available_roles,
         recent_processed=recent_processed
     )
+
+
+# ============================================================================
+# POST-GAME REPORTS MANAGEMENT
+# ============================================================================
+
+@admin_bp.route('/postgame-settings', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def postgame_settings():
+    """Manage which leagues have post-game reporting enabled."""
+    from app.models.league_season import LeagueSeason
+
+    current_season = OrgSeason.get_current_season()
+    if not current_season:
+        flash('No current season configured.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    leagues = LeagueSeason.get_by_season(current_season.year, current_season.is_spring)
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        anchor = None
+
+        if action == 'toggle':
+            league_id = request.form.get('league_id', type=int)
+            league = LeagueSeason.query.get(league_id)
+            if league:
+                league.postgame_enabled = not league.postgame_enabled
+                db.session.commit()
+                status = 'enabled' if league.postgame_enabled else 'disabled'
+                flash(f'Post-game reports {status} for {league.league}.', 'success')
+                anchor = f'league-{league_id}'
+
+        elif action == 'enable_all':
+            for league in leagues:
+                league.postgame_enabled = True
+            db.session.commit()
+            flash('Post-game reports enabled for all leagues.', 'success')
+
+        elif action == 'disable_all':
+            for league in leagues:
+                league.postgame_enabled = False
+            db.session.commit()
+            flash('Post-game reports disabled for all leagues.', 'success')
+
+        redirect_url = url_for('admin.postgame_settings')
+        if anchor:
+            redirect_url += f'#{anchor}'
+        return redirect(redirect_url)
+
+    return render_template(
+        'admin/postgame_settings.html',
+        leagues=leagues,
+        current_season=current_season
+    )
+
+
+@admin_bp.route('/postgame-reports')
+@login_required
+@admin_required
+def postgame_reports():
+    """View all post-game reports with filters."""
+    from app.models.post_game_report import PostGameReport
+    from app.models.league_season import LeagueSeason
+    from app.models.game import Game
+    from sqlalchemy.orm import joinedload
+
+    current_season = OrgSeason.get_current_season()
+    if not current_season:
+        flash('No current season configured.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    year = request.args.get('year', current_season.year, type=int)
+    is_spring = request.args.get('is_spring', current_season.is_spring, type=int)
+    league_filter = request.args.get('league', '')
+    status_filter = request.args.get('status', '')
+
+    # Get leagues for filter dropdown
+    leagues = LeagueSeason.get_by_season(year, is_spring)
+    league_names = [ls.league for ls in leagues]
+
+    # Build query
+    query = PostGameReport.query.join(Game).options(
+        joinedload(PostGameReport.game).joinedload(Game.home_team),
+        joinedload(PostGameReport.game).joinedload(Game.away_team),
+        joinedload(PostGameReport.team),
+        joinedload(PostGameReport.submitted_by)
+    ).filter(
+        Game.year == year,
+        Game.is_spring == is_spring
+    )
+
+    if league_filter:
+        query = query.filter(Game.league == league_filter)
+    if status_filter:
+        query = query.filter(PostGameReport.status == status_filter)
+
+    reports = query.order_by(Game.game_date.desc()).all()
+
+    # Get summary stats
+    stats = PostGameReport.get_completion_stats(year, is_spring, league_filter or None)
+
+    return render_template(
+        'admin/postgame_reports.html',
+        reports=reports,
+        stats=stats,
+        leagues=league_names,
+        league_filter=league_filter,
+        status_filter=status_filter,
+        year=year,
+        is_spring=is_spring
+    )
+
+
+@admin_bp.route('/postgame-reports/<int:game_id>')
+@login_required
+@admin_required
+def postgame_game(game_id):
+    """View post-game reports for a specific game."""
+    from app.models.post_game_report import PostGameReport
+    from app.models.game import Game
+    from sqlalchemy.orm import joinedload
+
+    game = Game.query.options(
+        joinedload(Game.home_team),
+        joinedload(Game.away_team),
+        joinedload(Game.field_rel)
+    ).get(game_id)
+
+    if not game:
+        flash('Game not found.', 'error')
+        return redirect(url_for('admin.postgame_reports'))
+
+    # Get reports for both teams
+    reports = PostGameReport.query.filter_by(game_id=game_id).options(
+        joinedload(PostGameReport.team),
+        joinedload(PostGameReport.submitted_by)
+    ).all()
+
+    home_report = next((r for r in reports if r.team_id == game.home_ID), None)
+    away_report = next((r for r in reports if r.team_id == game.away_ID), None)
+
+    # Check for score dispute
+    score_dispute = False
+    if home_report and away_report:
+        if home_report.status == PostGameReport.STATUS_SUBMITTED and away_report.status == PostGameReport.STATUS_SUBMITTED:
+            if (home_report.our_score != away_report.opponent_score or
+                away_report.our_score != home_report.opponent_score):
+                score_dispute = True
+
+    return render_template(
+        'admin/postgame_game.html',
+        game=game,
+        home_report=home_report,
+        away_report=away_report,
+        score_dispute=score_dispute
+    )
+
+
+@admin_bp.route('/postgame-reports/<int:game_id>/resolve', methods=['POST'])
+@login_required
+@admin_required
+def postgame_resolve_score(game_id):
+    """Manually resolve a score dispute."""
+    from app.models.game import Game
+
+    game = Game.query.get(game_id)
+    if not game:
+        flash('Game not found.', 'error')
+        return redirect(url_for('admin.postgame_reports'))
+
+    home_score = request.form.get('home_score', type=int)
+    away_score = request.form.get('away_score', type=int)
+
+    if home_score is None or away_score is None:
+        flash('Both scores are required.', 'error')
+        return redirect(url_for('admin.postgame_game', game_id=game_id))
+
+    game.home_score = home_score
+    game.away_score = away_score
+    game.status = 'completed'
+    db.session.commit()
+
+    flash(f'Score resolved: {home_score}-{away_score}', 'success')
+    return redirect(url_for('admin.postgame_game', game_id=game_id))
+
+
+@admin_bp.route('/postgame-summary')
+@login_required
+@admin_required
+def postgame_summary():
+    """Summary view of post-game report statistics."""
+    from app.models.post_game_report import PostGameReport
+    from app.models.league_season import LeagueSeason
+
+    current_season = OrgSeason.get_current_season()
+    if not current_season:
+        flash('No current season configured.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    year = request.args.get('year', current_season.year, type=int)
+    is_spring = request.args.get('is_spring', current_season.is_spring, type=int)
+
+    # Get leagues with postgame enabled
+    leagues = LeagueSeason.get_by_season(year, is_spring)
+    enabled_leagues = [ls for ls in leagues if ls.postgame_enabled]
+
+    # Get stats per league
+    league_stats = []
+    for league in enabled_leagues:
+        stats = PostGameReport.get_completion_stats(year, is_spring, league.league)
+        league_stats.append({
+            'league': league.league,
+            'stats': stats
+        })
+
+    # Get overall stats
+    overall_stats = PostGameReport.get_completion_stats(year, is_spring)
+
+    # Get umpire summary
+    umpire_summary = PostGameReport.get_umpire_summary(year, is_spring)
+
+    return render_template(
+        'admin/postgame_summary.html',
+        league_stats=league_stats,
+        overall_stats=overall_stats,
+        umpire_summary=umpire_summary,
+        year=year,
+        is_spring=is_spring
+    )

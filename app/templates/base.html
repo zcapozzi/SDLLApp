@@ -353,7 +353,8 @@
                     <div class="dropdown-divider"></div>
                     <a href="{{ url_for('admin.users') }}">Users</a>
                     <a href="{{ url_for('admin.seasons') }}">Seasons</a>
-                    <a href="#">Settings</a>
+                    <a href="{{ url_for('admin.postgame_settings') }}">Post-Game Reports</a>
+                    <a href="{{ url_for('admin.access_requests') }}">Access Requests</a>
                     {% endif %}
                 </div>
             </div>

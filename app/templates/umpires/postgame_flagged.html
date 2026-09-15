@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+
+{% block title %}Flagged Umpire Reports{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 style="color: rgb(34, 139, 34); margin-bottom: 10px;">Flagged Umpire Reports</h1>
+    <p style="color: #666; margin-bottom: 30px;">
+        Reports flagged for unusual rating patterns. These may warrant review to ensure feedback is accurate.
+    </p>
+
+    {% if reports %}
+    <div class="card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Game</th>
+                    <th>Umpire</th>
+                    <th>Rating</th>
+                    <th>Flag Reason</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for report in reports %}
+                <tr style="background: rgba(200, 50, 50, 0.05);">
+                    <td>{{ report.game.game_date.strftime('%b %d, %Y') if report.game.game_date else 'TBD' }}</td>
+                    <td>
+                        {{ report.game.home_team.computed_display_name if report.game.home_team else 'TBD' }}
+                        vs
+                        {{ report.game.away_team.computed_display_name if report.game.away_team else 'TBD' }}
+                        <br>
+                        <span style="color: #888; font-size: 12px;">
+                            Reported by: {{ report.team.computed_display_name if report.team else 'Unknown' }}
+                        </span>
+                    </td>
+                    <td><strong>{{ report.umpire_name }}</strong></td>
+                    <td>
+                        <span class="badge" style="
+                            {% if report.umpire_rating == 'excellent' %}background: rgb(34, 139, 34);{% endif %}
+                            {% if report.umpire_rating == 'good' %}background: rgb(100, 180, 100);{% endif %}
+                            {% if report.umpire_rating == 'ok' %}background: rgb(255, 140, 0);{% endif %}
+                            {% if report.umpire_rating == 'poor' %}background: rgb(200, 50, 50);{% endif %}
+                            color: white;">
+                            {{ report.rating_display }}
+                        </span>
+                    </td>
+                    <td style="color: #c33; font-size: 13px;">
+                        {{ report.flag_reason or 'No reason recorded' }}
+                    </td>
+                    <td>
+                        <form method="POST" action="{{ url_for('umpires.clear_flag', report_id=report.id) }}" style="display: inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-outline btn-sm" style="border-color: rgb(34, 139, 34); color: rgb(34, 139, 34);">
+                                Clear Flag
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% if report.umpire_comments %}
+                <tr style="background: rgba(200, 50, 50, 0.02);">
+                    <td colspan="6" style="padding-left: 40px; border-top: none;">
+                        <strong>Comments:</strong>
+                        <em style="color: #666;">"{{ report.umpire_comments }}"</em>
+                    </td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h3 style="margin-top: 0;">About Flagged Reports</h3>
+        <p style="color: #666;">
+            Reports are automatically flagged when a coach's rating is significantly different from their
+            historical average (2+ levels deviation). This helps identify:
+        </p>
+        <ul style="color: #666;">
+            <li>Potentially biased feedback</li>
+            <li>Genuinely exceptional or problematic umpire performance</li>
+            <li>Data entry errors</li>
+        </ul>
+        <p style="color: #666;">
+            After reviewing a flagged report, click "Clear Flag" to acknowledge it has been reviewed.
+            The underlying feedback data remains unchanged.
+        </p>
+    </div>
+
+    {% else %}
+    <div class="card">
+        <p style="color: #666; text-align: center; padding: 40px;">
+            No flagged reports. All feedback appears to be within normal patterns.
+        </p>
+    </div>
+    {% endif %}
+
+    <div style="margin-top: 20px;">
+        <a href="{{ url_for('umpires.postgame_feedback') }}" class="btn btn-outline">View All Feedback</a>
+        <a href="{{ url_for('umpires.postgame_feedback_summary') }}" class="btn btn-outline">View Summary</a>
+    </div>
+</div>
+{% endblock %}

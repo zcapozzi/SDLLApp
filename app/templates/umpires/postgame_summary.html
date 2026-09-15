@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+
+{% block title %}Umpire Ratings Summary{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 style="color: rgb(34, 139, 34); margin-bottom: 10px;">Umpire Ratings Summary</h1>
+    <p style="color: #666; margin-bottom: 30px;">Aggregated feedback from post-game coach evaluations.</p>
+
+    {% if umpire_summary %}
+    <div class="card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Umpire</th>
+                    <th>Total Reports</th>
+                    <th>Excellent</th>
+                    <th>Good</th>
+                    <th>OK</th>
+                    <th>Poor</th>
+                    <th>Average Rating</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for umpire_name, data in umpire_summary|dictsort(by='value', attribute='avg_rating', reverse=true) %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('umpires.postgame_feedback', umpire=umpire_name) }}" style="color: rgb(34, 139, 34);">
+                            <strong>{{ umpire_name }}</strong>
+                        </a>
+                    </td>
+                    <td>{{ data.count }}</td>
+                    <td>
+                        {% if data.ratings.excellent > 0 %}
+                        <span style="color: rgb(34, 139, 34); font-weight: bold;">{{ data.ratings.excellent }}</span>
+                        {% else %}
+                        <span style="color: #ccc;">0</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if data.ratings.good > 0 %}
+                        <span style="color: rgb(100, 180, 100); font-weight: bold;">{{ data.ratings.good }}</span>
+                        {% else %}
+                        <span style="color: #ccc;">0</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if data.ratings.ok > 0 %}
+                        <span style="color: rgb(255, 140, 0); font-weight: bold;">{{ data.ratings.ok }}</span>
+                        {% else %}
+                        <span style="color: #ccc;">0</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if data.ratings.poor > 0 %}
+                        <span style="color: rgb(200, 50, 50); font-weight: bold;">{{ data.ratings.poor }}</span>
+                        {% else %}
+                        <span style="color: #ccc;">0</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge" style="
+                            {% if data.avg_rating >= 3.5 %}background: rgb(34, 139, 34);{% endif %}
+                            {% if data.avg_rating >= 2.5 and data.avg_rating < 3.5 %}background: rgb(100, 180, 100);{% endif %}
+                            {% if data.avg_rating >= 1.5 and data.avg_rating < 2.5 %}background: rgb(255, 140, 0);{% endif %}
+                            {% if data.avg_rating < 1.5 %}background: rgb(200, 50, 50);{% endif %}
+                            color: white;">
+                            {{ data.avg_label }}
+                        </span>
+                        <span style="color: #888; font-size: 12px; margin-left: 5px;">{{ "%.2f"|format(data.avg_rating) }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Rating Scale Legend -->
+    <div class="card">
+        <h3 style="margin-top: 0;">Rating Scale</h3>
+        <p style="color: #666;">
+            <span class="badge" style="background: rgb(34, 139, 34); color: white;">Excellent</span> = 4 &nbsp;|&nbsp;
+            <span class="badge" style="background: rgb(100, 180, 100); color: white;">Good</span> = 3 &nbsp;|&nbsp;
+            <span class="badge" style="background: rgb(255, 140, 0); color: white;">OK</span> = 2 &nbsp;|&nbsp;
+            <span class="badge" style="background: rgb(200, 50, 50); color: white;">Poor</span> = 1
+        </p>
+    </div>
+
+    {% else %}
+    <div class="card">
+        <p style="color: #666; text-align: center; padding: 40px;">
+            No umpire ratings have been submitted yet for this season.
+        </p>
+    </div>
+    {% endif %}
+
+    <div style="margin-top: 20px;">
+        <a href="{{ url_for('umpires.postgame_feedback') }}" class="btn btn-outline">View All Feedback</a>
+        <a href="{{ url_for('umpires.postgame_flagged') }}" class="btn btn-outline">View Flagged Reports</a>
+    </div>
+</div>
+{% endblock %}

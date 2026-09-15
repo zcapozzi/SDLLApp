@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block title %}Review Post-Game Report{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 700px;">
+    <h1 style="color: rgb(34, 139, 34); margin-bottom: 10px;">Review Your Report</h1>
+
+    <p style="color: #666; margin-bottom: 20px;">Please review the information below before submitting.</p>
+
+    <!-- Game Info Card -->
+    <div class="card" style="background: linear-gradient(to right, rgba(34, 139, 34, 0.1), rgba(255, 140, 0, 0.1)); border-left: 4px solid rgb(34, 139, 34);">
+        <h2 style="margin: 0 0 15px 0; font-size: 18px;">
+            {{ team.computed_display_name }} vs {{ opponent.computed_display_name if opponent else 'TBD' }}
+        </h2>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+            <div>
+                <strong style="color: #888; font-size: 12px; text-transform: uppercase;">Date</strong><br>
+                {{ game.game_date.strftime('%A, %B %d, %Y') if game.game_date else 'TBD' }}
+            </div>
+            <div>
+                <strong style="color: #888; font-size: 12px; text-transform: uppercase;">Time</strong><br>
+                {{ game.game_date.strftime('%I:%M %p').lstrip('0') if game.game_date else 'TBD' }}
+            </div>
+            <div>
+                <strong style="color: #888; font-size: 12px; text-transform: uppercase;">Field</strong><br>
+                {{ game.field_name or 'TBD' }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Card -->
+    <div class="card">
+        <h3 style="margin-top: 0; border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Report Summary</h3>
+
+        <!-- Score -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">
+            <div style="text-align: center; padding: 20px; background: rgba(34, 139, 34, 0.05); border-radius: 8px;">
+                <div style="font-size: 36px; font-weight: bold; color: rgb(34, 139, 34);">{{ data.our_score }}</div>
+                <div style="color: #666;">{{ team.computed_display_name }}</div>
+            </div>
+            <div style="text-align: center; padding: 20px; background: rgba(255, 140, 0, 0.05); border-radius: 8px;">
+                <div style="font-size: 36px; font-weight: bold; color: rgb(255, 140, 0);">{{ data.opponent_score }}</div>
+                <div style="color: #666;">{{ opponent.computed_display_name if opponent else 'Opponent' }}</div>
+            </div>
+        </div>
+
+        <!-- Innings -->
+        <div style="margin-bottom: 25px;">
+            <h4 style="color: #888; font-size: 12px; text-transform: uppercase; margin-bottom: 10px;">Innings</h4>
+            <p style="margin: 0;">
+                <strong>Batted:</strong> {{ data.innings_batted }} innings &nbsp;&nbsp;|&nbsp;&nbsp;
+                <strong>Fielded:</strong> {{ data.innings_fielded }} innings
+            </p>
+        </div>
+
+        <!-- Umpire -->
+        <div>
+            <h4 style="color: #888; font-size: 12px; text-transform: uppercase; margin-bottom: 10px;">Umpire Evaluation</h4>
+            <p style="margin: 0 0 5px 0;"><strong>Name:</strong> {{ data.umpire_name }}</p>
+            <p style="margin: 0 0 5px 0;">
+                <strong>Rating:</strong>
+                <span class="badge" style="
+                    {% if data.umpire_rating == 'excellent' %}background: rgb(34, 139, 34);{% endif %}
+                    {% if data.umpire_rating == 'good' %}background: rgb(100, 180, 100);{% endif %}
+                    {% if data.umpire_rating == 'ok' %}background: rgb(255, 140, 0);{% endif %}
+                    {% if data.umpire_rating == 'poor' %}background: rgb(200, 50, 50);{% endif %}
+                    color: white;">
+                    {{ rating_labels[data.umpire_rating] }}
+                </span>
+            </p>
+            {% if data.umpire_comments %}
+            <p style="margin: 10px 0 0 0; color: #666; font-style: italic;">
+                "{{ data.umpire_comments }}"
+            </p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Confirm Form -->
+    <div class="card">
+        <form method="POST" action="{{ url_for('coach.postgame_confirm', game_id=game.ID, team_id=team.team_ID) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="our_score" value="{{ data.our_score }}">
+            <input type="hidden" name="opponent_score" value="{{ data.opponent_score }}">
+            <input type="hidden" name="innings_batted" value="{{ data.innings_batted }}">
+            <input type="hidden" name="innings_fielded" value="{{ data.innings_fielded }}">
+            <input type="hidden" name="umpire_name" value="{{ data.umpire_name }}">
+            <input type="hidden" name="umpire_rating" value="{{ data.umpire_rating }}">
+            <input type="hidden" name="umpire_comments" value="{{ data.umpire_comments }}">
+
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <a href="{{ url_for('coach.postgame_form', game_id=game.ID, team_id=team.team_ID) }}" class="btn btn-outline">
+                    Go Back & Edit
+                </a>
+                <button type="submit" class="btn btn-primary" style="padding: 12px 30px;">
+                    Confirm & Submit
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

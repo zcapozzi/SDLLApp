@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+
+{% block title %}Post-Game Report Summary{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 style="color: rgb(34, 139, 34); margin-bottom: 10px;">Post-Game Report Summary</h1>
+    <p style="color: #666; margin-bottom: 30px;">Season overview of post-game report submissions and umpire feedback.</p>
+
+    <!-- Overall Stats -->
+    <div class="card">
+        <h2 style="margin-top: 0;">Overall Statistics</h2>
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px;">
+            <div style="text-align: center; padding: 15px; background: rgba(34, 139, 34, 0.05); border-radius: 8px;">
+                <div style="font-size: 28px; font-weight: bold; color: rgb(34, 139, 34);">{{ overall_stats.total_games }}</div>
+                <div style="color: #666; font-size: 14px;">Total Games</div>
+            </div>
+            <div style="text-align: center; padding: 15px; background: rgba(34, 139, 34, 0.05); border-radius: 8px;">
+                <div style="font-size: 28px; font-weight: bold; color: rgb(34, 139, 34);">{{ overall_stats.submitted }}</div>
+                <div style="color: #666; font-size: 14px;">Submitted</div>
+            </div>
+            <div style="text-align: center; padding: 15px; background: rgba(255, 140, 0, 0.05); border-radius: 8px;">
+                <div style="font-size: 28px; font-weight: bold; color: rgb(255, 140, 0);">{{ overall_stats.pending }}</div>
+                <div style="color: #666; font-size: 14px;">Pending</div>
+            </div>
+            <div style="text-align: center; padding: 15px; background: rgba(100, 100, 100, 0.05); border-radius: 8px;">
+                <div style="font-size: 28px; font-weight: bold; color: #888;">{{ overall_stats.not_played }}</div>
+                <div style="color: #666; font-size: 14px;">Not Played</div>
+            </div>
+            <div style="text-align: center; padding: 15px; background: rgba(34, 139, 34, 0.05); border-radius: 8px;">
+                {% set completion_rate = (overall_stats.submitted / overall_stats.total_expected_reports * 100) if overall_stats.total_expected_reports > 0 else 0 %}
+                <div style="font-size: 28px; font-weight: bold; color: rgb(34, 139, 34);">{{ "%.0f"|format(completion_rate) }}%</div>
+                <div style="color: #666; font-size: 14px;">Completion Rate</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- League Stats -->
+    {% if league_stats %}
+    <div class="card">
+        <h2 style="margin-top: 0;">By League</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>League</th>
+                    <th>Games</th>
+                    <th>Submitted</th>
+                    <th>Pending</th>
+                    <th>Not Played</th>
+                    <th>Completion</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in league_stats %}
+                <tr>
+                    <td><strong>{{ item.league }}</strong></td>
+                    <td>{{ item.stats.total_games }}</td>
+                    <td>
+                        <span style="color: rgb(34, 139, 34);">{{ item.stats.submitted }}</span>
+                    </td>
+                    <td>
+                        {% if item.stats.pending > 0 %}
+                        <span style="color: rgb(255, 140, 0);">{{ item.stats.pending }}</span>
+                        {% else %}
+                        {{ item.stats.pending }}
+                        {% endif %}
+                    </td>
+                    <td>{{ item.stats.not_played }}</td>
+                    <td>
+                        {% set rate = (item.stats.submitted / item.stats.total_expected_reports * 100) if item.stats.total_expected_reports > 0 else 0 %}
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="flex: 1; background: #ddd; height: 8px; border-radius: 4px;">
+                                <div style="width: {{ rate }}%; background: rgb(34, 139, 34); height: 100%; border-radius: 4px;"></div>
+                            </div>
+                            <span style="width: 50px; text-align: right;">{{ "%.0f"|format(rate) }}%</span>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Umpire Summary -->
+    {% if umpire_summary %}
+    <div class="card">
+        <h2 style="margin-top: 0;">Umpire Ratings Summary</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Umpire</th>
+                    <th>Reports</th>
+                    <th>Excellent</th>
+                    <th>Good</th>
+                    <th>OK</th>
+                    <th>Poor</th>
+                    <th>Average</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for umpire_name, data in umpire_summary|dictsort(by='value', attribute='count', reverse=true) %}
+                <tr>
+                    <td><strong>{{ umpire_name }}</strong></td>
+                    <td>{{ data.count }}</td>
+                    <td style="color: rgb(34, 139, 34);">{{ data.ratings.excellent }}</td>
+                    <td style="color: rgb(100, 180, 100);">{{ data.ratings.good }}</td>
+                    <td style="color: rgb(255, 140, 0);">{{ data.ratings.ok }}</td>
+                    <td style="color: rgb(200, 50, 50);">{{ data.ratings.poor }}</td>
+                    <td>
+                        <span class="badge" style="
+                            {% if data.avg_rating >= 3.5 %}background: rgb(34, 139, 34);{% endif %}
+                            {% if data.avg_rating >= 2.5 and data.avg_rating < 3.5 %}background: rgb(100, 180, 100);{% endif %}
+                            {% if data.avg_rating >= 1.5 and data.avg_rating < 2.5 %}background: rgb(255, 140, 0);{% endif %}
+                            {% if data.avg_rating < 1.5 %}background: rgb(200, 50, 50);{% endif %}
+                            color: white;">
+                            {{ data.avg_label }}
+                        </span>
+                        <span style="color: #888; font-size: 12px; margin-left: 5px;">({{ "%.1f"|format(data.avg_rating) }})</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card">
+        <p style="color: #666; text-align: center; padding: 30px;">
+            No umpire ratings have been submitted yet.
+        </p>
+    </div>
+    {% endif %}
+
+    <div style="margin-top: 20px;">
+        <a href="{{ url_for('admin.postgame_settings') }}" class="btn btn-outline">Settings</a>
+        <a href="{{ url_for('admin.postgame_reports') }}" class="btn btn-outline">View All Reports</a>
+    </div>
+</div>
+{% endblock %}

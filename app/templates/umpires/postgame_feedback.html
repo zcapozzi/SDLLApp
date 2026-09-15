@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+
+{% block title %}Umpire Feedback{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 style="color: rgb(34, 139, 34); margin-bottom: 10px;">Umpire Feedback</h1>
+    <p style="color: #666; margin-bottom: 30px;">Post-game evaluations submitted by coaches.</p>
+
+    <!-- Filters -->
+    <div class="card" style="margin-bottom: 20px;">
+        <form method="GET" style="display: flex; gap: 15px; align-items: flex-end;">
+            <div style="flex: 1;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Umpire</label>
+                <select name="umpire" class="form-control" onchange="this.form.submit()">
+                    <option value="">All Umpires</option>
+                    {% for name in umpire_names %}
+                    <option value="{{ name }}" {% if name == umpire_filter %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="flex: 1;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Rating</label>
+                <select name="rating" class="form-control" onchange="this.form.submit()">
+                    <option value="">All Ratings</option>
+                    {% for rating in ratings %}
+                    <option value="{{ rating }}" {% if rating == rating_filter %}selected{% endif %}>{{ rating_labels[rating] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <a href="{{ url_for('umpires.postgame_feedback') }}" class="btn btn-outline btn-sm">Clear</a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Feedback Table -->
+    <div class="card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Game</th>
+                    <th>Reporting Team</th>
+                    <th>Umpire</th>
+                    <th>Rating</th>
+                    <th>Comments</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for report in reports %}
+                <tr {% if report.is_flagged %}style="background: rgba(200, 50, 50, 0.05);"{% endif %}>
+                    <td>{{ report.game.game_date.strftime('%b %d') if report.game.game_date else 'TBD' }}</td>
+                    <td>
+                        {{ report.game.home_team.computed_display_name if report.game.home_team else 'TBD' }}
+                        vs
+                        {{ report.game.away_team.computed_display_name if report.game.away_team else 'TBD' }}
+                        <br><span style="color: #888; font-size: 12px;">{{ report.game.league }}</span>
+                    </td>
+                    <td>{{ report.team.computed_display_name if report.team else 'Unknown' }}</td>
+                    <td>
+                        <strong>{{ report.umpire_name }}</strong>
+                        {% if report.is_flagged %}
+                        <span style="color: #c33; font-size: 12px;" title="{{ report.flag_reason }}"> (flagged)</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge" style="
+                            {% if report.umpire_rating == 'excellent' %}background: rgb(34, 139, 34);{% endif %}
+                            {% if report.umpire_rating == 'good' %}background: rgb(100, 180, 100);{% endif %}
+                            {% if report.umpire_rating == 'ok' %}background: rgb(255, 140, 0);{% endif %}
+                            {% if report.umpire_rating == 'poor' %}background: rgb(200, 50, 50);{% endif %}
+                            color: white;">
+                            {{ report.rating_display }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if report.umpire_comments %}
+                        <em style="color: #666; font-size: 13px;">"{{ report.umpire_comments[:100] }}{% if report.umpire_comments|length > 100 %}...{% endif %}"</em>
+                        {% else %}
+                        <span style="color: #ccc;">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 30px; color: #666;">
+                        No feedback found matching your filters.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div style="margin-top: 20px;">
+        <a href="{{ url_for('umpires.postgame_feedback_summary') }}" class="btn btn-outline">View Summary</a>
+        <a href="{{ url_for('umpires.postgame_flagged') }}" class="btn btn-outline">View Flagged Reports</a>
+    </div>
+</div>
+{% endblock %}
