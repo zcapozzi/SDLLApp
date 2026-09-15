@@ -67,6 +67,7 @@ def create_app(config_name=None):
     from .analytics import analytics_bp
     from .assignr import assignr_bp
     from .treasurer import treasurer_bp
+    from .data import data_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(main_bp)
@@ -85,6 +86,7 @@ def create_app(config_name=None):
     app.register_blueprint(analytics_bp, url_prefix='/analytics')  # Product admin analytics
     app.register_blueprint(assignr_bp, url_prefix='/umpires/assignr')  # Assignr API integration
     app.register_blueprint(treasurer_bp, url_prefix='/treasurer')  # Treasurer financial views
+    app.register_blueprint(data_bp, url_prefix='/data')  # Data management (evals, placement, surveys)
 
     # User loader for Flask-Login
     from .models.user import User

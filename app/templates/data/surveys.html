@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Surveys{% endblock %}
+
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto;">
+    <h1 style="margin-bottom: 10px;">Surveys</h1>
+    <p style="color: var(--text-muted); margin-bottom: 30px;">
+        <a href="{{ url_for('main.dashboard') }}">Dashboard</a> &rsaquo; Data Management &rsaquo; Surveys
+    </p>
+
+    <div class="card" style="text-align: center; padding: 60px 40px;">
+        <div style="font-size: 64px; margin-bottom: 20px;">📝</div>
+        <h2 style="margin-bottom: 15px;">Survey Management</h2>
+        <p style="color: var(--text-muted); max-width: 500px; margin: 0 auto 30px;">
+            This feature allows league administrators to create, distribute,
+            and analyze surveys for coaches, parents, and players.
+        </p>
+        <div style="background: #f5f5f5; border-radius: 8px; padding: 20px; max-width: 400px; margin: 0 auto;">
+            <p style="font-size: 14px; color: #666; margin: 0;">
+                <strong>Coming Soon</strong><br>
+                This feature is under development. Check back later for updates.
+            </p>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 20px;">
+        <h3 style="margin-bottom: 15px;">Planned Features</h3>
+        <ul style="color: var(--text-muted); line-height: 1.8;">
+            <li>End-of-season feedback surveys</li>
+            <li>Coach evaluation forms</li>
+            <li>Registration preference surveys</li>
+            <li>Response analytics and reporting</li>
+            <li>Export results to spreadsheets</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

@@ -112,4 +112,16 @@
     </div>
 </div>
 {% endif %}
+
+<!-- Data Management -->
+{% if current_user.has_role('admin', 'DataManager') %}
+<div class="card" style="margin-top: 20px;">
+    <h2 style="margin-bottom: 20px;">📊 Data Management</h2>
+    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+        <a href="{{ url_for('data.player_evals') }}" class="btn btn-primary">Player Evals</a>
+        <a href="{{ url_for('data.player_placement') }}" class="btn btn-secondary">Player Placement</a>
+        <a href="{{ url_for('data.surveys') }}" class="btn btn-secondary">Surveys</a>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
