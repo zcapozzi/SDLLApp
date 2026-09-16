@@ -300,6 +300,35 @@
 </div>
 
 <style>
+/* Summary Stats Cards - 1x4 on desktop, 2x2 on mobile */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+}
+.stat-card {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--primary-color);
+    line-height: 1.2;
+}
+.stat-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 .filter-group {
     display: flex;
     flex-direction: column;
@@ -484,6 +513,21 @@ tr.unpublished-row td {
 }
 
 @media (max-width: 768px) {
+    /* Stats grid: 2x2 on mobile */
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    .stat-card {
+        padding: 15px 10px;
+    }
+    .stat-value {
+        font-size: 24px;
+    }
+    .stat-label {
+        font-size: 11px;
+    }
+
     table {
         font-size: 13px;
     }
