@@ -53,7 +53,8 @@
                 <th>Division</th>
                 <th>Matchup</th>
                 <th>Umpire Source</th>
-                <th>Contact</th>
+                <th>Contact Partner</th>
+                <th>Contact Coaches</th>
             </tr>
         </thead>
         <tbody>
@@ -62,6 +63,8 @@
             {% set partner = partners.get(partner_code) %}
             {% set contact = partner_contacts.get(partner_code) %}
             {% set needs_alert = game._needs_umpire and not game.umpire_override %}
+            {% set home_coaches = coaches_by_team.get(game.home_ID, []) %}
+            {% set away_coaches = coaches_by_team.get(game.away_ID, []) %}
             <tr data-field="{{ game.field_rel.name if game.field_rel else '' }}"
                 data-league="{{ game.league or '' }}"
                 class="{{ 'needs-umpire-alert' if needs_alert else '' }}">
@@ -88,10 +91,10 @@
                 <td>
                     {% if contact %}
                     <div class="contact-actions">
-                        <button class="btn btn-sm btn-outline" onclick="copyText('{{ contact.display_name }}', '{{ contact.phone or '' }}', '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}')" title="Copy text message">
+                        <button class="btn btn-sm btn-outline" onclick="copyPartnerSMS('{{ contact.display_name }}', '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}')" title="Copy text message">
                             SMS
                         </button>
-                        <button class="btn btn-sm btn-outline" onclick="copyEmail('{{ contact.email }}', '{{ contact.display_name }}', '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}')" title="Copy email">
+                        <button class="btn btn-sm btn-outline" onclick="copyPartnerEmail('{{ contact.email }}', '{{ contact.display_name }}', '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}')" title="Copy email">
                             Email
                         </button>
                         {% if contact.phone %}
@@ -102,6 +105,20 @@
                     </div>
                     {% else %}
                     <span style="color: var(--text-muted);">No contact</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if home_coaches or away_coaches %}
+                    <div class="contact-actions">
+                        <button class="btn btn-sm btn-primary" onclick="copyCoachSMS('{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}', '{{ game.home_team.computed_display_name if game.home_team else 'TBD' }}', '{{ game.away_team.computed_display_name if game.away_team else 'TBD' }}')" title="Copy text for coaches">
+                            SMS
+                        </button>
+                        <button class="btn btn-sm btn-primary" onclick="copyCoachEmail({% if home_coaches %}'{{ home_coaches[0].email or '' }}'{% else %}''{% endif %}, {% if away_coaches %}'{{ away_coaches[0].email or '' }}'{% else %}''{% endif %}, '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}', '{{ game.home_team.computed_display_name if game.home_team else 'TBD' }}', '{{ game.away_team.computed_display_name if game.away_team else 'TBD' }}')" title="Email coaches">
+                            Email
+                        </button>
+                    </div>
+                    {% else %}
+                    <span style="color: var(--text-muted);">No coaches</span>
                     {% endif %}
                 </td>
             </tr>
@@ -133,6 +150,8 @@
                 {% set partner = partners.get(partner_code) %}
                 {% set contact = partner_contacts.get(partner_code) %}
                 {% set needs_alert = game._needs_umpire and not game.umpire_override %}
+                {% set home_coaches = coaches_by_team.get(game.home_ID, []) %}
+                {% set away_coaches = coaches_by_team.get(game.away_ID, []) %}
                 <tr class="compact-row {{ 'needs-umpire-alert' if needs_alert else '' }}"
                     data-field="{{ game.field_rel.name if game.field_rel else '' }}"
                     data-league="{{ game.league or '' }}"
@@ -184,13 +203,16 @@
                                 <span class="partner-badge unknown">Unknown</span>
                                 {% endif %}
                             </div>
+
+                            {# Contact Partner Section #}
                             {% if contact %}
+                            <div class="expand-section-label">Contact Partner:</div>
                             <div class="expand-actions">
-                                <button class="btn btn-primary" onclick="event.stopPropagation(); copyText('{{ contact.display_name }}', '{{ contact.phone or '' }}', '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}')">
-                                    SMS
+                                <button class="btn btn-outline" onclick="event.stopPropagation(); copyPartnerSMS('{{ contact.display_name }}', '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}')">
+                                    SMS Partner
                                 </button>
-                                <button class="btn btn-outline" onclick="event.stopPropagation(); copyEmail('{{ contact.email }}', '{{ contact.display_name }}', '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}')">
-                                    Email
+                                <button class="btn btn-outline" onclick="event.stopPropagation(); copyPartnerEmail('{{ contact.email }}', '{{ contact.display_name }}', '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}')">
+                                    Email Partner
                                 </button>
                                 {% if contact.phone %}
                                 <a href="tel:{{ contact.phone }}" class="btn btn-outline" onclick="event.stopPropagation();">
@@ -198,7 +220,22 @@
                                 </a>
                                 {% endif %}
                             </div>
-                            {% else %}
+                            {% endif %}
+
+                            {# Contact Coaches Section #}
+                            {% if home_coaches or away_coaches %}
+                            <div class="expand-section-label">Contact Coaches:</div>
+                            <div class="expand-actions">
+                                <button class="btn btn-primary" onclick="event.stopPropagation(); copyCoachSMS('{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}', '{{ game.home_team.computed_display_name if game.home_team else 'TBD' }}', '{{ game.away_team.computed_display_name if game.away_team else 'TBD' }}')">
+                                    SMS Coaches
+                                </button>
+                                <button class="btn btn-primary" onclick="event.stopPropagation(); copyCoachEmail({% if home_coaches %}'{{ home_coaches[0].email or '' }}'{% else %}''{% endif %}, {% if away_coaches %}'{{ away_coaches[0].email or '' }}'{% else %}''{% endif %}, '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}', '{{ game.home_team.computed_display_name if game.home_team else 'TBD' }}', '{{ game.away_team.computed_display_name if game.away_team else 'TBD' }}')">
+                                    Email Coaches
+                                </button>
+                            </div>
+                            {% endif %}
+
+                            {% if not contact and not home_coaches and not away_coaches %}
                             <div class="expand-detail" style="color: var(--text-muted);">
                                 No contact info available
                             </div>
@@ -391,12 +428,18 @@
     color: #888;
     font-size: 12px;
 }
+.expand-section-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #666;
+    margin-top: 12px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+}
 .expand-actions {
     display: flex;
     gap: 10px;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid #e0e0e0;
+    margin-bottom: 8px;
 }
 .expand-actions .btn {
     flex: 1;
@@ -502,22 +545,46 @@ function showToast(message) {
     }, 2000);
 }
 
-function copyText(contactName, phone, field, time, league) {
+// Partner contact functions (asking about missing umpire)
+function copyPartnerSMS(contactName, field, time, league) {
     var message = "I just heard that there's no umpire at " + field + " for the " + league + " game. Have you heard anything about traffic issues or a delay?";
     navigator.clipboard.writeText(message).then(function() {
         showToast('Text message copied!');
     });
 }
 
-function copyEmail(email, contactName, field, time, league) {
+function copyPartnerEmail(email, contactName, field, time, league) {
     var subject = 'Umpire Status - ' + field + ' ' + time;
     var body = 'Hi ' + contactName + ",\n\nI just heard that there's no umpire at " + field + " for the " + league + " game. Have you heard anything about traffic issues or a delay?\n\nThanks!";
 
-    // Copy the email body
     navigator.clipboard.writeText(body).then(function() {
         showToast('Email body copied! Opening email...');
-        // Also open mailto link
         window.location.href = 'mailto:' + email + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+    });
+}
+
+// Coach contact functions (notifying about umpire delay)
+function copyCoachSMS(field, time, league, homeTeam, awayTeam) {
+    var message = "Hi coaches - heads up that the umpire for your " + time + " " + league + " game at " + field + " (" + homeTeam + " vs " + awayTeam + ") is running a few minutes late. They should be there shortly. Thanks for your patience!";
+    navigator.clipboard.writeText(message).then(function() {
+        showToast('Coach SMS copied!');
+    });
+}
+
+function copyCoachEmail(homeEmail, awayEmail, field, time, league, homeTeam, awayTeam) {
+    var subject = 'Umpire Running Late - ' + field + ' ' + time;
+    var body = "Hi coaches,\n\nQuick heads up that the umpire for your " + time + " " + league + " game at " + field + " (" + homeTeam + " vs " + awayTeam + ") is running a few minutes late. They should be there shortly.\n\nThanks for your patience!\n\nSDLL";
+
+    // Build recipient list
+    var recipients = [];
+    if (homeEmail) recipients.push(homeEmail);
+    if (awayEmail) recipients.push(awayEmail);
+
+    navigator.clipboard.writeText(body).then(function() {
+        showToast('Coach email copied! Opening email...');
+        if (recipients.length > 0) {
+            window.location.href = 'mailto:' + recipients.join(',') + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+        }
     });
 }
 </script>

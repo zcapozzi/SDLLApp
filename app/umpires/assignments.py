@@ -93,8 +93,10 @@ def missing_umpire(date_str=None):
 
     Shows all games for a given day with umpire source info and
     quick copy-to-clipboard for contacting the responsible organization.
+    Also allows contacting coaches when umpire is running late.
     """
     from app.models.partner_contact import PartnerContact
+    from app.models.coach import CoachSeason
 
     # Parse date (default to today)
     if date_str:
@@ -147,6 +149,25 @@ def missing_umpire(date_str=None):
     # Get league umpire requirements
     league_lookup = {l.display_name: l for l in League.query.all()}
 
+    # Get all team IDs from games for batch coach lookup
+    team_ids = set()
+    for game in games:
+        if game.home_ID:
+            team_ids.add(game.home_ID)
+        if game.away_ID:
+            team_ids.add(game.away_ID)
+
+    # Batch fetch all coaches for these teams (avoid N+1)
+    coaches_by_team = {}
+    if team_ids:
+        all_coaches = CoachSeason.query.filter(
+            CoachSeason.team_id.in_(team_ids)
+        ).order_by(CoachSeason.role).all()  # Head coaches first
+        for coach in all_coaches:
+            if coach.team_id not in coaches_by_team:
+                coaches_by_team[coach.team_id] = []
+            coaches_by_team[coach.team_id].append(coach)
+
     # For each game, determine if it needs an umpire alert
     # (needs umpire based on league, but doesn't have one assigned and count_override != 0)
     for game in games:
@@ -166,6 +187,7 @@ def missing_umpire(date_str=None):
         target_date=target_date,
         partners=partners,
         partner_contacts=partner_contacts,
+        coaches_by_team=coaches_by_team,
         fields=fields,
         leagues=leagues_list
     )
