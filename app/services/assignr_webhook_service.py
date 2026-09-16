@@ -259,6 +259,18 @@ class AssignrWebhookService:
         game_id = event.assignr_game_id
         assignment_id = event.assignr_assignment_id
 
+        # If IDs are missing, try to extract from stored payload (fixes old events)
+        if not game_id or not assignment_id:
+            extracted_game_id, extracted_assignment_id = event.extract_ids_from_payload()
+            if not game_id and extracted_game_id:
+                game_id = extracted_game_id
+                event.assignr_game_id = game_id
+            if not assignment_id and extracted_assignment_id:
+                assignment_id = extracted_assignment_id
+                event.assignr_assignment_id = assignment_id
+            if game_id or assignment_id:
+                db.session.commit()
+
         if not game_id:
             event.mark_ignored("No game ID in payload")
             return True
