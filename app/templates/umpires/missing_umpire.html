@@ -109,13 +109,33 @@
                 </td>
                 <td>
                     {% if home_coaches or away_coaches %}
-                    <div class="contact-actions">
-                        <button class="btn btn-sm btn-primary" onclick="copyCoachSMS('{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}', '{{ game.home_team.computed_display_name if game.home_team else 'TBD' }}', '{{ game.away_team.computed_display_name if game.away_team else 'TBD' }}')" title="Copy text for coaches">
-                            SMS
-                        </button>
-                        <button class="btn btn-sm btn-primary" onclick="copyCoachEmail({% if home_coaches %}'{{ home_coaches[0].email or '' }}'{% else %}''{% endif %}, {% if away_coaches %}'{{ away_coaches[0].email or '' }}'{% else %}''{% endif %}, '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}', '{{ game.home_team.computed_display_name if game.home_team else 'TBD' }}', '{{ game.away_team.computed_display_name if game.away_team else 'TBD' }}')" title="Email coaches">
-                            Email
-                        </button>
+                    <div class="coach-contacts">
+                        {% if home_coaches %}
+                        <div class="coach-line">
+                            <span class="coach-team">H:</span>
+                            <span class="coach-name">{{ home_coaches[0].name or 'Unknown' }}</span>
+                            {% if home_coaches[0].phone %}
+                            <a href="tel:{{ home_coaches[0].phone }}" class="coach-phone" title="Call {{ home_coaches[0].name }}">{{ home_coaches[0].phone }}</a>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        {% if away_coaches %}
+                        <div class="coach-line">
+                            <span class="coach-team">A:</span>
+                            <span class="coach-name">{{ away_coaches[0].name or 'Unknown' }}</span>
+                            {% if away_coaches[0].phone %}
+                            <a href="tel:{{ away_coaches[0].phone }}" class="coach-phone" title="Call {{ away_coaches[0].name }}">{{ away_coaches[0].phone }}</a>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        <div class="contact-actions" style="margin-top: 6px;">
+                            <button class="btn btn-sm btn-primary" onclick="copyCoachSMS('{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}', '{{ game.home_team.computed_display_name if game.home_team else 'TBD' }}', '{{ game.away_team.computed_display_name if game.away_team else 'TBD' }}')" title="Copy text for coaches">
+                                SMS
+                            </button>
+                            <button class="btn btn-sm btn-primary" onclick="copyCoachEmail({% if home_coaches %}'{{ home_coaches[0].email or '' }}'{% else %}''{% endif %}, {% if away_coaches %}'{{ away_coaches[0].email or '' }}'{% else %}''{% endif %}, '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}', '{{ game.home_team.computed_display_name if game.home_team else 'TBD' }}', '{{ game.away_team.computed_display_name if game.away_team else 'TBD' }}')" title="Email coaches">
+                                Email
+                            </button>
+                        </div>
                     </div>
                     {% else %}
                     <span style="color: var(--text-muted);">No coaches</span>
@@ -225,12 +245,36 @@
                             {# Contact Coaches Section #}
                             {% if home_coaches or away_coaches %}
                             <div class="expand-section-label">Contact Coaches:</div>
+                            <div class="coach-contacts-mobile">
+                                {% if home_coaches %}
+                                <div class="coach-line-mobile">
+                                    <span class="coach-team">Home:</span>
+                                    <span class="coach-name">{{ home_coaches[0].name or 'Unknown' }}</span>
+                                    {% if home_coaches[0].phone %}
+                                    <a href="tel:{{ home_coaches[0].phone }}" class="coach-phone-mobile" onclick="event.stopPropagation();">{{ home_coaches[0].phone }}</a>
+                                    {% else %}
+                                    <span class="no-phone">No phone</span>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                                {% if away_coaches %}
+                                <div class="coach-line-mobile">
+                                    <span class="coach-team">Away:</span>
+                                    <span class="coach-name">{{ away_coaches[0].name or 'Unknown' }}</span>
+                                    {% if away_coaches[0].phone %}
+                                    <a href="tel:{{ away_coaches[0].phone }}" class="coach-phone-mobile" onclick="event.stopPropagation();">{{ away_coaches[0].phone }}</a>
+                                    {% else %}
+                                    <span class="no-phone">No phone</span>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            </div>
                             <div class="expand-actions">
                                 <button class="btn btn-primary" onclick="event.stopPropagation(); copyCoachSMS('{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}', '{{ game.home_team.computed_display_name if game.home_team else 'TBD' }}', '{{ game.away_team.computed_display_name if game.away_team else 'TBD' }}')">
-                                    SMS Coaches
+                                    Copy SMS
                                 </button>
                                 <button class="btn btn-primary" onclick="event.stopPropagation(); copyCoachEmail({% if home_coaches %}'{{ home_coaches[0].email or '' }}'{% else %}''{% endif %}, {% if away_coaches %}'{{ away_coaches[0].email or '' }}'{% else %}''{% endif %}, '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}', '{{ game.home_team.computed_display_name if game.home_team else 'TBD' }}', '{{ game.away_team.computed_display_name if game.away_team else 'TBD' }}')">
-                                    Email Coaches
+                                    Email
                                 </button>
                             </div>
                             {% endif %}
@@ -320,6 +364,74 @@
 .contact-actions .btn {
     padding: 4px 10px;
     font-size: 12px;
+}
+
+/* Coach contact display */
+.coach-contacts {
+    font-size: 13px;
+}
+.coach-line {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 4px;
+}
+.coach-team {
+    font-weight: 600;
+    color: #666;
+    width: 18px;
+}
+.coach-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100px;
+}
+.coach-phone {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-size: 12px;
+    white-space: nowrap;
+}
+.coach-phone:hover {
+    text-decoration: underline;
+}
+
+/* Mobile coach contacts */
+.coach-contacts-mobile {
+    margin-bottom: 10px;
+}
+.coach-line-mobile {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid #eee;
+}
+.coach-line-mobile:last-child {
+    border-bottom: none;
+}
+.coach-line-mobile .coach-team {
+    width: 45px;
+    font-weight: 600;
+    color: #666;
+}
+.coach-line-mobile .coach-name {
+    flex: 1;
+}
+.coach-phone-mobile {
+    background: var(--primary-color);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 13px;
+}
+.no-phone {
+    color: #999;
+    font-size: 12px;
+    font-style: italic;
 }
 
 /* Alert for games needing umpires */
