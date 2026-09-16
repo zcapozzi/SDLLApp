@@ -390,26 +390,36 @@ def get_games_needing_reports(year, is_spring):
     return needing_reports
 
 
-def get_games_needing_emails(minutes_after_start=105):
+def get_games_needing_emails(minutes_after_start=105, max_hours_ago=18):
     """Get games that need post-game emails sent.
 
     Finds games where:
     - Game start time + minutes_after_start < now
+    - Game is within max_hours_ago (prevents sending to old missed games)
     - League has postgame_enabled = True
     - No PostGameReport record exists with email_sent_at set
 
     Args:
         minutes_after_start: Minutes after game start to send email
+        max_hours_ago: Maximum hours since game start to still send email.
+            Games older than this are skipped even if emails weren't sent.
+            Default 18 hours covers same-day games plus some buffer.
 
     Returns:
         list: List of (Game, team_id) tuples needing emails
     """
-    cutoff = datetime.utcnow() - timedelta(minutes=minutes_after_start)
+    now = datetime.utcnow()
+    cutoff_min = now - timedelta(minutes=minutes_after_start)
+    cutoff_max = now - timedelta(hours=max_hours_ago)
 
-    # Get games that started before cutoff (exclude scrimmages)
+    # Get games that:
+    # - Started before cutoff_min (enough time has passed since game start)
+    # - Started after cutoff_max (not too old - only recent games)
+    # - Exclude scrimmages
     games = Game.query.filter(
         Game.active == 1,
-        Game.game_date < cutoff,
+        Game.game_date < cutoff_min,
+        Game.game_date > cutoff_max,
         Game.game_type.in_(['regular', 'playoff']),
         Game.is_scrimmage == 0,
         Game.home_ID.isnot(None),
