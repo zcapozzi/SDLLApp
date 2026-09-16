@@ -206,7 +206,7 @@ class AssignrWebhookEvent(db.Model):
             'accepted': 'Accepted assignment',
             'declined': 'Declined assignment',
             'assigned': 'Was assigned to game',
-            'removed': 'Was removed from game',
+            'removed': 'Umpire removed from game',
             'pending': 'Assignment pending'
         }
         return action_labels.get(self.action_type, self.action_type or 'Unknown')

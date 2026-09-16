@@ -286,7 +286,7 @@ class AssignrWebhookService:
 
         # Determine action type and official info
         is_accepted = False
-        official_name = "Unknown"
+        official_name = None
         position = "Unknown"
         action_type = "removed"  # Default if assignment not found (was removed)
 
@@ -295,8 +295,11 @@ class AssignrWebhookService:
             official = embedded.get('official', {}) or {}
             first_name = official.get('first_name', '')
             last_name = official.get('last_name', '')
-            official_name = f"{first_name} {last_name}".strip() or "Unknown"
+            official_name = f"{first_name} {last_name}".strip() or None
             position = assignment_data.get('position', 'Unknown')
+
+            # Check if anyone is currently assigned to this slot
+            is_assigned = assignment_data.get('assigned') in [True, 'True', 'true']
 
             # Determine action type based on assignment state
             accepted = assignment_data.get('accepted')
@@ -307,12 +310,15 @@ class AssignrWebhookService:
                 is_accepted = True
             elif declined in [True, 'True', 'true']:
                 action_type = "declined"
-            else:
-                # Assignment exists but not accepted/declined = pending/assigned
+            elif is_assigned:
+                # Someone is assigned but hasn't accepted/declined yet
                 action_type = "assigned"
+            else:
+                # assigned=false means nobody is in this slot anymore (removed/de-assigned)
+                action_type = "removed"
+                logger.info(f"Assignment {assignment_id} has assigned=false - umpire was removed/de-assigned")
         else:
             logger.info(f"Assignment {assignment_id} not found in game {game_id} - likely removed")
-            # Assignment not found = was removed
 
         # Fetch game details
         game_data = self.assignr.get_game(int(game_id))
