@@ -161,6 +161,9 @@
                     <div class="action-menu">
                         <button class="action-btn" onclick="toggleActionMenu(this, event)">⋮</button>
                         <div class="action-dropdown">
+                            <a href="{{ url_for('games.view', game_id=game.ID) }}">
+                                <span class="action-icon">👁</span> View Game
+                            </a>
                             <a href="#" onclick="emailCoachesForGame({{ game.ID }}); return false;">
                                 <span class="action-icon">✉</span> Email Coaches
                             </a>
@@ -211,6 +214,9 @@
                     <div class="action-menu">
                         <button class="action-btn" onclick="toggleActionMenu(this, event)">⋮</button>
                         <div class="action-dropdown">
+                            <a href="{{ url_for('games.view', game_id=game.ID) }}">
+                                <span class="action-icon">👁</span> View Game
+                            </a>
                             <a href="#" onclick="emailCoachesForGame({{ game.ID }}); return false;">
                                 <span class="action-icon">✉</span> Email Coaches
                             </a>
@@ -345,6 +351,9 @@
                             {% endif %}
                             {% if current_user.is_authenticated and current_user.has_role('admin', 'scheduler', 'SBPlayerAgent', 'BBPlayerAgent') %}
                             <div class="expand-actions">
+                                <a href="{{ url_for('games.view', game_id=game.ID) }}" class="expand-action-btn">
+                                    <span class="action-icon">👁</span> View Game
+                                </a>
                                 <a href="#" class="expand-action-btn" onclick="emailCoachesForGame({{ game.ID }}); return false;">
                                     <span class="action-icon">✉</span> Email Coaches
                                 </a>

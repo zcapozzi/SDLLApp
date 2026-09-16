@@ -108,6 +108,7 @@
         <div class="postgame-team-card">
             <h3 style="margin-top: 0; color: rgb(34, 139, 34);">
                 Home: {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                <span style="font-size: 11px; color: #999; font-weight: normal;">(ID: {{ game.home_ID or 'None' }})</span>
             </h3>
 
             {% if home_coaches %}
@@ -147,6 +148,7 @@
         <div class="postgame-team-card">
             <h3 style="margin-top: 0; color: rgb(255, 140, 0);">
                 Away: {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                <span style="font-size: 11px; color: #999; font-weight: normal;">(ID: {{ game.away_ID or 'None' }})</span>
             </h3>
 
             {% if away_coaches %}

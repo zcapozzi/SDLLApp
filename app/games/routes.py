@@ -562,6 +562,10 @@ def view(game_id):
     home_coaches = CoachSeason.get_for_team(game.home_ID) if game.home_ID else []
     away_coaches = CoachSeason.get_for_team(game.away_ID) if game.away_ID else []
 
+    # Debug logging
+    logger.info(f"Game {game_id}: home_ID={game.home_ID}, away_ID={game.away_ID}")
+    logger.info(f"  home_coaches count: {len(home_coaches)}, away_coaches count: {len(away_coaches)}")
+
     # Get post-game report status for each team
     home_report = PostGameReport.query.filter_by(game_id=game_id, team_id=game.home_ID).first() if game.home_ID else None
     away_report = PostGameReport.query.filter_by(game_id=game_id, team_id=game.away_ID).first() if game.away_ID else None
