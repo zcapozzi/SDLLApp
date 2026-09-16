@@ -552,9 +552,55 @@ def index():
 @games_bp.route('/<int:game_id>')
 @login_required
 def view(game_id):
-    """View a single game"""
+    """View a single game with coach info for post-game emails"""
+    from app.models.coach import CoachSeason
+    from app.models.post_game_report import PostGameReport
+
     game = Game.query.get_or_404(game_id)
-    return render_template('games/view.html', game=game)
+
+    # Get coaches for both teams
+    home_coaches = CoachSeason.get_for_team(game.home_ID) if game.home_ID else []
+    away_coaches = CoachSeason.get_for_team(game.away_ID) if game.away_ID else []
+
+    # Get post-game report status for each team
+    home_report = PostGameReport.query.filter_by(game_id=game_id, team_id=game.home_ID).first() if game.home_ID else None
+    away_report = PostGameReport.query.filter_by(game_id=game_id, team_id=game.away_ID).first() if game.away_ID else None
+
+    return render_template(
+        'games/view.html',
+        game=game,
+        home_coaches=home_coaches,
+        away_coaches=away_coaches,
+        home_report=home_report,
+        away_report=away_report
+    )
+
+
+@games_bp.route('/<int:game_id>/send-postgame-email/<int:team_id>', methods=['POST'])
+@login_required
+def send_postgame_email(game_id, team_id):
+    """Manually send post-game email to a specific team's coaches"""
+    from app.services.post_game_service import send_postgame_email as send_email
+
+    if not current_user.has_role('admin', 'scheduler'):
+        flash('You do not have permission to send post-game emails.', 'error')
+        return redirect(url_for('games.view', game_id=game_id))
+
+    game = Game.query.get_or_404(game_id)
+
+    # Verify team is part of this game
+    if team_id not in (game.home_ID, game.away_ID):
+        flash('Invalid team for this game.', 'error')
+        return redirect(url_for('games.view', game_id=game_id))
+
+    success, message = send_email(game_id, team_id)
+
+    if success:
+        flash(f'Post-game email sent successfully!', 'success')
+    else:
+        flash(f'Failed to send email: {message}', 'error')
+
+    return redirect(url_for('games.view', game_id=game_id))
 
 
 @games_bp.route('/upcoming')
