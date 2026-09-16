@@ -101,7 +101,7 @@
                 <td style="white-space: nowrap;">
                     <a href="https://sdll.assignr.com/games/{{ game.id }}" target="_blank" class="btn btn-sm btn-outline" title="Open in Assignr">Assignr</a>
                     {% if local %}
-                    <a href="{{ url_for('games.edit_game', id=local.game_id) }}" class="btn btn-sm btn-outline">Local</a>
+                    <a href="{{ url_for('games.view', game_id=local.game_id) }}" class="btn btn-sm btn-outline">Local</a>
                     {% endif %}
                 </td>
             </tr>

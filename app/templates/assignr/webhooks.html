@@ -290,7 +290,7 @@
                     </a>
                     {% endif %}
                     {% if local_game %}
-                    <a href="{{ url_for('games.edit_game', id=local_game.ID) }}" class="btn btn-sm btn-outline" title="View local game">
+                    <a href="{{ url_for('games.view', game_id=local_game.ID) }}" class="btn btn-sm btn-outline" title="View local game">
                         Game
                     </a>
                     {% endif %}

@@ -155,7 +155,7 @@
                 <td>{{ game.field_name or '-' }}</td>
                 <td><code>{{ game.assignr_id }}</code></td>
                 <td>
-                    <a href="{{ url_for('games.edit_game', id=game.ID) }}" class="btn btn-sm btn-outline">Edit</a>
+                    <a href="{{ url_for('games.view', game_id=game.ID) }}" class="btn btn-sm btn-outline">Edit</a>
                 </td>
             </tr>
             {% endfor %}
@@ -198,7 +198,7 @@
                 </td>
                 <td>{{ game.field_name or '-' }}</td>
                 <td>
-                    <a href="{{ url_for('games.edit_game', id=game.ID) }}" class="btn btn-sm btn-outline">Edit</a>
+                    <a href="{{ url_for('games.view', game_id=game.ID) }}" class="btn btn-sm btn-outline">Edit</a>
                 </td>
             </tr>
             {% endfor %}

@@ -37,7 +37,7 @@
         </a>
         {% endif %}
         {% if event.local_game_id %}
-        <a href="{{ url_for('games.edit_game', id=event.local_game_id) }}" class="btn btn-outline">
+        <a href="{{ url_for('games.view', game_id=event.local_game_id) }}" class="btn btn-outline">
             View Local Game
         </a>
         {% endif %}
@@ -96,7 +96,7 @@
         </div>
     </div>
     <div style="margin-top: 15px;">
-        <a href="{{ url_for('games.edit_game', id=local_game.ID) }}" class="btn btn-outline">View Full Game Details</a>
+        <a href="{{ url_for('games.view', game_id=local_game.ID) }}" class="btn btn-outline">View Full Game Details</a>
     </div>
 </div>
 {% endif %}
@@ -145,7 +145,7 @@
             <span class="label">Local Game ID:</span>
             <span>
                 {% if event.local_game_id %}
-                <a href="{{ url_for('games.edit_game', id=event.local_game_id) }}">
+                <a href="{{ url_for('games.view', game_id=event.local_game_id) }}">
                     {{ event.local_game_id }}
                 </a>
                 {% else %}
