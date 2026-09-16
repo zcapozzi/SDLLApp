@@ -860,51 +860,14 @@
             {% set is_recordable = game.ID in recordable_game_ids %}
             {% set existing_record = game_start_records.get(game.ID) if is_recordable else None %}
             {% set has_valid_id = game.ID is number %}
-            {# Build Google Calendar URL components #}
-            {% if game.game_type == 'practice' %}
-                {% if game.is_league_practice %}
-                    {% set gcal_title = team.league ~ ' Division Practice' %}
-                {% else %}
-                    {% set gcal_title = team.computed_display_name ~ ' Practice' %}
-                {% endif %}
-            {% elif game.is_scrimmage %}
-                {% if game.home_ID == team.team_ID %}
-                    {% set gcal_title = 'Scrimmage vs ' ~ (game.away_team.computed_display_name if game.away_team else 'TBD') %}
-                {% else %}
-                    {% set gcal_title = 'Scrimmage @ ' ~ (game.home_team.computed_display_name if game.home_team else 'TBD') %}
-                {% endif %}
-            {% else %}
-                {% if game.home_ID == team.team_ID %}
-                    {% set gcal_title = 'vs ' ~ (game.away_team.computed_display_name if game.away_team else 'TBD') ~ ' (Home)' %}
-                {% else %}
-                    {% set gcal_title = '@ ' ~ (game.home_team.computed_display_name if game.home_team else 'TBD') ~ ' (Away)' %}
-                {% endif %}
-            {% endif %}
-            {% set gcal_location = game.field_name or 'TBD' %}
-            <div class="game-card {{ 'practice' if game.game_type == 'practice' else 'scrimmage' if game.is_scrimmage else 'game' }} {{ game.status }}" data-game-id="{{ game.ID if has_valid_id else '' }}"
-                 data-gcal-title="{{ gcal_title }}"
-                 data-gcal-location="{{ gcal_location }}"
-                 data-gcal-start="{{ game.game_date.strftime('%Y%m%dT%H%M%S') if game.game_date else '' }}"
-                 data-gcal-duration="{{ practice_duration if game.game_type == 'practice' else 120 }}">
-                {% if has_valid_id and game.game_date %}
+            <div class="game-card {{ 'practice' if game.game_type == 'practice' else 'scrimmage' if game.is_scrimmage else 'game' }} {{ game.status }}" data-game-id="{{ game.ID if has_valid_id else '' }}">
+                {% if has_valid_id and game.game_date and is_recordable %}
                 <button class="game-menu-btn" onclick="toggleGameMenu(this)" aria-label="Game options">&#8942;</button>
                 <div class="game-menu">
-                    {# Calendar options #}
-                    <a href="#" onclick="openGoogleCalendar(this); return false;" class="game-menu-item">
-                        <svg viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
-                        Add to Google Calendar
-                    </a>
-                    <a href="{{ url_for('public.team_schedule_game_ics', token=team.schedule_token, game_id=game.ID) }}" class="game-menu-item" onclick="showCalendarInstructions()">
-                        <svg viewBox="0 0 24 24"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
-                        Add to Apple/Outlook
-                    </a>
-                    {% if is_recordable %}
-                    <div class="game-menu-divider"></div>
                     <button class="game-menu-item" onclick="showStartForm(this)">
                         <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
                         Record Game Start
                     </button>
-                    {% endif %}
                 </div>
                 {% endif %}
                 <div class="game-date-box">
@@ -1326,69 +1289,6 @@
             document.body.removeChild(textArea);
             alert('URL copied to clipboard');
         });
-    }
-
-    function showCalendarInstructions() {
-        // Show the instructions panel (for single-game downloads)
-        var panel = document.getElementById('calendar-instructions');
-        var urlDisplay = document.getElementById('calendar-url');
-        if (panel) {
-            panel.classList.add('show');
-            if (urlDisplay) {
-                urlDisplay.textContent = currentCalendarUrl;
-            }
-            // Scroll to show the instructions
-            setTimeout(function() {
-                panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }, 100);
-        }
-    }
-
-    function openGoogleCalendar(link) {
-        var card = link.closest('.game-card');
-        var title = card.dataset.gcalTitle;
-        var location = card.dataset.gcalLocation;
-        var startStr = card.dataset.gcalStart;
-        var duration = parseInt(card.dataset.gcalDuration) || 120;
-
-        if (!startStr) return;
-
-        // Parse start time and calculate end time
-        // startStr format: YYYYMMDDTHHMMSS
-        var year = parseInt(startStr.substr(0, 4));
-        var month = parseInt(startStr.substr(4, 2)) - 1;
-        var day = parseInt(startStr.substr(6, 2));
-        var hour = parseInt(startStr.substr(9, 2));
-        var minute = parseInt(startStr.substr(11, 2));
-
-        var startDate = new Date(year, month, day, hour, minute);
-        var endDate = new Date(startDate.getTime() + duration * 60 * 1000);
-
-        // Format dates for Google Calendar (YYYYMMDDTHHMMSS)
-        function formatDate(d) {
-            return d.getFullYear().toString() +
-                   String(d.getMonth() + 1).padStart(2, '0') +
-                   String(d.getDate()).padStart(2, '0') + 'T' +
-                   String(d.getHours()).padStart(2, '0') +
-                   String(d.getMinutes()).padStart(2, '0') + '00';
-        }
-
-        var dates = formatDate(startDate) + '/' + formatDate(endDate);
-        var details = 'SDLL {{ season_name }} - {{ team.league }}';
-        var timezone = '{{ org_timezone }}';
-
-        // Build Google Calendar URL with timezone
-        var url = 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
-                  '&text=' + encodeURIComponent(title) +
-                  '&dates=' + dates +
-                  '&details=' + encodeURIComponent(details) +
-                  '&location=' + encodeURIComponent(location) +
-                  '&ctz=' + encodeURIComponent(timezone);
-
-        window.open(url, '_blank');
-
-        // Close the menu
-        card.querySelector('.game-menu').classList.remove('show');
     }
 
     // Game Start Recording Functions
