@@ -159,10 +159,10 @@ def webhook_detail(event_id):
 @login_required
 @umpire_coordinator_required
 def webhook_retry(event_id):
-    """Retry processing a failed webhook event."""
+    """Retry or reprocess a webhook event."""
     event = AssignrWebhookEvent.query.get_or_404(event_id)
 
-    if event.status not in ['failed', 'ignored']:
+    if event.status not in ['failed', 'ignored', 'completed']:
         flash(f'Cannot retry event in {event.status} status.', 'error')
         return redirect(url_for('assignr.webhook_detail', event_id=event_id))
 
