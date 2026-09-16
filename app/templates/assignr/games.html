@@ -98,9 +98,10 @@
                     <span style="color: var(--text-muted);">-</span>
                     {% endif %}
                 </td>
-                <td>
+                <td style="white-space: nowrap;">
+                    <a href="https://sdll.assignr.com/games/{{ game.id }}" target="_blank" class="btn btn-sm btn-outline" title="Open in Assignr">Assignr</a>
                     {% if local %}
-                    <a href="{{ url_for('games.edit_game', id=local.game_id) }}" class="btn btn-sm btn-outline">View</a>
+                    <a href="{{ url_for('games.edit_game', id=local.game_id) }}" class="btn btn-sm btn-outline">Local</a>
                     {% endif %}
                 </td>
             </tr>
@@ -282,11 +283,9 @@
                     {% endif %}
                 </td>
                 <td>
-                    {% if local %}
-                    <span class="badge badge-success" title="Linked to local game">&#10003;</span>
-                    {% else %}
-                    <span class="badge badge-warning" title="Assignr only">&#33;</span>
-                    {% endif %}
+                    <a href="https://sdll.assignr.com/games/{{ game.id }}" target="_blank" class="btn btn-sm btn-outline" title="Open in Assignr">
+                        Assignr
+                    </a>
                 </td>
             </tr>
             {% endfor %}
