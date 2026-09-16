@@ -148,9 +148,12 @@ class AssignrWebhookService:
         resource_link = links.get('resource', {})
         resource_href = resource_link.get('href', '')
         if '/assignments/' in resource_href:
-            # Extract ID from URL like ".../assignments/12345"
+            # Extract ID from URL like ".../assignments/12345.json"
             try:
                 assignment_id = resource_href.split('/assignments/')[-1].split('/')[0].split('?')[0]
+                # Strip .json extension if present
+                if assignment_id.endswith('.json'):
+                    assignment_id = assignment_id[:-5]
             except (IndexError, AttributeError):
                 pass
 
@@ -160,7 +163,11 @@ class AssignrWebhookService:
         game_href = game_link.get('href', '')
         if '/games/' in game_href:
             try:
+                # Extract ID from URL like ".../games/28327383.json"
                 game_id = game_href.split('/games/')[-1].split('/')[0].split('?')[0]
+                # Strip .json extension if present
+                if game_id.endswith('.json'):
+                    game_id = game_id[:-5]
             except (IndexError, AttributeError):
                 pass
 
