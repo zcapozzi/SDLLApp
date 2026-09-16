@@ -182,11 +182,11 @@
         </div>
         <div class="detail-row">
             <span class="label">Received At:</span>
-            <span>{{ event.received_at.strftime('%a, %b %d, %Y at %I:%M %p').replace(' 0', ' ') if event.received_at else '-' }}</span>
+            <span>{{ (event.received_at | local_datetime('%a, %b %d, %Y at %I:%M %p')).replace(' 0', ' ') if event.received_at else '-' }}</span>
         </div>
         <div class="detail-row">
             <span class="label">Processed At:</span>
-            <span>{{ event.processed_at.strftime('%a, %b %d, %Y at %I:%M %p').replace(' 0', ' ') if event.processed_at else '-' }}</span>
+            <span>{{ (event.processed_at | local_datetime('%a, %b %d, %Y at %I:%M %p')).replace(' 0', ' ') if event.processed_at else '-' }}</span>
         </div>
         {% if event.error_message %}
         <div class="detail-row">

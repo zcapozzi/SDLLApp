@@ -216,9 +216,11 @@
                 </div>
                 <div class="webhook-meta">
                     {% if event.event_timestamp %}
+                    {# event_timestamp is already in local time from Assignr payload #}
                     <div title="Event occurred">{{ event.event_timestamp.strftime('%a, %b %d at %I:%M %p').replace(' 0', ' ') }}</div>
                     {% elif event.received_at %}
-                    <div title="Received at">{{ event.received_at.strftime('%a, %b %d at %I:%M %p').replace(' 0', ' ') }}</div>
+                    {# received_at is stored in UTC, convert to local timezone #}
+                    <div title="Received at">{{ (event.received_at | local_datetime('%a, %b %d at %I:%M %p')).replace(' 0', ' ') }}</div>
                     {% endif %}
                     {% if event.status == 'completed' %}
                     <span class="badge badge-success" style="margin-top: 4px;">Completed</span>
