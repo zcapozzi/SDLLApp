@@ -129,7 +129,10 @@
                         </div>
                         {% endif %}
                         <div class="contact-actions" style="margin-top: 6px;">
-                            <button class="btn btn-sm btn-primary" onclick="copyCoachSMS('{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}', '{{ game.home_team.computed_display_name if game.home_team else 'TBD' }}', '{{ game.away_team.computed_display_name if game.away_team else 'TBD' }}')" title="Copy text for coaches">
+                            <button class="btn btn-sm btn-success" onclick="copyCoachPhones('{{ home_coaches[0].phone if home_coaches and home_coaches[0].phone else '' }}', '{{ away_coaches[0].phone if away_coaches and away_coaches[0].phone else '' }}')" title="Copy both phone numbers">
+                                Copy #s
+                            </button>
+                            <button class="btn btn-sm btn-primary" onclick="copyCoachSMS('{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}', '{{ game.home_team.computed_display_name if game.home_team else 'TBD' }}', '{{ game.away_team.computed_display_name if game.away_team else 'TBD' }}')" title="Copy text message">
                                 SMS
                             </button>
                             <button class="btn btn-sm btn-primary" onclick="copyCoachEmail({% if home_coaches %}'{{ home_coaches[0].email or '' }}'{% else %}''{% endif %}, {% if away_coaches %}'{{ away_coaches[0].email or '' }}'{% else %}''{% endif %}, '{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}', '{{ game.home_team.computed_display_name if game.home_team else 'TBD' }}', '{{ game.away_team.computed_display_name if game.away_team else 'TBD' }}')" title="Email coaches">
@@ -270,6 +273,9 @@
                                 {% endif %}
                             </div>
                             <div class="expand-actions">
+                                <button class="btn btn-success" onclick="event.stopPropagation(); copyCoachPhones('{{ home_coaches[0].phone if home_coaches and home_coaches[0].phone else '' }}', '{{ away_coaches[0].phone if away_coaches and away_coaches[0].phone else '' }}')">
+                                    Copy #s
+                                </button>
                                 <button class="btn btn-primary" onclick="event.stopPropagation(); copyCoachSMS('{{ game.field_rel.name if game.field_rel else '' }}', '{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}', '{{ game.league or '' }}', '{{ game.home_team.computed_display_name if game.home_team else 'TBD' }}', '{{ game.away_team.computed_display_name if game.away_team else 'TBD' }}')">
                                     Copy SMS
                                 </button>
@@ -435,6 +441,17 @@
     color: #999;
     font-size: 12px;
     font-style: italic;
+}
+
+/* Green success button */
+.btn-success {
+    background: #228B22;
+    color: white;
+    border: 1px solid #228B22;
+}
+.btn-success:hover {
+    background: #1a6b1a;
+    border-color: #1a6b1a;
 }
 
 /* Alert for games needing umpires */
@@ -675,6 +692,22 @@ function copyPartnerEmail(email, contactName, field, time, league) {
     navigator.clipboard.writeText(body).then(function() {
         showToast('Email body copied! Opening email...');
         window.location.href = 'mailto:' + email + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+    });
+}
+
+// Copy both coach phone numbers for group text
+function copyCoachPhones(homePhone, awayPhone) {
+    var phones = [];
+    if (homePhone) phones.push(homePhone);
+    if (awayPhone) phones.push(awayPhone);
+
+    if (phones.length === 0) {
+        showToast('No phone numbers available');
+        return;
+    }
+
+    navigator.clipboard.writeText(phones.join(', ')).then(function() {
+        showToast(phones.length + ' phone number(s) copied!');
     });
 }
 
