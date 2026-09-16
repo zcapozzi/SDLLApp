@@ -357,7 +357,7 @@ def get_games_needing_reports(year, is_spring):
     if not enabled_league_names:
         return []
 
-    # Get completed games
+    # Get completed games (exclude scrimmages)
     games = Game.query.options(
         joinedload(Game.home_team),
         joinedload(Game.away_team)
@@ -367,6 +367,7 @@ def get_games_needing_reports(year, is_spring):
         Game.active == 1,
         Game.game_date < datetime.utcnow(),
         Game.game_type.in_(['regular', 'playoff']),
+        Game.is_scrimmage == 0,
         Game.league.in_(enabled_league_names),
         Game.home_ID.isnot(None),
         Game.away_ID.isnot(None)
@@ -405,11 +406,12 @@ def get_games_needing_emails(minutes_after_start=105):
     """
     cutoff = datetime.utcnow() - timedelta(minutes=minutes_after_start)
 
-    # Get games that started before cutoff
+    # Get games that started before cutoff (exclude scrimmages)
     games = Game.query.filter(
         Game.active == 1,
         Game.game_date < cutoff,
         Game.game_type.in_(['regular', 'playoff']),
+        Game.is_scrimmage == 0,
         Game.home_ID.isnot(None),
         Game.away_ID.isnot(None)
     ).all()

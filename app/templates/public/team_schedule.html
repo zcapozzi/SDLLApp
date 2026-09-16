@@ -961,9 +961,28 @@
                         {% else %}
                             @ {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
                         {% endif %}
+                        {# Show score for completed games with scores (even if in upcoming section due to same-day completion) #}
+                        {% if (game.home_score is not none and game.away_score is not none) and game.status == 'completed' %}
+                            {% if game.home_ID == team.team_ID %}
+                                {% set team_score = game.home_score %}
+                                {% set opp_score = game.away_score %}
+                            {% else %}
+                                {% set team_score = game.away_score %}
+                                {% set opp_score = game.home_score %}
+                            {% endif %}
+                            {% if team_score > opp_score %}
+                                <span class="game-score win">W {{ team_score }}-{{ opp_score }}</span>
+                            {% elif team_score < opp_score %}
+                                <span class="game-score loss">L {{ team_score }}-{{ opp_score }}</span>
+                            {% else %}
+                                <span class="game-score tie">T {{ team_score }}-{{ opp_score }}</span>
+                            {% endif %}
+                        {% endif %}
                     </div>
                     {% endif %}
-                    {% if game.status != 'scheduled' %}
+                    {# Show status for non-scheduled games, but NOT for completed games with scores #}
+                    {% set has_final_score = (game.home_score is not none and game.away_score is not none) and game.status == 'completed' %}
+                    {% if game.status != 'scheduled' and not has_final_score %}
                     <div class="game-status">{{ game.status|title }}</div>
                     {% endif %}
                     {% if game_originals and game.ID in game_originals %}
@@ -993,13 +1012,50 @@
         <div class="section">
             <div class="section-title">Past Games</div>
             {% for game in past_games|reverse %}
-            <div class="game-card {{ 'practice' if game.game_type == 'practice' else 'scrimmage' if game.is_scrimmage else 'game' }} {{ game.status }}" style="opacity: 0.7;">
+            {# Only show score layout if BOTH home_score and away_score are populated (not NULL) #}
+            {% set has_score = (game.home_score is not none and game.away_score is not none) and game.status == 'completed' %}
+            {% if has_score %}
+                {% if game.home_ID == team.team_ID %}
+                    {% set team_score = game.home_score %}
+                    {% set opp_score = game.away_score %}
+                {% else %}
+                    {% set team_score = game.away_score %}
+                    {% set opp_score = game.home_score %}
+                {% endif %}
+                {% set is_win = team_score > opp_score %}
+                {% set is_loss = team_score < opp_score %}
+            {% endif %}
+            <div class="game-card {{ 'practice' if game.game_type == 'practice' else 'scrimmage' if game.is_scrimmage else 'game' }} {{ game.status }}" style="opacity: 0.85;">
                 <div class="game-date-box">
                     <div class="month">{{ game.game_date.strftime('%b') if game.game_date else '' }}</div>
                     <div class="day">{{ game.game_date.strftime('%d') if game.game_date else '?' }}</div>
                     <div class="weekday">{{ game.game_date.strftime('%a') if game.game_date else '' }}</div>
                 </div>
-                <div class="game-info">
+                <div class="game-info" style="flex: 1;">
+                    {# For completed games with scores, show score prominently first #}
+                    {% if has_score %}
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                        <span style="font-size: 22px; font-weight: 700; {% if is_win %}color: #2e7d32;{% elif is_loss %}color: #c62828;{% else %}color: #666;{% endif %}">
+                            {% if is_win %}W{% elif is_loss %}L{% else %}T{% endif %} {{ team_score }}-{{ opp_score }}
+                        </span>
+                        {% if game.home_ID == team.team_ID %}
+                            <span class="game-type-badge home" style="font-size: 9px;">Home</span>
+                        {% else %}
+                            <span class="game-type-badge away" style="font-size: 9px;">Away</span>
+                        {% endif %}
+                    </div>
+                    <div class="game-opponent" style="font-size: 14px; color: #333;">
+                        {% if game.home_ID == team.team_ID %}
+                            vs {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                        {% else %}
+                            @ {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                        {% endif %}
+                    </div>
+                    <div style="font-size: 12px; color: #888; margin-top: 2px;">
+                        {{ game.field_name or '' }}
+                    </div>
+                    {% else %}
+                    {# No score - show traditional layout #}
                     <div class="game-time">
                         {% if game.game_date %}
                         {% set start_hour = game.game_date.strftime('%I')|int %}
@@ -1045,37 +1101,14 @@
                     <div class="game-opponent">
                         {% if game.home_ID == team.team_ID %}
                             vs {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
-                            {# Show score for completed regular/playoff games #}
-                            {% if game.status == 'completed' and not game.is_scrimmage and game.game_type in ('regular', 'playoff') and game.home_score is not none and game.away_score is not none %}
-                                {% set team_score = game.home_score %}
-                                {% set opp_score = game.away_score %}
-                                {% if team_score > opp_score %}
-                                    <span class="game-score win">W {{ team_score }}-{{ opp_score }}</span>
-                                {% elif team_score < opp_score %}
-                                    <span class="game-score loss">L {{ team_score }}-{{ opp_score }}</span>
-                                {% else %}
-                                    <span class="game-score tie">T {{ team_score }}-{{ opp_score }}</span>
-                                {% endif %}
-                            {% endif %}
                         {% else %}
                             @ {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
-                            {# Show score for completed regular/playoff games (away perspective) #}
-                            {% if game.status == 'completed' and not game.is_scrimmage and game.game_type in ('regular', 'playoff') and game.home_score is not none and game.away_score is not none %}
-                                {% set team_score = game.away_score %}
-                                {% set opp_score = game.home_score %}
-                                {% if team_score > opp_score %}
-                                    <span class="game-score win">W {{ team_score }}-{{ opp_score }}</span>
-                                {% elif team_score < opp_score %}
-                                    <span class="game-score loss">L {{ team_score }}-{{ opp_score }}</span>
-                                {% else %}
-                                    <span class="game-score tie">T {{ team_score }}-{{ opp_score }}</span>
-                                {% endif %}
-                            {% endif %}
                         {% endif %}
                     </div>
                     {% endif %}
                     {% if game.status != 'scheduled' and game.status != 'completed' %}
                     <div class="game-status">{{ game.status|title }}</div>
+                    {% endif %}
                     {% endif %}
                 </div>
             </div>
