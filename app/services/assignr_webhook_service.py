@@ -200,6 +200,10 @@ class AssignrWebhookService:
             assignr_game_id=game_id,
             assignr_assignment_id=assignment_id
         )
+
+        # Parse and store the event timestamp from payload
+        event.set_event_timestamp_from_payload()
+
         db.session.commit()
 
         logger.info(f"Stored webhook event {event_id}: {topic}")
@@ -235,8 +239,9 @@ class AssignrWebhookService:
         1. Fetch assignment details from Assignr API
         2. Fetch game details to get start time
         3. Find local game by assignr_id
-        4. Check if accepted AND within 48 hours
-        5. Send notification if needed
+        4. Determine action type (accepted, declined, removed, etc.)
+        5. Check if accepted AND within 48 hours
+        6. Send notification if needed
 
         Args:
             event: AssignrWebhookEvent being processed
@@ -260,23 +265,35 @@ class AssignrWebhookService:
                     assignment_data = a
                     break
 
-        if not assignment_data:
-            logger.info(f"Assignment {assignment_id} not found in game {game_id}")
-            # Still continue - assignment may have been removed
-
-        # Check if assignment was accepted
+        # Determine action type and official info
         is_accepted = False
         official_name = "Unknown"
         position = "Unknown"
+        action_type = "removed"  # Default if assignment not found (was removed)
 
         if assignment_data:
-            is_accepted = assignment_data.get('accepted') in [True, 'True', 'true']
             embedded = assignment_data.get('_embedded', {}) or {}
             official = embedded.get('official', {}) or {}
             first_name = official.get('first_name', '')
             last_name = official.get('last_name', '')
             official_name = f"{first_name} {last_name}".strip() or "Unknown"
             position = assignment_data.get('position', 'Unknown')
+
+            # Determine action type based on assignment state
+            accepted = assignment_data.get('accepted')
+            declined = assignment_data.get('declined')
+
+            if accepted in [True, 'True', 'true']:
+                action_type = "accepted"
+                is_accepted = True
+            elif declined in [True, 'True', 'true']:
+                action_type = "declined"
+            else:
+                # Assignment exists but not accepted/declined = pending/assigned
+                action_type = "assigned"
+        else:
+            logger.info(f"Assignment {assignment_id} not found in game {game_id} - likely removed")
+            # Assignment not found = was removed
 
         # Fetch game details
         game_data = self.assignr.get_game(int(game_id))
@@ -311,7 +328,10 @@ class AssignrWebhookService:
         event.mark_completed(
             local_game_id=local_game_id,
             notification_sent=notification_sent,
-            notification_reason=reason
+            notification_reason=reason,
+            official_name=official_name,
+            action_type=action_type,
+            position=position
         )
 
         return True

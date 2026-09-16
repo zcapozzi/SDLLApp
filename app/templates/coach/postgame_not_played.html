@@ -3,7 +3,26 @@
 {% block title %}Game Not Played{% endblock %}
 
 {% block content %}
-<div class="container" style="max-width: 600px;">
+<style>
+@media (max-width: 600px) {
+    .postgame-game-info {
+        grid-template-columns: 1fr 1fr !important;
+    }
+    .postgame-game-info > div:last-child {
+        grid-column: span 2;
+    }
+    .postgame-actions {
+        flex-direction: column-reverse !important;
+        gap: 15px;
+    }
+    .postgame-actions a,
+    .postgame-actions button {
+        width: 100%;
+        text-align: center;
+    }
+}
+</style>
+<div class="container" style="max-width: 600px; padding: 0 15px;">
     <h1 style="color: rgb(34, 139, 34); margin-bottom: 10px;">Game Not Played</h1>
 
     <!-- Game Info Card -->
@@ -11,7 +30,7 @@
         <h2 style="margin: 0 0 15px 0; font-size: 18px;">
             {{ team.computed_display_name }} vs {{ opponent.computed_display_name if opponent else 'TBD' }}
         </h2>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+        <div class="postgame-game-info" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
             <div>
                 <strong style="color: #888; font-size: 12px; text-transform: uppercase;">Date</strong><br>
                 {{ game.game_date.strftime('%A, %B %d, %Y') if game.game_date else 'TBD' }}
@@ -49,7 +68,7 @@
                           placeholder="Any additional details about why the game wasn't played..."></textarea>
             </div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+            <div class="postgame-actions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
                 <a href="{{ url_for('coach.postgame_form', game_id=game.ID, team_id=team.team_ID) }}" class="btn btn-outline">
                     Back to Report Form
                 </a>

@@ -3,7 +3,23 @@
 {% block title %}My Games{% endblock %}
 
 {% block content %}
-<div class="container">
+<style>
+@media (max-width: 600px) {
+    .responsive-table {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .responsive-table table {
+        min-width: 500px;
+    }
+    .responsive-table td,
+    .responsive-table th {
+        white-space: nowrap;
+        padding: 8px 10px;
+    }
+}
+</style>
+<div class="container" style="padding: 0 15px;">
     <h1 style="color: rgb(34, 139, 34); margin-bottom: 10px;">My Games</h1>
     <p style="color: #666; margin-bottom: 30px;">Post-game reports for teams you coach.</p>
 
@@ -24,6 +40,7 @@
         </h2>
 
         {% if pending_games %}
+        <div class="responsive-table">
         <table>
             <thead>
                 <tr>
@@ -57,6 +74,7 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
         {% else %}
         <p style="color: #666; text-align: center; padding: 30px;">
             No pending reports. You're all caught up!
@@ -74,6 +92,7 @@
         </h2>
 
         {% if submitted_games %}
+        <div class="responsive-table">
         <table>
             <thead>
                 <tr>
@@ -130,6 +149,7 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
         {% else %}
         <p style="color: #666; text-align: center; padding: 30px;">
             No submitted reports yet.

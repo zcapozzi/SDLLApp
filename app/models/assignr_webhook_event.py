@@ -32,6 +32,12 @@ class AssignrWebhookEvent(db.Model):
     # Local references
     local_game_id = db.Column(db.BigInteger)
 
+    # Parsed event details (populated during processing)
+    official_name = db.Column(db.String(100))
+    action_type = db.Column(db.String(50))  # accepted, declined, assigned, removed, etc.
+    position = db.Column(db.String(50))  # Plate, Base, etc.
+    event_timestamp = db.Column(db.DateTime)  # Timestamp from Assignr payload (local time)
+
     # Notification tracking
     notification_sent = db.Column(db.SmallInteger, default=0)
     notification_reason = db.Column(db.String(100))
@@ -114,7 +120,10 @@ class AssignrWebhookEvent(db.Model):
         self,
         local_game_id: Optional[int] = None,
         notification_sent: bool = False,
-        notification_reason: Optional[str] = None
+        notification_reason: Optional[str] = None,
+        official_name: Optional[str] = None,
+        action_type: Optional[str] = None,
+        position: Optional[str] = None
     ):
         """
         Mark event as successfully processed.
@@ -123,6 +132,9 @@ class AssignrWebhookEvent(db.Model):
             local_game_id: Local sdll_games.ID if found
             notification_sent: Whether an alert email was sent
             notification_reason: Reason for notification (e.g., 'accepted_within_48h')
+            official_name: Name of the official involved
+            action_type: Type of action (accepted, declined, assigned, removed)
+            position: Position (Plate, Base, etc.)
         """
         self.status = 'completed'
         self.processed_at = datetime.utcnow()
@@ -131,6 +143,12 @@ class AssignrWebhookEvent(db.Model):
         if notification_sent:
             self.notification_sent = 1
             self.notification_reason = notification_reason
+        if official_name:
+            self.official_name = official_name
+        if action_type:
+            self.action_type = action_type
+        if position:
+            self.position = position
         db.session.commit()
 
     def mark_failed(self, error_message: str):
@@ -172,3 +190,56 @@ class AssignrWebhookEvent(db.Model):
             return 0
         delta = datetime.utcnow() - self.received_at
         return delta.total_seconds() / 3600
+
+    @property
+    def local_game(self):
+        """Get the linked local Game object if available."""
+        if not self.local_game_id:
+            return None
+        from app.models.game import Game
+        return Game.query.get(self.local_game_id)
+
+    @property
+    def action_display(self) -> str:
+        """Human-readable action type."""
+        action_labels = {
+            'accepted': 'Accepted assignment',
+            'declined': 'Declined assignment',
+            'assigned': 'Was assigned to game',
+            'removed': 'Was removed from game',
+            'pending': 'Assignment pending'
+        }
+        return action_labels.get(self.action_type, self.action_type or 'Unknown')
+
+    @property
+    def action_icon(self) -> str:
+        """Emoji icon for action type."""
+        action_icons = {
+            'accepted': '✅',
+            'declined': '❌',
+            'assigned': '📋',
+            'removed': '🚫',
+            'pending': '⏳'
+        }
+        return action_icons.get(self.action_type, '❓')
+
+    def parse_event_timestamp(self) -> Optional[datetime]:
+        """Parse the event timestamp from the payload's 'created' field."""
+        payload = self.get_payload_dict()
+        created = payload.get('created')
+        if not created:
+            return None
+        try:
+            # Format: "2026-09-15T19:57:33.964-04:00"
+            from dateutil import parser
+            return parser.parse(created)
+        except Exception:
+            return None
+
+    def set_event_timestamp_from_payload(self):
+        """Set event_timestamp from the payload's created field."""
+        ts = self.parse_event_timestamp()
+        if ts:
+            # Store without timezone info for DB compatibility
+            self.event_timestamp = ts.replace(tzinfo=None)
+            db.session.commit()

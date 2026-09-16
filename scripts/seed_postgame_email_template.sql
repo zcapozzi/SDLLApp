@@ -53,7 +53,7 @@ SDLL',
 
     <p style="text-align: center;">
         <a href="{{submit_url}}" style="display: inline-block; background: #228B22; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
-            Submit Post-Game Report
+            Complete Post-Game Report
         </a>
     </p>
 

@@ -3,7 +3,28 @@
 {% block title %}Post-Game Report{% endblock %}
 
 {% block content %}
-<div class="container" style="max-width: 700px;">
+<style>
+/* Mobile-friendly styles for post-game form */
+@media (max-width: 600px) {
+    .postgame-game-info {
+        grid-template-columns: 1fr 1fr !important;
+    }
+    .postgame-game-info > div:last-child {
+        grid-column: span 2;
+    }
+    .postgame-two-col {
+        grid-template-columns: 1fr !important;
+    }
+    .postgame-actions {
+        flex-direction: column-reverse !important;
+        gap: 15px;
+    }
+    .postgame-actions button {
+        width: 100%;
+    }
+}
+</style>
+<div class="container" style="max-width: 700px; padding: 0 15px;">
     <h1 style="color: rgb(34, 139, 34); margin-bottom: 10px;">Post-Game Report</h1>
 
     <!-- Game Info Card -->
@@ -11,7 +32,7 @@
         <h2 style="margin: 0 0 15px 0; font-size: 18px;">
             {{ team.computed_display_name }} vs {{ opponent.computed_display_name if opponent else 'TBD' }}
         </h2>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+        <div class="postgame-game-info" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
             <div>
                 <strong style="color: #888; font-size: 12px; text-transform: uppercase;">Date</strong><br>
                 {{ game.game_date.strftime('%A, %B %d, %Y') if game.game_date else 'TBD' }}
@@ -46,7 +67,7 @@
             <!-- Score Section -->
             <h3 style="margin-top: 0; border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Final Score</h3>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <div class="postgame-two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
                 <div class="form-group">
                     <label for="our_score">{{ team.computed_display_name }} (Your Team)</label>
                     <input type="number" id="our_score" name="our_score" class="form-control"
@@ -64,7 +85,7 @@
             <!-- Innings Section -->
             <h3 style="border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Innings Played</h3>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <div class="postgame-two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
                 <div class="form-group">
                     <label for="innings_batted">Innings Batted</label>
                     <select id="innings_batted" name="innings_batted" class="form-control" required>
@@ -118,7 +139,7 @@
             {% endif %}
 
             <!-- Actions -->
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+            <div class="postgame-actions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
                 <button type="submit" name="action" value="not_played" class="btn btn-outline" style="border-color: #888; color: #888;">
                     Game Was Not Played
                 </button>

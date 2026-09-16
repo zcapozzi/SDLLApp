@@ -94,6 +94,8 @@ def receive_webhook():
 @umpire_coordinator_required
 def webhook_list():
     """Admin view: List recent webhook events."""
+    from app.models.game import Game
+
     # Get filter from query params
     status_filter = request.args.get('status', '')
     limit = int(request.args.get('limit', 50))
@@ -115,11 +117,24 @@ def webhook_list():
             status=status
         ).count()
 
+    # Pre-fetch local games for all events that have local_game_id
+    local_game_ids = [e.local_game_id for e in events if e.local_game_id]
+    games_by_id = {}
+    if local_game_ids:
+        from sqlalchemy.orm import joinedload
+        games = Game.query.options(
+            joinedload(Game.home_team),
+            joinedload(Game.away_team),
+            joinedload(Game.field_rel)
+        ).filter(Game.ID.in_(local_game_ids)).all()
+        games_by_id = {g.ID: g for g in games}
+
     return render_template(
         'assignr/webhooks.html',
         events=events,
         status_filter=status_filter,
-        status_counts=status_counts
+        status_counts=status_counts,
+        games_by_id=games_by_id
     )
 
 

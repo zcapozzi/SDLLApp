@@ -47,6 +47,60 @@
     </div>
 </div>
 
+{# Action Summary #}
+{% if event.official_name or event.action_type %}
+<div class="card" style="margin-bottom: 20px; background: linear-gradient(to right, rgba(34, 139, 34, 0.05), rgba(255, 140, 0, 0.05));">
+    <h3 style="margin-top: 0;">{{ event.action_icon }} What Happened</h3>
+    <div style="font-size: 18px; margin-bottom: 15px;">
+        {% if event.official_name and event.official_name != 'Unknown' %}
+        <strong>{{ event.official_name }}</strong>
+        {% if event.position and event.position != 'Unknown' %}({{ event.position }}){% endif %}
+        - {{ event.action_display }}
+        {% else %}
+        {{ event.action_display }}
+        {% endif %}
+    </div>
+    {% if event.event_timestamp %}
+    <div style="color: var(--text-muted);">
+        Event occurred: <strong>{{ event.event_timestamp.strftime('%A, %B %d, %Y at %I:%M %p').replace(' 0', ' ') }}</strong>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{# Linked Game Info #}
+{% set local_game = event.local_game %}
+{% if local_game %}
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-top: 0;">Game Information</h3>
+    <div class="detail-grid">
+        <div class="detail-row">
+            <span class="label">Matchup:</span>
+            <span>
+                <strong>{{ local_game.home_team.computed_display_name if local_game.home_team else 'TBD' }}</strong>
+                vs
+                <strong>{{ local_game.away_team.computed_display_name if local_game.away_team else 'TBD' }}</strong>
+            </span>
+        </div>
+        <div class="detail-row">
+            <span class="label">Date/Time:</span>
+            <span>{{ local_game.game_date.strftime('%A, %B %d, %Y at %I:%M %p').replace(' 0', ' ') if local_game.game_date else 'TBD' }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="label">Field:</span>
+            <span>{{ local_game.field_name or 'TBD' }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="label">League:</span>
+            <span>{{ local_game.league or 'Unknown' }}</span>
+        </div>
+    </div>
+    <div style="margin-top: 15px;">
+        <a href="{{ url_for('scheduler.game_detail', game_id=local_game.ID) }}" class="btn btn-outline">View Full Game Details</a>
+    </div>
+</div>
+{% endif %}
+
 {# Event Details #}
 <div class="card" style="margin-bottom: 20px;">
     <h3>Event Details</h3>
@@ -59,6 +113,18 @@
             <span class="label">Topic:</span>
             <span><code>{{ event.topic }}</code></span>
         </div>
+        {% if event.official_name %}
+        <div class="detail-row">
+            <span class="label">Official:</span>
+            <span>{{ event.official_name }}{% if event.position and event.position != 'Unknown' %} ({{ event.position }}){% endif %}</span>
+        </div>
+        {% endif %}
+        {% if event.action_type %}
+        <div class="detail-row">
+            <span class="label">Action:</span>
+            <span>{{ event.action_display }}</span>
+        </div>
+        {% endif %}
         <div class="detail-row">
             <span class="label">Assignr Game ID:</span>
             <span>
@@ -111,12 +177,16 @@
             </span>
         </div>
         <div class="detail-row">
+            <span class="label">Event Time:</span>
+            <span>{{ event.event_timestamp.strftime('%a, %b %d, %Y at %I:%M %p').replace(' 0', ' ') if event.event_timestamp else '-' }}</span>
+        </div>
+        <div class="detail-row">
             <span class="label">Received At:</span>
-            <span>{{ event.received_at.strftime('%Y-%m-%d %H:%M:%S') if event.received_at else '-' }}</span>
+            <span>{{ event.received_at.strftime('%a, %b %d, %Y at %I:%M %p').replace(' 0', ' ') if event.received_at else '-' }}</span>
         </div>
         <div class="detail-row">
             <span class="label">Processed At:</span>
-            <span>{{ event.processed_at.strftime('%Y-%m-%d %H:%M:%S') if event.processed_at else '-' }}</span>
+            <span>{{ event.processed_at.strftime('%a, %b %d, %Y at %I:%M %p').replace(' 0', ' ') if event.processed_at else '-' }}</span>
         </div>
         {% if event.error_message %}
         <div class="detail-row">

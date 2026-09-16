@@ -3,6 +3,106 @@
 {% block title %}Assignr Webhooks{% endblock %}
 
 {% block content %}
+<style>
+.webhook-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    transition: box-shadow 0.2s;
+}
+.webhook-card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.webhook-card.status-completed {
+    border-left: 4px solid var(--success-color, #28a745);
+}
+.webhook-card.status-failed {
+    border-left: 4px solid var(--danger-color, #dc3545);
+}
+.webhook-card.status-ignored {
+    border-left: 4px solid #6c757d;
+}
+.webhook-card.status-received,
+.webhook-card.status-processing {
+    border-left: 4px solid var(--warning-color, #ffc107);
+}
+.webhook-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+.webhook-action {
+    font-size: 18px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.webhook-action-icon {
+    font-size: 20px;
+}
+.webhook-meta {
+    text-align: right;
+    color: var(--text-muted, #666);
+    font-size: 13px;
+}
+.webhook-game-info {
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+.webhook-game-title {
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.webhook-game-details {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    font-size: 14px;
+    color: var(--text-muted, #666);
+}
+.webhook-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 12px;
+    border-top: 1px solid #eee;
+    font-size: 13px;
+}
+.webhook-ids {
+    color: var(--text-muted, #666);
+}
+.webhook-ids code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+@media (max-width: 600px) {
+    .webhook-header {
+        flex-direction: column;
+        gap: 8px;
+    }
+    .webhook-meta {
+        text-align: left;
+    }
+    .webhook-game-details {
+        flex-direction: column;
+        gap: 4px;
+    }
+    .webhook-footer {
+        flex-direction: column;
+        gap: 10px;
+        align-items: flex-start;
+    }
+}
+</style>
+
 <div style="margin-bottom: 20px;">
     <h1 style="margin: 0;">Assignr Webhooks</h1>
     <p style="color: var(--text-muted); margin: 5px 0 0 0;">Monitor incoming webhook events from Assignr</p>
@@ -55,81 +155,115 @@
     </div>
 </div>
 
-{# Events Table #}
-<div class="card">
+{# Events Cards #}
+<div>
     {% if events %}
-    <div class="table-responsive">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Event ID</th>
-                    <th>Topic</th>
-                    <th>Game ID</th>
-                    <th>Status</th>
-                    <th>Notification</th>
-                    <th>Received</th>
-                    <th>Processed</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for event in events %}
-                <tr>
-                    <td>{{ event.id }}</td>
-                    <td>{{ event.event_id }}</td>
-                    <td><code>{{ event.topic }}</code></td>
-                    <td>
-                        {% if event.assignr_game_id %}
-                        <a href="https://sdll.assignr.com/games/{{ event.assignr_game_id }}" target="_blank">
-                            {{ event.assignr_game_id }}
-                        </a>
+        {% for event in events %}
+        {% set local_game = games_by_id.get(event.local_game_id) if event.local_game_id else None %}
+        <div class="webhook-card status-{{ event.status }}">
+            {# Header: Action + Timestamp #}
+            <div class="webhook-header">
+                <div class="webhook-action">
+                    <span class="webhook-action-icon">{{ event.action_icon }}</span>
+                    <span>
+                        {% if event.official_name and event.official_name != 'Unknown' %}
+                            <strong>{{ event.official_name }}</strong>
+                            {% if event.position and event.position != 'Unknown' %}
+                                ({{ event.position }})
+                            {% endif %}
+                            - {{ event.action_display }}
                         {% else %}
-                        <span style="color: var(--text-muted);">-</span>
+                            {{ event.action_display }}
                         {% endif %}
-                    </td>
-                    <td>
-                        {% if event.status == 'completed' %}
-                        <span class="badge badge-success">Completed</span>
-                        {% elif event.status == 'failed' %}
-                        <span class="badge badge-danger">Failed</span>
-                        {% elif event.status == 'ignored' %}
-                        <span class="badge badge-secondary">Ignored</span>
-                        {% elif event.status == 'processing' %}
-                        <span class="badge badge-warning">Processing</span>
-                        {% else %}
-                        <span class="badge badge-info">Received</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if event.notification_sent %}
-                        <span class="badge badge-success" title="{{ event.notification_reason }}">Sent</span>
-                        {% else %}
-                        <span style="color: var(--text-muted);">-</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <span title="{{ event.received_at }}">
-                            {{ event.received_at.strftime('%m/%d %I:%M %p') if event.received_at else '-' }}
-                        </span>
-                    </td>
-                    <td>
-                        <span title="{{ event.processed_at }}">
-                            {{ event.processed_at.strftime('%m/%d %I:%M %p') if event.processed_at else '-' }}
-                        </span>
-                    </td>
-                    <td>
-                        <a href="{{ url_for('assignr.webhook_detail', event_id=event.id) }}" class="btn btn-sm btn-outline">
-                            View
-                        </a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+                    </span>
+                </div>
+                <div class="webhook-meta">
+                    {% if event.event_timestamp %}
+                    <div title="Event occurred">{{ event.event_timestamp.strftime('%a, %b %d at %I:%M %p').replace(' 0', ' ') }}</div>
+                    {% elif event.received_at %}
+                    <div title="Received at">{{ event.received_at.strftime('%a, %b %d at %I:%M %p').replace(' 0', ' ') }}</div>
+                    {% endif %}
+                    {% if event.status == 'completed' %}
+                    <span class="badge badge-success" style="margin-top: 4px;">Completed</span>
+                    {% elif event.status == 'failed' %}
+                    <span class="badge badge-danger" style="margin-top: 4px;">Failed</span>
+                    {% elif event.status == 'ignored' %}
+                    <span class="badge badge-secondary" style="margin-top: 4px;">Ignored</span>
+                    {% elif event.status == 'processing' %}
+                    <span class="badge badge-warning" style="margin-top: 4px;">Processing</span>
+                    {% else %}
+                    <span class="badge badge-info" style="margin-top: 4px;">Pending</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# Game Info (if linked) #}
+            {% if local_game %}
+            <div class="webhook-game-info">
+                <div class="webhook-game-title">
+                    {{ local_game.home_team.computed_display_name if local_game.home_team else 'TBD' }}
+                    vs
+                    {{ local_game.away_team.computed_display_name if local_game.away_team else 'TBD' }}
+                </div>
+                <div class="webhook-game-details">
+                    <span>📅 {{ local_game.game_date.strftime('%a, %b %d at %I:%M %p').replace(' 0', ' ') if local_game.game_date else 'TBD' }}</span>
+                    <span>📍 {{ local_game.field_name or 'TBD' }}</span>
+                    <span>🏆 {{ local_game.league or 'Unknown' }}</span>
+                </div>
+            </div>
+            {% elif event.assignr_game_id %}
+            <div class="webhook-game-info" style="background: #fff3cd;">
+                <div class="webhook-game-details">
+                    <span>⚠️ Assignr Game #{{ event.assignr_game_id }} - Not linked to local game</span>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Error message if failed #}
+            {% if event.status in ['failed', 'ignored'] and event.error_message %}
+            <div style="background: #f8d7da; border-radius: 6px; padding: 10px; margin-bottom: 12px; font-size: 14px; color: #721c24;">
+                {{ event.error_message }}
+            </div>
+            {% endif %}
+
+            {# Notification badge #}
+            {% if event.notification_sent %}
+            <div style="margin-bottom: 12px;">
+                <span class="badge badge-success">📧 Alert Sent</span>
+                {% if event.notification_reason %}
+                <span style="color: var(--text-muted); font-size: 13px; margin-left: 8px;">{{ event.notification_reason }}</span>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {# Footer: IDs + Actions #}
+            <div class="webhook-footer">
+                <div class="webhook-ids">
+                    Event <code>#{{ event.event_id }}</code>
+                    {% if event.assignr_assignment_id %}
+                    &bull; Assignment <code>#{{ event.assignr_assignment_id }}</code>
+                    {% endif %}
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    {% if event.assignr_game_id %}
+                    <a href="https://sdll.assignr.com/games/{{ event.assignr_game_id }}" target="_blank" class="btn btn-sm btn-outline" title="View in Assignr">
+                        Assignr
+                    </a>
+                    {% endif %}
+                    {% if local_game %}
+                    <a href="{{ url_for('scheduler.game_detail', game_id=local_game.ID) }}" class="btn btn-sm btn-outline" title="View local game">
+                        Game
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('assignr.webhook_detail', event_id=event.id) }}" class="btn btn-sm btn-primary">
+                        Details
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
     {% else %}
-    <div style="padding: 40px; text-align: center; color: var(--text-muted);">
+    <div class="card" style="padding: 40px; text-align: center; color: var(--text-muted);">
         <p>No webhook events found.</p>
         <p style="font-size: 14px;">Events will appear here when Assignr sends webhook notifications.</p>
     </div>
