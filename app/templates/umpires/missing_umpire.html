@@ -713,7 +713,7 @@ function copyCoachPhones(homePhone, awayPhone) {
 
 // Coach contact functions (notifying about umpire delay)
 function copyCoachSMS(field, time, league, homeTeam, awayTeam) {
-    var message = "Hi coaches - heads up that the umpire for your " + time + " " + league + " game at " + field + " (" + homeTeam + " vs " + awayTeam + ") is running a few minutes late. They should be there shortly. Thanks for your patience!";
+    var message = "Hi - the umpire is running a few minutes late but is on the way.";
     navigator.clipboard.writeText(message).then(function() {
         showToast('Coach SMS copied!');
     });
