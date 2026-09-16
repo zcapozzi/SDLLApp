@@ -4,7 +4,7 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Implemented self-service access request feature with three workflows (Parent/Coach/Admin).
+Last session: Improved webhook UI (cards, action details), fixed team schedule score display, excluded scrimmages from post-game emails, and fixed reapportionment to filter by game umpire_override field.
 
 ---
 
@@ -2376,4 +2376,88 @@ When an umpire accepts within 48 hours, an email is sent to all users with `admi
 - Game details (league, date, time, field, teams)
 - Umpire name and position
 - Hours remaining until game
+
+---
+
+## Session: September 15, 2026 - Webhook UI, Post-Game, and Reapportionment Improvements
+
+### Overview
+
+Multiple improvements to the webhook UI, post-game reporting system, team schedules, and umpire reapportionment tool.
+
+### 1. Assignr Webhook UI Improvements
+
+**Files Modified:**
+- `app/models/assignr_webhook_event.py` - Added new fields and helper properties
+- `app/services/assignr_webhook_service.py` - Capture action details during processing
+- `app/assignr/webhooks.py` - Pre-fetch game data for card display
+- `app/templates/assignr/webhooks.html` - Complete rewrite with card-based UI
+- `app/templates/assignr/webhook_detail.html` - Enhanced detail view
+
+**New Database Fields** (migration: `scripts/add_webhook_event_details.sql`):
+- `official_name` - Name of the umpire who took action
+- `action_type` - accepted, declined, assigned, removed
+- `position` - Plate, Base, etc.
+- `event_timestamp` - Local time when event occurred
+
+**New Model Properties:**
+- `action_display` - Human-readable action (e.g., "Accepted assignment")
+- `action_icon` - Emoji indicator (✅ accepted, ❌ declined, etc.)
+
+**UI Changes:**
+- Card-based layout instead of table rows
+- Local time display for all timestamps
+- Action icons and official names prominently displayed
+- Game info linked to local game records
+
+### 2. Post-Game Email Button Text
+
+**Files Modified:**
+- `app/services/post_game_service.py` - Changed button text
+- `scripts/seed_postgame_email_template.sql` - Updated template
+
+**Change:** Button text changed from "Submit Post-Game Report" to "Complete Post-Game Report"
+
+### 3. Team Schedule Score Display
+
+**Files Modified:**
+- `app/templates/public/team_schedule.html` - Added score display logic
+
+**Features:**
+- Completed games show actual score (W 5-4 or L 4-5) instead of "Completed" label
+- Score prominently displayed with color coding (green for wins, red for losses)
+- Works in both upcoming games (same day) and past games sections
+- Applies to all games with non-NULL home_score and away_score
+
+### 4. Scrimmage Exclusion from Post-Game Emails
+
+**Files Modified:**
+- `app/services/post_game_service.py` - Added `Game.is_scrimmage == 0` filter
+
+**Change:** Post-game report emails never sent for scrimmages (is_scrimmage=1)
+
+### 5. Umpire Reapportionment Fix
+
+**Files Modified:**
+- `app/services/reapportionment_service.py` - Fixed filtering logic
+
+**Issue:** Reapportionment wasn't showing any games
+
+**Root Cause:** The filter was checking for leagues with `default_partner_id` linked to a partner with `is_managed_by_org=True`, but no leagues had `default_partner_id` set.
+
+**Fix:** Changed to filter games by `umpire_override` field:
+- `_get_managed_partner_codes()` - Gets short_codes of partners where `is_managed_by_org=True`
+- `_is_managed_game()` - Checks if game's `umpire_override` matches a managed partner code
+- Currently shows games with `umpire_override='SDL'` (110 games)
+
+### Database Migrations Required
+```sql
+-- Add webhook event details columns
+scripts/add_webhook_event_details.sql
+```
+
+### Git Commits
+- `e33345e` - Improve webhooks UI and make post-game forms mobile-friendly
+- `3d138e6` - Show scores instead of Completed label on team schedule
+- `fc4e88f` - Fix reapportionment to filter by game umpire_override field
 

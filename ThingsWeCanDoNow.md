@@ -731,6 +731,46 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
   - Updates campaign status to "sent"
 - **Navigation:** Campaign Preview → "Send"
 
+### 8.22 Assignr Webhook Events
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** `/assignr/webhooks`
+- **URL Args:** `?status=` to filter by status
+- **Actions:**
+  - View all webhook events from Assignr in card-based layout
+  - See action details (accepted, declined, assigned, removed)
+  - View official name and position for each event
+  - See local time for event timestamps
+  - Link to local game records when available
+  - Filter by status (completed, failed, ignored)
+  - Retry failed events
+- **Navigation:** Dashboard → "Umpires" → "Assignr" → "Webhooks"
+
+### 8.23 Assignr Webhook Event Detail
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** `/assignr/webhooks/<event_id>`
+- **Actions:**
+  - View full webhook payload
+  - See processing status and error messages
+  - View linked game information
+  - Retry processing for failed events
+  - Link to Assignr game page
+- **Navigation:** Webhook Events → Click event card
+
+### 8.24 Umpire Game Reapportionment
+- **Access:** `umpire_coordinator`, `admin`
+- **Path:** `/umpires/<year>/<is_spring>/reapportion`
+- **URL Args:** `?sport=baseball` or `?sport=softball`
+- **Actions:**
+  - View Academy umpire game assignments for rebalancing
+  - See umpire game counts and identify over/under-assigned umpires
+  - Score games for reassignment priority (considers back-to-back games)
+  - View unassigned games available for trade
+  - Unassign games from over-assigned umpires
+  - Reassign games to under-assigned umpires
+  - Send notification messages to affected umpires
+- **Filtering:** Only shows games where `umpire_override` matches a managed partner (SDL Academy)
+- **Navigation:** Dashboard → "Umpires" → "Reapportionment"
+
 ---
 
 ## 9. Umpire Portal (Self-Service)
@@ -813,6 +853,8 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
 - **Actions:**
   - View team's full schedule (games and practices)
   - See game details (date, time, field, opponent)
+  - View game scores for completed games (W 5-4, L 3-7, T 4-4)
+  - Score display color-coded: green for wins, red for losses
   - Color-coded by game type
   - Link to field directions
   - Sync schedule to calendar (see 10.1a)
@@ -1129,6 +1171,37 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
   - Coach role enables team schedule access
 - **Navigation:** N/A (managed by admin)
 
+### 14.3 Post-Game Report Submission
+- **Access:** `coach` (for their teams)
+- **Path:** `/coach/postgame/<game_id>/<team_id>`
+- **Actions:**
+  - Submit post-game data after games complete
+  - Enter final score (team score and opponent score)
+  - Enter innings batted and innings fielded
+  - Rate umpire performance (Excellent, Good, OK, Poor)
+  - Add umpire name and optional comments
+  - Review data before final submission
+- **Email Trigger:** Automated email sent 105 minutes after game start
+- **Scrimmages:** Post-game emails are NOT sent for scrimmages
+- **Navigation:** Click link in post-game email
+
+### 14.4 Mark Game Not Played
+- **Access:** `coach` (for their teams)
+- **Path:** `/coach/postgame/<game_id>/<team_id>/not-played`
+- **Actions:**
+  - Mark game as not played (rainout, cancelled, forfeit)
+  - Select reason from dropdown
+  - Add optional notes
+- **Navigation:** Post-game form → "Game Was Not Played"
+
+### 14.5 My Pending Games
+- **Access:** `coach`
+- **Path:** `/coach/my-games`
+- **Actions:**
+  - View games pending post-game submission
+  - Access post-game forms for each game
+- **Navigation:** Dashboard → "My Games" (coach view)
+
 ---
 
 ## 15. Facilities Management
@@ -1246,6 +1319,9 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
 | Email Campaigns | Ump Coord+ | Umpires → "Campaigns" |
 | Manage Seasons | Admin | Admin → "Seasons" |
 | Analytics Dashboard | Product Admin | Direct URL `/analytics/` |
+| Assignr Webhooks | Ump Coord+ | Umpires → "Assignr" → "Webhooks" |
+| Game Reapportionment | Ump Coord+ | Umpires → "Reapportionment" |
+| Post-Game Report | Coach | Click link in post-game email |
 
 ---
 
@@ -1274,6 +1350,9 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
 | View Field Schedules | - | - | - | - | - | ✓ | ✓ | ✓ |
 | Master Schedule | - | - | - | ✓ | ✓ | ✓ | - | ✓***** |
 | Analytics Dashboard | - | - | - | - | - | - | - | ✓**** |
+| Post-Game Reports | - | ✓ | - | - | - | - | - | ✓ |
+| Assignr Webhooks | - | - | - | ✓ | - | - | - | ✓ |
+| Game Reapportionment | - | - | - | ✓ | - | - | - | ✓ |
 
 \* With valid token
 \** Landing page only
@@ -1291,4 +1370,4 @@ When adding new routes or features:
 3. Update feature matrix if needed
 4. Update quick reference navigation paths
 
-Last updated: September 14, 2026
+Last updated: September 15, 2026
