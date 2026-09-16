@@ -88,7 +88,7 @@
         }
         .forgot-link {
             display: block;
-            margin-top: 20px;
+            margin-top: 15px;
             color: #666;
             text-decoration: none;
             font-size: 14px;
@@ -96,6 +96,62 @@
         .forgot-link:hover {
             color: rgb(34, 139, 34);
             text-decoration: underline;
+        }
+        .info-box {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 25px;
+            text-align: left;
+        }
+        .info-box p {
+            color: #856404;
+            font-size: 14px;
+            line-height: 1.5;
+            margin: 0;
+        }
+        .section {
+            margin-bottom: 20px;
+        }
+        .section h3 {
+            color: #333;
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        .section-text {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 25px 0;
+            color: #999;
+            font-size: 13px;
+        }
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #ddd;
+        }
+        .divider span {
+            padding: 0 15px;
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid #ddd;
+            color: #666;
+            width: 100%;
+        }
+        .btn-outline:hover {
+            background: #f5f5f5;
+            border-color: #ccc;
         }
         .footer {
             margin-top: 40px;
@@ -118,17 +174,38 @@
             <span class="badge">{{ season_name }}</span>
         </div>
 
-        <p class="info-text">
-            Please log in to view the master schedule. This page is for SDLL board members and coordinators to see all games and practices across all divisions.
-        </p>
+        <div class="info-box">
+            <p>
+                The Master Schedule is a <strong>board-only</strong> resource showing all games and practices across all divisions.
+            </p>
+            <p style="margin-top: 8px; font-size: 13px; color: #856404;">
+                Access is limited to board members, coordinators, and coaches.
+            </p>
+        </div>
 
-        <a href="{{ login_url }}" class="btn btn-primary">
-            Login to View Schedule
-        </a>
+        <div class="section">
+            <h3>Already have an account?</h3>
+            <a href="{{ login_url }}" class="btn btn-primary">
+                Login to View Schedule
+            </a>
+            <a href="{{ url_for('auth.forgot_password') }}" class="forgot-link">
+                Set or reset your password
+            </a>
+        </div>
 
-        <a href="{{ url_for('auth.forgot_password') }}" class="forgot-link">
-            Set or reset your password
-        </a>
+        <div class="divider">
+            <span>or</span>
+        </div>
+
+        <div class="section">
+            <h3>Need an account?</h3>
+            <p class="section-text">
+                If you're a board member or coordinator and don't have an account yet, request access below.
+            </p>
+            <a href="mailto:info@sdll.org?subject=Master%20Schedule%20Access%20Request&body=Hi%2C%0A%0AI%20would%20like%20to%20request%20access%20to%20the%20Master%20Schedule.%0A%0AMy%20name%3A%20%0AMy%20email%3A%20%0AMy%20role%20with%20SDLL%3A%20%0A%0AThank%20you!" class="btn btn-outline">
+                Request Access
+            </a>
+        </div>
 
         <div class="footer">
             <p>South Durham Little League</p>
