@@ -62,13 +62,8 @@ def assignr_webhook():
     if existing:
         return jsonify({'status': 'duplicate', 'message': 'Event already processed'}), 200
 
-    # Extract game and assignment IDs from payload if present
-    assignr_game_id = None
-    assignr_assignment_id = None
-    if 'game' in payload:
-        assignr_game_id = str(payload['game'].get('id', ''))
-    if 'assignment' in payload:
-        assignr_assignment_id = str(payload['assignment'].get('id', ''))
+    # Extract game and assignment IDs from payload links
+    assignr_game_id, assignr_assignment_id = service.extract_ids_from_payload(payload)
 
     # Store the event
     import json
