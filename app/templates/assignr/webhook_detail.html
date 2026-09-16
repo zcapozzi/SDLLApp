@@ -26,11 +26,11 @@
 {# Actions #}
 <div class="card" style="margin-bottom: 20px;">
     <div style="display: flex; gap: 10px; align-items: center;">
-        {% if event.status in ['failed', 'ignored'] %}
         <form method="POST" action="{{ url_for('assignr.webhook_retry', event_id=event.id) }}">
-            <button type="submit" class="btn btn-primary">Retry Processing</button>
+            <button type="submit" class="btn btn-primary">
+                {% if event.status == 'completed' %}Reprocess{% else %}Retry Processing{% endif %}
+            </button>
         </form>
-        {% endif %}
         {% if event.assignr_game_id %}
         <a href="https://sdll.assignr.com/games/{{ event.assignr_game_id }}" target="_blank" class="btn btn-outline">
             View in Assignr
