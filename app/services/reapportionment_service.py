@@ -23,40 +23,49 @@ class ReapportionmentService:
     def __init__(self):
         self.assignr = get_assignr_service()
         self._academy_official_ids = None
-        self._managed_leagues = None  # Cache for leagues with managed partners
+        self._managed_partner_codes = None  # Cache for managed partner short_codes
 
-    def _get_managed_leagues(self) -> set:
-        """Get set of league names that have managed umpire partners.
+    def _get_managed_partner_codes(self) -> set:
+        """Get set of short_codes for partners managed by the org.
 
-        Only games from these leagues should appear in reapportionment.
+        Only games with umpire_override matching these codes should appear
+        in reapportionment.
         Caches the result for the lifetime of the service instance.
         """
-        if self._managed_leagues is not None:
-            return self._managed_leagues
+        if self._managed_partner_codes is not None:
+            return self._managed_partner_codes
 
-        from app.models.league import League
         from app.models.umpire_partner import UmpirePartner
 
-        # Get all leagues with their default partners
-        leagues = League.query.filter(League.default_partner_id.isnot(None)).all()
+        # Get partners where is_managed_by_org is True
+        partners = UmpirePartner.query.filter(UmpirePartner.is_managed_by_org == True).all()
 
-        # Filter to leagues where the partner is managed by org
-        managed_leagues = set()
-        for league in leagues:
-            partner = UmpirePartner.query.get(league.default_partner_id)
-            if partner and partner.is_managed_by_org:
-                managed_leagues.add(league.name)
+        # Collect short_codes
+        managed_codes = set()
+        for partner in partners:
+            if partner.short_code:
+                managed_codes.add(partner.short_code)
 
-        logger.info(f"Found {len(managed_leagues)} leagues with managed partners: {managed_leagues}")
-        self._managed_leagues = managed_leagues
-        return self._managed_leagues
+        logger.info(f"Found {len(managed_codes)} managed partner codes: {managed_codes}")
+        self._managed_partner_codes = managed_codes
+        return self._managed_partner_codes
 
-    def _is_managed_league(self, league_name: str) -> bool:
-        """Check if a league name corresponds to a managed umpire partner."""
-        if not league_name:
+    def _is_managed_game(self, game: Dict) -> bool:
+        """Check if a game is managed by checking its umpire_override field.
+
+        A game is managed if its umpire_override matches a partner with
+        is_managed_by_org=True.
+        """
+        local = game.get('_local')
+        if not local:
             return False
-        managed = self._get_managed_leagues()
-        return league_name in managed
+
+        umpire_override = local.get('umpire_override')
+        if not umpire_override:
+            return False
+
+        managed_codes = self._get_managed_partner_codes()
+        return umpire_override in managed_codes
 
     def _get_academy_official_ids(self) -> set:
         """Get set of official IDs that belong to the Academy group.
@@ -130,8 +139,8 @@ class ReapportionmentService:
             if game_sport != sport:
                 continue
 
-            # Only include games from leagues with managed umpire partners
-            if not self._is_managed_league(league):
+            # Only include games where umpire_override matches a managed partner
+            if not self._is_managed_game(game):
                 continue
 
             # Check if game has an assignment
@@ -338,8 +347,8 @@ class ReapportionmentService:
             if game_sport != sport:
                 continue
 
-            # Only include games from leagues with managed umpire partners
-            if not self._is_managed_league(league):
+            # Only include games where umpire_override matches a managed partner
+            if not self._is_managed_game(game):
                 continue
 
             # Check if unassigned (no accepted assignments)
