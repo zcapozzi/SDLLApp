@@ -861,12 +861,13 @@
             {% set existing_record = game_start_records.get(game.ID) if is_recordable else None %}
             {% set has_valid_id = game.ID is number %}
             <div class="game-card {{ 'practice' if game.game_type == 'practice' else 'scrimmage' if game.is_scrimmage else 'game' }} {{ game.status }}" data-game-id="{{ game.ID if has_valid_id else '' }}">
-                {% if has_valid_id and game.game_date and is_recordable %}
+                {% if has_valid_id and game.game_date and is_recordable and not existing_record %}
+                {# Only show menu if no first pitch recorded yet - once recorded, cannot be changed #}
                 <button class="game-menu-btn" onclick="toggleGameMenu(this)" aria-label="Game options">&#8942;</button>
                 <div class="game-menu">
                     <button class="game-menu-item" onclick="showStartForm(this)">
                         <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
-                        Record Game Start
+                        Record First Pitch
                     </button>
                 </div>
                 {% endif %}
@@ -955,11 +956,12 @@
                     <div class="game-start-badge">First pitch: {{ existing_record.formatted_time }}</div>
                     {% endif %}
                 </div>
-                {% if is_recordable %}
+                {% if is_recordable and not existing_record %}
+                {# Only show form if no first pitch recorded yet #}
                 <div class="game-start-form" id="start-form-{{ game.ID }}">
                     <label>When was the first pitch thrown?</label>
                     <div class="input-row">
-                        <input type="time" id="start-time-{{ game.ID }}" value="{{ existing_record.start_time[11:16] if existing_record else '' }}">
+                        <input type="time" id="start-time-{{ game.ID }}" value="">
                         <button class="btn-save" onclick="saveGameStart({{ game.ID }})">Save</button>
                         <button class="btn-cancel" onclick="hideStartForm({{ game.ID }})">Cancel</button>
                     </div>
@@ -1389,7 +1391,7 @@
             }
 
             // Show success message
-            successEl.textContent = data.was_update ? 'Start time updated!' : 'Start time recorded!';
+            successEl.textContent = 'First pitch recorded!';
             successEl.style.display = 'block';
 
             // Update or add the badge
@@ -1407,10 +1409,18 @@
                 gameInfo.appendChild(badge);
             }
 
-            // Hide form after a moment
+            // Hide form and menu button permanently (cannot edit once recorded)
             setTimeout(function() {
                 hideStartForm(gameId);
                 successEl.style.display = 'none';
+                // Remove the menu button since editing is not allowed
+                var menuBtn = card.querySelector('.game-menu-btn');
+                var menuDiv = card.querySelector('.game-menu');
+                if (menuBtn) menuBtn.remove();
+                if (menuDiv) menuDiv.remove();
+                // Remove the form entirely
+                var form = document.getElementById('start-form-' + gameId);
+                if (form) form.remove();
             }, 1500);
         })
         .catch(function(err) {

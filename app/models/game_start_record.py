@@ -55,12 +55,10 @@ class GameStartRecord(db.Model):
 
     @classmethod
     def record_start(cls, game_id, start_time, user_id=None, session_id=None):
-        """Record or update a game start time.
+        """Record a game start time (first pitch).
 
-        If the user/session already has a record for this game, update it.
-        Otherwise, create a new record.
-
-        Returns the record.
+        Once a record is created, it cannot be edited. Returns (record, error_msg).
+        If error_msg is not None, the record was not created.
         """
         existing = None
 
@@ -71,13 +69,8 @@ class GameStartRecord(db.Model):
             existing = cls.get_for_game_by_session(game_id, session_id)
 
         if existing:
-            existing.start_time = start_time
-            existing.updated_at = datetime.utcnow()
-            # If user logged in after anonymous submission, associate with user
-            if user_id and not existing.user_id:
-                existing.user_id = user_id
-            db.session.commit()
-            return existing
+            # First pitch already recorded - cannot edit
+            return existing, "First pitch already recorded and cannot be changed"
 
         # Create new record
         record = cls(
@@ -88,7 +81,7 @@ class GameStartRecord(db.Model):
         )
         db.session.add(record)
         db.session.commit()
-        return record
+        return record, None
 
     @classmethod
     def get_latest_for_game(cls, game_id):

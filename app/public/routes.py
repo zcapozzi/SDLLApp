@@ -1093,19 +1093,25 @@ def record_game_start():
             pass
 
         # Record the start time
-        record = GameStartRecord.record_start(
+        record, error_msg = GameStartRecord.record_start(
             game_id=game_id,
             start_time=start_time,
             user_id=user_id,
             session_id=session_id
         )
 
+        # Check if already recorded (cannot edit)
+        if error_msg:
+            return jsonify({
+                'error': error_msg,
+                'existing_time': record.start_time.isoformat() if record else None
+            }), 400
+
         # Build response
         response = make_response(jsonify({
             'status': 'ok',
             'record_id': record.id,
-            'start_time': record.start_time.isoformat(),
-            'was_update': record.created_at != record.updated_at
+            'start_time': record.start_time.isoformat()
         }))
 
         # Set session cookie
