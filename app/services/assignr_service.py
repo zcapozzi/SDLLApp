@@ -263,12 +263,12 @@ class AssignrService:
         Returns:
             List of official assignments
         """
-        url = f"{self.BASE_URL}/games/{game_id}/assignments"
-        data = self._request(url)
-        if not data:
+        # Assignments are embedded in the game response, not a separate endpoint
+        game_data = self.get_game(game_id)
+        if not game_data:
             return []
 
-        return data.get('_embedded', {}).get('assignments', [])
+        return game_data.get('_embedded', {}).get('assignments', [])
 
     def get_game(self, game_id: int) -> Optional[Dict]:
         """Fetch a single game's details from Assignr.
