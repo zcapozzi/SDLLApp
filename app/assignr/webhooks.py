@@ -166,6 +166,9 @@ def webhook_retry(event_id):
         flash(f'Cannot retry event in {event.status} status.', 'error')
         return redirect(url_for('assignr.webhook_detail', event_id=event_id))
 
+    # Re-extract IDs from payload (fixes events stored before ID extraction was fixed)
+    event.reextract_ids()
+
     # Reset status and retry
     event.status = 'received'
     event.error_message = None

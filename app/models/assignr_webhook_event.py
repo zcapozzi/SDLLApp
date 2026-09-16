@@ -243,3 +243,64 @@ class AssignrWebhookEvent(db.Model):
             # Store without timezone info for DB compatibility
             self.event_timestamp = ts.replace(tzinfo=None)
             db.session.commit()
+
+    def extract_ids_from_payload(self) -> tuple:
+        """
+        Extract game ID and assignment ID from stored payload's _links structure.
+
+        Returns:
+            Tuple of (game_id, assignment_id) - either may be None
+        """
+        payload = self.get_payload_dict()
+        links = payload.get('_links', {})
+
+        # Extract game ID from game link
+        game_id = None
+        game_link = links.get('game', {})
+        game_href = game_link.get('href', '')
+        if '/games/' in game_href:
+            try:
+                game_id = game_href.split('/games/')[-1].split('/')[0].split('?')[0]
+                if game_id.endswith('.json'):
+                    game_id = game_id[:-5]
+            except (IndexError, AttributeError):
+                pass
+
+        # Extract assignment ID from resource link
+        assignment_id = None
+        resource_link = links.get('resource', {})
+        resource_href = resource_link.get('href', '')
+        if '/assignments/' in resource_href:
+            try:
+                assignment_id = resource_href.split('/assignments/')[-1].split('/')[0].split('?')[0]
+                if assignment_id.endswith('.json'):
+                    assignment_id = assignment_id[:-5]
+            except (IndexError, AttributeError):
+                pass
+
+        return game_id, assignment_id
+
+    def reextract_ids(self) -> bool:
+        """
+        Re-extract and update game/assignment IDs from stored payload.
+
+        Useful for fixing events that were stored before ID extraction was fixed.
+
+        Returns:
+            True if any IDs were updated
+        """
+        game_id, assignment_id = self.extract_ids_from_payload()
+        updated = False
+
+        if game_id and not self.assignr_game_id:
+            self.assignr_game_id = game_id
+            updated = True
+
+        if assignment_id and not self.assignr_assignment_id:
+            self.assignr_assignment_id = assignment_id
+            updated = True
+
+        if updated:
+            db.session.commit()
+
+        return updated

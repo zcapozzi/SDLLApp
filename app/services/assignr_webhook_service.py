@@ -559,6 +559,9 @@ SDLL Umpire Management
         }
 
         for event in events:
+            # Re-extract IDs from payload (fixes events stored before ID extraction was fixed)
+            event.reextract_ids()
+
             if self.process_event(event):
                 results['processed'] += 1
             else:
