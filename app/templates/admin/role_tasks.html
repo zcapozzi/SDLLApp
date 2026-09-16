@@ -1,0 +1,201 @@
+{% extends 'base.html' %}
+
+{% block title %}Role Task Templates{% endblock %}
+
+{% block extra_css %}
+<style>
+    .role-section {
+        margin-bottom: 30px;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .role-header {
+        background-color: #f8f9fa;
+        padding: 12px 15px;
+        font-weight: 600;
+        border-bottom: 1px solid #dee2e6;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .role-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 13px;
+        background-color: #228B22;
+        color: white;
+    }
+    .task-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .task-table th {
+        padding: 10px;
+        text-align: left;
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+        font-weight: 500;
+        font-size: 13px;
+    }
+    .task-table td {
+        padding: 10px;
+        border-bottom: 1px solid #dee2e6;
+        vertical-align: middle;
+    }
+    .milestone-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 3px;
+        font-size: 11px;
+        background-color: #e9ecef;
+        color: #495057;
+    }
+    .offset-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 11px;
+    }
+    .offset-before { background-color: #fff3cd; color: #856404; }
+    .offset-on { background-color: #d4edda; color: #155724; }
+    .offset-after { background-color: #cce5ff; color: #004085; }
+    .status-active { color: #28a745; }
+    .status-inactive { color: #dc3545; }
+    .btn-link {
+        background: none;
+        border: none;
+        color: #228B22;
+        text-decoration: underline;
+        cursor: pointer;
+        padding: 0;
+        font-size: 12px;
+    }
+    .btn-link:hover { color: #1a6a1a; }
+    .btn-danger-link {
+        background: none;
+        border: none;
+        color: #dc3545;
+        text-decoration: underline;
+        cursor: pointer;
+        padding: 0;
+        font-size: 12px;
+    }
+    .btn-danger-link:hover { color: #a71d2a; }
+    .generate-section {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    .generate-section h4 {
+        margin: 0 0 10px 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>Role Task Templates</h2>
+        <a href="{{ url_for('knowledge.admin_role_task_new') }}" class="btn btn-primary">+ New Template</a>
+    </div>
+
+    <p style="color: #666; margin-bottom: 20px;">
+        Task templates define recurring tasks that are generated for each season. Tasks are triggered relative to season milestones.
+    </p>
+
+    <!-- Generate Tasks Section -->
+    <div class="generate-section">
+        <h4>Generate Tasks for Season</h4>
+        <form action="{{ url_for('knowledge.admin_generate_tasks', year=current_season.year if current_season else 2026, is_spring=1 if current_season and current_season.is_spring else 0) }}"
+              method="POST" style="display: flex; gap: 10px; align-items: center;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select name="season" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="{{ current_season.year }}-{{ '1' if current_season.is_spring else '0' }}">
+                    {{ current_season.season_name if current_season else 'Current Season' }}
+                </option>
+            </select>
+            <button type="submit" class="btn btn-secondary">Generate Tasks</button>
+            {% if current_season %}
+            <a href="{{ url_for('knowledge.admin_task_instances', year=current_season.year, is_spring=1 if current_season.is_spring else 0) }}"
+               class="btn btn-secondary">View Instances</a>
+            {% endif %}
+        </form>
+    </div>
+
+    {% if templates %}
+    {% for role, role_templates in by_role.items() %}
+    <div class="role-section">
+        <div class="role-header">
+            <span class="role-badge">{{ role.replace('_', ' ').title() }}</span>
+            <span style="color: #666; font-size: 13px;">{{ role_templates|length }} task(s)</span>
+        </div>
+        <table class="task-table">
+            <thead>
+                <tr>
+                    <th>Task</th>
+                    <th>Timing</th>
+                    <th>Reminders</th>
+                    <th>Status</th>
+                    <th style="text-align: center;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for template in role_templates %}
+                <tr id="template-{{ template.id }}">
+                    <td>
+                        <strong>{{ template.title }}</strong>
+                        {% if template.description %}
+                        <br><small style="color: #666;">{{ template.description[:60] }}{% if template.description|length > 60 %}...{% endif %}</small>
+                        {% endif %}
+                        {% if template.artifact %}
+                        <br><small style="color: #17a2b8;">Linked: {{ template.artifact.title }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="milestone-badge">{{ template.milestone_display }}</span>
+                        {% if template.days_offset < 0 %}
+                        <span class="offset-badge offset-before">{{ template.days_offset }} days</span>
+                        {% elif template.days_offset > 0 %}
+                        <span class="offset-badge offset-after">+{{ template.days_offset }} days</span>
+                        {% else %}
+                        <span class="offset-badge offset-on">On date</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if template.reminder_days_before %}
+                        {{ template.reminder_days_before }} days before
+                        {% else %}
+                        <span style="color: #999;">None</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if template.active %}
+                        <span class="status-active">Active</span>
+                        {% else %}
+                        <span class="status-inactive">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: center;">
+                        <a href="{{ url_for('knowledge.admin_role_task_edit', template_id=template.id) }}" class="btn-link">Edit</a>
+                        <form action="{{ url_for('knowledge.admin_role_task_delete', template_id=template.id) }}" method="POST" style="display: inline;"
+                              onsubmit="return confirm('Delete this template and all its instances?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn-danger-link">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div style="padding: 40px; text-align: center; color: #666;">
+        <p>No task templates found. <a href="{{ url_for('knowledge.admin_role_task_new') }}">Create your first template</a>.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

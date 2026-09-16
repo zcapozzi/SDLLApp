@@ -70,6 +70,7 @@ def create_app(config_name=None):
     from .treasurer import treasurer_bp
     from .data import data_bp
     from .coach import coach_bp
+    from .knowledge import knowledge_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(main_bp)
@@ -90,6 +91,7 @@ def create_app(config_name=None):
     app.register_blueprint(treasurer_bp, url_prefix='/treasurer')  # Treasurer financial views
     app.register_blueprint(data_bp, url_prefix='/data')  # Data management (evals, placement, surveys)
     app.register_blueprint(coach_bp, url_prefix='/coach')  # Coach features (post-game reports)
+    app.register_blueprint(knowledge_bp)  # Knowledge base and onboarding (no prefix - routes start with /kb, /admin, etc)
 
     # User loader for Flask-Login
     from .models.user import User
@@ -292,7 +294,7 @@ def create_app(config_name=None):
         user_id = None
         try:
             if current_user.is_authenticated:
-                user_id = current_user.id
+                user_id = current_user.ID
         except Exception:
             pass
 

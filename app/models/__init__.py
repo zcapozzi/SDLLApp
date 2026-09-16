@@ -54,3 +54,8 @@ from .access_request import AccessRequest
 
 # Post-game reporting
 from .post_game_report import PostGameReport
+
+# Institutional knowledge system
+from .email_routing_config import EmailRoutingConfig
+from .artifact import Artifact
+from .role_task import RoleTaskTemplate, RoleTaskInstance

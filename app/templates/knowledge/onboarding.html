@@ -1,0 +1,358 @@
+{% extends 'base.html' %}
+
+{% block title %}Onboarding Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .welcome-banner {
+        background: linear-gradient(135deg, #228B22 0%, #1a6a1a 100%);
+        color: white;
+        padding: 30px;
+        border-radius: 8px;
+        margin-bottom: 25px;
+    }
+    .welcome-banner h1 {
+        margin: 0 0 10px 0;
+        font-size: 28px;
+    }
+    .welcome-banner p {
+        margin: 0;
+        opacity: 0.9;
+        font-size: 16px;
+    }
+    .role-badges {
+        display: flex;
+        gap: 8px;
+        margin-top: 15px;
+        flex-wrap: wrap;
+    }
+    .role-badge {
+        display: inline-block;
+        padding: 6px 12px;
+        background-color: rgba(255,255,255,0.2);
+        border-radius: 4px;
+        font-size: 13px;
+    }
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 25px;
+    }
+    @media (max-width: 992px) {
+        .dashboard-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    .section-card {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .section-card h3 {
+        margin: 0 0 15px 0;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #228B22;
+        font-size: 18px;
+    }
+    .task-item {
+        display: flex;
+        align-items: center;
+        padding: 12px;
+        background: #f8f9fa;
+        border-radius: 6px;
+        margin-bottom: 10px;
+    }
+    .task-item.overdue {
+        border-left: 4px solid #dc3545;
+    }
+    .task-item.due-soon {
+        border-left: 4px solid #ffc107;
+    }
+    .task-info {
+        flex: 1;
+    }
+    .task-title {
+        font-weight: 500;
+        margin-bottom: 3px;
+    }
+    .task-meta {
+        font-size: 12px;
+        color: #666;
+    }
+    .task-due {
+        font-size: 13px;
+        font-weight: 500;
+        text-align: right;
+    }
+    .task-due.overdue { color: #dc3545; }
+    .task-due.due-soon { color: #856404; }
+    .resource-item {
+        display: flex;
+        align-items: center;
+        padding: 10px 12px;
+        background: #f8f9fa;
+        border-radius: 6px;
+        margin-bottom: 8px;
+        text-decoration: none;
+        color: inherit;
+        transition: background 0.2s;
+    }
+    .resource-item:hover {
+        background: #e9ecef;
+    }
+    .resource-icon {
+        width: 36px;
+        height: 36px;
+        background: #228B22;
+        color: white;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 12px;
+        font-size: 14px;
+        font-weight: bold;
+    }
+    .resource-icon.document { background: #17a2b8; }
+    .resource-icon.template { background: #6f42c1; }
+    .resource-icon.checklist { background: #28a745; }
+    .resource-icon.link { background: #fd7e14; }
+    .resource-info {
+        flex: 1;
+    }
+    .resource-title {
+        font-weight: 500;
+        font-size: 14px;
+    }
+    .resource-type {
+        font-size: 11px;
+        color: #666;
+    }
+    .contact-item {
+        display: flex;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .contact-item:last-child {
+        border-bottom: none;
+    }
+    .contact-avatar {
+        width: 40px;
+        height: 40px;
+        background: #e9ecef;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 12px;
+        font-weight: bold;
+        color: #666;
+    }
+    .contact-info {
+        flex: 1;
+    }
+    .contact-name {
+        font-weight: 500;
+    }
+    .contact-role {
+        font-size: 12px;
+        color: #228B22;
+    }
+    .quick-links {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    .quick-link {
+        display: block;
+        padding: 12px 15px;
+        background: #f8f9fa;
+        border-radius: 6px;
+        text-decoration: none;
+        color: #212529;
+        font-size: 14px;
+        transition: background 0.2s;
+    }
+    .quick-link:hover {
+        background: #228B22;
+        color: white;
+    }
+    .role-description {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 6px;
+        margin-bottom: 15px;
+    }
+    .role-description h4 {
+        margin: 0 0 8px 0;
+        color: #228B22;
+        font-size: 15px;
+    }
+    .role-description p {
+        margin: 0;
+        font-size: 13px;
+        color: #666;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 30px;
+        color: #666;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="welcome-banner">
+    <h1>Welcome, {{ current_user.name }}!</h1>
+    <p>Here's everything you need to get started with your roles at South Durham Little League.</p>
+    <div class="role-badges">
+        {% for role in user_roles %}
+        <span class="role-badge">{{ role.replace('_', ' ').title() }}</span>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <div class="main-column">
+        <!-- Role Descriptions -->
+        <div class="section-card">
+            <h3>Your Responsibilities</h3>
+            {% for role in user_roles %}
+            {% if role in role_descriptions %}
+            <div class="role-description">
+                <h4>{{ role.replace('_', ' ').title() }}</h4>
+                <p>{{ role_descriptions[role] }}</p>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+
+        <!-- Upcoming Tasks -->
+        <div class="section-card">
+            <h3>Your Upcoming Tasks</h3>
+            {% if pending_tasks %}
+            {% for task in pending_tasks[:5] %}
+            <div class="task-item {% if task.is_overdue %}overdue{% elif task.days_until_due is not none and task.days_until_due <= 7 %}due-soon{% endif %}">
+                <div class="task-info">
+                    <div class="task-title">{{ task.title }}</div>
+                    <div class="task-meta">{{ task.role.replace('_', ' ').title() }}</div>
+                </div>
+                <div class="task-due {% if task.is_overdue %}overdue{% elif task.days_until_due is not none and task.days_until_due <= 7 %}due-soon{% endif %}">
+                    {% if task.due_date %}
+                    {% if task.is_overdue %}
+                    Overdue
+                    {% elif task.days_until_due == 0 %}
+                    Today
+                    {% elif task.days_until_due == 1 %}
+                    Tomorrow
+                    {% else %}
+                    {{ task.due_date.strftime('%b %d') }}
+                    {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+            {% if pending_tasks|length > 5 %}
+            <p style="text-align: center; margin-top: 15px;">
+                <a href="{{ url_for('knowledge.my_tasks') }}">View all {{ pending_tasks|length }} tasks</a>
+            </p>
+            {% endif %}
+            {% else %}
+            <div class="empty-state">
+                <p>No pending tasks for this season.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Resources by Role -->
+        {% for role, artifacts in artifacts_by_role.items() %}
+        <div class="section-card">
+            <h3>{{ role.replace('_', ' ').title() }} Resources</h3>
+            {% for artifact in artifacts[:5] %}
+            {% if artifact.artifact_type == 'link' and artifact.external_url %}
+            <a href="{{ artifact.external_url }}" target="_blank" class="resource-item">
+            {% else %}
+            <a href="{{ url_for('knowledge.view_artifact', artifact_id=artifact.id) }}" class="resource-item">
+            {% endif %}
+                <div class="resource-icon {{ artifact.artifact_type }}">
+                    {% if artifact.artifact_type == 'document' %}D{% endif %}
+                    {% if artifact.artifact_type == 'template' %}T{% endif %}
+                    {% if artifact.artifact_type == 'checklist' %}C{% endif %}
+                    {% if artifact.artifact_type == 'link' %}L{% endif %}
+                </div>
+                <div class="resource-info">
+                    <div class="resource-title">{{ artifact.title }}</div>
+                    <div class="resource-type">{{ artifact.type_display }}</div>
+                </div>
+            </a>
+            {% endfor %}
+            {% if artifacts|length > 5 %}
+            <p style="text-align: center; margin-top: 10px;">
+                <a href="{{ url_for('knowledge.browse', category=role) }}">View all resources</a>
+            </p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="side-column">
+        <!-- Quick Links -->
+        <div class="section-card">
+            <h3>Quick Actions</h3>
+            <div class="quick-links">
+                <a href="{{ url_for('knowledge.my_tasks') }}" class="quick-link">My Tasks</a>
+                <a href="{{ url_for('knowledge.browse') }}" class="quick-link">Knowledge Base</a>
+                <a href="{{ url_for('main.dashboard') }}" class="quick-link">Dashboard</a>
+                {% if current_user.has_role('umpire_coordinator') %}
+                <a href="{{ url_for('umpires.management') }}" class="quick-link">Umpires</a>
+                {% endif %}
+                {% if current_user.has_role('scheduler') %}
+                <a href="{{ url_for('scheduler.index') }}" class="quick-link">Scheduler</a>
+                {% endif %}
+                {% if current_user.has_role('admin') %}
+                <a href="{{ url_for('admin.users') }}" class="quick-link">Users</a>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Key Contacts -->
+        <div class="section-card">
+            <h3>Key Contacts</h3>
+            {% for role, users in role_holders.items() %}
+            {% for user in users %}
+            <div class="contact-item">
+                <div class="contact-avatar">{{ user.name[0] if user.name else '?' }}</div>
+                <div class="contact-info">
+                    <div class="contact-name">{{ user.name }}</div>
+                    <div class="contact-role">{{ role.replace('_', ' ').title() }}</div>
+                </div>
+            </div>
+            {% endfor %}
+            {% endfor %}
+            {% if not role_holders %}
+            <div class="empty-state">
+                <p>No contacts available.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Season Info -->
+        <div class="section-card">
+            <h3>Season Info</h3>
+            <p><strong>Current Season:</strong> {{ org_season.season_name }}</p>
+            {% if org_season.opening_day_date %}
+            <p><strong>Opening Day:</strong> {{ org_season.opening_day_date.strftime('%B %d, %Y') }}</p>
+            {% endif %}
+            {% if org_season.first_practice_date %}
+            <p><strong>First Practice:</strong> {{ org_season.first_practice_date.strftime('%B %d, %Y') }}</p>
+            {% endif %}
+            {% if org_season.season_end_date %}
+            <p><strong>Season End:</strong> {{ org_season.season_end_date.strftime('%B %d, %Y') }}</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

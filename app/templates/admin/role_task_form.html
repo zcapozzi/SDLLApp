@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if template %}Edit Task Template{% else %}New Task Template{% endif %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-group {
+        margin-bottom: 20px;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+    }
+    .form-group input[type="text"],
+    .form-group input[type="number"],
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    .form-group textarea {
+        min-height: 100px;
+        font-family: inherit;
+    }
+    .form-group .help-text {
+        font-size: 12px;
+        color: #666;
+        margin-top: 5px;
+    }
+    .form-row {
+        display: flex;
+        gap: 20px;
+    }
+    .form-row .form-group {
+        flex: 1;
+    }
+    .timing-preview {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-top: 20px;
+        border: 1px solid #dee2e6;
+    }
+    .timing-preview h4 {
+        margin: 0 0 10px 0;
+        font-size: 14px;
+        color: #495057;
+    }
+    .timing-preview p {
+        margin: 0;
+        color: #228B22;
+        font-weight: 500;
+    }
+    .checkbox-inline {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>{% if template %}Edit Task Template{% else %}New Task Template{% endif %}</h2>
+        <a href="{{ url_for('knowledge.admin_role_tasks') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="role">Role *</label>
+                <select name="role" id="role" required>
+                    <option value="">-- Select Role --</option>
+                    {% for role in roles %}
+                    <option value="{{ role }}" {% if template and template.role == role %}selected{% endif %}>
+                        {{ role.replace('_', ' ').title() }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <div class="help-text">Which role is responsible for this task.</div>
+            </div>
+            <div class="form-group">
+                <label for="sort_order">Sort Order</label>
+                <input type="number" name="sort_order" id="sort_order" value="{{ template.sort_order if template else 0 }}">
+                <div class="help-text">Tasks are shown in this order.</div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="title">Title *</label>
+            <input type="text" name="title" id="title" value="{{ template.title if template else '' }}" required>
+        </div>
+
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea name="description" id="description">{{ template.description if template else '' }}</textarea>
+            <div class="help-text">Detailed instructions for completing this task.</div>
+        </div>
+
+        <hr style="margin: 30px 0;">
+
+        <h3 style="margin-bottom: 15px;">Timing</h3>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="trigger_milestone">Trigger Milestone *</label>
+                <select name="trigger_milestone" id="trigger_milestone" required onchange="updateTimingPreview()">
+                    {% for code, label in milestones %}
+                    <option value="{{ code }}" {% if template and template.trigger_milestone == code %}selected{% endif %}>
+                        {{ label }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <div class="help-text">The milestone date this task is relative to.</div>
+            </div>
+            <div class="form-group">
+                <label for="days_offset">Days Offset</label>
+                <input type="number" name="days_offset" id="days_offset"
+                       value="{{ template.days_offset if template else 0 }}"
+                       onchange="updateTimingPreview()">
+                <div class="help-text">Negative = before milestone, Positive = after.</div>
+            </div>
+        </div>
+
+        <div class="timing-preview">
+            <h4>Timing Preview</h4>
+            <p id="timing-text">Task due on the milestone date</p>
+        </div>
+
+        <hr style="margin: 30px 0;">
+
+        <h3 style="margin-bottom: 15px;">Reminders & Resources</h3>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="reminder_days_before">Reminder Days</label>
+                <input type="text" name="reminder_days_before" id="reminder_days_before"
+                       value="{{ template.reminder_days_before if template else '7,3,1' }}"
+                       placeholder="7,3,1">
+                <div class="help-text">Comma-separated days before due date to send reminders.</div>
+            </div>
+            <div class="form-group">
+                <label for="artifact_id">Linked Artifact</label>
+                <select name="artifact_id" id="artifact_id">
+                    <option value="">-- None --</option>
+                    {% for artifact in artifacts %}
+                    <option value="{{ artifact.id }}" {% if template and template.artifact_id == artifact.id %}selected{% endif %}>
+                        {{ artifact.title }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <div class="help-text">Link to a checklist or document for this task.</div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="checkbox-inline">
+                <input type="checkbox" name="active" value="1"
+                       {% if not template or template.active %}checked{% endif %}>
+                Active
+            </label>
+            <div class="help-text" style="margin-top: 5px;">Inactive templates won't generate new task instances.</div>
+        </div>
+
+        <div style="margin-top: 30px;">
+            <button type="submit" class="btn btn-primary">Save Template</button>
+            <a href="{{ url_for('knowledge.admin_role_tasks') }}" class="btn btn-secondary" style="margin-left: 10px;">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+function updateTimingPreview() {
+    var milestone = document.getElementById('trigger_milestone');
+    var offset = parseInt(document.getElementById('days_offset').value) || 0;
+    var milestoneText = milestone.options[milestone.selectedIndex].text;
+    var timingText = document.getElementById('timing-text');
+
+    if (offset === 0) {
+        timingText.textContent = 'Task due on ' + milestoneText;
+    } else if (offset < 0) {
+        timingText.textContent = 'Task due ' + Math.abs(offset) + ' day(s) before ' + milestoneText;
+    } else {
+        timingText.textContent = 'Task due ' + offset + ' day(s) after ' + milestoneText;
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateTimingPreview();
+});
+</script>
+{% endblock %}

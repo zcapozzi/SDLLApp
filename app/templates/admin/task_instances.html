@@ -1,0 +1,212 @@
+{% extends 'base.html' %}
+
+{% block title %}Task Instances - {{ 'Spring' if is_spring else 'Fall' }} {{ year }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .summary-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+    .summary-card {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+        text-align: center;
+    }
+    .summary-card .number {
+        font-size: 28px;
+        font-weight: bold;
+        color: #228B22;
+    }
+    .summary-card .label {
+        font-size: 12px;
+        color: #666;
+        text-transform: uppercase;
+    }
+    .summary-card.warning .number { color: #ffc107; }
+    .summary-card.danger .number { color: #dc3545; }
+    .role-section {
+        margin-bottom: 30px;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .role-header {
+        background-color: #f8f9fa;
+        padding: 12px 15px;
+        font-weight: 600;
+        border-bottom: 1px solid #dee2e6;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .role-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 13px;
+        background-color: #228B22;
+        color: white;
+    }
+    .progress-bar {
+        width: 100px;
+        height: 8px;
+        background-color: #e9ecef;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .progress-fill {
+        height: 100%;
+        background-color: #28a745;
+        transition: width 0.3s;
+    }
+    .task-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .task-table th {
+        padding: 10px;
+        text-align: left;
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+        font-weight: 500;
+        font-size: 13px;
+    }
+    .task-table td {
+        padding: 10px;
+        border-bottom: 1px solid #dee2e6;
+        vertical-align: middle;
+    }
+    .status-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: 500;
+    }
+    .status-pending { background-color: #ffc107; color: #212529; }
+    .status-in_progress { background-color: #17a2b8; color: white; }
+    .status-completed { background-color: #28a745; color: white; }
+    .status-skipped { background-color: #6c757d; color: white; }
+    .overdue { color: #dc3545; font-weight: 500; }
+    .due-soon { color: #ffc107; font-weight: 500; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>Task Instances - {{ 'Spring' if is_spring else 'Fall' }} {{ year }}</h2>
+        <a href="{{ url_for('knowledge.admin_role_tasks') }}" class="btn btn-secondary">Back to Templates</a>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="summary-cards">
+        <div class="summary-card">
+            <div class="number">{{ summary.total }}</div>
+            <div class="label">Total Tasks</div>
+        </div>
+        <div class="summary-card">
+            <div class="number">{{ summary.completed }}</div>
+            <div class="label">Completed</div>
+        </div>
+        <div class="summary-card warning">
+            <div class="number">{{ summary.pending + summary.in_progress }}</div>
+            <div class="label">In Progress</div>
+        </div>
+        <div class="summary-card danger">
+            <div class="number">{{ summary.overdue }}</div>
+            <div class="label">Overdue</div>
+        </div>
+        <div class="summary-card">
+            <div class="number">{{ summary.due_this_week }}</div>
+            <div class="label">Due This Week</div>
+        </div>
+    </div>
+
+    {% if instances %}
+    {% for role, role_instances in by_role.items() %}
+    {% set role_stats = summary.by_role.get(role, {'total': 0, 'completed': 0}) %}
+    {% set completion_pct = (role_stats.completed / role_stats.total * 100) if role_stats.total > 0 else 0 %}
+    <div class="role-section">
+        <div class="role-header">
+            <div>
+                <span class="role-badge">{{ role.replace('_', ' ').title() }}</span>
+                <span style="color: #666; font-size: 13px; margin-left: 10px;">
+                    {{ role_stats.completed }}/{{ role_stats.total }} complete
+                </span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: {{ completion_pct }}%;"></div>
+            </div>
+        </div>
+        <table class="task-table">
+            <thead>
+                <tr>
+                    <th>Task</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                    <th>Completed By</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for instance in role_instances %}
+                <tr>
+                    <td>
+                        <strong>{{ instance.title }}</strong>
+                        {% if instance.description %}
+                        <br><small style="color: #666;">{{ instance.description[:50] }}{% if instance.description|length > 50 %}...{% endif %}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if instance.due_date %}
+                        <span class="{% if instance.is_overdue %}overdue{% elif instance.days_until_due is not none and instance.days_until_due <= 7 %}due-soon{% endif %}">
+                            {{ instance.due_date.strftime('%b %d, %Y') }}
+                        </span>
+                        {% if instance.is_overdue %}
+                        <br><small class="overdue">{{ (instance.due_date - today).days|abs }} days overdue</small>
+                        {% elif instance.days_until_due is not none and instance.days_until_due <= 7 %}
+                        <br><small>{{ instance.days_until_due }} days left</small>
+                        {% endif %}
+                        {% else %}
+                        <span style="color: #999;">No date</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="status-badge status-{{ instance.status }}">{{ instance.status_display }}</span>
+                    </td>
+                    <td>
+                        {% if instance.completed_by %}
+                        {{ instance.completed_by.name }}
+                        <br><small style="color: #666;">{{ instance.completed_at.strftime('%b %d') if instance.completed_at else '' }}</small>
+                        {% else %}
+                        <span style="color: #999;">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if instance.notes %}
+                        <small>{{ instance.notes[:40] }}{% if instance.notes|length > 40 %}...{% endif %}</small>
+                        {% else %}
+                        <span style="color: #999;">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div style="padding: 40px; text-align: center; color: #666;">
+        <p>No task instances found for this season.</p>
+        <p><a href="{{ url_for('knowledge.admin_role_tasks') }}">Generate tasks from templates</a></p>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

@@ -78,3 +78,30 @@ def product_admin_required(f):
 
         return f(*args, **kwargs)
     return decorated
+
+
+def role_required(*roles):
+    """Decorator to require user to have at least one of the specified roles.
+
+    Usage:
+        @role_required('admin')
+        def admin_only():
+            ...
+
+        @role_required('admin', 'scheduler')  # OR logic - either role works
+        def admin_or_scheduler():
+            ...
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated:
+                return redirect(url_for('auth.login'))
+
+            if not current_user.has_role(*roles):
+                flash('You do not have permission to access this page.', 'error')
+                return redirect(url_for('main.dashboard'))
+
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator

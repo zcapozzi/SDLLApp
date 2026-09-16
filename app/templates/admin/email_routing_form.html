@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Email Routing - {{ config.email_type_display }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-group {
+        margin-bottom: 20px;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+    }
+    .form-group input[type="text"],
+    .form-group input[type="email"],
+    .form-group select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    .form-group .help-text {
+        font-size: 12px;
+        color: #666;
+        margin-top: 5px;
+    }
+    .form-row {
+        display: flex;
+        gap: 20px;
+    }
+    .form-row .form-group {
+        flex: 1;
+    }
+    .section-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 25px 0 15px 0;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #dee2e6;
+    }
+    .role-holders-note {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    .role-holders-note h4 {
+        margin: 0 0 10px 0;
+        font-size: 14px;
+    }
+    .role-holder-item {
+        display: inline-block;
+        padding: 4px 10px;
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        margin: 3px;
+        font-size: 13px;
+    }
+    .role-holder-item .role-name {
+        font-weight: 500;
+        color: #228B22;
+    }
+    .checkbox-inline {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>Edit Email Routing: {{ config.email_type_display }}</h2>
+        <a href="{{ url_for('knowledge.admin_email_routing') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+
+    <div class="role-holders-note">
+        <h4>Current Role Holders</h4>
+        <p style="font-size: 13px; color: #666; margin-bottom: 10px;">
+            When you select a role, emails will be routed to these users:
+        </p>
+        {% for role, users in role_holders.items() %}
+        <span class="role-holder-item">
+            <span class="role-name">{{ role.replace('_', ' ').title() }}:</span>
+            {{ users[0].name if users else 'None' }}
+        </span>
+        {% endfor %}
+    </div>
+
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="section-title">Sender Information</div>
+
+        <div class="form-group">
+            <label for="from_name">From Name</label>
+            <input type="text" name="from_name" id="from_name" value="{{ config.from_name or '' }}" placeholder="e.g., South Durham Little League">
+            <div class="help-text">Display name shown in the From field. Leave blank to use default.</div>
+        </div>
+
+        <div class="section-title">Reply-To Configuration</div>
+        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+            Choose either a specific email address OR a role. If a role is selected, replies will go to the current holder of that role.
+        </p>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="reply_to_email">Reply-To Email (Specific)</label>
+                <input type="email" name="reply_to_email" id="reply_to_email" value="{{ config.reply_to_email or '' }}" placeholder="email@example.com">
+                <div class="help-text">Specific email address for replies.</div>
+            </div>
+            <div class="form-group">
+                <label for="reply_to_role">Reply-To Role (Dynamic)</label>
+                <select name="reply_to_role" id="reply_to_role">
+                    <option value="">-- None --</option>
+                    {% for role in roles %}
+                    <option value="{{ role }}" {% if config.reply_to_role == role %}selected{% endif %}>
+                        {{ role.replace('_', ' ').title() }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <div class="help-text">Replies go to current holder of this role.</div>
+            </div>
+        </div>
+
+        <div class="section-title">CC Configuration</div>
+
+        <div class="form-group">
+            <label for="cc_emails">CC Email Addresses</label>
+            <input type="text" name="cc_emails" id="cc_emails" value="{{ config.cc_emails or '' }}" placeholder="email1@example.com, email2@example.com">
+            <div class="help-text">Comma-separated list of email addresses to CC.</div>
+        </div>
+
+        <div class="form-group">
+            <label for="cc_roles">CC Roles</label>
+            <input type="text" name="cc_roles" id="cc_roles" value="{{ config.cc_roles or '' }}" placeholder="admin|scheduler">
+            <div class="help-text">Pipe-separated list of roles. Current holders will be CC'd.</div>
+        </div>
+
+        <div class="section-title">BCC Configuration</div>
+
+        <div class="form-group">
+            <label for="bcc_emails">BCC Email Addresses</label>
+            <input type="text" name="bcc_emails" id="bcc_emails" value="{{ config.bcc_emails or '' }}" placeholder="archive@example.com">
+            <div class="help-text">Comma-separated list of email addresses to BCC (hidden from recipients).</div>
+        </div>
+
+        <hr style="margin: 30px 0;">
+
+        <div class="form-group">
+            <label class="checkbox-inline">
+                <input type="checkbox" name="active" value="1" {% if config.active %}checked{% endif %}>
+                Active
+            </label>
+            <div class="help-text" style="margin-top: 5px;">When inactive, this routing configuration will not be used.</div>
+        </div>
+
+        <div style="margin-top: 30px;">
+            <button type="submit" class="btn btn-primary">Save Configuration</button>
+            <a href="{{ url_for('knowledge.admin_email_routing') }}" class="btn btn-secondary" style="margin-left: 10px;">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

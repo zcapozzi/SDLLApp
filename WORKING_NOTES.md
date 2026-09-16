@@ -4,7 +4,135 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Improved webhook UI (cards, action details), fixed team schedule score display, excluded scrimmages from post-game emails, and fixed reapportionment to filter by game umpire_override field.
+Last session: Implemented institutional knowledge and email routing system for preserving board member knowledge across transitions.
+
+---
+
+## Session: September 16, 2026 - Institutional Knowledge System Implementation
+
+### Overview
+Implemented a comprehensive institutional knowledge management system for preserving board member knowledge across transitions. The system includes:
+
+1. **Email Routing Configuration** - Admin-configurable from/reply-to/CC per email type
+2. **Role Task System** - Milestone-triggered tasks for all board roles with scheduled reminders
+3. **Artifacts/Knowledge Base** - Documents, templates, and checklists tied to roles
+4. **Onboarding Dashboard** - Guide new role holders through their responsibilities
+
+### Files Created
+
+#### Models
+1. **app/models/email_routing_config.py** - Email routing configuration per email type
+   - Supports explicit email addresses or role-based routing
+   - CC/BCC configuration with role auto-resolution
+   - Email types: weekly_digest, postgame_reminder, umpire_assignment, umpire_campaign, coach_welcome, rainout_notification, access_request
+
+2. **app/models/artifact.py** - Knowledge base artifacts
+   - Types: document, template, checklist, link
+   - Categories: umpires, coaches, scheduling, facilities, finance, general
+   - Role-based visibility controls
+   - Search functionality
+
+3. **app/models/role_task.py** - Role task templates and instances
+   - RoleTaskTemplate: Defines recurring tasks triggered by season milestones
+   - RoleTaskInstance: Season-specific task instances with status tracking
+   - Milestones: registration_opens, evaluations, draft, first_practice, training, opening_day, season_end
+   - Reminder configuration (days before due)
+
+#### Services
+4. **app/services/email_routing_service.py** - Resolves email routing
+   - Role-to-email resolution
+   - CC/BCC list building
+   - get_email_routing() convenience function
+
+5. **app/services/role_task_service.py** - Task management
+   - generate_season_tasks() - Creates task instances from templates
+   - recalculate_due_dates() - Updates due dates when milestones change
+   - send_task_reminders() - Sends reminder emails for upcoming/overdue tasks
+   - get_dashboard_summary() - Statistics for admin dashboard
+
+#### Blueprint
+6. **app/knowledge/__init__.py** - Knowledge blueprint with board_member_required decorator
+7. **app/knowledge/routes.py** - All routes for knowledge base, tasks, and admin management
+
+#### Templates - Admin
+8. **app/templates/admin/artifacts.html** - Artifact list with filtering
+9. **app/templates/admin/artifact_form.html** - Create/edit artifacts
+10. **app/templates/admin/role_tasks.html** - Task template list by role
+11. **app/templates/admin/role_task_form.html** - Create/edit task templates
+12. **app/templates/admin/task_instances.html** - View task instances for a season
+13. **app/templates/admin/email_routing.html** - Email routing configuration
+14. **app/templates/admin/email_routing_form.html** - Edit email routing
+
+#### Templates - User-Facing
+15. **app/templates/knowledge/browse.html** - Knowledge base browser with search
+16. **app/templates/knowledge/view.html** - Single artifact view
+17. **app/templates/knowledge/my_tasks.html** - User's pending and completed tasks
+18. **app/templates/knowledge/onboarding.html** - Role-aware onboarding dashboard
+
+#### Database Migration
+19. **scripts/add_institutional_knowledge_tables.sql** - Creates 4 tables + seed data:
+    - sdll_email_routing_configs
+    - sdll_artifacts
+    - sdll_role_task_templates
+    - sdll_role_task_instances
+    - Default email routing configs
+    - Default task templates for umpire_coordinator, scheduler, coaching_coordinator, admin
+
+### Files Modified
+1. **app/models/__init__.py** - Added imports for new models
+2. **app/__init__.py** - Registered knowledge blueprint
+3. **app/utils/auth.py** - Added role_required() decorator
+4. **app/templates/main/dashboard.html** - Added "Board Resources" section with links to My Tasks, Knowledge Base, Onboarding
+
+### Routes
+| Route | Purpose |
+|-------|---------|
+| `/kb` | Knowledge base browser |
+| `/kb/<id>` | View single artifact |
+| `/my-tasks` | User's task list |
+| `/my-tasks/<id>/complete` | Mark task complete |
+| `/my-tasks/<id>/skip` | Mark task skipped |
+| `/my-tasks/<id>/in-progress` | Start a task |
+| `/onboarding` | Onboarding dashboard |
+| `/admin/artifacts` | Manage artifacts |
+| `/admin/artifacts/new` | Create artifact |
+| `/admin/artifacts/<id>/edit` | Edit artifact |
+| `/admin/artifacts/<id>/delete` | Delete artifact |
+| `/admin/role-tasks` | Manage task templates |
+| `/admin/role-tasks/new` | Create task template |
+| `/admin/role-tasks/<id>/edit` | Edit task template |
+| `/admin/role-tasks/<id>/delete` | Delete task template |
+| `/admin/role-tasks/generate/<year>/<is_spring>` | Generate task instances |
+| `/admin/role-tasks/instances/<year>/<is_spring>` | View task instances |
+| `/admin/email-routing` | Email routing configuration |
+| `/admin/email-routing/<id>/edit` | Edit email routing |
+
+### Database Changes Required
+Run this migration on production:
+```sql
+scripts/add_institutional_knowledge_tables.sql
+```
+
+### Key Features
+1. **Role-Based Task Generation**: Tasks automatically created when setting up a new season, with due dates calculated from milestones
+2. **Dynamic Email Routing**: When umpire_coordinator changes, emails automatically route to the new holder
+3. **Knowledge Base Search**: Full-text search across titles, descriptions, and tags
+4. **Role-Filtered Visibility**: Board members only see artifacts relevant to their roles
+5. **Task Reminders**: Configurable reminder emails at 7, 3, 1 days before due (or custom)
+6. **Onboarding Dashboard**: New role holders see their tasks, resources, and contacts
+
+### Default Task Templates (Seed Data)
+- **Umpire Coordinator**: 6 tasks (partner rates, training emails, quiz, contacts, opening day assignments)
+- **Scheduler**: 5 tasks (field allocations, draft schedule, conflicts, publish, playoffs)
+- **Coaching Coordinator**: 4 tasks (welcome emails, training, background checks, equipment)
+- **Admin**: 3 tasks (website update, roles review, archive data)
+
+### Next Steps
+1. Run database migration
+2. Test task generation for a season
+3. Add artifacts for each role
+4. Configure email routing as needed
+5. Consider adding cron job for daily task reminders
 
 ---
 

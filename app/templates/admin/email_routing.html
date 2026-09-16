@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+
+{% block title %}Email Routing Configuration{% endblock %}
+
+{% block extra_css %}
+<style>
+    .routing-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .routing-table th {
+        padding: 12px;
+        text-align: left;
+        background-color: #f8f9fa;
+        border-bottom: 2px solid #dee2e6;
+        font-weight: 600;
+    }
+    .routing-table td {
+        padding: 12px;
+        border-bottom: 1px solid #dee2e6;
+        vertical-align: top;
+    }
+    .email-type-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 13px;
+        background-color: #228B22;
+        color: white;
+        font-weight: 500;
+    }
+    .routing-detail {
+        font-size: 13px;
+        color: #495057;
+    }
+    .routing-detail strong {
+        color: #212529;
+    }
+    .routing-detail .role-ref {
+        display: inline-block;
+        padding: 2px 6px;
+        background-color: #e9ecef;
+        border-radius: 3px;
+        font-size: 11px;
+        margin-left: 5px;
+    }
+    .routing-detail .email-ref {
+        color: #17a2b8;
+    }
+    .status-active { color: #28a745; }
+    .status-inactive { color: #dc3545; }
+    .btn-link {
+        background: none;
+        border: none;
+        color: #228B22;
+        text-decoration: underline;
+        cursor: pointer;
+        padding: 0;
+        font-size: 12px;
+    }
+    .btn-link:hover { color: #1a6a1a; }
+    .role-holders-section {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 25px;
+    }
+    .role-holders-section h4 {
+        margin: 0 0 15px 0;
+    }
+    .role-holder-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 10px;
+    }
+    .role-holder-item {
+        background: white;
+        padding: 10px 15px;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+    }
+    .role-holder-item .role-name {
+        font-weight: 500;
+        font-size: 13px;
+        color: #228B22;
+    }
+    .role-holder-item .user-name {
+        font-size: 13px;
+        color: #495057;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2 style="margin-bottom: 10px;">Email Routing Configuration</h2>
+    <p style="color: #666; margin-bottom: 25px;">
+        Configure how system emails are routed. You can set reply-to addresses, CC recipients, and link routing to roles
+        so that emails automatically go to the current role holder.
+    </p>
+
+    <!-- Current Role Holders -->
+    <div class="role-holders-section">
+        <h4>Current Role Holders</h4>
+        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+            When routing is set to a role, emails will be sent to these users:
+        </p>
+        <div class="role-holder-list">
+            {% for role, users in role_holders.items() %}
+            <div class="role-holder-item">
+                <div class="role-name">{{ role.replace('_', ' ').title() }}</div>
+                <div class="user-name">
+                    {% for user in users %}
+                    {{ user.name }}{% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <table class="routing-table">
+        <thead>
+            <tr>
+                <th>Email Type</th>
+                <th>Reply-To</th>
+                <th>CC</th>
+                <th>Status</th>
+                <th style="text-align: center;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for config in configs %}
+            <tr id="config-{{ config.id }}">
+                <td>
+                    <span class="email-type-badge">{{ config.email_type_display }}</span>
+                    <br><small style="color: #666;">{{ config.email_type }}</small>
+                </td>
+                <td class="routing-detail">
+                    {% if config.reply_to_email %}
+                    <span class="email-ref">{{ config.reply_to_email }}</span>
+                    {% elif config.reply_to_role %}
+                    <span>Role:</span><span class="role-ref">{{ config.reply_to_role.replace('_', ' ').title() }}</span>
+                    {% if config.reply_to_role in role_holders %}
+                    <br><small style="color: #666;">
+                        Current: {{ role_holders[config.reply_to_role][0].name if role_holders[config.reply_to_role] else 'None' }}
+                    </small>
+                    {% endif %}
+                    {% else %}
+                    <span style="color: #999;">Not configured</span>
+                    {% endif %}
+                </td>
+                <td class="routing-detail">
+                    {% if config.cc_emails %}
+                    <span class="email-ref">{{ config.cc_emails }}</span>
+                    {% endif %}
+                    {% if config.cc_roles %}
+                    <span>Roles:</span><span class="role-ref">{{ config.cc_roles.replace('|', ', ') }}</span>
+                    {% endif %}
+                    {% if not config.cc_emails and not config.cc_roles %}
+                    <span style="color: #999;">None</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if config.active %}
+                    <span class="status-active">Active</span>
+                    {% else %}
+                    <span class="status-inactive">Inactive</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: center;">
+                    <a href="{{ url_for('knowledge.admin_email_routing_edit', config_id=config.id) }}" class="btn-link">Edit</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

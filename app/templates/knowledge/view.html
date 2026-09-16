@@ -1,0 +1,227 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ artifact.title }} - Knowledge Base{% endblock %}
+
+{% block extra_css %}
+<style>
+    .artifact-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 25px;
+    }
+    .artifact-title {
+        margin: 0 0 10px 0;
+        font-size: 24px;
+    }
+    .artifact-meta {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .type-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    .type-document { background-color: #17a2b8; color: white; }
+    .type-template { background-color: #6f42c1; color: white; }
+    .type-checklist { background-color: #28a745; color: white; }
+    .type-link { background-color: #fd7e14; color: white; }
+    .category-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        background-color: #e9ecef;
+        color: #495057;
+    }
+    .artifact-description {
+        font-size: 16px;
+        color: #666;
+        line-height: 1.6;
+        margin-bottom: 25px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid #dee2e6;
+    }
+    .artifact-content {
+        font-size: 15px;
+        line-height: 1.7;
+    }
+    .artifact-content h1, .artifact-content h2, .artifact-content h3 {
+        margin-top: 25px;
+        margin-bottom: 15px;
+    }
+    .artifact-content ul, .artifact-content ol {
+        margin: 15px 0;
+        padding-left: 25px;
+    }
+    .artifact-content li {
+        margin-bottom: 8px;
+    }
+    .artifact-content pre {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 6px;
+        overflow-x: auto;
+    }
+    .artifact-content code {
+        background-color: #f8f9fa;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 14px;
+    }
+    .external-link-box {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+    }
+    .external-link-box a {
+        display: inline-block;
+        padding: 12px 24px;
+        background-color: #228B22;
+        color: white;
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 500;
+    }
+    .external-link-box a:hover {
+        background-color: #1a6a1a;
+    }
+    .checklist-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px;
+        background-color: #f8f9fa;
+        border-radius: 6px;
+        margin-bottom: 8px;
+    }
+    .checklist-item input[type="checkbox"] {
+        margin-top: 3px;
+        width: 18px;
+        height: 18px;
+    }
+    .checklist-item label {
+        flex: 1;
+        cursor: pointer;
+    }
+    .checklist-item.checked label {
+        text-decoration: line-through;
+        color: #666;
+    }
+    .tag-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid #dee2e6;
+    }
+    .tag {
+        display: inline-block;
+        padding: 4px 10px;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        font-size: 12px;
+        color: #666;
+    }
+    .audit-info {
+        font-size: 12px;
+        color: #999;
+        margin-top: 25px;
+        padding-top: 15px;
+        border-top: 1px solid #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="artifact-header">
+        <div>
+            <h1 class="artifact-title">{{ artifact.title }}</h1>
+            <div class="artifact-meta">
+                <span class="type-badge type-{{ artifact.artifact_type }}">{{ artifact.type_display }}</span>
+                <span class="category-badge">{{ artifact.category_display }}</span>
+            </div>
+        </div>
+        <div>
+            <a href="{{ url_for('knowledge.browse') }}" class="btn btn-secondary">Back to KB</a>
+            {% if current_user.is_admin() %}
+            <a href="{{ url_for('knowledge.admin_artifact_edit', artifact_id=artifact.id) }}" class="btn btn-secondary">Edit</a>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if artifact.description %}
+    <p class="artifact-description">{{ artifact.description }}</p>
+    {% endif %}
+
+    <div class="artifact-content">
+        {% if artifact.artifact_type == 'link' and artifact.external_url %}
+        <div class="external-link-box">
+            <p style="margin-bottom: 15px; color: #666;">This artifact links to an external resource:</p>
+            <a href="{{ artifact.external_url }}" target="_blank">
+                Open External Resource &#x2197;
+            </a>
+            <p style="margin-top: 15px; font-size: 12px; color: #999;">
+                {{ artifact.external_url }}
+            </p>
+        </div>
+
+        {% elif artifact.artifact_type == 'checklist' and artifact.content %}
+        <h3 style="margin-bottom: 15px;">Checklist Items</h3>
+        <div class="checklist-container">
+            {% for line in artifact.content.split('\n') %}
+            {% if line.strip() %}
+            <div class="checklist-item" onclick="toggleCheck(this)">
+                <input type="checkbox" id="check-{{ loop.index }}">
+                <label for="check-{{ loop.index }}">{{ line.strip().lstrip('- ').lstrip('* ') }}</label>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+
+        {% elif artifact.content %}
+        <div class="content-body">
+            {{ artifact.content | safe }}
+        </div>
+
+        {% else %}
+        <p style="color: #666; font-style: italic;">No content available.</p>
+        {% endif %}
+    </div>
+
+    {% if artifact.tag_list %}
+    <div class="tag-list">
+        <strong style="margin-right: 10px; color: #666;">Tags:</strong>
+        {% for tag in artifact.tag_list %}
+        <span class="tag">{{ tag }}</span>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="audit-info">
+        Created {{ artifact.created_at.strftime('%B %d, %Y') }}
+        {% if artifact.created_by %} by {{ artifact.created_by.name }}{% endif %}
+        {% if artifact.updated_at %}
+        &middot; Last updated {{ artifact.updated_at.strftime('%B %d, %Y') }}
+        {% if artifact.updated_by %} by {{ artifact.updated_by.name }}{% endif %}
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function toggleCheck(item) {
+    var checkbox = item.querySelector('input[type="checkbox"]');
+    checkbox.checked = !checkbox.checked;
+    item.classList.toggle('checked', checkbox.checked);
+}
+</script>
+{% endblock %}

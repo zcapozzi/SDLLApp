@@ -124,4 +124,16 @@
     </div>
 </div>
 {% endif %}
+
+<!-- Board Resources -->
+{% if current_user.has_role('admin', 'BoardExec', 'BB_VP', 'SB_VP', 'scheduler', 'umpire_coordinator', 'treasurer', 'BBPlayerAgent', 'SBPlayerAgent', 'coaching_coordinator', 'DataManager', 'facilities', 'fieldCaptain') %}
+<div class="card" style="margin-top: 20px;">
+    <h2 style="margin-bottom: 20px;">Board Resources</h2>
+    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+        <a href="{{ url_for('knowledge.my_tasks') }}" class="btn btn-primary">My Tasks</a>
+        <a href="{{ url_for('knowledge.browse') }}" class="btn btn-secondary">Knowledge Base</a>
+        <a href="{{ url_for('knowledge.onboarding') }}" class="btn btn-secondary">Onboarding Guide</a>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
