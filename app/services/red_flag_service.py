@@ -228,10 +228,13 @@ class RedFlagService:
         return flags
 
     def check_umpire_overlaps(self) -> List[RedFlag]:
-        """Find SDL umpires assigned to overlapping or same-time games.
+        """Find SDL umpires assigned to truly overlapping games.
 
         Checks games in Assignr where the same official is assigned to multiple
-        games that overlap in time (within a reasonable buffer for travel).
+        games that overlap in time (game 2 starts before game 1 ends).
+
+        Back-to-back games (e.g., 2 hours apart for 2-hour games) are NOT flagged
+        as that's normal scheduling.
         """
         from app.services.assignr_service import get_assignr_service
 
@@ -253,7 +256,6 @@ class RedFlagService:
         # Build map of official_id -> list of (game_time, game_end_time, game_info)
         # We'll estimate end time as start + 2 hours for games
         GAME_DURATION_HOURS = 2
-        BUFFER_MINUTES = 30  # Travel time buffer
 
         official_games: Dict[int, List[Tuple[datetime, datetime, dict]]] = defaultdict(list)
 
@@ -294,7 +296,7 @@ class RedFlagService:
                         }
                     ))
 
-        # Check for overlaps within each official's games
+        # Check for TRUE overlaps within each official's games
         for official_id, games in official_games.items():
             if len(games) < 2:
                 continue
@@ -307,21 +309,14 @@ class RedFlagService:
                 start1, end1, info1 = games[i]
                 start2, end2, info2 = games[i + 1]
 
-                # Calculate the gap between games
-                gap = (start2 - end1).total_seconds() / 60  # in minutes
-
-                if gap < BUFFER_MINUTES:
-                    # Overlapping or insufficient gap
-                    if start2 < end1:
-                        message = f"Umpire {info1['official_name']} double-booked: overlapping games"
-                        severity = 'error'
-                    else:
-                        message = f"Umpire {info1['official_name']} has only {int(gap)} minutes between games"
-                        severity = 'warning'
+                # Only flag if game 2 starts BEFORE game 1 ends (true overlap)
+                if start2 < end1:
+                    overlap_minutes = int((end1 - start2).total_seconds() / 60)
+                    message = f"Umpire {info1['official_name']} double-booked: games overlap by {overlap_minutes} minutes"
 
                     flags.append(RedFlag(
                         flag_type='umpire_overlap',
-                        severity=severity,
+                        severity='error',
                         message=message,
                         official_id=official_id,
                         official_name=info1['official_name'],
@@ -340,7 +335,7 @@ class RedFlagService:
                                 'field': info2['field'],
                                 'position': info2['position']
                             },
-                            'gap_minutes': int(gap) if gap > 0 else 0
+                            'overlap_minutes': overlap_minutes
                         }
                     ))
 
@@ -480,18 +475,15 @@ def generate_red_flag_email(report: RedFlagReport, days: int = 7, base_url: str 
         lines.append("")
 
     if report.umpire_overlaps:
-        lines.append(f"🚨 UMPIRE SCHEDULING CONFLICTS ({len(report.umpire_overlaps)}):")
+        lines.append(f"🚨 UMPIRE DOUBLE-BOOKED ({len(report.umpire_overlaps)}):")
         for flag in report.umpire_overlaps:
             lines.append(f"  - {flag.official_name}:")
             g1 = flag.details.get('game1', {})
             g2 = flag.details.get('game2', {})
+            overlap = flag.details.get('overlap_minutes', 0)
             lines.append(f"    Game 1: {g1.get('time', '?')} @ {g1.get('field', '?')}")
             lines.append(f"    Game 2: {g2.get('time', '?')} @ {g2.get('field', '?')}")
-            gap = flag.details.get('gap_minutes', 0)
-            if gap > 0:
-                lines.append(f"    Only {gap} minutes between games")
-            else:
-                lines.append(f"    OVERLAPPING GAMES")
+            lines.append(f"    Games overlap by {overlap} minutes")
         lines.append("")
 
     if report.sdl_without_assignr:
@@ -575,20 +567,17 @@ def generate_red_flag_email(report: RedFlagReport, days: int = 7, base_url: str 
 
     # Umpire overlaps section
     if report.umpire_overlaps:
-        html.append('<h3 style="color: #c33;">🚨 Umpire Scheduling Conflicts</h3>')
-        html.append('<p style="font-size: 13px; color: #666;">Same umpire assigned to overlapping or back-to-back games.</p>')
+        html.append('<h3 style="color: #c33;">🚨 Umpire Double-Booked</h3>')
+        html.append('<p style="font-size: 13px; color: #666;">Same umpire assigned to overlapping games.</p>')
         for flag in report.umpire_overlaps:
             g1 = flag.details.get('game1', {})
             g2 = flag.details.get('game2', {})
-            gap = flag.details.get('gap_minutes', 0)
-
-            conflict_type = f"Only {gap} minutes between games" if gap > 0 else "GAMES OVERLAP"
-            color = '#c33' if gap <= 0 else '#f0ad4e'
+            overlap = flag.details.get('overlap_minutes', 0)
 
             html.append(
-                f'<div style="background: #f9f9f9; padding: 10px; border-radius: 4px; margin-bottom: 10px; border-left: 4px solid {color};">'
+                f'<div style="background: #f9f9f9; padding: 10px; border-radius: 4px; margin-bottom: 10px; border-left: 4px solid #c33;">'
                 f'<strong>{flag.official_name}</strong><br>'
-                f'<span style="color: {color}; font-size: 13px;">{conflict_type}</span>'
+                f'<span style="color: #c33; font-size: 13px;">Games overlap by {overlap} minutes</span>'
                 f'<table style="width: 100%; margin-top: 8px; font-size: 13px;">'
                 f'<tr><td style="padding: 4px 0;">Game 1: {g1.get("time", "?")} @ {g1.get("field", "?")}</td></tr>'
                 f'<tr><td style="padding: 4px 0;">Game 2: {g2.get("time", "?")} @ {g2.get("field", "?")}</td></tr>'
