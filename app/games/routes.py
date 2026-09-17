@@ -672,14 +672,19 @@ def manage(year, is_spring):
                     game.away_ID = int(away_id) if away_id else None
 
                     # Update game type and status
-                    game.game_type = request.form.get('game_type', 'regular')
+                    # Prevent converting between practice and game types
+                    new_game_type = request.form.get('game_type', 'regular')
+                    old_is_practice = game.game_type == 'practice'
+                    new_is_practice = new_game_type == 'practice'
+
+                    if old_is_practice != new_is_practice:
+                        flash('Cannot convert between practice and game types. Please delete and recreate, or move the events to swap dates.', 'error')
+                        return redirect(url_for('games.manage', year=year, is_spring=is_spring) + f'#game-{game_id}')
+
+                    game.game_type = new_game_type
                     game.status = request.form.get('status', 'scheduled')
                     game.is_scrimmage = 1 if request.form.get('is_scrimmage') else 0
                     game.no_time_limit = 1 if request.form.get('no_time_limit') else 0
-
-                    # If converting to practice, clear away team
-                    if game.game_type == 'practice':
-                        game.away_ID = None
 
                     db.session.commit()
 
