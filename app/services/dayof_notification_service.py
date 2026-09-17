@@ -312,7 +312,7 @@ class DayOfNotificationService:
         """
         # Format times
         time_str = game_date.strftime('%I:%M%p').lstrip('0').replace(':00', '')
-        arrive_time = game_date - timedelta(minutes=15)
+        arrive_time = game_date - timedelta(minutes=10)
         arrive_str = arrive_time.strftime('%I:%M%p').lstrip('0').replace(':00', '')
 
         # Get league display string
@@ -324,16 +324,23 @@ class DayOfNotificationService:
         # Get weather zip
         weather_zip = FIELD_ZIP_CODES.get(location, DEFAULT_ZIP)
 
-        # Build team strings with coaches
-        if home_coach:
-            home_team_w_coach = f"{home_team} (head coach is {home_coach})"
-        else:
-            home_team_w_coach = f"{home_team} (head coach is not listed)"
+        # Build team info - handle missing names gracefully
+        def format_team(team_name: str, coach_name: Optional[str], role: str) -> str:
+            """Format team info, handling missing data."""
+            has_team = team_name and team_name.strip()
+            has_coach = coach_name and coach_name.strip()
 
-        if away_coach:
-            away_team_w_coach = f"{away_team} (head coach is {away_coach})"
-        else:
-            away_team_w_coach = f"{away_team} (head coach is not listed)"
+            if has_team and has_coach:
+                return f"<strong>{team_name}</strong> (head coach: {coach_name})"
+            elif has_team:
+                return f"<strong>{team_name}</strong>"
+            elif has_coach:
+                return f"Head coach: {coach_name}"
+            else:
+                return f"({role} team info not available)"
+
+        home_info = format_team(home_team, home_coach, "home")
+        away_info = format_team(away_team, away_coach, "away")
 
         # Build greeting
         hi_intro = f"Hi {umpire_first_name}," if umpire_first_name else "Hi,"
@@ -357,8 +364,9 @@ class DayOfNotificationService:
 </tr>
 <tr>
 <td style="line-height: 1.5; padding: 6px 0;">
-  Today, you are working a {league_str} game.
-  The {home_team_w_coach} are the home team and the away team is {away_team_w_coach}.
+  Today, you are working a {league_str} game.<br>
+  <span style="color: #228B22;">Home:</span> {home_info}<br>
+  <span style="color: #FF8C00;">Away:</span> {away_info}
 </td>
 </tr>
 </table>"""
