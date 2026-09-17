@@ -475,6 +475,74 @@ def cron_unassigned_umpires():
         return jsonify({'error': f'Failed to send email: {str(e)}'}), 500
 
 
+@main_bp.route('/cron/red-flags')
+def cron_red_flags():
+    """
+    Comprehensive red flag alert for umpire scheduling issues.
+
+    Checks for:
+    - Games without umpire_override set (no delegation decision made)
+    - Practices with umpire_override set (shouldn't have umpires)
+    - Overlapping/same-time games for the same SDL umpire
+    - SDL-assigned games with no accepted Assignr assignments (within 3 days)
+
+    Call with ?token=YOUR_SECRET&days=7&recipient=umpires@sdll.org
+    """
+    import os
+    from app.services.red_flag_service import RedFlagService, generate_red_flag_email
+    from app.services.notification_service import GmailService
+
+    # Verify secret token
+    expected_token = os.environ.get('CRON_SECRET')
+    provided_token = request.args.get('token')
+
+    if not expected_token:
+        return jsonify({'error': 'CRON_SECRET not configured'}), 500
+
+    if provided_token != expected_token:
+        return jsonify({'error': 'Invalid token'}), 403
+
+    # Get parameters
+    days = request.args.get('days', 7, type=int)
+    recipient = request.args.get('recipient', 'umpires@sdll.org')
+    send_if_empty = request.args.get('send_if_empty', 'false').lower() == 'true'
+
+    # Run all red flag checks
+    service = RedFlagService(days=days)
+    report = service.run_all_checks()
+
+    # If no issues found and not forcing send, just return status
+    if report.total_count == 0 and not send_if_empty:
+        return jsonify({
+            'status': 'ok',
+            'message': 'No umpire issues found',
+            'days': days
+        }), 200
+
+    # Generate email content
+    subject, body_text, body_html = generate_red_flag_email(report, days=days)
+
+    # Send the email
+    gmail = GmailService()
+    if not gmail.is_configured:
+        return jsonify({'error': 'Email service not configured'}), 500
+
+    try:
+        gmail.send_email(recipient, subject, body_text, body_html)
+        return jsonify({
+            'status': 'ok',
+            'message': f'Red flag alert sent',
+            'total_issues': report.total_count,
+            'missing_assignments': len(report.missing_assignments),
+            'practices_with_umpires': len(report.practices_with_umpires),
+            'umpire_overlaps': len(report.umpire_overlaps),
+            'sdl_without_assignr': len(report.sdl_without_assignr),
+            'recipient': recipient
+        }), 200
+    except Exception as e:
+        return jsonify({'error': f'Failed to send email: {str(e)}'}), 500
+
+
 @main_bp.route('/cron/diagnose-email')
 def cron_diagnose_email():
     """
