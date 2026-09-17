@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}Webhook Time Distribution{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <a href="{{ url_for('assignr.webhook_list') }}" style="color: var(--text-muted); text-decoration: none;">&larr; Back to Webhooks</a>
+    <h1 style="margin: 10px 0 0 0;">Webhook Time Distribution</h1>
+    <p style="color: var(--text-muted); margin: 5px 0 0 0;">
+        Analysis of {{ total }} webhook events by time of day
+    </p>
+</div>
+
+{# Hour of Day Distribution #}
+<div class="card" style="margin-bottom: 20px;">
+    <h2 style="margin-top: 0;">By Hour of Day</h2>
+    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 15px;">
+        When do umpire assignment changes typically occur?
+    </p>
+
+    <div class="hour-chart">
+        {% set max_hour_count = hour_distribution.values()|max if hour_distribution.values()|max > 0 else 1 %}
+        {% for hour in range(24) %}
+        {% set count = hour_distribution[hour] %}
+        {% set pct = (count / max_hour_count * 100)|round|int if max_hour_count > 0 else 0 %}
+        {% set display_hour = hour if hour <= 12 else hour - 12 %}
+        {% set display_hour = 12 if display_hour == 0 else display_hour %}
+        {% set ampm = 'a' if hour < 12 else 'p' %}
+        <div class="hour-bar-container">
+            <div class="hour-label">{{ display_hour }}{{ ampm }}</div>
+            <div class="hour-bar-bg">
+                <div class="hour-bar" style="width: {{ pct }}%;" title="{{ count }} events"></div>
+            </div>
+            <div class="hour-count">{{ count }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{# Day of Week Distribution #}
+<div class="card" style="margin-bottom: 20px;">
+    <h2 style="margin-top: 0;">By Day of Week</h2>
+
+    <div class="dow-chart">
+        {% set max_dow_count = dow_distribution.values()|max if dow_distribution.values()|max > 0 else 1 %}
+        {% for dow in range(1, 8) %}
+        {% set count = dow_distribution[dow] %}
+        {% set pct = (count / max_dow_count * 100)|round|int if max_dow_count > 0 else 0 %}
+        <div class="dow-bar-container">
+            <div class="dow-label">{{ day_names[dow] }}</div>
+            <div class="dow-bar-bg">
+                <div class="dow-bar" style="height: {{ pct }}%;"></div>
+            </div>
+            <div class="dow-count">{{ count }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{# Action Type Distribution #}
+<div class="card">
+    <h2 style="margin-top: 0;">By Action Type</h2>
+
+    <table style="width: 100%;">
+        <thead>
+            <tr>
+                <th style="text-align: left;">Action</th>
+                <th style="text-align: right;">Count</th>
+                <th style="text-align: right;">%</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for action, count in action_counts|sort(attribute='1', reverse=true) %}
+            <tr>
+                <td>{{ action or 'Unknown' }}</td>
+                <td style="text-align: right;">{{ count }}</td>
+                <td style="text-align: right;">{{ ((count / total) * 100)|round(1) if total > 0 else 0 }}%</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<style>
+.hour-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.hour-bar-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.hour-label {
+    width: 35px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: right;
+}
+.hour-bar-bg {
+    flex: 1;
+    height: 20px;
+    background: #f0f0f0;
+    border-radius: 3px;
+    overflow: hidden;
+}
+.hour-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #228B22, #32CD32);
+    border-radius: 3px;
+    min-width: 2px;
+    transition: width 0.3s ease;
+}
+.hour-count {
+    width: 40px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: right;
+}
+
+.dow-chart {
+    display: flex;
+    justify-content: space-around;
+    align-items: flex-end;
+    height: 200px;
+    padding-top: 20px;
+}
+.dow-bar-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 60px;
+}
+.dow-label {
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 8px;
+}
+.dow-bar-bg {
+    width: 40px;
+    height: 150px;
+    background: #f0f0f0;
+    border-radius: 4px 4px 0 0;
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+}
+.dow-bar {
+    width: 100%;
+    background: linear-gradient(180deg, #FF8C00, #FFA500);
+    border-radius: 4px 4px 0 0;
+    min-height: 2px;
+    transition: height 0.3s ease;
+}
+.dow-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+@media (max-width: 600px) {
+    .dow-bar-container {
+        width: 40px;
+    }
+    .dow-bar-bg {
+        width: 30px;
+        height: 100px;
+    }
+    .dow-label {
+        font-size: 11px;
+    }
+}
+</style>
+{% endblock %}

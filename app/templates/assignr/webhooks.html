@@ -166,6 +166,7 @@
                     Process Pending ({{ status_counts.get('received', 0) }})
                 </button>
             </form>
+            <a href="{{ url_for('assignr.webhook_time_report') }}" class="btn btn-outline">Time Report</a>
             <a href="{{ url_for('assignr.webhook_test') }}" class="btn btn-outline">Test Webhook</a>
             <a href="{{ url_for('assignr.index') }}" class="btn btn-outline">Back to Dashboard</a>
         </div>

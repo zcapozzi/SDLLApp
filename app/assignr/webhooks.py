@@ -251,3 +251,62 @@ def process_pending():
     )
 
     return redirect(url_for('assignr.webhook_list'))
+
+
+@assignr_bp.route('/webhooks/time-report')
+@login_required
+@umpire_coordinator_required
+def webhook_time_report():
+    """Show distribution of webhook events by time of day."""
+    from sqlalchemy import func, extract
+
+    # Get hour distribution using event_timestamp (when event occurred in Assignr)
+    # Fall back to received_at if event_timestamp is null
+    hour_counts = db.session.query(
+        func.hour(func.coalesce(
+            AssignrWebhookEvent.event_timestamp,
+            AssignrWebhookEvent.received_at
+        )).label('hour'),
+        func.count(AssignrWebhookEvent.id).label('count')
+    ).group_by('hour').order_by('hour').all()
+
+    # Build full 24-hour distribution (fill in zeros for missing hours)
+    distribution = {h: 0 for h in range(24)}
+    total = 0
+    for hour, count in hour_counts:
+        if hour is not None:
+            distribution[int(hour)] = count
+            total += count
+
+    # Get day of week distribution
+    dow_counts = db.session.query(
+        func.dayofweek(func.coalesce(
+            AssignrWebhookEvent.event_timestamp,
+            AssignrWebhookEvent.received_at
+        )).label('dow'),
+        func.count(AssignrWebhookEvent.id).label('count')
+    ).group_by('dow').order_by('dow').all()
+
+    # MySQL dayofweek: 1=Sunday, 2=Monday, ..., 7=Saturday
+    day_names = ['', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    dow_distribution = {d: 0 for d in range(1, 8)}
+    for dow, count in dow_counts:
+        if dow is not None:
+            dow_distribution[int(dow)] = count
+
+    # Get action type distribution
+    action_counts = db.session.query(
+        AssignrWebhookEvent.action_type,
+        func.count(AssignrWebhookEvent.id).label('count')
+    ).filter(
+        AssignrWebhookEvent.action_type.isnot(None)
+    ).group_by(AssignrWebhookEvent.action_type).all()
+
+    return render_template(
+        'assignr/webhook_time_report.html',
+        hour_distribution=distribution,
+        dow_distribution=dow_distribution,
+        day_names=day_names,
+        action_counts=action_counts,
+        total=total
+    )
