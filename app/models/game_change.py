@@ -356,36 +356,23 @@ class GameChange(db.Model):
                 continue
 
             current_game = game_lookup.get(game_id)
-            most_recent = changes[0]
 
-            # Always show what changed from the most recent change's "old" values
-            # This is more useful than showing the original value from weeks ago
-            prev_values = most_recent.changes_dict or {}
-            display = cls._format_changed_from(prev_values)
+            # Check if most recent change was > 24 hours after previous change
+            if len(changes) >= 2:
+                most_recent = changes[0]
+                previous = changes[1]
+                time_gap = most_recent.changed_at - previous.changed_at
 
-            # But if two changes within 30 minutes reverse each other, suppress display
-            # (e.g., moved to Field B then immediately back to Field A)
-            if len(changes) >= 2 and display:
-                second_change = changes[1]
-                time_gap = most_recent.changed_at - second_change.changed_at
+                if time_gap > timedelta(hours=24):
+                    # The previous value was "communicated" - show what changed from
+                    prev_values = most_recent.changes_dict or {}
+                    display = cls._format_changed_from(prev_values)
+                    if display:
+                        result[game_id] = display
+                    continue
 
-                if time_gap < timedelta(minutes=30):
-                    # Check if this is a reversal (current matches second change's old)
-                    second_dict = second_change.changes_dict or {}
-                    is_reversal = True
-
-                    for field in ['field', 'location']:
-                        if field in prev_values and field in second_dict:
-                            # Most recent old == second change's old means reversal
-                            if prev_values[field].get('old') != second_dict[field].get('old'):
-                                is_reversal = False
-                                break
-
-                    if is_reversal:
-                        # This is a quick reversal - check if we need to show anything
-                        # Fall back to showing the second change's old values
-                        display = cls._format_changed_from(second_dict)
-
+            # Fall back to comparing current to original
+            display = cls._get_original_display_internal_from_changes(changes, current_game)
             if display:
                 result[game_id] = display
 
