@@ -41,6 +41,10 @@ class League(db.Model):
     # League documentation
     rules_doc_url = db.Column(db.String(500))  # URL to league-specific rules document
 
+    # Umpire payment rate overrides (NULL = use org defaults)
+    umpire_rate_plate_override = db.Column(db.Numeric(6, 2))  # Override plate rate for this league
+    umpire_rate_base_override = db.Column(db.Numeric(6, 2))   # Override base rate for this league
+
     # Sport constants
     SPORT_BASEBALL = 'baseball'
     SPORT_SOFTBALL = 'softball'
@@ -420,3 +424,85 @@ class League(db.Model):
             from app.models.umpire_partner import UmpirePartner
             return UmpirePartner.query.get(self.default_partner_id)
         return None
+
+    def get_umpire_rate(self, position='plate', org=None):
+        """Get the umpire payment rate for this league and position.
+
+        Args:
+            position: 'plate', 'base', or 'umpire' (single-umpire games use plate rate)
+            org: Organization object (optional, fetched if not provided)
+
+        Returns:
+            Decimal rate amount
+        """
+        from decimal import Decimal
+
+        # Single-umpire games get plate rate (they're doing both jobs)
+        is_plate = position in ('plate', 'umpire')
+
+        # Check for league-specific override first
+        if is_plate and self.umpire_rate_plate_override is not None:
+            return Decimal(str(self.umpire_rate_plate_override))
+        if not is_plate and self.umpire_rate_base_override is not None:
+            return Decimal(str(self.umpire_rate_base_override))
+
+        # Fall back to organization defaults
+        if org is None:
+            from app.models.organization import Organization
+            org = Organization.get_home_org()
+
+        if org:
+            if is_plate and org.umpire_rate_plate is not None:
+                return Decimal(str(org.umpire_rate_plate))
+            if not is_plate and org.umpire_rate_base is not None:
+                return Decimal(str(org.umpire_rate_base))
+
+        # Ultimate fallback (shouldn't reach here normally)
+        return Decimal('45.00') if is_plate else Decimal('40.00')
+
+    @property
+    def umpire_rates_display(self):
+        """Human-readable umpire rate display."""
+        plate = self.umpire_rate_plate_override
+        base = self.umpire_rate_base_override
+
+        if plate is None and base is None:
+            return "Org default"
+
+        parts = []
+        if plate is not None:
+            parts.append(f"Plate: ${plate:.0f}")
+        if base is not None:
+            parts.append(f"Base: ${base:.0f}")
+        return ", ".join(parts)
+
+    @classmethod
+    def get_umpire_rate_for_game(cls, game, position='plate'):
+        """Get umpire rate for a specific game.
+
+        Convenience method that handles looking up the league.
+
+        Args:
+            game: Game object
+            position: 'plate', 'base', or 'umpire'
+
+        Returns:
+            Decimal rate amount
+        """
+        league = cls.get_by_name(game.league) if game.league else None
+        if league:
+            return league.get_umpire_rate(position)
+
+        # No league found, use org defaults
+        from decimal import Decimal
+        from app.models.organization import Organization
+        org = Organization.get_home_org()
+
+        is_plate = position in ('plate', 'umpire')
+        if org:
+            if is_plate and org.umpire_rate_plate:
+                return Decimal(str(org.umpire_rate_plate))
+            if not is_plate and org.umpire_rate_base:
+                return Decimal(str(org.umpire_rate_base))
+
+        return Decimal('45.00') if is_plate else Decimal('40.00')

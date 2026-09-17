@@ -116,16 +116,18 @@ def managed_umpires(year=None, is_spring=None):
             grand_total={'games': 0, 'ntl_games': 0, 'base_pay': 0, 'adjustments': 0, 'total': 0}
         )
 
-    # Get SDL partner rates
-    sdl_partner = UmpirePartner.query.filter_by(short_code='SDL', active=True).first()
-    if sdl_partner:
-        rate_normal = float(sdl_partner.rate_normal) if sdl_partner.rate_normal else 35.00
-        rate_ntl = float(sdl_partner.rate_ntl) if sdl_partner.rate_ntl else 50.00
-    else:
-        rate_normal = 35.00
-        rate_ntl = 50.00
+    # Get org default rates for display
+    from app.models.organization import Organization
+    from app.models.league import League
+    org = Organization.get_home_org()
+    rate_plate = float(org.umpire_rate_plate) if org and org.umpire_rate_plate else 45.00
+    rate_base = float(org.umpire_rate_base) if org and org.umpire_rate_base else 40.00
 
-    rates = {'normal': rate_normal, 'ntl': rate_ntl}
+    # NTL rate from SDL partner (multiplier on top of position rate)
+    sdl_partner = UmpirePartner.query.filter_by(short_code='SDL', active=True).first()
+    rate_ntl_multiplier = 1.0  # Default no extra for NTL
+
+    rates = {'plate': rate_plate, 'base': rate_base}
 
     # Fetch games from Assignr
     assignr = get_assignr_service()
@@ -206,14 +208,16 @@ def managed_umpires(year=None, is_spring=None):
                     if email_addresses:
                         official_info[official_id]['email'] = email_addresses[0].get('email', '')
 
-                # Track game info
+                # Track game info including position
                 local_data = game.get('_local', {}) or {}
+                position = assignment.get('position', 'Plate')  # Default to Plate if unknown
                 games_by_official[official_id].append({
                     'game_id': local_data.get('game_id') if local_data else None,
                     'assignr_id': game.get('id'),
                     'game_date': game.get('_game_date'),
                     'league': local_data.get('league') if local_data else game.get('league_name', 'Unknown'),
-                    'is_ntl': game.get('no_time_limit', False) or (local_data.get('status') == 'ntl' if local_data else False)
+                    'is_ntl': game.get('no_time_limit', False) or (local_data.get('status') == 'ntl' if local_data else False),
+                    'position': position  # 'Plate', 'Base', etc.
                 })
 
     # Get all local game IDs for multiplier lookup
@@ -230,19 +234,36 @@ def managed_umpires(year=None, is_spring=None):
     umpire_data = []
     grand_total = {
         'games': 0,
-        'ntl_games': 0,
+        'plate_games': 0,
+        'base_games': 0,
         'base_pay': Decimal('0'),
         'adjustments': Decimal('0'),
         'total': Decimal('0')
     }
 
+    # Build league lookup for rate calculations
+    league_lookup = {l.display_name: l for l in League.get_all_active()}
+
     for official_id, games in sorted(games_by_official.items(), key=lambda x: official_info.get(x[0], {}).get('last_name', '')):
         info = official_info.get(official_id, {})
-        normal_games = 0
-        ntl_games = 0
+        plate_games = 0
+        base_games = 0
         adjustment_total = Decimal('0')
+        base_pay = Decimal('0')
 
         for g in games:
+            # Determine position and get appropriate rate
+            position = g.get('position', 'Plate')
+            is_plate = position.lower() in ('plate', 'umpire', 'unknown', '')
+
+            # Get rate based on league (with override support)
+            league_name = g.get('league', '')
+            league = league_lookup.get(league_name)
+            if league:
+                game_rate = league.get_umpire_rate('plate' if is_plate else 'base', org)
+            else:
+                game_rate = Decimal(str(rate_plate if is_plate else rate_base))
+
             # Check for multiplier
             multiplier = Decimal('1.0')
             if g['game_id']:
@@ -250,17 +271,19 @@ def managed_umpires(year=None, is_spring=None):
                 if key in multipliers:
                     multiplier = Decimal(str(multipliers[key]))
 
-            if g.get('is_ntl'):
-                ntl_games += 1
-                if multiplier != Decimal('1.0'):
-                    adjustment_total += (Decimal(str(rate_ntl)) * (multiplier - Decimal('1.0')))
-            else:
-                normal_games += 1
-                if multiplier != Decimal('1.0'):
-                    adjustment_total += (Decimal(str(rate_normal)) * (multiplier - Decimal('1.0')))
+            # Calculate pay for this game
+            game_pay = game_rate * multiplier
+            base_pay += game_pay
 
-        base_pay = (Decimal(normal_games) * Decimal(str(rate_normal))) + (Decimal(ntl_games) * Decimal(str(rate_ntl)))
-        total_pay = base_pay + adjustment_total
+            if multiplier != Decimal('1.0'):
+                adjustment_total += game_rate * (multiplier - Decimal('1.0'))
+
+            if is_plate:
+                plate_games += 1
+            else:
+                base_games += 1
+
+        total_pay = base_pay
 
         umpire_data.append({
             'official_id': official_id,
@@ -268,17 +291,18 @@ def managed_umpires(year=None, is_spring=None):
             'last_name': info.get('last_name', ''),
             'full_name': f"{info.get('first_name', '')} {info.get('last_name', '')}".strip(),
             'email': info.get('email', ''),
-            'normal_games': normal_games,
-            'ntl_games': ntl_games,
-            'total_games': normal_games + ntl_games,
-            'base_pay': float(base_pay),
+            'plate_games': plate_games,
+            'base_games': base_games,
+            'total_games': plate_games + base_games,
+            'base_pay': float(base_pay - adjustment_total),  # Base pay without adjustments
             'adjustments': float(adjustment_total),
             'total_pay': float(total_pay)
         })
 
-        grand_total['games'] += normal_games
-        grand_total['ntl_games'] += ntl_games
-        grand_total['base_pay'] += base_pay
+        grand_total['games'] += plate_games + base_games
+        grand_total['plate_games'] = grand_total.get('plate_games', 0) + plate_games
+        grand_total['base_games'] = grand_total.get('base_games', 0) + base_games
+        grand_total['base_pay'] += (base_pay - adjustment_total)
         grand_total['adjustments'] += adjustment_total
         grand_total['total'] += total_pay
 

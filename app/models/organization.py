@@ -23,6 +23,10 @@ class Organization(db.Model):
     notes = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
 
+    # Default umpire payment rates (for org-managed umpires like SDL Academy)
+    umpire_rate_plate = db.Column(db.Numeric(6, 2), default=45.00)  # Behind-the-plate rate
+    umpire_rate_base = db.Column(db.Numeric(6, 2), default=40.00)   # Base/field umpire rate
+
     # Relationship to teams (defined via backref in TeamSeason)
 
     def __repr__(self):
