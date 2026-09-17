@@ -381,26 +381,30 @@ class GameChange(db.Model):
     @classmethod
     def _get_original_display_internal_from_changes(cls, changes, current_game):
         """
-        Helper to compute original display from pre-fetched changes.
+        Helper to compute display from pre-fetched changes.
+
+        Uses the MOST RECENT "old" value for each field, not the original.
+        This is more useful when a game has been changed multiple times.
         """
         if not changes:
             return None
 
-        # Build original values from the oldest changes
-        original = {}
-        for change in reversed(changes):  # Process oldest first
+        # Build values from the MOST RECENT change for each field
+        # Changes are already ordered newest-first
+        previous_values = {}
+        for change in changes:  # Process newest first
             changes_dict = change.changes_dict
             if not changes_dict:
                 continue
 
             for field in ['date', 'time', 'field', 'location']:
-                if field in changes_dict and field not in original:
+                key = 'field' if field == 'location' else field
+                if field in changes_dict and key not in previous_values:
                     old_val = changes_dict[field].get('old')
                     if old_val:
-                        key = 'field' if field == 'location' else field
-                        original[key] = old_val
+                        previous_values[key] = old_val
 
-        if not original:
+        if not previous_values:
             return None
 
         # Compare to current - if same, no need to show
@@ -410,42 +414,42 @@ class GameChange(db.Model):
             current_field = current_game.field_name
 
             matches_current = True
-            if 'date' in original and original['date'] != current_date:
+            if 'date' in previous_values and previous_values['date'] != current_date:
                 matches_current = False
-            if 'time' in original and original['time'] != current_time:
+            if 'time' in previous_values and previous_values['time'] != current_time:
                 matches_current = False
-            if 'field' in original and original['field'] != current_field:
+            if 'field' in previous_values and previous_values['field'] != current_field:
                 matches_current = False
 
             if matches_current:
                 return None
 
-        # Format the original values into a string
+        # Format the previous values into a string
         parts = []
 
-        if 'date' in original:
+        if 'date' in previous_values:
             try:
                 from datetime import datetime
-                d = datetime.strptime(original['date'], '%Y-%m-%d')
+                d = datetime.strptime(previous_values['date'], '%Y-%m-%d')
                 parts.append(d.strftime('%b %d'))
             except (ValueError, TypeError):
                 pass
 
-        if 'time' in original:
+        if 'time' in previous_values:
             try:
                 from datetime import datetime
-                t = datetime.strptime(original['time'], '%H:%M')
+                t = datetime.strptime(previous_values['time'], '%H:%M')
                 parts.append(f"at {t.strftime('%I:%M %p').lstrip('0')}")
             except (ValueError, TypeError):
                 pass
 
-        if 'field' in original:
-            parts.append(f"at {original['field']}")
+        if 'field' in previous_values:
+            parts.append(f"at {previous_values['field']}")
 
         if not parts:
             return None
 
-        return "Originally " + " ".join(parts)
+        return "Changed from " + " ".join(parts)
 
     @classmethod
     def acknowledge_all_for_season(cls, year, is_spring):
