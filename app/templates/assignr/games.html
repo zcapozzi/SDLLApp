@@ -151,8 +151,8 @@
             </label>
         </div>
         <button type="submit" class="btn btn-primary">Update</button>
-        <button type="button" id="generate-email-btn" class="btn btn-outline" onclick="toggleEmailGenerator()" title="Generate email for available games">
-            &#9993; Email Draft
+        <button type="button" id="compose-message-btn" class="btn btn-outline" onclick="toggleMessageComposer()" title="Compose message for available games">
+            &#9993; Compose Message
         </button>
         <div style="color: var(--text-muted); font-size: 14px; margin-left: auto;">
             <span id="visible-count">{{ games|length }}</span> visible
@@ -160,16 +160,58 @@
     </form>
 </div>
 
-{# Email Generator Panel #}
-<div id="email-generator-panel" class="email-generator" style="display: none;">
-    <div class="email-generator-header">
-        <span>Email Draft - Available Games for Academy Umpires</span>
-        <div class="email-generator-actions">
-            <button class="btn btn-primary btn-sm" onclick="copyEmailToClipboard()">Copy to Clipboard</button>
-            <button class="btn-close" onclick="toggleEmailGenerator()">&times;</button>
+{# Message Composer Panel #}
+<div id="message-composer-panel" class="message-composer" style="display: none;">
+    <div class="message-composer-header">
+        <span>Compose Message via Assignr</span>
+        <button class="btn-close" onclick="toggleMessageComposer()">&times;</button>
+    </div>
+
+    <div class="message-composer-body">
+        {# Recipient Selection #}
+        <div class="composer-section">
+            <label>Recipients</label>
+            <div class="recipient-controls">
+                <select id="recipient-group" class="form-control" onchange="loadGroupMembers()">
+                    <option value="">-- Select a group --</option>
+                </select>
+                <label class="cc-toggle">
+                    <input type="checkbox" id="use-cc" onchange="updateRecipientDisplay()">
+                    <span>CC (instead of BCC)</span>
+                </label>
+            </div>
+            <div id="recipient-list" class="recipient-list" style="display: none;">
+                <div class="recipient-list-header">
+                    <span id="recipient-count">0 recipients</span>
+                    <button type="button" class="btn btn-sm btn-outline" onclick="toggleRecipientList()">
+                        <span id="toggle-icon">&#9660;</span> Show names
+                    </button>
+                </div>
+                <div id="recipient-names" class="recipient-names" style="display: none;"></div>
+            </div>
+        </div>
+
+        {# Subject #}
+        <div class="composer-section">
+            <label for="message-subject">Subject</label>
+            <input type="text" id="message-subject" class="form-control" placeholder="Enter subject...">
+        </div>
+
+        {# Message Body #}
+        <div class="composer-section">
+            <label for="message-body">Message</label>
+            <textarea id="message-body" class="form-control" rows="12" placeholder="Enter message..."></textarea>
+        </div>
+
+        {# Actions #}
+        <div class="composer-actions">
+            <button type="button" class="btn btn-outline" onclick="copyMessageToClipboard()">Copy to Clipboard</button>
+            <button type="button" class="btn btn-outline" onclick="regenerateMessage()">Regenerate from Games</button>
+            <button type="button" class="btn btn-primary" onclick="sendMessage()" id="send-btn">
+                Send via Assignr
+            </button>
         </div>
     </div>
-    <textarea id="email-text" readonly></textarea>
 </div>
 
 {# Games Table #}
@@ -455,20 +497,23 @@ tr.unpublished-row td {
     outline: none;
 }
 
-/* Email Generator */
-.email-generator {
+/* Message Composer */
+.message-composer {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    width: 500px;
+    width: 600px;
     max-width: calc(100vw - 40px);
+    max-height: calc(100vh - 100px);
     background: white;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
     z-index: 1000;
+    display: flex;
+    flex-direction: column;
 }
-.email-generator-header {
+.message-composer-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -477,13 +522,9 @@ tr.unpublished-row td {
     color: white;
     border-radius: 8px 8px 0 0;
     font-weight: 600;
+    flex-shrink: 0;
 }
-.email-generator-actions {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-.email-generator-actions .btn-close {
+.message-composer-header .btn-close {
     background: none;
     border: none;
     color: white;
@@ -492,21 +533,86 @@ tr.unpublished-row td {
     padding: 0 4px;
     line-height: 1;
 }
-.email-generator-actions .btn-close:hover {
+.message-composer-header .btn-close:hover {
     opacity: 0.8;
 }
-.email-generator textarea {
+.message-composer-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+}
+.composer-section {
+    margin-bottom: 16px;
+}
+.composer-section > label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-size: 14px;
+}
+.recipient-controls {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.recipient-controls select {
+    flex: 1;
+    min-width: 200px;
+}
+.cc-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: normal;
+    cursor: pointer;
+    white-space: nowrap;
+    font-size: 14px;
+}
+.cc-toggle input {
+    cursor: pointer;
+}
+.recipient-list {
+    margin-top: 10px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+}
+.recipient-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+}
+.recipient-names {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+    max-height: 120px;
+    overflow-y: auto;
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+.composer-section input.form-control {
     width: 100%;
-    height: 300px;
-    padding: 12px;
-    border: none;
-    border-radius: 0 0 8px 8px;
+}
+.composer-section textarea.form-control {
+    width: 100%;
     font-family: monospace;
     font-size: 13px;
     resize: vertical;
-    background: #f8f9fa;
+    min-height: 180px;
 }
-#generate-email-btn.active {
+.composer-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+    flex-wrap: wrap;
+}
+#compose-message-btn.active {
     background: var(--primary-color);
     color: white;
 }
@@ -534,10 +640,17 @@ tr.unpublished-row td {
         width: 60px !important;
         font-size: 10px !important;
     }
-    .email-generator {
+    .message-composer {
         width: calc(100vw - 20px);
         bottom: 10px;
         right: 10px;
+        max-height: calc(100vh - 80px);
+    }
+    .composer-actions {
+        flex-direction: column;
+    }
+    .composer-actions .btn {
+        width: 100%;
     }
 }
 </style>
@@ -574,46 +687,126 @@ document.addEventListener('DOMContentLoaded', function() {
     filterGames();
 });
 
-// Email Generator Functions
-function toggleEmailGenerator() {
-    var panel = document.getElementById('email-generator-panel');
-    var btn = document.getElementById('generate-email-btn');
+// Message Composer Functions
+var composerRecipients = [];  // Store loaded recipients
+
+function toggleMessageComposer() {
+    var panel = document.getElementById('message-composer-panel');
+    var btn = document.getElementById('compose-message-btn');
 
     if (panel.style.display === 'none') {
-        panel.style.display = 'block';
+        panel.style.display = 'flex';
         btn.classList.add('active');
-        generateEmailContent();
+        loadGroups();
+        regenerateMessage();
     } else {
         panel.style.display = 'none';
         btn.classList.remove('active');
     }
 }
 
-function generateEmailContent() {
-    var textarea = document.getElementById('email-text');
+function loadGroups() {
+    var select = document.getElementById('recipient-group');
+
+    // Only load once
+    if (select.options.length > 1) return;
+
+    fetch('{{ url_for("assignr.api_groups") }}')
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.groups) {
+                data.groups.forEach(function(group) {
+                    var option = document.createElement('option');
+                    option.value = group.id;
+                    option.textContent = group.name;
+                    select.appendChild(option);
+                });
+            }
+        })
+        .catch(function(err) {
+            console.error('Failed to load groups:', err);
+        });
+}
+
+function loadGroupMembers() {
+    var select = document.getElementById('recipient-group');
+    var groupId = select.value;
+    var recipientList = document.getElementById('recipient-list');
+    var recipientCount = document.getElementById('recipient-count');
+    var recipientNames = document.getElementById('recipient-names');
+
+    if (!groupId) {
+        recipientList.style.display = 'none';
+        composerRecipients = [];
+        return;
+    }
+
+    recipientCount.textContent = 'Loading...';
+    recipientList.style.display = 'block';
+
+    fetch('{{ url_for("assignr.api_group_members", group_id=0) }}'.replace('/0/', '/' + groupId + '/'))
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.members) {
+                composerRecipients = data.members;
+                updateRecipientDisplay();
+            }
+        })
+        .catch(function(err) {
+            console.error('Failed to load group members:', err);
+            recipientCount.textContent = 'Error loading members';
+        });
+}
+
+function updateRecipientDisplay() {
+    var recipientCount = document.getElementById('recipient-count');
+    var recipientNames = document.getElementById('recipient-names');
+    var useCc = document.getElementById('use-cc').checked;
+
+    var count = composerRecipients.length;
+    var modeLabel = useCc ? 'CC' : 'BCC';
+    recipientCount.textContent = count + ' recipient' + (count !== 1 ? 's' : '') + ' (' + modeLabel + ')';
+
+    // Build names list
+    var names = composerRecipients.map(function(r) { return r.name; }).sort();
+    recipientNames.textContent = names.join(', ');
+}
+
+function toggleRecipientList() {
+    var namesDiv = document.getElementById('recipient-names');
+    var icon = document.getElementById('toggle-icon');
+    var btn = icon.parentElement;
+
+    if (namesDiv.style.display === 'none') {
+        namesDiv.style.display = 'block';
+        icon.innerHTML = '&#9650;';
+        btn.innerHTML = '<span id="toggle-icon">&#9650;</span> Hide names';
+    } else {
+        namesDiv.style.display = 'none';
+        icon.innerHTML = '&#9660;';
+        btn.innerHTML = '<span id="toggle-icon">&#9660;</span> Show names';
+    }
+}
+
+function regenerateMessage() {
+    var subjectInput = document.getElementById('message-subject');
+    var bodyTextarea = document.getElementById('message-body');
     var rows = document.querySelectorAll('#games-table tbody tr');
 
     // Collect visible unassigned SDL games
     var unassignedGames = [];
 
     rows.forEach(function(row) {
-        // Skip hidden rows
         if (row.style.display === 'none') return;
-
-        // Only include unassigned games
         if (row.dataset.status !== 'unassigned') return;
-
-        // Only include SDL-managed games (Academy umpires)
         var umpireSource = (row.dataset.umpireSource || '').toUpperCase();
         if (umpireSource !== 'SDL') return;
 
-        // Extract game info from the row
         var cells = row.querySelectorAll('td');
         var dateTimeCell = cells[0];
         var leagueCell = cells[1];
         var locationCell = cells[3];
 
-        // Get date from data attribute (YYYY-MM-DD format)
         var dateStr = row.dataset.gameDate || '';
         var timeDiv = dateTimeCell.querySelectorAll('div')[1];
         var timeStr = timeDiv ? timeDiv.textContent.trim() : '';
@@ -631,58 +824,51 @@ function generateEmailContent() {
         }
     });
 
-    // Generate email content
-    var email = '';
+    // Generate subject
+    subjectInput.value = 'Available Games (' + unassignedGames.length + ')';
+
+    // Generate body
+    var body = '';
 
     if (unassignedGames.length === 0) {
-        email = 'No unassigned games available at this time.\n';
+        body = 'No unassigned games available at this time.\n';
     } else {
-        // Group games by date
         var byDate = {};
         unassignedGames.forEach(function(g) {
-            if (!byDate[g.date]) {
-                byDate[g.date] = [];
-            }
+            if (!byDate[g.date]) byDate[g.date] = [];
             byDate[g.date].push(g);
         });
 
-        // Sort dates
         var dates = Object.keys(byDate).sort(function(a, b) {
             return new Date(a) - new Date(b);
         });
 
-        email = 'Hi Academy Umpires!\n\n';
-        email += 'AVAILABLE GAMES (' + unassignedGames.length + ' total)\n\n';
+        body = 'Hi Academy Umpires!\n\n';
+        body += 'AVAILABLE GAMES (' + unassignedGames.length + ' total)\n\n';
 
         dates.forEach(function(date) {
             var games = byDate[date];
-            // Parse date for day of week (manual parse to avoid timezone issues)
             var parts = date.split('-');
             var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
             var dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
             var dayName = dayNames[d.getDay()];
 
-            email += dayName + ', ' + formatDisplayDate(date) + '\n';
+            body += dayName + ', ' + formatDisplayDate(date) + '\n';
 
-            // Sort games by time within the date
-            games.sort(function(a, b) {
-                return a.time.localeCompare(b.time);
-            });
+            games.sort(function(a, b) { return a.time.localeCompare(b.time); });
 
             games.forEach(function(g) {
-                email += '  ' + g.time + ' - ' + g.league + ' at ' + g.field + '\n';
+                body += '  ' + g.time + ' - ' + g.league + ' at ' + g.field + '\n';
             });
 
-            email += '\n';
+            body += '\n';
         });
     }
 
-    textarea.value = email;
+    bodyTextarea.value = body;
 }
 
 function formatDisplayDate(dateStr) {
-    // Convert YYYY-MM-DD to "Sep 22" format (month and day only)
-    // Parse manually to avoid timezone issues (new Date('YYYY-MM-DD') is UTC)
     var parts = dateStr.split('-');
     var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
     var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -690,24 +876,94 @@ function formatDisplayDate(dateStr) {
     return months[d.getMonth()] + ' ' + d.getDate();
 }
 
-function copyEmailToClipboard() {
-    var textarea = document.getElementById('email-text');
-    textarea.select();
-    textarea.setSelectionRange(0, 99999); // For mobile
+function copyMessageToClipboard() {
+    var body = document.getElementById('message-body').value;
 
-    navigator.clipboard.writeText(textarea.value).then(function() {
-        var btn = document.querySelector('.email-generator-actions .btn-primary');
+    navigator.clipboard.writeText(body).then(function() {
+        var btn = document.querySelector('.composer-actions .btn-outline');
         var originalText = btn.textContent;
         btn.textContent = 'Copied!';
         btn.style.background = '#28a745';
+        btn.style.color = 'white';
         setTimeout(function() {
             btn.textContent = originalText;
             btn.style.background = '';
+            btn.style.color = '';
         }, 2000);
     }).catch(function(err) {
-        // Fallback for older browsers
-        document.execCommand('copy');
-        alert('Copied to clipboard!');
+        alert('Failed to copy: ' + err);
+    });
+}
+
+function sendMessage() {
+    var subject = document.getElementById('message-subject').value.trim();
+    var body = document.getElementById('message-body').value.trim();
+    var sendBtn = document.getElementById('send-btn');
+
+    if (composerRecipients.length === 0) {
+        alert('Please select a recipient group first.');
+        return;
+    }
+
+    if (!subject) {
+        alert('Please enter a subject.');
+        return;
+    }
+
+    if (!body) {
+        alert('Please enter a message.');
+        return;
+    }
+
+    // Confirm send
+    var count = composerRecipients.length;
+    if (!confirm('Send this message to ' + count + ' recipient' + (count !== 1 ? 's' : '') + '?')) {
+        return;
+    }
+
+    // Disable button
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Sending...';
+
+    var recipientIds = composerRecipients.map(function(r) { return r.id; });
+
+    // Get CSRF token
+    var csrfToken = document.querySelector('meta[name="csrf-token"]');
+    csrfToken = csrfToken ? csrfToken.getAttribute('content') : '';
+
+    fetch('{{ url_for("assignr.api_send_message") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            recipient_ids: recipientIds,
+            subject: subject,
+            body: body
+        })
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.success) {
+            sendBtn.textContent = 'Sent!';
+            sendBtn.style.background = '#28a745';
+            setTimeout(function() {
+                sendBtn.textContent = 'Send via Assignr';
+                sendBtn.style.background = '';
+                sendBtn.disabled = false;
+                toggleMessageComposer();
+            }, 2000);
+        } else {
+            alert('Failed to send: ' + (data.error || 'Unknown error'));
+            sendBtn.textContent = 'Send via Assignr';
+            sendBtn.disabled = false;
+        }
+    })
+    .catch(function(err) {
+        alert('Error sending message: ' + err);
+        sendBtn.textContent = 'Send via Assignr';
+        sendBtn.disabled = false;
     });
 }
 

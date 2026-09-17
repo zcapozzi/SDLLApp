@@ -770,3 +770,88 @@ def groups_list():
         'assignr/groups.html',
         groups=groups
     )
+
+
+@assignr_bp.route('/api/groups')
+@login_required
+@umpire_coordinator_required
+def api_groups():
+    """API endpoint to get all Assignr groups."""
+    service = get_assignr_service()
+
+    if not service.is_configured():
+        return jsonify({'error': 'Assignr not configured'}), 500
+
+    groups = service.get_site_groups()
+
+    # Return simplified group data
+    return jsonify({
+        'groups': [
+            {'id': g.get('id'), 'name': g.get('name')}
+            for g in groups
+        ]
+    })
+
+
+@assignr_bp.route('/api/groups/<int:group_id>/members')
+@login_required
+@umpire_coordinator_required
+def api_group_members(group_id):
+    """API endpoint to get members of a specific group."""
+    service = get_assignr_service()
+
+    if not service.is_configured():
+        return jsonify({'error': 'Assignr not configured'}), 500
+
+    members = service.get_group_members(group_id)
+
+    # Return member data with id, name, and email
+    return jsonify({
+        'members': [
+            {
+                'id': m.get('id'),
+                'name': f"{m.get('first_name', '')} {m.get('last_name', '')}".strip(),
+                'email': m.get('email_addresses', [{}])[0].get('email', '') if m.get('email_addresses') else ''
+            }
+            for m in members
+        ]
+    })
+
+
+@assignr_bp.route('/api/messages/send', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def api_send_message():
+    """Send a message to officials via Assignr Messages API."""
+    service = get_assignr_service()
+
+    if not service.is_configured():
+        return jsonify({'error': 'Assignr not configured'}), 500
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    recipient_ids = data.get('recipient_ids', [])
+    subject = data.get('subject', '').strip()
+    body = data.get('body', '').strip()
+
+    if not recipient_ids:
+        return jsonify({'error': 'No recipients specified'}), 400
+    if not subject:
+        return jsonify({'error': 'Subject is required'}), 400
+    if not body:
+        return jsonify({'error': 'Message body is required'}), 400
+
+    # Send via Assignr API
+    success, error = service.send_message(recipient_ids, subject, body)
+
+    if success:
+        logger.info(f"User {current_user.ID} sent Assignr message to {len(recipient_ids)} recipients: {subject}")
+        return jsonify({
+            'success': True,
+            'message': f'Message sent to {len(recipient_ids)} recipient(s)'
+        })
+    else:
+        logger.error(f"Failed to send Assignr message: {error}")
+        return jsonify({'error': error or 'Failed to send message'}), 500
