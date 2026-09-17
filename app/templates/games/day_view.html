@@ -856,9 +856,20 @@ function openEditModal(gameId, gameDate, gameTime, fieldId, homeId, awayId, stat
     document.getElementById('edit-home-team').value = homeId || '';
     document.getElementById('edit-away-team').value = awayId || '';
     document.getElementById('edit-status').value = status;
-    document.getElementById('edit-game-type').value = gameType;
     document.getElementById('edit-is-scrimmage').checked = isScrimmage == 1;
     document.getElementById('edit-no-time-limit').checked = noTimeLimit == 1;
+
+    // Dynamically set game type options - can't convert between practice and game types
+    var gameTypeSelect = document.getElementById('edit-game-type');
+    gameTypeSelect.innerHTML = '';
+    if (gameType === 'practice') {
+        // Practice can only stay as practice
+        gameTypeSelect.innerHTML = '<option value="practice">Practice</option>';
+    } else {
+        // Games can be regular or playoff, but not practice
+        gameTypeSelect.innerHTML = '<option value="regular">Regular Game</option><option value="playoff">Playoff Game</option>';
+    }
+    gameTypeSelect.value = gameType;
 
     toggleAwayTeam();
     document.getElementById('edit-modal').style.display = 'flex';
