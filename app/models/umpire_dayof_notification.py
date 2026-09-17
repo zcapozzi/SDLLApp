@@ -95,10 +95,10 @@ class UmpireDayOfNotification(db.Model):
 
     @property
     def arrive_time_str(self):
-        """Return suggested arrival time (15 minutes before game)."""
+        """Return suggested arrival time (10 minutes before game)."""
         if self.game_date:
             from datetime import timedelta
-            arrive = self.game_date - timedelta(minutes=15)
+            arrive = self.game_date - timedelta(minutes=10)
             time_str = arrive.strftime('%I:%M%p').lstrip('0')
             return time_str.replace(':00', '')
         return ''
