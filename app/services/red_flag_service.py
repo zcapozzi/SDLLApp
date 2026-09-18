@@ -65,8 +65,16 @@ class RedFlagService:
             is_spring: Spring season flag (defaults to current)
             days: Number of days ahead to check (default 7)
         """
+        from app.models.organization import Organization
+
         self.days = days
-        self.now = datetime.utcnow()
+
+        # Game dates are stored in LOCAL time, so compare against local time
+        # Use the home org's timezone (typically America/New_York)
+        utc_now = datetime.utcnow()
+        local_now = Organization.utc_to_local(utc_now)
+        # Convert back to naive datetime for DB comparison (DB stores naive local times)
+        self.now = local_now.replace(tzinfo=None)
         self.cutoff = self.now + timedelta(days=days)
 
         # Default to current season if not specified
