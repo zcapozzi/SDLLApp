@@ -1,0 +1,499 @@
+{% extends "base.html" %}
+{% block title %}Umpire Capacity Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .capacity-container {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .summary-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+
+    .summary-card {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 15px;
+        text-align: center;
+    }
+
+    .summary-card .value {
+        font-size: 28px;
+        font-weight: bold;
+        color: #2e7d32;
+    }
+
+    .summary-card .label {
+        font-size: 13px;
+        color: #666;
+        margin-top: 5px;
+    }
+
+    .summary-card.warning .value {
+        color: #f57c00;
+    }
+
+    .summary-card.danger .value {
+        color: #c62828;
+    }
+
+    /* Heatmap Styles */
+    .heatmap-section {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 25px;
+        overflow-x: auto;
+    }
+
+    .heatmap-section h3 {
+        margin-top: 0;
+        color: #2e7d32;
+        border-bottom: 2px solid #2e7d32;
+        padding-bottom: 10px;
+    }
+
+    .heatmap-legend {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 15px;
+        flex-wrap: wrap;
+        font-size: 12px;
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .legend-swatch {
+        width: 14px;
+        height: 14px;
+        border-radius: 2px;
+        border: 1px solid #ddd;
+    }
+
+    .heatmap-table {
+        border-collapse: collapse;
+        font-size: 11px;
+    }
+
+    .heatmap-table th,
+    .heatmap-table td {
+        padding: 2px;
+        text-align: center;
+    }
+
+    .heatmap-table th.umpire-name {
+        text-align: left;
+        padding-right: 10px;
+        white-space: nowrap;
+        font-weight: normal;
+        position: sticky;
+        left: 0;
+        background: white;
+        color: #333;
+        z-index: 1;
+    }
+
+    .heatmap-table th.date-header {
+        font-weight: normal;
+        color: #666;
+        writing-mode: vertical-lr;
+        text-orientation: mixed;
+        height: 60px;
+        padding: 4px 2px;
+    }
+
+    .heatmap-table th.date-header.weekend {
+        background: #f5f5f5;
+    }
+
+    .heatmap-table th.date-header.today {
+        font-weight: bold;
+        color: #FF8C00;
+    }
+
+    .heatmap-cell {
+        width: 14px;
+        height: 14px;
+        border-radius: 2px;
+        cursor: default;
+    }
+
+    /* Activity levels */
+    .heatmap-cell.level-0 {
+        background: #ebedf0;
+    }
+
+    .heatmap-cell.level-1 {
+        background: #9be9a8;
+    }
+
+    .heatmap-cell.level-2 {
+        background: #40c463;
+    }
+
+    .heatmap-cell.level-3 {
+        background: #30a14e;
+    }
+
+    .heatmap-cell.level-4 {
+        background: #216e39;
+    }
+
+    /* Blocked dates */
+    .heatmap-cell.blocked {
+        background: #ffcdd2 !important;
+    }
+
+    .heatmap-cell.blocked.has-game {
+        background: linear-gradient(135deg, #ffcdd2 50%, #40c463 50%) !important;
+    }
+
+    /* Today marker */
+    .heatmap-cell.today {
+        box-shadow: inset 0 0 0 2px #FF8C00;
+    }
+
+    /* Past dates are muted */
+    .heatmap-cell.past {
+        opacity: 0.7;
+    }
+
+    .umpire-stats {
+        font-size: 11px;
+        color: #666;
+        padding-left: 5px;
+    }
+
+    /* Open Games Section */
+    .open-games-section {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 25px;
+    }
+
+    .open-games-section h3 {
+        margin-top: 0;
+        color: #f57c00;
+        border-bottom: 2px solid #f57c00;
+        padding-bottom: 10px;
+    }
+
+    .open-games-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 15px;
+    }
+
+    .open-game-card {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 12px;
+        background: #fff8e1;
+    }
+
+    .open-game-date {
+        font-weight: bold;
+        color: #333;
+    }
+
+    .open-game-details {
+        font-size: 13px;
+        color: #666;
+        margin-top: 5px;
+    }
+
+    .open-game-league {
+        display: inline-block;
+        background: #e8f5e9;
+        color: #2e7d32;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        margin-top: 5px;
+    }
+
+    /* Swap Suggestions */
+    .swap-section {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 25px;
+    }
+
+    .swap-section h3 {
+        margin-top: 0;
+        color: #1976d2;
+        border-bottom: 2px solid #1976d2;
+        padding-bottom: 10px;
+    }
+
+    .swap-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 15px;
+    }
+
+    .swap-card {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 12px;
+        background: #e3f2fd;
+    }
+
+    .swap-game-info {
+        font-size: 13px;
+        margin-bottom: 10px;
+    }
+
+    .swap-current {
+        color: #c62828;
+        font-size: 12px;
+    }
+
+    .swap-available {
+        margin-top: 8px;
+    }
+
+    .swap-available-label {
+        font-size: 11px;
+        color: #666;
+        margin-bottom: 5px;
+    }
+
+    .swap-umpire {
+        display: inline-block;
+        background: #c8e6c9;
+        color: #2e7d32;
+        padding: 3px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        margin: 2px;
+    }
+
+    /* Filters */
+    .filters {
+        background: #f9f9f9;
+        padding: 15px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .filters label {
+        font-size: 13px;
+        color: #666;
+    }
+
+    .filters select {
+        padding: 6px 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .no-data {
+        color: #666;
+        font-style: italic;
+        padding: 20px;
+        text-align: center;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .heatmap-table th.umpire-name {
+            max-width: 100px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="capacity-container">
+    <h2>Umpire Capacity Dashboard</h2>
+
+    {% if current_season %}
+    <p class="text-muted">{{ current_season.season_name }} | {{ start_date.strftime('%b %d') }} - {{ end_date.strftime('%b %d, %Y') }}</p>
+    {% endif %}
+
+    <!-- Summary Cards -->
+    <div class="summary-cards">
+        <div class="summary-card">
+            <div class="value">{{ active_umpires|length }}</div>
+            <div class="label">Active Umpires</div>
+        </div>
+        <div class="summary-card {% if open_games|length > 5 %}danger{% elif open_games|length > 0 %}warning{% endif %}">
+            <div class="value">{{ open_games|length }}</div>
+            <div class="label">Open SDL Games</div>
+        </div>
+        <div class="summary-card {% if swap_suggestions|length > 3 %}warning{% endif %}">
+            <div class="value">{{ swap_suggestions|length }}</div>
+            <div class="label">Swap Suggestions</div>
+        </div>
+    </div>
+
+    <!-- Open Games Section -->
+    {% if open_games %}
+    <div class="open-games-section">
+        <h3>Open SDL Games (Need Assignments)</h3>
+        <div class="open-games-list">
+            {% for game in open_games[:12] %}
+            <div class="open-game-card" data-league="{{ game.league or '' }}">
+                <div class="open-game-date">{{ game.game_date.strftime('%a, %b %d @ %I:%M %p').replace(' 0', ' ') }}</div>
+                <div class="open-game-details">
+                    {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                    vs
+                    {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                </div>
+                <div class="open-game-details">{{ game.field_rel.name if game.field_rel else 'TBD' }}</div>
+                {% if game.league %}
+                <span class="open-game-league">{{ game.league }}</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% if open_games|length > 12 %}
+        <p class="text-muted" style="margin-top: 15px;">...and {{ open_games|length - 12 }} more</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Swap Suggestions -->
+    {% if swap_suggestions %}
+    <div class="swap-section">
+        <h3>BTP Swap Suggestions</h3>
+        <p class="text-muted" style="margin-top: -5px; margin-bottom: 15px;">
+            Kid-pitch games where a non-BTP-qualified umpire is on plate. BTP-qualified umpires available for swap:
+        </p>
+        <div class="swap-list">
+            {% for suggestion in swap_suggestions %}
+            <div class="swap-card">
+                <div class="swap-game-info">
+                    <strong>{{ suggestion.game_date.strftime('%a, %b %d @ %I:%M %p').replace(' 0', ' ') }}</strong><br>
+                    {{ suggestion.game.get('localized_title', '') }}<br>
+                    {{ suggestion.game.get('venue_name', '') }}
+                </div>
+                <div class="swap-current">
+                    Current plate: {{ suggestion.current_plate }}
+                </div>
+                <div class="swap-available">
+                    <div class="swap-available-label">Available BTP-qualified:</div>
+                    {% for umpire in suggestion.available_btp %}
+                    <span class="swap-umpire">{{ umpire.name }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Activity Heatmap -->
+    <div class="heatmap-section">
+        <h3>Umpire Activity Heatmap</h3>
+
+        <div class="heatmap-legend">
+            <div class="legend-item">
+                <div class="legend-swatch" style="background: #ebedf0;"></div>
+                <span>No games</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-swatch" style="background: #9be9a8;"></div>
+                <span>1 game</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-swatch" style="background: #40c463;"></div>
+                <span>2 games</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-swatch" style="background: #30a14e;"></div>
+                <span>3 games</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-swatch" style="background: #216e39;"></div>
+                <span>4+ games</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-swatch" style="background: #ffcdd2;"></div>
+                <span>Blocked</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-swatch" style="box-shadow: inset 0 0 0 2px #FF8C00;"></div>
+                <span>Today</span>
+            </div>
+        </div>
+
+        {% if heatmap_data %}
+        <table class="heatmap-table">
+            <thead>
+                <tr>
+                    <th class="umpire-name">Umpire</th>
+                    {% for day in heatmap_data[0].days %}
+                    <th class="date-header {% if day.date.weekday() >= 5 %}weekend{% endif %} {% if day.is_today %}today{% endif %}">
+                        {{ day.date.strftime('%m/%d') }}
+                    </th>
+                    {% endfor %}
+                    <th class="umpire-name" style="padding-left: 10px;">Stats</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in heatmap_data %}
+                <tr>
+                    <th class="umpire-name">
+                        {{ row.profile.name }}
+                        {% if row.profile.max_baseball_age_rank and row.profile.max_baseball_age_rank >= 4 %}
+                        <span title="BTP Qualified" style="color: #1976d2;">*</span>
+                        {% endif %}
+                    </th>
+                    {% for day in row.days %}
+                    <td>
+                        <div class="heatmap-cell
+                            {% if day.blocked %}blocked{% endif %}
+                            {% if day.count == 0 %}level-0
+                            {% elif day.count == 1 %}level-1
+                            {% elif day.count == 2 %}level-2
+                            {% elif day.count == 3 %}level-3
+                            {% else %}level-4{% endif %}
+                            {% if day.blocked and day.count > 0 %}has-game{% endif %}
+                            {% if day.is_past %}past{% endif %}
+                            {% if day.is_today %}today{% endif %}"
+                            title="{{ day.date.strftime('%b %d') }}: {{ day.count }} game(s){% if day.blocked %}, BLOCKED{% endif %}">
+                        </div>
+                    </td>
+                    {% endfor %}
+                    <td class="umpire-stats">
+                        {{ row.total_games }} games
+                        {% if row.blocked_count > 0 %}, {{ row.blocked_count }} blocked{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="no-data">No active umpires found.</p>
+        {% endif %}
+    </div>
+
+    <p class="text-muted" style="font-size: 12px;">
+        * = BTP-qualified (can call balls and strikes behind the plate for kid-pitch)<br>
+        Heatmap shows past 30 days of activity and future scheduled games through end of season.
+    </p>
+</div>
+{% endblock %}

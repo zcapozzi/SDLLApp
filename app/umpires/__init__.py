@@ -35,3 +35,4 @@ def umpire_coordinator_required(f):
 # Import all routes to register them with the blueprint
 from . import management, partners, delegation, assignments, digests, proposals, dayof
 from . import campaigns, leads, feedback, reapportionment
+from . import availability, capacity

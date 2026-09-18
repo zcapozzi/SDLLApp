@@ -1,0 +1,416 @@
+{% extends "base.html" %}
+{% block title %}My Availability{% endblock %}
+
+{% block extra_css %}
+<style>
+    .availability-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .profile-selector {
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #f9f9f9;
+        border-radius: 6px;
+    }
+
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .calendar-month {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .calendar-month-header {
+        background: #2e7d32;
+        color: white;
+        padding: 10px;
+        text-align: center;
+        font-weight: bold;
+    }
+
+    .calendar-weekdays {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        background: #f5f5f5;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .calendar-weekday {
+        padding: 8px 4px;
+        text-align: center;
+        font-size: 12px;
+        font-weight: bold;
+        color: #666;
+    }
+
+    .calendar-days {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+    }
+
+    .calendar-day {
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #eee;
+        cursor: pointer;
+        position: relative;
+        font-size: 14px;
+        transition: background-color 0.15s;
+    }
+
+    .calendar-day:hover:not(.past):not(.empty) {
+        background: #e8f5e9;
+    }
+
+    .calendar-day.empty {
+        background: #fafafa;
+        cursor: default;
+    }
+
+    .calendar-day.past {
+        color: #ccc;
+        cursor: default;
+        background: #fafafa;
+    }
+
+    .calendar-day.today {
+        font-weight: bold;
+        box-shadow: inset 0 0 0 2px #FF8C00;
+    }
+
+    .calendar-day.blocked {
+        background: #ffcdd2 !important;
+        color: #c62828;
+    }
+
+    .calendar-day.blocked:hover {
+        background: #ef9a9a !important;
+    }
+
+    .calendar-day.has-game {
+        background: #c8e6c9;
+    }
+
+    .calendar-day.has-game.blocked {
+        background: linear-gradient(135deg, #ffcdd2 50%, #c8e6c9 50%);
+    }
+
+    .calendar-day .game-dot {
+        position: absolute;
+        bottom: 2px;
+        width: 6px;
+        height: 6px;
+        background: #2e7d32;
+        border-radius: 50%;
+    }
+
+    .legend {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        padding: 15px;
+        background: #f9f9f9;
+        border-radius: 6px;
+        margin-bottom: 20px;
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+    }
+
+    .legend-swatch {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+    }
+
+    .legend-swatch.blocked {
+        background: #ffcdd2;
+    }
+
+    .legend-swatch.game {
+        background: #c8e6c9;
+    }
+
+    .legend-swatch.today {
+        background: white;
+        box-shadow: inset 0 0 0 2px #FF8C00;
+    }
+
+    .upcoming-games {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 30px;
+    }
+
+    .upcoming-games h3 {
+        margin-top: 0;
+        color: #2e7d32;
+        border-bottom: 2px solid #2e7d32;
+        padding-bottom: 10px;
+    }
+
+    .game-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .game-list li {
+        padding: 10px 0;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .game-list li:last-child {
+        border-bottom: none;
+    }
+
+    .game-date {
+        font-weight: bold;
+        color: #333;
+    }
+
+    .game-details {
+        color: #666;
+        font-size: 13px;
+    }
+
+    .game-position {
+        background: #e8f5e9;
+        color: #2e7d32;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+
+    .instructions {
+        background: #e3f2fd;
+        border-left: 4px solid #1976d2;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 0 6px 6px 0;
+    }
+
+    .instructions p {
+        margin: 0;
+        color: #1565c0;
+    }
+
+    .quick-actions {
+        margin-bottom: 20px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .quick-actions button {
+        padding: 8px 16px;
+        border: 1px solid #ddd;
+        background: white;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+    }
+
+    .quick-actions button:hover {
+        background: #f5f5f5;
+    }
+
+    .saving-indicator {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #333;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 4px;
+        display: none;
+        z-index: 1000;
+    }
+
+    .saving-indicator.show {
+        display: block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="availability-container">
+    <h2>My Umpire Availability</h2>
+
+    {% if accessible_profiles|length > 1 %}
+    <div class="profile-selector">
+        <label for="profile-select"><strong>Managing availability for:</strong></label>
+        <select id="profile-select" onchange="window.location.href='{{ url_for('umpires.availability') }}?profile_id=' + this.value">
+            {% for p in accessible_profiles %}
+            <option value="{{ p.id }}" {% if p.id == profile.id %}selected{% endif %}>
+                {{ p.name }}{% if p.is_managed %} (managed){% endif %}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
+
+    <div class="instructions">
+        <p><strong>Click on dates when you are NOT available to umpire.</strong>
+        Red dates indicate you're blocked out. Green dates show scheduled games.</p>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-swatch blocked"></div>
+            <span>Blocked (unavailable)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-swatch game"></div>
+            <span>Scheduled game</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-swatch today"></div>
+            <span>Today</span>
+        </div>
+    </div>
+
+    <div class="calendar-grid">
+        {% for month in calendar_months %}
+        <div class="calendar-month">
+            <div class="calendar-month-header">{{ month.name }}</div>
+            <div class="calendar-weekdays">
+                <div class="calendar-weekday">Su</div>
+                <div class="calendar-weekday">Mo</div>
+                <div class="calendar-weekday">Tu</div>
+                <div class="calendar-weekday">We</div>
+                <div class="calendar-weekday">Th</div>
+                <div class="calendar-weekday">Fr</div>
+                <div class="calendar-weekday">Sa</div>
+            </div>
+            <div class="calendar-days">
+                {% for week in month.weeks %}
+                    {% for day in week %}
+                        {% if day is none %}
+                        <div class="calendar-day empty"></div>
+                        {% else %}
+                        <div class="calendar-day
+                            {% if day.is_past %}past{% endif %}
+                            {% if day.is_blocked %}blocked{% endif %}
+                            {% if day.has_game %}has-game{% endif %}
+                            {% if day.is_today %}today{% endif %}"
+                            {% if not day.is_past %}
+                            data-date="{{ day.date.strftime('%Y-%m-%d') }}"
+                            onclick="toggleDate(this)"
+                            {% endif %}>
+                            {{ day.day }}
+                            {% if day.has_game %}<span class="game-dot"></span>{% endif %}
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if upcoming_games %}
+    <div class="upcoming-games">
+        <h3>Your Upcoming Games</h3>
+        <ul class="game-list">
+            {% for game in upcoming_games %}
+            <li>
+                <div>
+                    <span class="game-date">{{ game.date.strftime('%a, %b %d') }}</span>
+                    <span class="game-details">{{ game.time }} @ {{ game.venue }}</span>
+                    <br>
+                    <span class="game-details">{{ game.title }}</span>
+                </div>
+                <span class="game-position">{{ game.position }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% else %}
+    <div class="upcoming-games">
+        <h3>Your Upcoming Games</h3>
+        <p class="text-muted">No upcoming games scheduled yet.</p>
+    </div>
+    {% endif %}
+</div>
+
+<div class="saving-indicator" id="saving-indicator">Saving...</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var profileId = {{ profile.id }};
+var savingTimeout = null;
+
+function toggleDate(element) {
+    var dateStr = element.getAttribute('data-date');
+    if (!dateStr) return;
+
+    // Show saving indicator
+    showSaving();
+
+    // Toggle via API
+    fetch('{{ url_for("umpires.availability_toggle") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            profile_id: profileId,
+            date: dateStr
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update UI
+            if (data.is_blocked) {
+                element.classList.add('blocked');
+            } else {
+                element.classList.remove('blocked');
+            }
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+        hideSaving();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to save. Please try again.');
+        hideSaving();
+    });
+}
+
+function showSaving() {
+    document.getElementById('saving-indicator').classList.add('show');
+    if (savingTimeout) clearTimeout(savingTimeout);
+}
+
+function hideSaving() {
+    savingTimeout = setTimeout(function() {
+        document.getElementById('saving-indicator').classList.remove('show');
+    }, 500);
+}
+</script>
+{% endblock %}
