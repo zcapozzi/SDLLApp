@@ -186,6 +186,23 @@
 
         <hr style="margin: 20px 0;">
 
+        <h3>Assignr Integration</h3>
+        <p style="color: var(--text-muted); margin-bottom: 15px; font-size: 14px;">
+            Link this profile to an Assignr official to track game assignments and availability.
+        </p>
+
+        <div class="form-group">
+            <label for="assignr_id">Assignr Official ID</label>
+            <input type="text" name="assignr_id" id="assignr_id" class="form-control"
+                   value="{{ profile.assignr_id or '' }}" placeholder="e.g., 12345"
+                   style="max-width: 200px;">
+            <p style="font-size: 12px; color: var(--text-muted);">
+                Find this in Assignr under Officials &rarr; official's profile URL (the number at the end).
+            </p>
+        </div>
+
+        <hr style="margin: 20px 0;">
+
         <h3>Payment Information</h3>
         <p style="color: var(--text-muted); margin-bottom: 15px; font-size: 14px;">
             Payment account IDs for umpire compensation (used by treasurer).

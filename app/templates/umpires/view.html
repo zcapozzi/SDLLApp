@@ -71,6 +71,20 @@
             {% endif %}
         </table>
         {% endif %}
+
+        {% if profile.assignr_id %}
+        <h4 style="margin-top: 20px; margin-bottom: 10px; font-size: 14px; color: var(--text-muted);">Assignr Integration</h4>
+        <table style="width: 100%;">
+            <tr>
+                <td style="color: var(--text-muted); width: 40%;">Official ID</td>
+                <td>{{ profile.assignr_id }}</td>
+            </tr>
+        </table>
+        {% else %}
+        <p style="margin-top: 20px; font-size: 12px; color: var(--warning-color);">
+            No Assignr ID linked. <a href="{{ url_for('umpires.edit', id=profile.id) }}">Add one</a> to track game assignments.
+        </p>
+        {% endif %}
     </div>
 
     {% if profile.is_managed %}

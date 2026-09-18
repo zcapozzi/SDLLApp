@@ -32,24 +32,40 @@ def index():
 
     if status_filter == 'all':
         # Include both profiles with users and managed profiles (no user)
-        profiles = UmpireProfile.query.outerjoin(User).filter(
+        all_profiles = UmpireProfile.query.outerjoin(User).filter(
             db.or_(User.active == 1, UmpireProfile.user_id.is_(None))
         ).all()
     else:
-        profiles = UmpireProfile.query.filter_by(status=status_filter).outerjoin(User).filter(
+        all_profiles = UmpireProfile.query.filter_by(status=status_filter).outerjoin(User).filter(
             db.or_(User.active == 1, UmpireProfile.user_id.is_(None))
         ).all()
+
+    # Filter out profiles with encryption key mismatch
+    profiles = []
+    for p in all_profiles:
+        try:
+            # Test if we can decrypt the name
+            _ = p.name
+            profiles.append(p)
+        except Exception:
+            # Skip profiles we can't decrypt (encryption key mismatch)
+            pass
 
     # Get partners for quick reference
     partners = UmpirePartner.get_active()
 
     # Find users with umpire role who don't have profiles yet
     profile_user_ids = [p.user_id for p in profiles if p.user_id]
-    users_without_profiles = User.query.filter(
-        User.active == 1,
-        User.role.like('%umpire%'),
-        ~User.ID.in_(profile_user_ids) if profile_user_ids else True
-    ).all()
+    try:
+        users_without_profiles = User.query.filter(
+            User.active == 1,
+            User.role.like('%umpire%'),
+            ~User.ID.in_(profile_user_ids) if profile_user_ids else True
+        ).all()
+        # Filter users with decryption issues
+        users_without_profiles = [u for u in users_without_profiles if _can_decrypt_user(u)]
+    except Exception:
+        users_without_profiles = []
 
     return render_template(
         'umpires/index.html',
@@ -58,6 +74,16 @@ def index():
         status_filter=status_filter,
         users_without_profiles=users_without_profiles
     )
+
+
+def _can_decrypt_user(user):
+    """Check if user's encrypted fields can be decrypted."""
+    try:
+        _ = user.name
+        _ = user.email
+        return True
+    except Exception:
+        return False
 
 
 @umpires_bp.route('/add', methods=['GET', 'POST'])
@@ -390,6 +416,10 @@ def edit(id):
         profile.venmo_id = request.form.get('venmo_id', '').strip() or None
         profile.paypal_id = request.form.get('paypal_id', '').strip() or None
         profile.zelle_id = request.form.get('zelle_id', '').strip() or None
+
+        # Assignr integration
+        assignr_id_str = request.form.get('assignr_id', '').strip()
+        profile.assignr_id = int(assignr_id_str) if assignr_id_str else None
 
         try:
             db.session.commit()

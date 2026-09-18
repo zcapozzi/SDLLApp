@@ -6,6 +6,7 @@
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
     <h1>Umpires</h1>
     <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('umpires.capacity_dashboard') }}" class="btn btn-outline">Capacity</a>
         <a href="{{ url_for('umpires.partners') }}" class="btn btn-outline">Partners</a>
         <a href="{{ url_for('umpires.delegation') }}" class="btn btn-outline">Delegation Rules</a>
         <a href="{{ url_for('umpires.schedule') }}" class="btn btn-outline">Schedule</a>
@@ -54,7 +55,13 @@
                 <td>
                     <strong>{{ profile.full_name or 'Unknown' }}</strong>
                     {% if profile.is_managed %}
-                    <span class="badge" style="background: #ff9800; color: white; margin-left: 5px; font-size: 10px;">Managed</span>
+                    <span class="badge badge-managed">Managed</span>
+                    {% endif %}
+                    {% if not profile.assignr_id %}
+                    <span class="badge badge-warning" title="No Assignr ID linked">No Assignr</span>
+                    {% endif %}
+                    {% if profile.max_baseball_age_rank is none and profile.max_softball_age_rank is none %}
+                    <span class="badge badge-warning" title="No eligibility set">No Eligibility</span>
                     {% endif %}
                 </td>
                 <td>
@@ -177,6 +184,23 @@
 }
 .status-retired {
     background: var(--text-muted);
+    color: white;
+}
+.badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+.badge-managed {
+    background: #ff9800;
+    color: white;
+}
+.badge-warning {
+    background: #f44336;
     color: white;
 }
 </style>
