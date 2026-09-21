@@ -644,7 +644,18 @@
             </p>
         </div>
         {% elif next_game %}
-        <div class="next-game">
+        {% set next_is_recordable = next_game.ID in recordable_game_ids and next_game.game_type != 'practice' %}
+        {% set next_existing_record = game_start_records.get(next_game.ID) if next_is_recordable else None %}
+        <div class="next-game" style="position: relative;">
+            {% if next_is_recordable and not next_existing_record %}
+            <button class="game-menu-btn" onclick="toggleGameMenu(this)" aria-label="Game options" style="color: rgba(255,255,255,0.8);">&#8942;</button>
+            <div class="game-menu">
+                <button class="game-menu-item" onclick="showStartForm(this)" data-game-id="{{ next_game.ID }}">
+                    <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                    Record First Pitch
+                </button>
+            </div>
+            {% endif %}
             <div class="next-game-label">
                 {%- if next_game.game_type == 'practice' -%}
                     Next Practice
@@ -695,6 +706,22 @@
             {% else %}
             <div class="next-game-opponent">
                 <span class="next-game-type">Practice</span>
+            </div>
+            {% endif %}
+            {% if next_existing_record %}
+            <div class="game-start-badge" style="background: rgba(255,255,255,0.2); color: white; margin-top: 10px;">
+                First pitch: {{ next_existing_record.formatted_time }}
+            </div>
+            {% endif %}
+            {% if next_is_recordable and not next_existing_record %}
+            <div class="game-start-form" id="start-form-{{ next_game.ID }}" style="background: rgba(0,0,0,0.15); border-top: 1px solid rgba(255,255,255,0.2); margin: 15px -20px -20px -20px; padding: 15px 20px; border-radius: 0 0 12px 12px;">
+                <label style="color: rgba(255,255,255,0.9);">When was the first pitch thrown?</label>
+                <div class="input-row">
+                    <input type="time" id="start-time-{{ next_game.ID }}" value="" style="flex: 1;">
+                    <button class="btn-save" onclick="saveGameStart({{ next_game.ID }})" style="background: white; color: rgb(255, 140, 0);">Save</button>
+                    <button class="btn-cancel" onclick="hideStartForm({{ next_game.ID }})" style="background: rgba(255,255,255,0.2); color: white; border-color: rgba(255,255,255,0.3);">Cancel</button>
+                </div>
+                <div class="game-start-success" id="success-{{ next_game.ID }}" style="display: none; color: white;"></div>
             </div>
             {% endif %}
         </div>
@@ -1318,8 +1345,14 @@
     });
 
     function showStartForm(menuItem) {
-        var card = menuItem.closest('.game-card');
-        var gameId = card.dataset.gameId;
+        // Get game ID from button's data attribute (hero card) or from parent card
+        var gameId = menuItem.dataset.gameId;
+        if (!gameId) {
+            var card = menuItem.closest('.game-card');
+            gameId = card ? card.dataset.gameId : null;
+        }
+        if (!gameId) return;
+
         var form = document.getElementById('start-form-' + gameId);
         var timeInput = document.getElementById('start-time-' + gameId);
 
@@ -1394,31 +1427,66 @@
             successEl.textContent = 'First pitch recorded!';
             successEl.style.display = 'block';
 
-            // Update or add the badge
-            var card = document.querySelector('[data-game-id="' + gameId + '"]');
-            var badge = card.querySelector('.game-start-badge');
             var formattedTime = formatTime(timeInput.value);
 
-            if (badge) {
-                badge.textContent = 'First pitch: ' + formattedTime;
-            } else {
-                var gameInfo = card.querySelector('.game-info');
-                badge = document.createElement('div');
-                badge.className = 'game-start-badge';
-                badge.textContent = 'First pitch: ' + formattedTime;
-                gameInfo.appendChild(badge);
+            // Update game card if exists
+            var card = document.querySelector('[data-game-id="' + gameId + '"]');
+            if (card) {
+                var badge = card.querySelector('.game-start-badge');
+                if (badge) {
+                    badge.textContent = 'First pitch: ' + formattedTime;
+                } else {
+                    var gameInfo = card.querySelector('.game-info');
+                    badge = document.createElement('div');
+                    badge.className = 'game-start-badge';
+                    badge.textContent = 'First pitch: ' + formattedTime;
+                    gameInfo.appendChild(badge);
+                }
+            }
+
+            // Update hero card if exists
+            var heroCard = document.querySelector('.next-game');
+            if (heroCard) {
+                var heroBadge = heroCard.querySelector('.game-start-badge');
+                if (!heroBadge) {
+                    // Add badge before the form
+                    var heroForm = heroCard.querySelector('.game-start-form');
+                    heroBadge = document.createElement('div');
+                    heroBadge.className = 'game-start-badge';
+                    heroBadge.style.cssText = 'background: rgba(255,255,255,0.2); color: white; margin-top: 10px;';
+                    heroBadge.textContent = 'First pitch: ' + formattedTime;
+                    if (heroForm) {
+                        heroCard.insertBefore(heroBadge, heroForm);
+                    } else {
+                        heroCard.appendChild(heroBadge);
+                    }
+                } else {
+                    heroBadge.textContent = 'First pitch: ' + formattedTime;
+                }
             }
 
             // Hide form and menu button permanently (cannot edit once recorded)
             setTimeout(function() {
                 hideStartForm(gameId);
                 successEl.style.display = 'none';
-                // Remove the menu button since editing is not allowed
-                var menuBtn = card.querySelector('.game-menu-btn');
-                var menuDiv = card.querySelector('.game-menu');
-                if (menuBtn) menuBtn.remove();
-                if (menuDiv) menuDiv.remove();
-                // Remove the form entirely
+
+                // Remove menu from game card
+                if (card) {
+                    var menuBtn = card.querySelector('.game-menu-btn');
+                    var menuDiv = card.querySelector('.game-menu');
+                    if (menuBtn) menuBtn.remove();
+                    if (menuDiv) menuDiv.remove();
+                }
+
+                // Remove menu from hero card
+                if (heroCard) {
+                    var heroMenuBtn = heroCard.querySelector('.game-menu-btn');
+                    var heroMenuDiv = heroCard.querySelector('.game-menu');
+                    if (heroMenuBtn) heroMenuBtn.remove();
+                    if (heroMenuDiv) heroMenuDiv.remove();
+                }
+
+                // Remove the form entirely (both locations)
                 var form = document.getElementById('start-form-' + gameId);
                 if (form) form.remove();
             }, 1500);
