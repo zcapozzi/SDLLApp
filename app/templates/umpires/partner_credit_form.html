@@ -51,17 +51,15 @@
                 <p style="font-size: 11px; color: var(--text-muted);">Number of umpire assignments if applicable</p>
             </div>
             <div class="form-group">
-                <label for="season">Season (optional)</label>
-                <select name="season" id="season" class="form-control" onchange="parseSeason(this.value)">
+                <label for="org_season_id">Season (optional)</label>
+                <select name="org_season_id" id="org_season_id" class="form-control">
                     <option value="">No Season</option>
                     {% for s in seasons %}
-                    <option value="{{ s.year }}_{{ 1 if s.is_spring else 0 }}">
-                        {{ 'Spring' if s.is_spring else 'Fall' }} {{ s.year }}
+                    <option value="{{ s.ID }}">
+                        {{ s.display_name }}
                     </option>
                     {% endfor %}
                 </select>
-                <input type="hidden" name="year" id="year">
-                <input type="hidden" name="is_spring" id="is_spring">
             </div>
             <div></div>
         </div>
@@ -81,17 +79,3 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}
-<script>
-function parseSeason(value) {
-    if (value) {
-        var parts = value.split('_');
-        document.getElementById('year').value = parts[0];
-        document.getElementById('is_spring').value = parts[1];
-    } else {
-        document.getElementById('year').value = '';
-        document.getElementById('is_spring').value = '';
-    }
-}
-</script>
-{% endblock %}

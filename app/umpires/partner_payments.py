@@ -18,7 +18,7 @@ from flask_login import login_required, current_user
 from app.extensions import db
 from app.models.umpire_partner import UmpirePartner
 from app.models.partner_payment import PartnerPaymentRecord, PartnerCredit
-from app.models.league_season import LeagueSeason
+from app.models.org_season import OrgSeason
 
 from . import umpires_bp, logger
 
@@ -70,8 +70,7 @@ def partner_payments():
     """List all partner payment records."""
     # Get filter parameters
     partner_id = request.args.get('partner_id', type=int)
-    year = request.args.get('year', type=int)
-    is_spring = request.args.get('is_spring', type=int)
+    org_season_id = request.args.get('org_season_id', type=int)
     status = request.args.get('status')
 
     # Get prepay partners only
@@ -89,23 +88,20 @@ def partner_payments():
 
     if partner_id:
         query = query.filter_by(partner_id=partner_id)
-    if year:
-        query = query.filter_by(year=year)
-    if is_spring is not None:
-        query = query.filter_by(is_spring=is_spring)
+    if org_season_id:
+        query = query.filter_by(org_season_id=org_season_id)
     if status:
         query = query.filter_by(status=status)
 
+    # MySQL doesn't support NULLS FIRST, so use COALESCE workaround
     payments = query.order_by(
-        PartnerPaymentRecord.invoice_date.desc().nullsfirst(),
+        db.func.coalesce(PartnerPaymentRecord.invoice_date, '9999-12-31').desc(),
         PartnerPaymentRecord.created_at.desc()
     ).all()
 
     # Get available seasons for filter
-    seasons = db.session.query(
-        LeagueSeason.year, LeagueSeason.is_spring
-    ).filter_by(active=1).distinct().order_by(
-        LeagueSeason.year.desc(), LeagueSeason.is_spring.desc()
+    seasons = OrgSeason.query.filter_by(org_id=1).order_by(
+        OrgSeason.year.desc(), OrgSeason.is_spring.desc()
     ).all()
 
     # Calculate totals by partner
@@ -123,8 +119,7 @@ def partner_payments():
         seasons=seasons,
         partner_totals=partner_totals,
         selected_partner_id=partner_id,
-        selected_year=year,
-        selected_is_spring=is_spring,
+        selected_org_season_id=org_season_id,
         selected_status=status,
         can_edit=can_record_payments()
     )
@@ -140,17 +135,13 @@ def new_partner_payment():
     ).order_by(UmpirePartner.name).all()
 
     # Get available seasons
-    seasons = db.session.query(
-        LeagueSeason.year, LeagueSeason.is_spring
-    ).filter_by(active=1).distinct().order_by(
-        LeagueSeason.year.desc(), LeagueSeason.is_spring.desc()
+    seasons = OrgSeason.query.filter_by(org_id=1).order_by(
+        OrgSeason.year.desc(), OrgSeason.is_spring.desc()
     ).all()
 
     if request.method == 'POST':
         partner_id = request.form.get('partner_id', type=int)
-        year = request.form.get('year', type=int)
-        is_spring_str = request.form.get('is_spring')
-        is_spring = is_spring_str == '1' if is_spring_str else None
+        org_season_id = request.form.get('org_season_id', type=int)
 
         invoice_number = request.form.get('invoice_number', '').strip()
         invoice_date_str = request.form.get('invoice_date')
@@ -199,8 +190,7 @@ def new_partner_payment():
         # Create payment record
         payment = PartnerPaymentRecord(
             partner_id=partner_id,
-            year=year,
-            is_spring=is_spring,
+            org_season_id=org_season_id or None,
             invoice_number=invoice_number or None,
             invoice_date=invoice_date,
             invoice_amount=invoice_amount,
@@ -259,10 +249,8 @@ def edit_partner_payment(id):
         active=True, prepays_invoices=True
     ).order_by(UmpirePartner.name).all()
 
-    seasons = db.session.query(
-        LeagueSeason.year, LeagueSeason.is_spring
-    ).filter_by(active=1).distinct().order_by(
-        LeagueSeason.year.desc(), LeagueSeason.is_spring.desc()
+    seasons = OrgSeason.query.filter_by(org_id=1).order_by(
+        OrgSeason.year.desc(), OrgSeason.is_spring.desc()
     ).all()
 
     if request.method == 'POST':
@@ -270,9 +258,7 @@ def edit_partner_payment(id):
 
         if action == 'save':
             payment.partner_id = request.form.get('partner_id', type=int)
-            payment.year = request.form.get('year', type=int)
-            is_spring_str = request.form.get('is_spring')
-            payment.is_spring = is_spring_str == '1' if is_spring_str else None
+            payment.org_season_id = request.form.get('org_season_id', type=int) or None
 
             payment.invoice_number = request.form.get('invoice_number', '').strip() or None
             invoice_date_str = request.form.get('invoice_date')
@@ -425,10 +411,8 @@ def new_partner_credit():
         active=True, prepays_invoices=True
     ).order_by(UmpirePartner.name).all()
 
-    seasons = db.session.query(
-        LeagueSeason.year, LeagueSeason.is_spring
-    ).filter_by(active=1).distinct().order_by(
-        LeagueSeason.year.desc(), LeagueSeason.is_spring.desc()
+    seasons = OrgSeason.query.filter_by(org_id=1).order_by(
+        OrgSeason.year.desc(), OrgSeason.is_spring.desc()
     ).all()
 
     if request.method == 'POST':
@@ -436,9 +420,7 @@ def new_partner_credit():
         source_type = request.form.get('source_type', PartnerCredit.SOURCE_ADJUSTMENT)
         amount_str = request.form.get('amount', '').strip()
         umpire_games_str = request.form.get('umpire_games', '').strip()
-        year = request.form.get('year', type=int)
-        is_spring_str = request.form.get('is_spring')
-        is_spring = is_spring_str == '1' if is_spring_str else None
+        org_season_id = request.form.get('org_season_id', type=int)
         description = request.form.get('description', '').strip()
 
         if not partner_id or not amount_str:
@@ -465,8 +447,7 @@ def new_partner_credit():
             source_type=source_type,
             amount=amount,
             umpire_games=umpire_games,
-            season_year=year,
-            season_is_spring=is_spring,
+            org_season_id=org_season_id or None,
             description=description or None,
             created_by_user_id=current_user.ID
         )

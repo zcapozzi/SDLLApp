@@ -21,9 +21,8 @@ class PartnerPaymentRecord(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     partner_id = db.Column(db.Integer, db.ForeignKey('sdll_umpire_partners.id'), nullable=False)
 
-    # Season context (optional - can be per-invoice instead)
-    year = db.Column(db.Integer)
-    is_spring = db.Column(db.Boolean)
+    # Season context (links to org_season table)
+    org_season_id = db.Column(db.Integer, db.ForeignKey('sdll_org_seasons.ID'))
 
     # Invoice details
     invoice_number = db.Column(db.String(50))
@@ -58,6 +57,7 @@ class PartnerPaymentRecord(db.Model):
 
     # Relationships
     partner = db.relationship('UmpirePartner', backref='payment_records')
+    org_season = db.relationship('OrgSeason', backref='partner_payments')
     created_by = db.relationship('User', foreign_keys=[created_by_user_id])
     paid_by = db.relationship('User', foreign_keys=[paid_by_user_id])
     credits_applied = db.relationship('PartnerCredit',
@@ -81,8 +81,8 @@ class PartnerPaymentRecord(db.Model):
     @property
     def season_name(self):
         """Get formatted season name."""
-        if self.year and self.is_spring is not None:
-            return f'{"Spring" if self.is_spring else "Fall"} {self.year}'
+        if self.org_season:
+            return self.org_season.display_name
         return None
 
     @property
@@ -103,29 +103,26 @@ class PartnerPaymentRecord(db.Model):
         return paid - credit
 
     @classmethod
-    def get_for_partner(cls, partner_id, year=None, is_spring=None, status=None):
+    def get_for_partner(cls, partner_id, org_season_id=None, status=None):
         """Get payment records for a partner.
 
         Args:
             partner_id: Partner ID
-            year: Optional year filter
-            is_spring: Optional season filter
+            org_season_id: Optional season filter
             status: Optional status filter
 
         Returns:
             List of PartnerPaymentRecord
         """
         query = cls.query.filter_by(partner_id=partner_id)
-        if year is not None:
-            query = query.filter_by(year=year)
-        if is_spring is not None:
-            query = query.filter_by(is_spring=is_spring)
+        if org_season_id is not None:
+            query = query.filter_by(org_season_id=org_season_id)
         if status is not None:
             query = query.filter_by(status=status)
         return query.order_by(cls.invoice_date.desc()).all()
 
     @classmethod
-    def get_season_totals(cls, partner_id, year, is_spring):
+    def get_season_totals(cls, partner_id, org_season_id):
         """Get payment totals for a partner's season.
 
         Returns:
@@ -133,8 +130,7 @@ class PartnerPaymentRecord(db.Model):
         """
         records = cls.query.filter_by(
             partner_id=partner_id,
-            year=year,
-            is_spring=is_spring
+            org_season_id=org_season_id
         ).filter(cls.status != cls.STATUS_VOID).all()
 
         return {
@@ -169,9 +165,8 @@ class PartnerCredit(db.Model):
     amount = db.Column(db.Numeric(8, 2), nullable=False)
     umpire_games = db.Column(db.Integer)
 
-    # Season context
-    season_year = db.Column(db.Integer)
-    season_is_spring = db.Column(db.Boolean)
+    # Season context (links to org_season table)
+    org_season_id = db.Column(db.Integer, db.ForeignKey('sdll_org_seasons.ID'))
 
     # Status: available, applied, expired, void
     status = db.Column(db.String(20), default='available')
@@ -184,6 +179,7 @@ class PartnerCredit(db.Model):
 
     # Relationships
     partner = db.relationship('UmpirePartner', backref='credits')
+    org_season = db.relationship('OrgSeason', backref='partner_credits')
     source_game = db.relationship('Game')
     created_by = db.relationship('User', foreign_keys=[created_by_user_id])
 
@@ -218,8 +214,8 @@ class PartnerCredit(db.Model):
     @property
     def season_name(self):
         """Get formatted season name."""
-        if self.season_year and self.season_is_spring is not None:
-            return f'{"Spring" if self.season_is_spring else "Fall"} {self.season_year}'
+        if self.org_season:
+            return self.org_season.display_name
         return None
 
     @property
@@ -291,7 +287,7 @@ class PartnerCredit(db.Model):
         return result or Decimal('0')
 
     @classmethod
-    def create_from_postponed_game(cls, game, partner, rate, umpire_count, user_id=None):
+    def create_from_postponed_game(cls, game, partner, rate, umpire_count, user_id=None, org_season_id=None):
         """Create a credit from a postponed game.
 
         Args:
@@ -300,11 +296,21 @@ class PartnerCredit(db.Model):
             rate: Per-umpire rate
             umpire_count: Number of umpires assigned
             user_id: User creating the credit (optional)
+            org_season_id: OrgSeason ID (optional, looked up from game if not provided)
 
         Returns:
             New PartnerCredit instance (not yet committed)
         """
         amount = Decimal(str(rate)) * umpire_count
+
+        # Look up org_season_id from game if not provided
+        if org_season_id is None:
+            from app.models.org_season import OrgSeason
+            org_season = OrgSeason.query.filter_by(
+                year=game.year,
+                is_spring=1 if game.is_spring else 0
+            ).first()
+            org_season_id = org_season.ID if org_season else None
 
         credit = cls(
             partner_id=partner.id,
@@ -312,21 +318,19 @@ class PartnerCredit(db.Model):
             source_game_id=game.ID,
             amount=amount,
             umpire_games=umpire_count,
-            season_year=game.year,
-            season_is_spring=game.is_spring,
+            org_season_id=org_season_id,
             description=f'Postponed: {game.league} - {game.game_date.strftime("%m/%d/%Y")}',
             created_by_user_id=user_id
         )
         return credit
 
     @classmethod
-    def get_for_season(cls, partner_id, year, is_spring, status=None):
+    def get_for_season(cls, partner_id, org_season_id, status=None):
         """Get credits for a partner's season.
 
         Args:
             partner_id: Partner ID
-            year: Season year
-            is_spring: Season type
+            org_season_id: OrgSeason ID
             status: Optional status filter
 
         Returns:
@@ -334,8 +338,7 @@ class PartnerCredit(db.Model):
         """
         query = cls.query.filter_by(
             partner_id=partner_id,
-            season_year=year,
-            season_is_spring=is_spring
+            org_season_id=org_season_id
         )
         if status is not None:
             query = query.filter_by(status=status)

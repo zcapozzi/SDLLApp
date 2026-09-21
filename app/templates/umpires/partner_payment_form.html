@@ -29,18 +29,16 @@
                 </select>
             </div>
             <div class="form-group">
-                <label for="season">Season</label>
-                <select name="season" id="season" class="form-control" onchange="parseSeason(this.value)">
+                <label for="org_season_id">Season</label>
+                <select name="org_season_id" id="org_season_id" class="form-control">
                     <option value="">No Season</option>
                     {% for s in seasons %}
-                    <option value="{{ s.year }}_{{ 1 if s.is_spring else 0 }}"
-                            {% if payment and payment.year == s.year and payment.is_spring == s.is_spring %}selected{% endif %}>
-                        {{ 'Spring' if s.is_spring else 'Fall' }} {{ s.year }}
+                    <option value="{{ s.ID }}"
+                            {% if payment and payment.org_season_id == s.ID %}selected{% endif %}>
+                        {{ s.display_name }}
                     </option>
                     {% endfor %}
                 </select>
-                <input type="hidden" name="year" id="year" value="{{ payment.year if payment else '' }}">
-                <input type="hidden" name="is_spring" id="is_spring" value="{{ '1' if payment and payment.is_spring else ('0' if payment and payment.is_spring == false else '') }}">
             </div>
             <div></div>
         </div>
@@ -147,17 +145,3 @@
 {% endif %}
 {% endblock %}
 
-{% block extra_js %}
-<script>
-function parseSeason(value) {
-    if (value) {
-        var parts = value.split('_');
-        document.getElementById('year').value = parts[0];
-        document.getElementById('is_spring').value = parts[1];
-    } else {
-        document.getElementById('year').value = '';
-        document.getElementById('is_spring').value = '';
-    }
-}
-</script>
-{% endblock %}

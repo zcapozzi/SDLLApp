@@ -11,9 +11,8 @@ CREATE TABLE IF NOT EXISTS sdll_partner_payment_records (
     id INT AUTO_INCREMENT PRIMARY KEY,
     partner_id INT NOT NULL,
 
-    -- Season context (optional)
-    year INT,
-    is_spring TINYINT(1),
+    -- Season context (links to org_season table)
+    org_season_id INT COMMENT 'Links to sdll_org_seasons.ID',
 
     -- Invoice details
     invoice_number VARCHAR(50) COMMENT 'Partner invoice reference',
@@ -48,12 +47,13 @@ CREATE TABLE IF NOT EXISTS sdll_partner_payment_records (
 
     -- Foreign keys
     CONSTRAINT fk_ppr_partner FOREIGN KEY (partner_id) REFERENCES sdll_umpire_partners(id),
+    CONSTRAINT fk_ppr_org_season FOREIGN KEY (org_season_id) REFERENCES sdll_org_seasons(ID),
     CONSTRAINT fk_ppr_created_by FOREIGN KEY (created_by_user_id) REFERENCES sdll_users(ID),
     CONSTRAINT fk_ppr_paid_by FOREIGN KEY (paid_by_user_id) REFERENCES sdll_users(ID),
 
     -- Indexes
     INDEX idx_ppr_partner (partner_id),
-    INDEX idx_ppr_season (year, is_spring),
+    INDEX idx_ppr_org_season (org_season_id),
     INDEX idx_ppr_status (status),
     INDEX idx_ppr_invoice_date (invoice_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -72,9 +72,8 @@ CREATE TABLE IF NOT EXISTS sdll_partner_credits (
     amount DECIMAL(8,2) NOT NULL,
     umpire_games INT COMMENT 'Number of umpire-games if applicable',
 
-    -- Season context
-    season_year INT,
-    season_is_spring TINYINT(1),
+    -- Season context (links to org_season table)
+    org_season_id INT COMMENT 'Links to sdll_org_seasons.ID',
 
     -- Status: available, applied, expired, void
     status VARCHAR(20) DEFAULT 'available',
@@ -87,6 +86,7 @@ CREATE TABLE IF NOT EXISTS sdll_partner_credits (
 
     -- Foreign keys
     CONSTRAINT fk_pc_partner FOREIGN KEY (partner_id) REFERENCES sdll_umpire_partners(id),
+    CONSTRAINT fk_pc_org_season FOREIGN KEY (org_season_id) REFERENCES sdll_org_seasons(ID),
     CONSTRAINT fk_pc_game FOREIGN KEY (source_game_id) REFERENCES sdll_games(ID),
     CONSTRAINT fk_pc_source_payment FOREIGN KEY (source_payment_id) REFERENCES sdll_partner_payment_records(id),
     CONSTRAINT fk_pc_applied_payment FOREIGN KEY (applied_to_payment_id) REFERENCES sdll_partner_payment_records(id),
@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS sdll_partner_credits (
     -- Indexes
     INDEX idx_pc_partner (partner_id),
     INDEX idx_pc_status (status),
-    INDEX idx_pc_season (season_year, season_is_spring),
+    INDEX idx_pc_org_season (org_season_id),
     INDEX idx_pc_source_game (source_game_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

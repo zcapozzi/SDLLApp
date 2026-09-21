@@ -376,6 +376,14 @@ def delegation_report(year=None, is_spring=None):
 
     # Build prepay partner reconciliation data
     from app.models.partner_payment import PartnerPaymentRecord, PartnerCredit
+    from app.models.org_season import OrgSeason
+
+    # Look up the org_season_id for this year/is_spring
+    org_season = OrgSeason.query.filter_by(
+        year=year,
+        is_spring=1 if is_spring else 0
+    ).first()
+    org_season_id = org_season.ID if org_season else None
 
     prepay_reconciliation = {}
     for partner in partners:
@@ -384,13 +392,13 @@ def delegation_report(year=None, is_spring=None):
 
         # Get payment totals for this season
         payment_totals = PartnerPaymentRecord.get_season_totals(
-            partner.id, year, is_spring == 1
+            partner.id, org_season_id
         )
 
         # Get postponed credits for this season
         postponed_credits = PartnerCredit.get_for_season(
-            partner.id, year, is_spring == 1
-        )
+            partner.id, org_season_id
+        ) if org_season_id else []
         postponed_amount = sum(c.amount for c in postponed_credits if c.source_type == 'postponed_game')
         postponed_games = sum(c.umpire_games or 0 for c in postponed_credits if c.source_type == 'postponed_game')
 
