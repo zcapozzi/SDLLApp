@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+
+{% block title %}Payment #{{ payment.id }} - {{ payment.partner.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .payment-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 25px;
+    }
+    .payment-header h1 {
+        margin: 0;
+    }
+    .status-badge {
+        display: inline-block;
+        padding: 6px 16px;
+        border-radius: 16px;
+        font-size: 14px;
+        font-weight: 600;
+    }
+    .status-pending { background: #fff3cd; color: #856404; }
+    .status-paid { background: #d4edda; color: #155724; }
+    .status-disputed { background: #f8d7da; color: #721c24; }
+    .status-void { background: #e2e3e5; color: #6c757d; text-decoration: line-through; }
+
+    .details-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 25px;
+        margin-bottom: 30px;
+    }
+    .detail-card {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .detail-card h3 {
+        margin: 0 0 15px 0;
+        font-size: 14px;
+        text-transform: uppercase;
+        color: #666;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 8px;
+    }
+    .detail-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        font-size: 14px;
+    }
+    .detail-row .label {
+        color: #666;
+    }
+    .detail-row .value {
+        font-weight: 500;
+    }
+    .detail-row .value.large {
+        font-size: 20px;
+        color: rgb(34, 139, 34);
+    }
+    .mark-paid-form {
+        background: #e8f5e9;
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+    .mark-paid-form h3 {
+        margin: 0 0 15px 0;
+        color: rgb(34, 139, 34);
+    }
+    .credits-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+    .credits-table th {
+        background: rgb(34, 139, 34);
+        color: white;
+        padding: 10px 12px;
+        text-align: left;
+        font-weight: 600;
+    }
+    .credits-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #eee;
+    }
+    .amount {
+        font-variant-numeric: tabular-nums;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.partner_payments') }}">&larr; Back to Payments</a>
+</div>
+
+<div class="payment-header">
+    <div>
+        <h1>Payment Record #{{ payment.id }}</h1>
+        <p style="color: var(--text-muted); margin: 5px 0 0 0;">
+            {{ payment.partner.name }} ({{ payment.partner.short_code }})
+            {% if payment.season_name %} &bull; {{ payment.season_name }}{% endif %}
+        </p>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center;">
+        <span class="status-badge status-{{ payment.status }}">
+            {{ payment.status|upper }}
+        </span>
+        {% if can_edit and payment.status != 'void' %}
+        <a href="{{ url_for('umpires.edit_partner_payment', id=payment.id) }}" class="btn btn-outline">Edit</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="details-grid">
+    <!-- Invoice Details -->
+    <div class="detail-card">
+        <h3>Invoice Details</h3>
+        <div class="detail-row">
+            <span class="label">Invoice Number:</span>
+            <span class="value">{{ payment.invoice_number or '-' }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="label">Invoice Date:</span>
+            <span class="value">{{ payment.invoice_date.strftime('%B %d, %Y') if payment.invoice_date else '-' }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="label">Invoice Amount:</span>
+            <span class="value large">${{ '{:,.2f}'.format(payment.invoice_amount) if payment.invoice_amount else '-' }}</span>
+        </div>
+    </div>
+
+    <!-- Calculated Values -->
+    <div class="detail-card">
+        <h3>Our Calculation</h3>
+        <div class="detail-row">
+            <span class="label">Umpire-Games:</span>
+            <span class="value">{{ payment.calculated_games or '-' }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="label">Calculated Amount:</span>
+            <span class="value">${{ '{:,.2f}'.format(payment.calculated_amount) if payment.calculated_amount else '-' }}</span>
+        </div>
+        {% if payment.invoice_amount and payment.calculated_amount %}
+        {% set diff = payment.invoice_amount - payment.calculated_amount %}
+        <div class="detail-row" style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee;">
+            <span class="label">Difference:</span>
+            <span class="value" style="color: {% if diff > 0 %}#c00{% elif diff < 0 %}rgb(34,139,34){% else %}#666{% endif %};">
+                {% if diff > 0 %}+{% endif %}${{ '{:,.2f}'.format(diff) }}
+            </span>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Payment Info -->
+    <div class="detail-card">
+        <h3>Payment</h3>
+        {% if payment.is_paid %}
+        <div class="detail-row">
+            <span class="label">Paid Amount:</span>
+            <span class="value large">${{ '{:,.2f}'.format(payment.paid_amount) }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="label">Payment Date:</span>
+            <span class="value">{{ payment.payment_date.strftime('%B %d, %Y') if payment.payment_date else '-' }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="label">Method:</span>
+            <span class="value">{{ payment.payment_method|capitalize if payment.payment_method else '-' }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="label">Reference:</span>
+            <span class="value">{{ payment.payment_reference or '-' }}</span>
+        </div>
+        {% if payment.credit_applied and payment.credit_applied > 0 %}
+        <div class="detail-row" style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee;">
+            <span class="label">Credit Applied:</span>
+            <span class="value" style="color: rgb(34,139,34);">-${{ '{:,.2f}'.format(payment.credit_applied) }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="label">Net Amount:</span>
+            <span class="value">${{ '{:,.2f}'.format(payment.net_amount) }}</span>
+        </div>
+        {% endif %}
+        {% else %}
+        <p style="color: var(--text-muted);">Payment not yet recorded.</p>
+        {% endif %}
+    </div>
+</div>
+
+{% if payment.notes %}
+<div class="card">
+    <h3 style="margin-top: 0;">Notes</h3>
+    <p style="white-space: pre-wrap;">{{ payment.notes }}</p>
+</div>
+{% endif %}
+
+<!-- Mark as Paid Form -->
+{% if can_edit and payment.status == 'pending' %}
+<div class="mark-paid-form">
+    <h3>Mark as Paid</h3>
+    <form method="POST" action="{{ url_for('umpires.mark_payment_paid', id=payment.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 15px;">
+            <div class="form-group">
+                <label for="paid_amount">Amount Paid ($)</label>
+                <input type="number" name="paid_amount" id="paid_amount" class="form-control"
+                       value="{{ payment.invoice_amount or '' }}" step="0.01" min="0" required>
+            </div>
+            <div class="form-group">
+                <label for="payment_date">Payment Date</label>
+                <input type="date" name="payment_date" id="payment_date" class="form-control"
+                       value="{{ now().strftime('%Y-%m-%d') if now else '' }}">
+            </div>
+            <div class="form-group">
+                <label for="payment_method">Method</label>
+                <select name="payment_method" id="payment_method" class="form-control">
+                    <option value="">Select...</option>
+                    <option value="check">Check</option>
+                    <option value="ach">ACH Transfer</option>
+                    <option value="venmo">Venmo</option>
+                    <option value="zelle">Zelle</option>
+                    <option value="cash">Cash</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="payment_reference">Reference (Check #, etc.)</label>
+                <input type="text" name="payment_reference" id="payment_reference" class="form-control"
+                       placeholder="e.g., Check #1234">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Mark as Paid</button>
+    </form>
+</div>
+{% endif %}
+
+<!-- Applied Credits -->
+{% if applied_credits %}
+<div class="card" style="margin-top: 30px;">
+    <h3 style="margin-top: 0;">Credits Applied to This Payment</h3>
+    <table class="credits-table">
+        <thead>
+            <tr>
+                <th>Source</th>
+                <th>Description</th>
+                <th style="text-align: right;">Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for credit in applied_credits %}
+            <tr>
+                <td>{{ credit.source_type_label }}</td>
+                <td>{{ credit.description or '-' }}</td>
+                <td class="amount" style="text-align: right;">${{ '{:,.2f}'.format(credit.amount) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Available Credits (if payment is pending) -->
+{% if can_edit and payment.status == 'pending' and available_credits %}
+<div class="card" style="margin-top: 30px;">
+    <h3 style="margin-top: 0;">Available Credits</h3>
+    <p style="color: var(--text-muted); margin-bottom: 15px;">
+        Total available: <strong>${{ '{:,.2f}'.format(total_available) }}</strong>
+    </p>
+    <table class="credits-table">
+        <thead>
+            <tr>
+                <th>Source</th>
+                <th>Description</th>
+                <th>Season</th>
+                <th style="text-align: right;">Amount</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for credit in available_credits %}
+            <tr>
+                <td>{{ credit.source_type_label }}</td>
+                <td>{{ credit.description or '-' }}</td>
+                <td>{{ credit.season_name or '-' }}</td>
+                <td class="amount" style="text-align: right;">${{ '{:,.2f}'.format(credit.amount) }}</td>
+                <td style="text-align: right;">
+                    <form method="POST" action="{{ url_for('umpires.apply_partner_credit', id=credit.id) }}" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="payment_id" value="{{ payment.id }}">
+                        <button type="submit" class="btn btn-outline" style="padding: 3px 10px; font-size: 12px;">
+                            Apply
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Audit Info -->
+<div class="card" style="margin-top: 30px; font-size: 13px; color: var(--text-muted);">
+    <h3 style="margin-top: 0; font-size: 14px;">Record History</h3>
+    <p>
+        Created: {{ payment.created_at.strftime('%B %d, %Y at %I:%M %p') if payment.created_at else 'Unknown' }}
+        {% if payment.created_by %} by {{ payment.created_by.name }}{% endif %}
+    </p>
+    {% if payment.is_paid %}
+    <p>
+        Paid: {{ payment.payment_date.strftime('%B %d, %Y') if payment.payment_date else 'Unknown' }}
+        {% if payment.paid_by %} by {{ payment.paid_by.name }}{% endif %}
+    </p>
+    {% endif %}
+</div>
+{% endblock %}

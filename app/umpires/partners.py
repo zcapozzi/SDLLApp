@@ -84,6 +84,7 @@ def edit_partner(id):
             partner.short_code = request.form.get('short_code', '').strip().upper()
             partner.notification_preference = request.form.get('notification_preference', 'weekly')
             partner.active = request.form.get('active') == 'on'
+            partner.prepays_invoices = request.form.get('prepays_invoices') == 'on'
 
             db.session.commit()
             logger.info(f'Updated partner: {partner.name}')

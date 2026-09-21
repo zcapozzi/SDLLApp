@@ -270,6 +270,80 @@
         text-decoration: underline dotted;
         cursor: help;
     }
+
+    /* Prepay Reconciliation */
+    .prepay-reconciliation {
+        margin-bottom: 30px;
+    }
+    .prepay-card {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        overflow: hidden;
+        margin-bottom: 20px;
+    }
+    .prepay-header {
+        background: linear-gradient(135deg, #1e88e5, #1565c0);
+        color: white;
+        padding: 15px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .prepay-header h3 {
+        margin: 0;
+        font-size: 16px;
+    }
+    .prepay-header .badge {
+        background: rgba(255,255,255,0.2);
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+    }
+    .prepay-body {
+        padding: 20px;
+    }
+    .prepay-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 20px;
+    }
+    .prepay-stat {
+        text-align: center;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+    .prepay-stat.highlight {
+        background: #e3f2fd;
+    }
+    .prepay-stat.credit {
+        background: #e8f5e9;
+    }
+    .prepay-stat .value {
+        font-size: 24px;
+        font-weight: 600;
+        color: #333;
+    }
+    .prepay-stat .value.positive {
+        color: rgb(34, 139, 34);
+    }
+    .prepay-stat .value.negative {
+        color: #c62828;
+    }
+    .prepay-stat .label {
+        font-size: 12px;
+        color: #666;
+        margin-top: 5px;
+    }
+    .prepay-footer {
+        background: #f8f9fa;
+        padding: 15px 20px;
+        border-top: 1px solid #eee;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
 </style>
 {% endblock %}
 
@@ -309,6 +383,62 @@
             </div>
         </div>
     </div>
+
+    <!-- Prepay Partner Reconciliation -->
+    {% if prepay_reconciliation %}
+    <div class="prepay-reconciliation">
+        <h2 style="margin-bottom: 15px;">Prepay Partner Reconciliation</h2>
+        {% for partner_id, recon in prepay_reconciliation.items() %}
+        <div class="prepay-card">
+            <div class="prepay-header">
+                <h3>{{ recon.partner.name }} ({{ recon.partner.short_code }})</h3>
+                <span class="badge">Prepay Partner</span>
+            </div>
+            <div class="prepay-body">
+                <div class="prepay-grid">
+                    <div class="prepay-stat highlight">
+                        <div class="value">${{ "{:,.0f}".format(recon.payments_total) }}</div>
+                        <div class="label">Invoices Paid</div>
+                        <div style="font-size: 11px; color: #999;">{{ recon.payments_games or 0 }} umpire-games</div>
+                    </div>
+                    <div class="prepay-stat">
+                        <div class="value">${{ "{:,.0f}".format(recon.cost_used) }}</div>
+                        <div class="label">Games Used</div>
+                        <div style="font-size: 11px; color: #999;">{{ recon.games_used }} umpire-games</div>
+                    </div>
+                    <div class="prepay-stat">
+                        <div class="value">${{ "{:,.0f}".format(recon.postponed_amount) }}</div>
+                        <div class="label">Postponed (Credit)</div>
+                        <div style="font-size: 11px; color: #999;">{{ recon.postponed_games }} umpire-games</div>
+                    </div>
+                    {% set balance = recon.payments_total - recon.cost_used %}
+                    <div class="prepay-stat credit">
+                        <div class="value {% if balance >= 0 %}positive{% else %}negative{% endif %}">
+                            {% if balance >= 0 %}${{ "{:,.0f}".format(balance) }}{% else %}-${{ "{:,.0f}".format(balance|abs) }}{% endif %}
+                        </div>
+                        <div class="label">Balance</div>
+                        <div style="font-size: 11px; color: #999;">
+                            {% if balance >= 0 %}credit{% else %}owed{% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% if recon.available_credits > 0 %}
+                <div style="margin-top: 15px; padding: 10px 15px; background: #e8f5e9; border-radius: 6px; font-size: 14px;">
+                    <strong style="color: rgb(34,139,34);">Available Credit:</strong> ${{ "{:,.2f}".format(recon.available_credits) }}
+                    <span style="color: #666; margin-left: 10px;">(can be applied to future payments)</span>
+                </div>
+                {% endif %}
+            </div>
+            <div class="prepay-footer">
+                <a href="{{ url_for('umpires.partner_payments', partner_id=partner_id, year=year, is_spring=is_spring) }}"
+                   class="btn btn-outline" style="font-size: 13px;">View Payments</a>
+                <a href="{{ url_for('umpires.partner_credits', partner_id=partner_id) }}"
+                   class="btn btn-outline" style="font-size: 13px;">View Credits</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 
     <!-- Help Modal -->
     <div id="helpModal" class="help-modal-overlay" onclick="hideHelp(event)">

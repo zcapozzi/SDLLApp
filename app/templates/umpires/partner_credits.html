@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}Partner Credits{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filters-bar {
+        background: #f5f5f5;
+        padding: 15px 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .filters-bar select {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        min-width: 150px;
+    }
+    .partner-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+    .partner-card {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+    .partner-card h3 {
+        margin: 0 0 5px 0;
+        font-size: 14px;
+        color: #666;
+    }
+    .partner-card .amount {
+        font-size: 24px;
+        font-weight: 600;
+        color: rgb(34, 139, 34);
+    }
+    .status-badge {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    .status-available { background: #d4edda; color: #155724; }
+    .status-applied { background: #cce5ff; color: #004085; }
+    .status-expired { background: #fff3cd; color: #856404; }
+    .status-void { background: #e2e3e5; color: #6c757d; }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    th {
+        background: rgb(34, 139, 34);
+        color: white;
+        padding: 12px 15px;
+        text-align: left;
+        font-weight: 600;
+        font-size: 13px;
+    }
+    td {
+        padding: 12px 15px;
+        border-bottom: 1px solid #eee;
+    }
+    tr:hover {
+        background: #f8f9fa;
+    }
+    .amount-col {
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+    }
+    .btn-row {
+        display: flex;
+        gap: 10px;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.partner_payments') }}">&larr; Back to Partner Payments</a>
+</div>
+
+<div class="btn-row">
+    <h1 style="margin: 0;">Partner Credits</h1>
+    {% if can_edit %}
+    <a href="{{ url_for('umpires.new_partner_credit') }}" class="btn btn-primary">Add Credit</a>
+    {% endif %}
+</div>
+
+<p style="color: var(--text-muted); margin-bottom: 20px;">
+    Credits from postponed games, overpayments, or adjustments. Available credits can be applied to future payments.
+</p>
+
+{% if partners %}
+<!-- Available Credit Summary -->
+<div class="partner-summary">
+    {% for partner in partners %}
+    <div class="partner-card">
+        <h3>{{ partner.short_code }}</h3>
+        <div class="amount">${{ "{:,.2f}".format(partner_totals.get(partner.id, {}).get('available', 0)) }}</div>
+        <p style="font-size: 12px; color: #666; margin: 5px 0 0 0;">Available</p>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Filters -->
+<div class="filters-bar">
+    <label>Filter:</label>
+    <select id="filterPartner" onchange="applyFilters()">
+        <option value="">All Partners</option>
+        {% for partner in partners %}
+        <option value="{{ partner.id }}" {% if selected_partner_id == partner.id %}selected{% endif %}>
+            {{ partner.name }}
+        </option>
+        {% endfor %}
+    </select>
+    <select id="filterStatus" onchange="applyFilters()">
+        <option value="">All Statuses</option>
+        <option value="available" {% if selected_status == 'available' %}selected{% endif %}>Available</option>
+        <option value="applied" {% if selected_status == 'applied' %}selected{% endif %}>Applied</option>
+        <option value="expired" {% if selected_status == 'expired' %}selected{% endif %}>Expired</option>
+        <option value="void" {% if selected_status == 'void' %}selected{% endif %}>Void</option>
+    </select>
+    <button type="button" class="btn btn-outline" onclick="clearFilters()">Clear</button>
+</div>
+
+<!-- Credits Table -->
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Partner</th>
+                <th>Source</th>
+                <th>Description</th>
+                <th>Season</th>
+                <th>Umpire-Games</th>
+                <th class="amount-col">Amount</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for credit in credits %}
+            <tr>
+                <td><strong>{{ credit.partner.short_code }}</strong></td>
+                <td>{{ credit.source_type_label }}</td>
+                <td>{{ credit.description or '-' }}</td>
+                <td>{{ credit.season_name or '-' }}</td>
+                <td>{{ credit.umpire_games or '-' }}</td>
+                <td class="amount-col">${{ '{:,.2f}'.format(credit.amount) }}</td>
+                <td>
+                    <span class="status-badge status-{{ credit.status }}">
+                        {{ credit.status|capitalize }}
+                    </span>
+                </td>
+                <td style="text-align: right;">
+                    {% if can_edit and credit.is_available %}
+                    <form method="POST" action="{{ url_for('umpires.void_partner_credit', id=credit.id) }}"
+                          style="display: inline;" onsubmit="return confirm('Void this credit?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="reason" value="Manual void">
+                        <button type="submit" class="btn btn-outline" style="padding: 3px 10px; font-size: 12px; color: #c00;">
+                            Void
+                        </button>
+                    </form>
+                    {% elif credit.status == 'applied' and credit.applied_to_payment %}
+                    <a href="{{ url_for('umpires.view_partner_payment', id=credit.applied_to_payment_id) }}"
+                       class="btn btn-outline" style="padding: 3px 10px; font-size: 12px;">
+                        View Payment
+                    </a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 40px;">
+                    No credits found.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card" style="text-align: center; padding: 40px;">
+    <p style="color: var(--text-muted);">
+        No partners are configured for prepay tracking.<br>
+        Enable "Prepays Invoices" on a partner in <a href="{{ url_for('umpires.partners') }}">Partner Settings</a> to get started.
+    </p>
+</div>
+{% endif %}
+
+<!-- Legend -->
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0; font-size: 14px;">Credit Sources</h3>
+    <ul style="color: var(--text-muted); line-height: 1.8; font-size: 14px; margin-bottom: 0;">
+        <li><strong>Postponed Game</strong> - Credit generated when a prepaid game is postponed</li>
+        <li><strong>Unfulfilled Assignment</strong> - Credit when partner fails to provide umpires</li>
+        <li><strong>Overpayment</strong> - Credit from paying more than invoiced</li>
+        <li><strong>Manual Adjustment</strong> - Manually entered credit or adjustment</li>
+    </ul>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function applyFilters() {
+    var partner = document.getElementById('filterPartner').value;
+    var status = document.getElementById('filterStatus').value;
+
+    var url = new URL(window.location.href);
+    url.searchParams.delete('partner_id');
+    url.searchParams.delete('status');
+
+    if (partner) url.searchParams.set('partner_id', partner);
+    if (status) url.searchParams.set('status', status);
+
+    window.location.href = url.toString();
+}
+
+function clearFilters() {
+    window.location.href = '{{ url_for("umpires.partner_credits") }}';
+}
+</script>
+{% endblock %}

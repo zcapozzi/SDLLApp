@@ -82,6 +82,9 @@
                     {% else %}
                     <span class="badge" style="background: #999;">Inactive</span>
                     {% endif %}
+                    {% if partner.prepays_invoices %}
+                    <span class="badge" style="background: #cce5ff; color: #004085;">Prepay</span>
+                    {% endif %}
                 </td>
                 <td>
                     <a href="{{ url_for('umpires.edit_partner', id=partner.id) }}"

@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Add Credit{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.partner_credits') }}">&larr; Back to Credits</a>
+</div>
+
+<h1>Add Partner Credit</h1>
+
+<p style="color: var(--text-muted); margin-bottom: 20px;">
+    Manually create a credit adjustment. For postponed game credits, use the rainout wizard instead.
+</p>
+
+<div class="card">
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <div class="form-group">
+                <label for="partner_id">Partner <span style="color: #c33;">*</span></label>
+                <select name="partner_id" id="partner_id" class="form-control" required>
+                    <option value="">Select Partner...</option>
+                    {% for partner in partners %}
+                    <option value="{{ partner.id }}">{{ partner.name }} ({{ partner.short_code }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="source_type">Credit Type <span style="color: #c33;">*</span></label>
+                <select name="source_type" id="source_type" class="form-control" required>
+                    <option value="adjustment">Manual Adjustment</option>
+                    <option value="overpayment">Overpayment</option>
+                    <option value="unfulfilled">Unfulfilled Assignment</option>
+                    <option value="postponed_game">Postponed Game</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="amount">Amount ($) <span style="color: #c33;">*</span></label>
+                <input type="number" name="amount" id="amount" class="form-control"
+                       step="0.01" min="0" required placeholder="0.00">
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <div class="form-group">
+                <label for="umpire_games">Umpire-Games (optional)</label>
+                <input type="number" name="umpire_games" id="umpire_games" class="form-control"
+                       min="0" placeholder="e.g., 2">
+                <p style="font-size: 11px; color: var(--text-muted);">Number of umpire assignments if applicable</p>
+            </div>
+            <div class="form-group">
+                <label for="season">Season (optional)</label>
+                <select name="season" id="season" class="form-control" onchange="parseSeason(this.value)">
+                    <option value="">No Season</option>
+                    {% for s in seasons %}
+                    <option value="{{ s.year }}_{{ 1 if s.is_spring else 0 }}">
+                        {{ 'Spring' if s.is_spring else 'Fall' }} {{ s.year }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <input type="hidden" name="year" id="year">
+                <input type="hidden" name="is_spring" id="is_spring">
+            </div>
+            <div></div>
+        </div>
+
+        <div class="form-group">
+            <label for="description">Description</label>
+            <input type="text" name="description" id="description" class="form-control"
+                   placeholder="Brief description of this credit..."
+                   maxlength="255">
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button type="submit" class="btn btn-primary">Create Credit</button>
+            <a href="{{ url_for('umpires.partner_credits') }}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function parseSeason(value) {
+    if (value) {
+        var parts = value.split('_');
+        document.getElementById('year').value = parts[0];
+        document.getElementById('is_spring').value = parts[1];
+    } else {
+        document.getElementById('year').value = '';
+        document.getElementById('is_spring').value = '';
+    }
+}
+</script>
+{% endblock %}

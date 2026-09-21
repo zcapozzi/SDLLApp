@@ -48,6 +48,17 @@
             </p>
         </div>
 
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="prepays_invoices" {{ 'checked' if partner.prepays_invoices }}>
+                Prepays Invoices
+            </label>
+            <p style="font-size: 12px; color: var(--text-muted);">
+                Enable payment tracking and credit management for this partner.
+                When checked, postponed games will generate credits.
+            </p>
+        </div>
+
         <div style="display: flex; gap: 10px;">
             <button type="submit" class="btn btn-primary">Save Partner</button>
             <a href="{{ url_for('umpires.partners') }}" class="btn btn-outline">Cancel</a>

@@ -374,6 +374,49 @@ def delegation_report(year=None, is_spring=None):
         LeagueSeason.year.desc(), LeagueSeason.is_spring.desc()
     ).all()
 
+    # Build prepay partner reconciliation data
+    from app.models.partner_payment import PartnerPaymentRecord, PartnerCredit
+
+    prepay_reconciliation = {}
+    for partner in partners:
+        if not partner.prepays_invoices:
+            continue
+
+        # Get payment totals for this season
+        payment_totals = PartnerPaymentRecord.get_season_totals(
+            partner.id, year, is_spring == 1
+        )
+
+        # Get postponed credits for this season
+        postponed_credits = PartnerCredit.get_for_season(
+            partner.id, year, is_spring == 1
+        )
+        postponed_amount = sum(c.amount for c in postponed_credits if c.source_type == 'postponed_game')
+        postponed_games = sum(c.umpire_games or 0 for c in postponed_credits if c.source_type == 'postponed_game')
+
+        # Get available credits
+        available_credits = PartnerCredit.get_total_available(partner.id)
+
+        # Get games used from report_data
+        partner_report = next((p for p in report_data if p['code'] == partner.short_code), None)
+        games_used = 0
+        cost_used = 0
+        if partner_report:
+            games_used = partner_report['totals']['umpires'] + partner_report['totals']['ntl_umpires']
+            cost_used = partner_report['totals']['cost_total']
+
+        prepay_reconciliation[partner.id] = {
+            'partner': partner,
+            'payments_total': payment_totals['total_paid'],
+            'payments_games': payment_totals['total_games'],
+            'games_used': games_used,
+            'cost_used': cost_used,
+            'postponed_amount': postponed_amount,
+            'postponed_games': postponed_games,
+            'available_credits': available_credits,
+            'payment_count': payment_totals['record_count']
+        }
+
     return render_template(
         'umpires/delegation_report.html',
         year=year,
@@ -382,7 +425,8 @@ def delegation_report(year=None, is_spring=None):
         seasons=seasons,
         report_data=report_data,
         grand_totals=grand_totals,
-        partners=partners
+        partners=partners,
+        prepay_reconciliation=prepay_reconciliation
     )
 
 

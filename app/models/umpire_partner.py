@@ -41,6 +41,10 @@ class UmpirePartner(db.Model):
     # If 1, individual umpire digests are generated instead of a single partner digest
     is_managed_by_org = db.Column(db.Boolean, default=False)
 
+    # Whether we prepay invoices for this partner (requires credit tracking)
+    # If True, postponed games generate credits to be applied to future payments
+    prepays_invoices = db.Column(db.Boolean, default=False)
+
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

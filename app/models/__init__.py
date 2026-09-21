@@ -26,6 +26,7 @@ from .umpire_guardian import UmpireGuardian
 from .umpire_blockout import UmpireBlockout
 from .umpire_partner import UmpirePartner
 from .partner_contact import PartnerContact
+from .partner_payment import PartnerPaymentRecord, PartnerCredit
 from .game_umpire import GameUmpire
 from .umpire_delegation import UmpireDelegationRule, UmpireDelegationOverride
 from .umpire_delegation_allocation import UmpireDelegationAllocation

@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block title %}Partner Payments{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filters-bar {
+        background: #f5f5f5;
+        padding: 15px 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .filters-bar select {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        min-width: 150px;
+    }
+    .partner-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+    .partner-card {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border-left: 4px solid rgb(34, 139, 34);
+    }
+    .partner-card h3 {
+        margin: 0 0 10px 0;
+        font-size: 16px;
+    }
+    .partner-card .stat {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5px;
+    }
+    .partner-card .stat .value {
+        font-weight: 600;
+        color: rgb(34, 139, 34);
+    }
+    .status-badge {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    .status-pending { background: #fff3cd; color: #856404; }
+    .status-paid { background: #d4edda; color: #155724; }
+    .status-disputed { background: #f8d7da; color: #721c24; }
+    .status-void { background: #e2e3e5; color: #6c757d; }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    th {
+        background: rgb(34, 139, 34);
+        color: white;
+        padding: 12px 15px;
+        text-align: left;
+        font-weight: 600;
+        font-size: 13px;
+    }
+    td {
+        padding: 12px 15px;
+        border-bottom: 1px solid #eee;
+    }
+    tr:hover {
+        background: #f8f9fa;
+    }
+    .amount {
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+    }
+    .btn-row {
+        display: flex;
+        gap: 10px;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.index') }}">&larr; Back to Umpires</a>
+</div>
+
+<div class="btn-row">
+    <h1 style="margin: 0;">Partner Payments</h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('umpires.partner_credits') }}" class="btn btn-outline">View Credits</a>
+        {% if can_edit %}
+        <a href="{{ url_for('umpires.new_partner_payment') }}" class="btn btn-primary">Record Payment</a>
+        {% endif %}
+    </div>
+</div>
+
+<p style="color: var(--text-muted); margin-bottom: 20px;">
+    Track payments made to umpire partners with prepay arrangements. Credits from postponed games are tracked separately.
+</p>
+
+{% if partners %}
+<!-- Partner Summary Cards -->
+<div class="partner-summary">
+    {% for partner in partners %}
+    <div class="partner-card">
+        <h3>{{ partner.name }} ({{ partner.short_code }})</h3>
+        <div class="stat">
+            <span>Available Credit:</span>
+            <span class="value">${{ "{:,.2f}".format(partner_totals.get(partner.id, {}).get('available_credit', 0)) }}</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Filters -->
+<div class="filters-bar">
+    <label>Filter:</label>
+    <select id="filterPartner" onchange="applyFilters()">
+        <option value="">All Partners</option>
+        {% for partner in partners %}
+        <option value="{{ partner.id }}" {% if selected_partner_id == partner.id %}selected{% endif %}>
+            {{ partner.name }}
+        </option>
+        {% endfor %}
+    </select>
+    <select id="filterSeason" onchange="applyFilters()">
+        <option value="">All Seasons</option>
+        {% for s in seasons %}
+        <option value="{{ s.year }}_{{ 1 if s.is_spring else 0 }}"
+                {% if selected_year == s.year and selected_is_spring == (1 if s.is_spring else 0) %}selected{% endif %}>
+            {{ 'Spring' if s.is_spring else 'Fall' }} {{ s.year }}
+        </option>
+        {% endfor %}
+    </select>
+    <select id="filterStatus" onchange="applyFilters()">
+        <option value="">All Statuses</option>
+        <option value="pending" {% if selected_status == 'pending' %}selected{% endif %}>Pending</option>
+        <option value="paid" {% if selected_status == 'paid' %}selected{% endif %}>Paid</option>
+        <option value="disputed" {% if selected_status == 'disputed' %}selected{% endif %}>Disputed</option>
+        <option value="void" {% if selected_status == 'void' %}selected{% endif %}>Void</option>
+    </select>
+    <button type="button" class="btn btn-outline" onclick="clearFilters()">Clear</button>
+</div>
+
+<!-- Payments Table -->
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Partner</th>
+                <th>Season</th>
+                <th>Invoice #</th>
+                <th>Invoice Date</th>
+                <th class="amount">Invoice Amount</th>
+                <th class="amount">Paid Amount</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for payment in payments %}
+            <tr>
+                <td><strong>{{ payment.partner.name }}</strong></td>
+                <td>{{ payment.season_name or '-' }}</td>
+                <td>{{ payment.invoice_number or '-' }}</td>
+                <td>{{ payment.invoice_date.strftime('%m/%d/%Y') if payment.invoice_date else '-' }}</td>
+                <td class="amount">{{ '${:,.2f}'.format(payment.invoice_amount) if payment.invoice_amount else '-' }}</td>
+                <td class="amount">{{ '${:,.2f}'.format(payment.paid_amount) if payment.paid_amount else '-' }}</td>
+                <td>
+                    <span class="status-badge status-{{ payment.status }}">
+                        {{ payment.status|capitalize }}
+                    </span>
+                </td>
+                <td style="text-align: right;">
+                    <a href="{{ url_for('umpires.view_partner_payment', id=payment.id) }}"
+                       class="btn btn-outline" style="padding: 4px 12px; font-size: 12px;">View</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 40px;">
+                    No payment records found.
+                    {% if can_edit %}
+                    <a href="{{ url_for('umpires.new_partner_payment') }}">Record one</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card" style="text-align: center; padding: 40px;">
+    <p style="color: var(--text-muted);">
+        No partners are configured for prepay tracking.<br>
+        Enable "Prepays Invoices" on a partner in <a href="{{ url_for('umpires.partners') }}">Partner Settings</a> to get started.
+    </p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function applyFilters() {
+    var partner = document.getElementById('filterPartner').value;
+    var season = document.getElementById('filterSeason').value;
+    var status = document.getElementById('filterStatus').value;
+
+    var url = new URL(window.location.href);
+    url.searchParams.delete('partner_id');
+    url.searchParams.delete('year');
+    url.searchParams.delete('is_spring');
+    url.searchParams.delete('status');
+
+    if (partner) url.searchParams.set('partner_id', partner);
+    if (season) {
+        var parts = season.split('_');
+        url.searchParams.set('year', parts[0]);
+        url.searchParams.set('is_spring', parts[1]);
+    }
+    if (status) url.searchParams.set('status', status);
+
+    window.location.href = url.toString();
+}
+
+function clearFilters() {
+    window.location.href = '{{ url_for("umpires.partner_payments") }}';
+}
+</script>
+{% endblock %}

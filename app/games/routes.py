@@ -1514,7 +1514,12 @@ def rainout(year, is_spring):
 
                 db.session.commit()
 
-                # Log changes for each game
+                # Log changes for each game and create credits for prepay partners
+                from app.models.umpire_partner import UmpirePartner
+                from app.models.partner_payment import PartnerCredit
+                from app.models.league import League
+
+                credits_created = 0
                 for game in games:
                     change = GameChangeService.log_change(
                         game_id=game.ID,
@@ -1525,8 +1530,39 @@ def rainout(year, is_spring):
                     )
                     GameChangeService.queue_notifications_for_change(change, game)
 
+                    # Create credit for prepay partners
+                    if game.umpire_override:
+                        partner = UmpirePartner.query.filter_by(
+                            short_code=game.umpire_override.upper(),
+                            active=True
+                        ).first()
+                        if partner and partner.prepays_invoices:
+                            # Get umpire count and rate
+                            league = League.query.filter_by(display_name=game.league).first()
+                            if game.umpire_count_override is not None:
+                                umpire_count = game.umpire_count_override
+                            elif league:
+                                is_playoff = game.game_type == 'playoff'
+                                umpire_count = league.get_umpire_count(is_playoff=is_playoff)
+                            else:
+                                umpire_count = 1
+
+                            if umpire_count > 0:
+                                rate = float(partner.rate_ntl if game.no_time_limit else partner.rate_normal) or 35.0
+                                credit = PartnerCredit.create_from_postponed_game(
+                                    game, partner, rate, umpire_count, current_user.ID
+                                )
+                                db.session.add(credit)
+                                credits_created += 1
+
+                if credits_created > 0:
+                    db.session.commit()
+
                 logger.info(f'Postponed {count} games for rainout on {rainout_date}')
-                flash(f'Postponed {count} games for {rainout_date.strftime("%B %d, %Y")}', 'success')
+                msg = f'Postponed {count} games for {rainout_date.strftime("%B %d, %Y")}'
+                if credits_created > 0:
+                    msg += f' ({credits_created} credits created for prepay partners)'
+                flash(msg, 'success')
 
         elif action == 'reschedule_game':
             game_id = int(request.form.get('game_id'))
