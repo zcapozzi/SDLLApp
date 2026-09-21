@@ -2,8 +2,11 @@
 
 import os
 import hashlib
-from cryptography.fernet import Fernet
+import logging
+from cryptography.fernet import Fernet, InvalidToken
 from flask import current_app
+
+logger = logging.getLogger(__name__)
 
 
 def get_fernet():
@@ -27,11 +30,23 @@ def encrypt_value(value):
 
 
 def decrypt_value(encrypted_value):
-    """Decrypt an encrypted value"""
-    if encrypted_value is None:
+    """Decrypt an encrypted value.
+
+    Returns the decrypted value, or "[DECRYPTION_ERROR]" if decryption fails
+    (e.g., data was encrypted with a different key).
+    """
+    if encrypted_value is None or encrypted_value == '':
         return None
-    fernet = get_fernet()
-    return fernet.decrypt(encrypted_value.encode()).decode()
+    try:
+        fernet = get_fernet()
+        return fernet.decrypt(encrypted_value.encode()).decode()
+    except (InvalidToken, Exception) as e:
+        # Data was encrypted with a different key, is corrupted, or invalid
+        logger.warning(
+            f"Failed to decrypt value: {type(e).__name__}. "
+            "Data may have been encrypted with a different ENCRYPTION_KEY."
+        )
+        return "[DECRYPTION_ERROR]"
 
 
 def hash_for_lookup(value):
