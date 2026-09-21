@@ -5,7 +5,7 @@
 {% block extra_css %}
 <style>
     .rates-container {
-        max-width: 800px;
+        max-width: 1100px;
     }
     .rates-table {
         width: 100%;
@@ -18,12 +18,13 @@
     .rates-table th {
         background: rgb(34, 139, 34);
         color: white;
-        padding: 15px;
+        padding: 12px 10px;
         text-align: left;
         font-weight: 600;
+        font-size: 13px;
     }
     .rates-table td {
-        padding: 15px;
+        padding: 12px 10px;
         border-bottom: 1px solid #eee;
         vertical-align: middle;
     }
@@ -31,8 +32,8 @@
         border-bottom: none;
     }
     .rates-table input[type="number"] {
-        width: 100px;
-        padding: 8px 10px;
+        width: 90px;
+        padding: 6px 8px;
         border: 1px solid #ddd;
         border-radius: 4px;
         font-size: 14px;
@@ -41,21 +42,22 @@
         border-color: rgb(34, 139, 34);
         outline: none;
     }
+    .rates-table input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
     .partner-name {
         font-weight: 600;
     }
     .partner-code {
         color: #666;
-        font-size: 13px;
-    }
-    .rate-label {
         font-size: 12px;
-        color: #666;
-        margin-bottom: 4px;
     }
-    .rate-group {
-        display: flex;
-        flex-direction: column;
+    .rate-description {
+        font-size: 11px;
+        color: #888;
+        margin-top: 4px;
     }
     .btn-row {
         margin-top: 20px;
@@ -70,9 +72,20 @@
         font-size: 14px;
         color: #666;
     }
+    .help-text h4 {
+        margin: 0 0 10px 0;
+        color: #333;
+    }
+    .help-text ul {
+        margin: 0;
+        padding-left: 20px;
+    }
     abbr[title] {
         text-decoration: underline dotted;
         cursor: help;
+    }
+    .checkbox-cell {
+        text-align: center;
     }
 </style>
 {% endblock %}
@@ -81,11 +94,14 @@
 <h1>Umpire Rates</h1>
 
 <div class="help-text">
-    Set the per-umpire rate for each partner organization. These rates are used to calculate
-    costs in the <a href="{{ url_for('umpires.delegation_report') }}">Delegation Report</a>.
-    <br><br>
-    <strong>Normal Rate:</strong> Standard games (typically 2 hours)<br>
-    <strong><abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr> Rate:</strong> No Time Limit games (typically 3 hours)
+    <h4>Rate Structure</h4>
+    <ul>
+        <li><strong>Per-Umpire Rate:</strong> Cost per umpire assigned (e.g., Diamond: $85/umpire)</li>
+        <li><strong>Flat Rate:</strong> Check this if rate is per-game regardless of umpire count (e.g., Dynamic: $100/game)</li>
+        <li><strong>Per-Game Booking:</strong> Additional fee per game (e.g., Diamond: $18/game)</li>
+        <li><strong>Per-Season Fee:</strong> One-time seasonal booking fee (e.g., Dynamic: $1000/season)</li>
+        <li><strong><abbr title="No Time Limit - extended playoff-style games">NTL</abbr> Rate:</strong> Rate for No Time Limit games (leave blank to use normal rate)</li>
+    </ul>
 </div>
 
 <div class="rates-container">
@@ -96,8 +112,11 @@
             <thead>
                 <tr>
                     <th>Partner</th>
-                    <th>Normal Rate ($/ump)</th>
-                    <th><abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr> Rate ($/ump)</th>
+                    <th style="text-align: center;">Flat Rate?</th>
+                    <th>Normal Rate</th>
+                    <th><abbr title="No Time Limit">NTL</abbr> Rate</th>
+                    <th>Per-Game Booking</th>
+                    <th>Per-Season Fee</th>
                 </tr>
             </thead>
             <tbody>
@@ -106,18 +125,28 @@
                     <td>
                         <div class="partner-name">{{ partner.name }}</div>
                         <div class="partner-code">{{ partner.short_code }}</div>
+                        <div class="rate-description">{{ partner.get_rate_description() }}</div>
+                    </td>
+                    <td class="checkbox-cell">
+                        <input type="checkbox" name="is_flat_rate_{{ partner.id }}"
+                               {% if partner.is_flat_rate %}checked{% endif %}
+                               title="Check if rate is per-game instead of per-umpire">
                     </td>
                     <td>
-                        <div class="rate-group">
-                            <input type="number" step="0.01" min="0" name="rate_normal_{{ partner.id }}"
-                                   value="{{ partner.rate_normal or '' }}" placeholder="35.00">
-                        </div>
+                        <input type="number" step="0.01" min="0" name="rate_normal_{{ partner.id }}"
+                               value="{{ partner.rate_normal or '' }}" placeholder="0.00">
                     </td>
                     <td>
-                        <div class="rate-group">
-                            <input type="number" step="0.01" min="0" name="rate_ntl_{{ partner.id }}"
-                                   value="{{ partner.rate_ntl or '' }}" placeholder="50.00">
-                        </div>
+                        <input type="number" step="0.01" min="0" name="rate_ntl_{{ partner.id }}"
+                               value="{{ partner.rate_ntl or '' }}" placeholder="same">
+                    </td>
+                    <td>
+                        <input type="number" step="0.01" min="0" name="booking_fee_per_game_{{ partner.id }}"
+                               value="{{ partner.booking_fee_per_game or '' }}" placeholder="0.00">
+                    </td>
+                    <td>
+                        <input type="number" step="0.01" min="0" name="booking_fee_per_season_{{ partner.id }}"
+                               value="{{ partner.booking_fee_per_season or '' }}" placeholder="0.00">
                     </td>
                 </tr>
                 {% endfor %}
@@ -129,5 +158,13 @@
             <a href="{{ url_for('umpires.delegation_report') }}" class="btn btn-outline">Back to Report</a>
         </div>
     </form>
+</div>
+
+<div class="help-text" style="margin-top: 30px;">
+    <h4>Example Calculations</h4>
+    <ul>
+        <li><strong>Diamond (per-umpire):</strong> 2 umpires × $85 + $18 booking = <strong>$188</strong></li>
+        <li><strong>Dynamic (flat rate):</strong> $100 flat + $0 booking = <strong>$100</strong> (+ $1000/season)</li>
+    </ul>
 </div>
 {% endblock %}

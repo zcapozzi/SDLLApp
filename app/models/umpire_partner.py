@@ -27,9 +27,16 @@ class UmpirePartner(db.Model):
     # Status
     active = db.Column(db.Boolean, default=True)
 
-    # Per-game rates (cost per umpire)
-    rate_normal = db.Column(db.Numeric(6, 2))  # Rate for normal games (per umpire)
-    rate_ntl = db.Column(db.Numeric(6, 2))     # Rate for no-time-limit games (per umpire)
+    # Per-game rates
+    # If is_flat_rate=False: rate is per umpire (e.g., Diamond $85/umpire)
+    # If is_flat_rate=True: rate is flat per game (e.g., Dynamic $100/game)
+    rate_normal = db.Column(db.Numeric(8, 2))  # Rate for normal games
+    rate_ntl = db.Column(db.Numeric(8, 2))     # Rate for no-time-limit games
+    is_flat_rate = db.Column(db.Boolean, default=False)  # True = rate is per game, False = rate is per umpire
+
+    # Booking fees (in addition to umpire rates)
+    booking_fee_per_game = db.Column(db.Numeric(8, 2), default=0)  # Per-game fee (e.g., Diamond $18/game)
+    booking_fee_per_season = db.Column(db.Numeric(8, 2), default=0)  # Per-season fee (e.g., Dynamic $1000/season)
 
     # Schedule token for public schedule URL
     schedule_token = db.Column(db.String(32), unique=True, nullable=True, index=True)
@@ -185,3 +192,60 @@ class UmpirePartner(db.Model):
         """Get the primary contact for display purposes."""
         from app.models.partner_contact import PartnerContact
         return PartnerContact.get_primary_contact(self.id)
+
+    def calculate_game_cost(self, umpire_count, is_ntl=False):
+        """Calculate total cost for a single game.
+
+        Args:
+            umpire_count: Number of umpires assigned to the game
+            is_ntl: True if this is a no-time-limit game
+
+        Returns:
+            Decimal total cost for the game
+
+        Examples:
+            Diamond (per-umpire): 2 umpires * $85 + $18 booking = $188
+            Dynamic (flat rate): $100 flat + $0 booking = $100
+        """
+        from decimal import Decimal
+
+        # Get the appropriate rate
+        if is_ntl and self.rate_ntl:
+            base_rate = Decimal(str(self.rate_ntl))
+        else:
+            base_rate = Decimal(str(self.rate_normal or 0))
+
+        # Calculate umpire cost
+        if self.is_flat_rate:
+            # Flat rate per game regardless of umpire count
+            umpire_cost = base_rate
+        else:
+            # Per-umpire rate
+            umpire_cost = base_rate * umpire_count
+
+        # Add per-game booking fee
+        booking_fee = Decimal(str(self.booking_fee_per_game or 0))
+
+        return umpire_cost + booking_fee
+
+    def get_rate_description(self):
+        """Get a human-readable description of the rate structure.
+
+        Returns:
+            String like "$85/umpire + $18/game" or "$100/game flat"
+        """
+        parts = []
+
+        if self.rate_normal:
+            if self.is_flat_rate:
+                parts.append(f"${self.rate_normal}/game flat")
+            else:
+                parts.append(f"${self.rate_normal}/umpire")
+
+        if self.booking_fee_per_game and self.booking_fee_per_game > 0:
+            parts.append(f"${self.booking_fee_per_game}/game booking")
+
+        if self.booking_fee_per_season and self.booking_fee_per_season > 0:
+            parts.append(f"${self.booking_fee_per_season}/season")
+
+        return " + ".join(parts) if parts else "No rates set"

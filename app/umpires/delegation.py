@@ -287,44 +287,71 @@ def delegation_report(year=None, is_spring=None):
             summary[partner_code][league_name]['games'] += 1
             summary[partner_code][league_name]['umpires'] += umpire_count
 
-    # Calculate costs
-    # Default rates if not set (you can change these defaults)
+    # Calculate costs using new rate structure
+    # Partners can have:
+    # - Per-umpire rates (is_flat_rate=False): cost = umpires * rate + games * booking_fee
+    # - Flat rates (is_flat_rate=True): cost = games * rate + games * booking_fee
+    # Plus optional per-season booking fee
+
+    # Default rates for SDL (internal umpires)
     default_rate_normal = 35.00
     default_rate_ntl = 50.00
-
-    # Get rates from partners
-    rates = {'SDL': {'normal': default_rate_normal, 'ntl': default_rate_ntl}}
-    for p in partners:
-        rates[p.short_code] = {
-            'normal': float(p.rate_normal) if p.rate_normal else default_rate_normal,
-            'ntl': float(p.rate_ntl) if p.rate_ntl else default_rate_ntl
-        }
 
     # Calculate totals and costs
     report_data = []
     grand_totals = {
         'games': 0, 'ntl_games': 0, 'umpires': 0, 'ntl_umpires': 0,
-        'cost_normal': 0, 'cost_ntl': 0, 'cost_total': 0
+        'cost_umpires': 0, 'cost_booking': 0, 'cost_season': 0, 'cost_total': 0
     }
 
     for partner_code in partner_codes:
         if partner_code not in summary:
             continue
 
-        partner_rates = rates.get(partner_code, {'normal': default_rate_normal, 'ntl': default_rate_ntl})
-        partner_name = partner_lookup.get(partner_code)
-        partner_name = partner_name.name if partner_name else ('SDLL Academy' if partner_code == 'SDL' else partner_code)
+        partner_obj = partner_lookup.get(partner_code)
+        partner_name = partner_obj.name if partner_obj else ('SDLL Academy' if partner_code == 'SDL' else partner_code)
+
+        # Get rate info from partner object
+        if partner_obj:
+            rate_normal = float(partner_obj.rate_normal or default_rate_normal)
+            rate_ntl = float(partner_obj.rate_ntl or rate_normal)
+            is_flat_rate = partner_obj.is_flat_rate
+            booking_fee_per_game = float(partner_obj.booking_fee_per_game or 0)
+            booking_fee_per_season = float(partner_obj.booking_fee_per_season or 0)
+            rate_description = partner_obj.get_rate_description()
+        else:
+            # SDL defaults
+            rate_normal = default_rate_normal
+            rate_ntl = default_rate_ntl
+            is_flat_rate = False
+            booking_fee_per_game = 0
+            booking_fee_per_season = 0
+            rate_description = f"${rate_normal}/umpire"
 
         partner_totals = {
             'games': 0, 'ntl_games': 0, 'umpires': 0, 'ntl_umpires': 0,
-            'cost_normal': 0, 'cost_ntl': 0, 'cost_total': 0
+            'cost_umpires': 0, 'cost_booking': 0, 'cost_total': 0
         }
 
         league_rows = []
         for league_name, data in sorted(summary[partner_code].items()):
-            cost_normal = data['umpires'] * partner_rates['normal']
-            cost_ntl = data['ntl_umpires'] * partner_rates['ntl']
-            cost_total = cost_normal + cost_ntl
+            # Calculate umpire/game costs based on rate type
+            if is_flat_rate:
+                # Flat rate: cost per game regardless of umpire count
+                cost_normal_umpires = data['games'] * rate_normal
+                cost_ntl_umpires = data['ntl_games'] * rate_ntl
+            else:
+                # Per-umpire rate
+                cost_normal_umpires = data['umpires'] * rate_normal
+                cost_ntl_umpires = data['ntl_umpires'] * rate_ntl
+
+            cost_umpires = cost_normal_umpires + cost_ntl_umpires
+
+            # Per-game booking fee applies to all games
+            total_games = data['games'] + data['ntl_games']
+            cost_booking = total_games * booking_fee_per_game
+
+            cost_total = cost_umpires + cost_booking
 
             league_rows.append({
                 'league': league_name,
@@ -332,8 +359,8 @@ def delegation_report(year=None, is_spring=None):
                 'ntl_games': data['ntl_games'],
                 'umpires': data['umpires'],
                 'ntl_umpires': data['ntl_umpires'],
-                'cost_normal': cost_normal,
-                'cost_ntl': cost_ntl,
+                'cost_umpires': cost_umpires,
+                'cost_booking': cost_booking,
                 'cost_total': cost_total
             })
 
@@ -341,19 +368,27 @@ def delegation_report(year=None, is_spring=None):
             partner_totals['ntl_games'] += data['ntl_games']
             partner_totals['umpires'] += data['umpires']
             partner_totals['ntl_umpires'] += data['ntl_umpires']
-            partner_totals['cost_normal'] += cost_normal
-            partner_totals['cost_ntl'] += cost_ntl
+            partner_totals['cost_umpires'] += cost_umpires
+            partner_totals['cost_booking'] += cost_booking
             partner_totals['cost_total'] += cost_total
 
-        # Calculate blended rate (total cost / total umpires)
-        total_umpires = partner_totals['umpires'] + partner_totals['ntl_umpires']
-        blended_rate = partner_totals['cost_total'] / total_umpires if total_umpires > 0 else 0
+        # Add per-season booking fee to partner total
+        partner_totals['cost_season'] = booking_fee_per_season
+        partner_totals['cost_total'] += booking_fee_per_season
+
+        # Calculate blended rate (total cost / total games)
+        total_games = partner_totals['games'] + partner_totals['ntl_games']
+        blended_rate = partner_totals['cost_total'] / total_games if total_games > 0 else 0
 
         report_data.append({
             'code': partner_code,
             'name': partner_name,
-            'rate_normal': partner_rates['normal'],
-            'rate_ntl': partner_rates['ntl'],
+            'rate_normal': rate_normal,
+            'rate_ntl': rate_ntl,
+            'is_flat_rate': is_flat_rate,
+            'booking_fee_per_game': booking_fee_per_game,
+            'booking_fee_per_season': booking_fee_per_season,
+            'rate_description': rate_description,
             'leagues': league_rows,
             'totals': partner_totals,
             'blended_rate': blended_rate
@@ -363,8 +398,9 @@ def delegation_report(year=None, is_spring=None):
         grand_totals['ntl_games'] += partner_totals['ntl_games']
         grand_totals['umpires'] += partner_totals['umpires']
         grand_totals['ntl_umpires'] += partner_totals['ntl_umpires']
-        grand_totals['cost_normal'] += partner_totals['cost_normal']
-        grand_totals['cost_ntl'] += partner_totals['cost_ntl']
+        grand_totals['cost_umpires'] += partner_totals['cost_umpires']
+        grand_totals['cost_booking'] += partner_totals['cost_booking']
+        grand_totals['cost_season'] += partner_totals.get('cost_season', 0)
         grand_totals['cost_total'] += partner_totals['cost_total']
 
     # Get available seasons for picker
@@ -520,41 +556,27 @@ def invoice_tieout():
 
     games = games_query.order_by(Game.game_date).all()
 
-    # Get partner rates
+    # Build partner lookup for rate calculation
+    partner_objs = {p.short_code: p for p in partners}
+    partner_names = {p.short_code: p.name for p in partners}
+    partner_names['SDL'] = 'SDLL Academy'
+
+    # Default rates for SDL
     default_rate_normal = 35.00
     default_rate_ntl = 50.00
-    partner_rates = {}
-    for p in partners:
-        partner_rates[p.short_code] = {
-            'normal': float(p.rate_normal) if p.rate_normal else default_rate_normal,
-            'ntl': float(p.rate_ntl) if p.rate_ntl else default_rate_ntl
-        }
-    # Add SDL rates
-    sdl_partner = next((p for p in partners if p.short_code == 'SDL'), None)
-    if sdl_partner:
-        partner_rates['SDL'] = {
-            'normal': float(sdl_partner.rate_normal) if sdl_partner.rate_normal else default_rate_normal,
-            'ntl': float(sdl_partner.rate_ntl) if sdl_partner.rate_ntl else default_rate_ntl
-        }
-    else:
-        partner_rates['SDL'] = {'normal': default_rate_normal, 'ntl': default_rate_ntl}
 
     # Build game details and per-partner summaries
     game_rows = []
-    partner_summaries = {}  # {partner_code: {name, games, ntl_games, umpires, ntl_umpires, cost_normal, cost_ntl, cost_total}}
+    partner_summaries = {}
     totals = {
         'games': 0,
         'ntl_games': 0,
         'umpires': 0,
         'ntl_umpires': 0,
-        'cost_normal': 0,
-        'cost_ntl': 0,
+        'cost_umpires': 0,
+        'cost_booking': 0,
         'cost_total': 0
     }
-
-    # Build partner name lookup
-    partner_names = {p.short_code: p.name for p in partners}
-    partner_names['SDL'] = 'SDLL Academy'
 
     for game in games:
         # Skip games without an umpire partner assigned
@@ -567,6 +589,7 @@ def invoice_tieout():
 
         game_partner = game.umpire_override.upper()
         league_name = game.league or 'Unknown'
+        partner_obj = partner_objs.get(game_partner)
 
         # Get umpire count
         league_obj = league_lookup.get(league_name.lower().strip())
@@ -581,15 +604,26 @@ def invoice_tieout():
         if umpire_count == 0:
             umpire_count = 1
 
-        # Get rates for this partner
-        rates = partner_rates.get(game_partner, {'normal': default_rate_normal, 'ntl': default_rate_ntl})
-
-        # Calculate cost
         is_ntl = game.no_time_limit
-        if is_ntl:
-            cost = umpire_count * rates['ntl']
+
+        # Calculate cost using partner's rate structure
+        if partner_obj:
+            cost = float(partner_obj.calculate_game_cost(umpire_count, is_ntl))
+            booking_fee = float(partner_obj.booking_fee_per_game or 0)
+            is_flat_rate = partner_obj.is_flat_rate
+            if is_ntl:
+                rate = float(partner_obj.rate_ntl or partner_obj.rate_normal or default_rate_ntl)
+            else:
+                rate = float(partner_obj.rate_normal or default_rate_normal)
         else:
-            cost = umpire_count * rates['normal']
+            # SDL defaults
+            rate = default_rate_ntl if is_ntl else default_rate_normal
+            cost = umpire_count * rate
+            booking_fee = 0
+            is_flat_rate = False
+
+        # Calculate umpire cost (cost minus booking fee)
+        cost_umpires = cost - booking_fee
 
         game_rows.append({
             'id': game.ID,
@@ -602,7 +636,10 @@ def invoice_tieout():
             'partner': game_partner,
             'umpire_count': umpire_count,
             'is_ntl': is_ntl,
-            'rate': rates['ntl'] if is_ntl else rates['normal'],
+            'is_flat_rate': is_flat_rate,
+            'rate': rate,
+            'booking_fee': booking_fee,
+            'cost_umpires': cost_umpires,
             'cost': cost,
             'game_type': game.game_type,
             'status': game.status
@@ -613,8 +650,8 @@ def invoice_tieout():
         totals['ntl_games'] += 1 if is_ntl else 0
         totals['umpires'] += 0 if is_ntl else umpire_count
         totals['ntl_umpires'] += umpire_count if is_ntl else 0
-        totals['cost_normal'] += 0 if is_ntl else cost
-        totals['cost_ntl'] += cost if is_ntl else 0
+        totals['cost_umpires'] += cost_umpires
+        totals['cost_booking'] += booking_fee
         totals['cost_total'] += cost
 
         # Update per-partner summary
@@ -626,17 +663,18 @@ def invoice_tieout():
                 'ntl_games': 0,
                 'umpires': 0,
                 'ntl_umpires': 0,
-                'cost_normal': 0,
-                'cost_ntl': 0,
-                'cost_total': 0
+                'cost_umpires': 0,
+                'cost_booking': 0,
+                'cost_total': 0,
+                'rate_description': partner_obj.get_rate_description() if partner_obj else f"${default_rate_normal}/umpire"
             }
         ps = partner_summaries[game_partner]
         ps['games'] += 0 if is_ntl else 1
         ps['ntl_games'] += 1 if is_ntl else 0
         ps['umpires'] += 0 if is_ntl else umpire_count
         ps['ntl_umpires'] += umpire_count if is_ntl else 0
-        ps['cost_normal'] += 0 if is_ntl else cost
-        ps['cost_ntl'] += cost if is_ntl else 0
+        ps['cost_umpires'] += cost_umpires
+        ps['cost_booking'] += booking_fee
         ps['cost_total'] += cost
 
     # Sort partner summaries by name
@@ -687,25 +725,60 @@ def invoice_tieout():
 @login_required
 @umpire_coordinator_required
 def delegation_rates():
-    """Manage per-game rates for each umpire partner."""
+    """Manage per-game rates for each umpire partner.
+
+    Supports:
+    - Per-umpire rates (is_flat_rate=False): cost = umpires * rate + booking_fee
+    - Flat rates (is_flat_rate=True): cost = flat_rate + booking_fee
+    - Per-game booking fees
+    - Per-season booking fees
+    """
     partners = UmpirePartner.query.filter_by(active=True).order_by(UmpirePartner.name).all()
 
     if request.method == 'POST':
         for partner in partners:
-            rate_normal = request.form.get(f'rate_normal_{partner.id}')
-            rate_ntl = request.form.get(f'rate_ntl_{partner.id}')
+            # Rate type (flat vs per-umpire)
+            partner.is_flat_rate = request.form.get(f'is_flat_rate_{partner.id}') == 'on'
 
+            # Normal rate
+            rate_normal = request.form.get(f'rate_normal_{partner.id}', '').strip()
             if rate_normal:
                 try:
                     partner.rate_normal = float(rate_normal)
                 except ValueError:
                     pass
+            else:
+                partner.rate_normal = None
 
+            # NTL rate
+            rate_ntl = request.form.get(f'rate_ntl_{partner.id}', '').strip()
             if rate_ntl:
                 try:
                     partner.rate_ntl = float(rate_ntl)
                 except ValueError:
                     pass
+            else:
+                partner.rate_ntl = None
+
+            # Per-game booking fee
+            booking_game = request.form.get(f'booking_fee_per_game_{partner.id}', '').strip()
+            if booking_game:
+                try:
+                    partner.booking_fee_per_game = float(booking_game)
+                except ValueError:
+                    pass
+            else:
+                partner.booking_fee_per_game = 0
+
+            # Per-season booking fee
+            booking_season = request.form.get(f'booking_fee_per_season_{partner.id}', '').strip()
+            if booking_season:
+                try:
+                    partner.booking_fee_per_season = float(booking_season)
+                except ValueError:
+                    pass
+            else:
+                partner.booking_fee_per_season = 0
 
         db.session.commit()
         flash('Rates updated successfully.', 'success')

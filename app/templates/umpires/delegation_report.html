@@ -510,8 +510,7 @@
         <div class="partner-header">
             <h3>{{ partner.name }}</h3>
             <div class="partner-rates">
-                Normal: ${{ "{:,.0f}".format(partner.rate_normal) }}/ump |
-                <abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr>: ${{ "{:,.0f}".format(partner.rate_ntl) }}/ump
+                {{ partner.rate_description }}
             </div>
         </div>
 
@@ -522,10 +521,12 @@
                     <th>League</th>
                     <th class="number">Games</th>
                     <th class="number">Umpires</th>
-                    <th class="number"><abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr> Games</th>
-                    <th class="number"><abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr> Umpires</th>
-                    <th class="currency">Normal Cost</th>
-                    <th class="currency"><abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr> Cost</th>
+                    <th class="number"><abbr title="No Time Limit">NTL</abbr> Games</th>
+                    <th class="number"><abbr title="No Time Limit">NTL</abbr> Umps</th>
+                    <th class="currency">{% if partner.is_flat_rate %}Game Cost{% else %}Umpire Cost{% endif %}</th>
+                    {% if partner.booking_fee_per_game > 0 %}
+                    <th class="currency">Booking</th>
+                    {% endif %}
                     <th class="currency">Total</th>
                 </tr>
             </thead>
@@ -537,26 +538,40 @@
                     <td class="number">{{ "{:,}".format(row.umpires) }}</td>
                     <td class="number">{{ "{:,}".format(row.ntl_games) }}</td>
                     <td class="number">{{ "{:,}".format(row.ntl_umpires) }}</td>
-                    <td class="currency">${{ "{:,.0f}".format(row.cost_normal) }}</td>
-                    <td class="currency">${{ "{:,.0f}".format(row.cost_ntl) }}</td>
+                    <td class="currency">${{ "{:,.0f}".format(row.cost_umpires) }}</td>
+                    {% if partner.booking_fee_per_game > 0 %}
+                    <td class="currency">${{ "{:,.0f}".format(row.cost_booking) }}</td>
+                    {% endif %}
                     <td class="currency">${{ "{:,.0f}".format(row.cost_total) }}</td>
                 </tr>
                 {% endfor %}
                 <tr class="totals-row">
-                    <td><strong>Total</strong></td>
+                    <td><strong>Subtotal</strong></td>
                     <td class="number"><strong>{{ "{:,}".format(partner.totals.games) }}</strong></td>
                     <td class="number"><strong>{{ "{:,}".format(partner.totals.umpires) }}</strong></td>
                     <td class="number"><strong>{{ "{:,}".format(partner.totals.ntl_games) }}</strong></td>
                     <td class="number"><strong>{{ "{:,}".format(partner.totals.ntl_umpires) }}</strong></td>
-                    <td class="currency"><strong>${{ "{:,.0f}".format(partner.totals.cost_normal) }}</strong></td>
-                    <td class="currency"><strong>${{ "{:,.0f}".format(partner.totals.cost_ntl) }}</strong></td>
+                    <td class="currency"><strong>${{ "{:,.0f}".format(partner.totals.cost_umpires) }}</strong></td>
+                    {% if partner.booking_fee_per_game > 0 %}
+                    <td class="currency"><strong>${{ "{:,.0f}".format(partner.totals.cost_booking) }}</strong></td>
+                    {% endif %}
+                    <td class="currency"><strong>${{ "{:,.0f}".format(partner.totals.cost_total - partner.totals.cost_season) }}</strong></td>
+                </tr>
+                {% if partner.booking_fee_per_season > 0 %}
+                <tr class="totals-row" style="background: #fff3cd;">
+                    <td colspan="{% if partner.booking_fee_per_game > 0 %}6{% else %}5{% endif %}" style="text-align: right;"><strong>Season Fee:</strong></td>
+                    <td class="currency"><strong>${{ "{:,.0f}".format(partner.totals.cost_season) }}</strong></td>
+                </tr>
+                <tr class="totals-row" style="background: #e8f5e9;">
+                    <td colspan="{% if partner.booking_fee_per_game > 0 %}6{% else %}5{% endif %}" style="text-align: right;"><strong>Season Total:</strong></td>
                     <td class="currency"><strong>${{ "{:,.0f}".format(partner.totals.cost_total) }}</strong></td>
                 </tr>
+                {% endif %}
             </tbody>
         </table>
         <div class="blended-rate">
-            Blended Rate: <strong>${{ "{:,.0f}".format(partner.blended_rate) }}</strong> per umpire
-            ({{ "{:,}".format(partner.totals.umpires + partner.totals.ntl_umpires) }} total umpire assignments)
+            Blended Rate: <strong>${{ "{:,.2f}".format(partner.blended_rate) }}</strong> per game
+            ({{ "{:,}".format(partner.totals.games + partner.totals.ntl_games) }} total games)
         </div>
         {% else %}
         <div class="empty-state">No games assigned to {{ partner.name }} this season.</div>
