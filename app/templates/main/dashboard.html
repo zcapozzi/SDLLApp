@@ -87,14 +87,16 @@
 </div>
 
 <!-- Quick Actions -->
-{% if current_user.can_edit_schedule() or current_user.can_manage_umpires() %}
+{% if current_user.can_edit_schedule() or current_user.can_manage_umpires() or current_user.can_view_master_schedule() %}
 <div class="card" style="margin-top: 20px;">
     <h2 style="margin-bottom: 20px;">Quick Actions</h2>
     <div style="display: flex; gap: 15px; flex-wrap: wrap;">
         {% if current_user.can_edit_schedule() %}
         <a href="{{ url_for('seasons.copy_wizard') }}" class="btn btn-primary">Copy Season</a>
         {% endif %}
-        <a href="{{ url_for('games.index') }}" class="btn btn-secondary">Browse Games</a>
+        {% if current_user.can_view_master_schedule() %}
+        <a href="{{ url_for('games.index') }}" class="btn btn-secondary">Master Schedule</a>
+        {% endif %}
     </div>
 </div>
 {% endif %}

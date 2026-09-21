@@ -179,6 +179,14 @@ class User(UserMixin, db.Model):
     def can_edit_schedule(self):
         return self.has_role('admin', 'scheduler')
 
+    def can_view_master_schedule(self):
+        """Check if user can view the master schedule (games index).
+
+        Includes schedulers, umpire coordinators, VPs, and player agents.
+        """
+        return self.has_role('admin', 'scheduler', 'umpire_coordinator',
+                             'BB_VP', 'SB_VP', 'BBPlayerAgent', 'SBPlayerAgent')
+
     def can_manage_umpires(self):
         return self.has_role('admin', 'umpire_coordinator')
 
