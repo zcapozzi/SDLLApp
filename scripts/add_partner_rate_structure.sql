@@ -30,11 +30,11 @@ SET rate_normal = 85.00,
     booking_fee_per_season = 0
 WHERE short_code = 'DIA';
 
--- Set up Dynamic rates: $100/game flat + $1000/season
+-- Set up Dynamic rates: $100/umpire + $1000/season
 UPDATE sdll_umpire_partners
 SET rate_normal = 100.00,
     rate_ntl = 100.00,
-    is_flat_rate = 1,
+    is_flat_rate = 0,
     booking_fee_per_game = 0,
     booking_fee_per_season = 1000.00
 WHERE short_code = 'DYN';
