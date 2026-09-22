@@ -57,7 +57,7 @@
                     {% for s in seasons %}
                     <option value="{{ s.ID }}"
                             {% if current_season and current_season.ID == s.ID %}selected{% endif %}>
-                        {{ s.display_name }}
+                        {{ s.season_name }}
                     </option>
                     {% endfor %}
                 </select>

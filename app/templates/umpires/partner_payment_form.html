@@ -37,7 +37,7 @@
                             {% if payment %}
                                 {% if payment.org_season_id == s.ID %}selected{% endif %}
                             {% elif current_season and current_season.ID == s.ID %}selected{% endif %}>
-                        {{ s.display_name }}
+                        {{ s.season_name }}
                     </option>
                     {% endfor %}
                 </select>
