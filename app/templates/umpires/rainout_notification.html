@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Rainout Notification - SDLL{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1>Rainout Notification</h1>
+        <p class="text-muted">Send a league-wide cancellation notice to all SDL umpires with games today</p>
+    </div>
+
+    <!-- Date selector -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="d-flex gap-2 align-items-center">
+                <label for="target-date" class="form-label mb-0">Date:</label>
+                <input type="date" id="target-date" class="form-control" style="width: auto;"
+                       value="{{ target_date.strftime('%Y-%m-%d') }}"
+                       onchange="changeDate(this.value)">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setToday()">Today</button>
+            </div>
+        </div>
+    </div>
+
+    {% if umpires %}
+    <div class="row">
+        <!-- Message form -->
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">Compose Rainout Message</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('umpires.send_rainout_notification') }}" id="rainout-form">
+                        <input type="hidden" name="target_date" value="{{ target_date.strftime('%Y-%m-%d') }}">
+
+                        <div class="mb-3">
+                            <label for="subject" class="form-label">Subject</label>
+                            <input type="text" class="form-control" id="subject" name="subject"
+                                   value="SDLL Games Cancelled - {{ target_date.strftime('%B %d, %Y') }}">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="message" class="form-label">Message</label>
+                            <textarea class="form-control" id="message" name="message" rows="4">{{ default_message }}</textarea>
+                            <div class="form-text">This message will be sent via BCC to all {{ umpires|length }} umpire(s) listed.</div>
+                        </div>
+
+                        <button type="submit" class="btn btn-danger btn-lg"
+                                onclick="return confirm('Send rainout notification to {{ umpires|length }} umpire(s)?')">
+                            Send Rainout Notification
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recipients list -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Recipients ({{ umpires|length }})</h5>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Umpire</th>
+                                <th>Games</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for umpire in umpires %}
+                            <tr>
+                                <td>
+                                    <strong>{{ umpire.name }}</strong><br>
+                                    <small class="text-muted">{{ umpire.email }}</small>
+                                </td>
+                                <td>
+                                    {% for game in umpire.games %}
+                                    <small>{{ game.time }} @ {{ game.field }}</small>{% if not loop.last %}<br>{% endif %}
+                                    {% endfor %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <strong>No SDL umpires</strong> have games scheduled for {{ target_date.strftime('%A, %B %d, %Y') }}.
+    </div>
+    {% endif %}
+
+    <div class="mt-4">
+        <a href="{{ url_for('umpires.dayof_notifications') }}" class="btn btn-outline-secondary">
+            &larr; Back to Day-of Emails
+        </a>
+    </div>
+</div>
+
+<script>
+function changeDate(dateStr) {
+    window.location.href = '{{ url_for("umpires.rainout_notification") }}?date=' + dateStr;
+}
+
+function setToday() {
+    var today = new Date().toISOString().split('T')[0];
+    document.getElementById('target-date').value = today;
+    changeDate(today);
+}
+</script>
+{% endblock %}

@@ -21,6 +21,11 @@
                 </div>
 
                 <div class="d-flex gap-2">
+                    <!-- Rainout notification -->
+                    <a href="{{ url_for('umpires.rainout_notification', date=target_date.strftime('%Y-%m-%d')) }}" class="btn btn-danger">
+                        Rainout
+                    </a>
+
                     <!-- Generate notifications -->
                     <form method="POST" action="{{ url_for('umpires.generate_dayof_notifications') }}" class="d-inline" id="generate-form">
                         <input type="hidden" name="hours_ahead" value="7">
