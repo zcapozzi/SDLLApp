@@ -9,6 +9,7 @@
         <a href="{{ url_for('umpires.capacity_dashboard') }}" class="btn btn-outline">Capacity</a>
         <a href="{{ url_for('umpires.partners') }}" class="btn btn-outline">Partners</a>
         <a href="{{ url_for('umpires.delegation') }}" class="btn btn-outline">Delegation Rules</a>
+        <a href="{{ url_for('umpires.partner_payments') }}" class="btn btn-outline">Payments</a>
         <a href="{{ url_for('umpires.schedule') }}" class="btn btn-outline">Schedule</a>
         {% if current_season %}
         <a href="{{ url_for('umpires.campaigns', org_season_id=current_season.ID) }}" class="btn btn-outline">Campaigns</a>
