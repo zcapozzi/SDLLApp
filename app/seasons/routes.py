@@ -105,8 +105,16 @@ def setup():
             if existing:
                 flash(f'Season {"Spring" if is_spring else "Fall"} {year} already exists.', 'error')
             else:
-                # Create empty season (will add teams separately)
-                flash(f'Season {"Spring" if is_spring else "Fall"} {year} created. Now add teams.', 'success')
+                # Create OrgSeason record (also generates email campaigns automatically)
+                from app.models.org_season import OrgSeason
+                org_season = OrgSeason.query.filter_by(year=year, is_spring=is_spring).first()
+                if not org_season:
+                    org_season = OrgSeason.create_season(year=year, is_spring=is_spring)
+                    flash(f'Season {"Spring" if is_spring else "Fall"} {year} created with email campaigns. Now add teams.', 'success')
+                else:
+                    # Ensure campaigns exist for existing OrgSeason
+                    org_season.ensure_campaigns()
+                    flash(f'Season {"Spring" if is_spring else "Fall"} {year} created. Now add teams.', 'success')
                 return redirect(url_for('seasons.manage_teams', year=year, is_spring=is_spring))
 
     # Get existing seasons for display
@@ -290,10 +298,8 @@ def manage_teams(year, is_spring):
                             coach_id=coach_id,
                             role=role
                         )
-                        # Auto-fill contact info from user
+                        # Store name for display (email/phone come from User)
                         coach_season.name = coach.user.name
-                        coach_season.email = coach.user.email
-                        coach_season.phone = coach.user.phone
 
                         db.session.add(coach_season)
 
@@ -1460,8 +1466,6 @@ def api_team_setup_update():
                             role='head'
                         )
                         cs.name = coach.user.name
-                        cs.email = coach.user.email
-                        cs.phone = coach.user.phone
                         db.session.add(cs)
 
                         # Update team's coach_name field
@@ -1484,8 +1488,6 @@ def api_team_setup_update():
                             # Update existing slot
                             assistants[slot_num - 1].coach_id = coach_id
                             assistants[slot_num - 1].name = coach.user.name
-                            assistants[slot_num - 1].email = coach.user.email
-                            assistants[slot_num - 1].phone = coach.user.phone
                         else:
                             # Add new assistant
                             cs = CoachSeason(
@@ -1494,8 +1496,6 @@ def api_team_setup_update():
                                 role='assistant'
                             )
                             cs.name = coach.user.name
-                            cs.email = coach.user.email
-                            cs.phone = coach.user.phone
                             db.session.add(cs)
 
             db.session.commit()

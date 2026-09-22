@@ -593,12 +593,17 @@ def send_postgame_email(game_id, team_id):
         head_coach = coaches[0]
         assistant_coaches = coaches[1:]
 
-    # Build email
-    to_email = head_coach.email
+    # Build email - use User email (not CoachSeason.email)
+    to_email = None
+    if head_coach.coach and head_coach.coach.user:
+        to_email = head_coach.coach.user.email
     if not to_email:
         return False, "Head coach has no email"
 
-    cc_emails = [c.email for c in assistant_coaches if c.email]
+    cc_emails = []
+    for c in assistant_coaches:
+        if c.coach and c.coach.user and c.coach.user.email:
+            cc_emails.append(c.coach.user.email)
 
     # Generate email content using shared function
     coach_first_name = head_coach.name.split()[0] if head_coach.name else 'Coach'

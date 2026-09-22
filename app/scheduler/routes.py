@@ -1473,19 +1473,19 @@ def api_game_coach_emails(game_id):
 
     emails = []
 
-    # Get coaches for home team
+    # Get coaches for home team (use User email, not CoachSeason.email)
     if game.home_ID:
         home_coaches = CoachSeason.get_for_team(game.home_ID)
         for coach in home_coaches:
-            if coach.email:
-                emails.append(coach.email)
+            if coach.coach and coach.coach.user and coach.coach.user.email:
+                emails.append(coach.coach.user.email)
 
     # Get coaches for away team
     if game.away_ID:
         away_coaches = CoachSeason.get_for_team(game.away_ID)
         for coach in away_coaches:
-            if coach.email:
-                emails.append(coach.email)
+            if coach.coach and coach.coach.user and coach.coach.user.email:
+                emails.append(coach.coach.user.email)
 
     # Return unique emails
     unique_emails = list(set(emails))

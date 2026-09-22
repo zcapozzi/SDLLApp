@@ -117,7 +117,7 @@
                 <div class="coach-item">
                     <span class="coach-role">{{ 'HC' if coach.is_head_coach else 'AC' }}</span>
                     <span class="coach-name">{{ coach.name or 'Unknown' }}</span>
-                    <span class="coach-email">{{ coach.email or 'No email' }}</span>
+                    <span class="coach-email">{{ coach.coach.user.email if coach.coach and coach.coach.user else 'No email' }}</span>
                 </div>
                 {% endfor %}
             </div>
@@ -157,7 +157,7 @@
                 <div class="coach-item">
                     <span class="coach-role">{{ 'HC' if coach.is_head_coach else 'AC' }}</span>
                     <span class="coach-name">{{ coach.name or 'Unknown' }}</span>
-                    <span class="coach-email">{{ coach.email or 'No email' }}</span>
+                    <span class="coach-email">{{ coach.coach.user.email if coach.coach and coach.coach.user else 'No email' }}</span>
                 </div>
                 {% endfor %}
             </div>

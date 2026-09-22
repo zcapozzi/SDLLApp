@@ -1349,6 +1349,16 @@ def preview_postgame_email(game_id):
         if not email_content:
             continue
 
+        # Get email from linked User account (not CoachSeason.email)
+        def get_coach_email(coach):
+            if coach and coach.coach and coach.coach.user:
+                return coach.coach.user.email
+            return None
+
+        head_email = get_coach_email(head_coach)
+        cc_emails = [get_coach_email(c) for c in assistant_coaches]
+        cc_emails = [e for e in cc_emails if e]  # Filter out None
+
         previews.append({
             'team': team,
             'team_name': team.computed_display_name if team else 'Your Team',
@@ -1356,9 +1366,9 @@ def preview_postgame_email(game_id):
             'opponent_name': opponent.computed_display_name if opponent else 'Opponent',
             'head_coach': head_coach,
             'assistant_coaches': assistant_coaches,
-            'to_email': head_coach.email if head_coach and head_coach.email else 'No head coach email',
+            'to_email': head_email or 'No head coach email',
             'to_name': head_coach.name if head_coach else 'No head coach',
-            'cc_emails': [c.email for c in assistant_coaches if c.email],
+            'cc_emails': cc_emails,
             'cc_names': [c.name for c in assistant_coaches if c.name],
             'submit_url': email_content['report_url'],
             'text_body': email_content['text_body'],
