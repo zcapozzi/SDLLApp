@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Managed Umpire Invoice{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.payment_events') }}">&larr; Back to Payment Events</a>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <div>
+        <h1 style="margin-bottom: 5px;">Managed Umpire Invoice</h1>
+        <p style="color: var(--text-muted);">{{ managed_partner.name }} - What's owed to each umpire</p>
+    </div>
+</div>
+
+<!-- Grand Totals -->
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px;">
+    <div class="card" style="padding: 15px; text-align: center;">
+        <div style="font-size: 24px; font-weight: bold; color: #f0ad4e;">${{ "%.2f"|format(grand_pending) }}</div>
+        <div style="font-size: 12px; color: var(--text-muted);">Pending Review</div>
+    </div>
+    <div class="card" style="padding: 15px; text-align: center;">
+        <div style="font-size: 24px; font-weight: bold; color: #5cb85c;">${{ "%.2f"|format(grand_approved) }}</div>
+        <div style="font-size: 12px; color: var(--text-muted);">Approved to Pay</div>
+    </div>
+    <div class="card" style="padding: 15px; text-align: center;">
+        <div style="font-size: 24px; font-weight: bold;">${{ "%.2f"|format(grand_pending + grand_approved) }}</div>
+        <div style="font-size: 12px; color: var(--text-muted);">Total Unpaid</div>
+    </div>
+    <div class="card" style="padding: 15px; text-align: center;">
+        <div style="font-size: 24px; font-weight: bold; color: #004085;">${{ "%.2f"|format(grand_paid) }}</div>
+        <div style="font-size: 12px; color: var(--text-muted);">Already Paid</div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card" style="margin-bottom: 20px;">
+    <form method="GET" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="org_season_id" style="font-size: 12px;">Season</label>
+            <select name="org_season_id" id="org_season_id" class="form-control" style="width: auto;">
+                {% for season in seasons %}
+                <option value="{{ season.ID }}" {{ 'selected' if selected_org_season_id == season.ID }}>
+                    {{ season.display_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="status" style="font-size: 12px;">Show</label>
+            <select name="status" id="status" class="form-control" style="width: auto;">
+                <option value="pending" {{ 'selected' if selected_status == 'pending' }}>Unpaid Only</option>
+                <option value="all" {{ 'selected' if selected_status == 'all' }}>All Events</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-secondary">Apply</button>
+    </form>
+</div>
+
+<!-- Invoice by Umpire -->
+{% if invoice_data %}
+{% for data in invoice_data %}
+<div class="card" style="margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
+        <div>
+            <h2 style="margin: 0;">{{ data.umpire.display_name }}</h2>
+            <span style="color: var(--text-muted); font-size: 12px;">
+                {{ data.event_count }} event{% if data.event_count != 1 %}s{% endif %}
+            </span>
+        </div>
+        <div style="text-align: right;">
+            <div style="font-size: 24px; font-weight: bold;">
+                ${{ "%.2f"|format(data.unpaid_amount) }}
+            </div>
+            <div style="font-size: 12px; color: var(--text-muted);">unpaid</div>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Details</th>
+                <th style="text-align: right;">Amount</th>
+                <th>Status</th>
+                {% if can_edit %}
+                <th></th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for event in data.events %}
+            <tr>
+                <td>{{ event.original_date.strftime('%m/%d/%Y') }}</td>
+                <td>
+                    <span class="badge {% if event.event_type == 'rainout_arrival' %}badge-warning{% elif event.event_type == 'bonus' %}badge-spring{% endif %}">
+                        {{ event.event_type_label }}
+                    </span>
+                </td>
+                <td>
+                    {% if event.original_league %}{{ event.original_league }}{% endif %}
+                    {% if event.original_field_name %}@ {{ event.original_field_name }}{% endif %}
+                    {% if event.reason %}
+                    <br><span style="font-size: 11px; color: var(--text-muted);">{{ event.reason }}</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: right;">${{ "%.2f"|format(event.amount) }}</td>
+                <td>
+                    {% if event.is_pending %}
+                    <span class="badge badge-warning">Pending</span>
+                    {% elif event.is_approved %}
+                    <span class="badge badge-spring">Approved</span>
+                    {% elif event.is_paid %}
+                    <span class="badge" style="background: #004085; color: white;">Paid</span>
+                    {% endif %}
+                </td>
+                {% if can_edit %}
+                <td>
+                    {% if event.is_pending %}
+                    <form method="POST" action="{{ url_for('umpires.approve_payment_event', id=event.id) }}" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-outline" style="padding: 2px 8px; font-size: 11px;">Approve</button>
+                    </form>
+                    {% elif event.is_approved %}
+                    <form method="POST" action="{{ url_for('umpires.mark_payment_event_paid', id=event.id) }}" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-outline" style="padding: 2px 8px; font-size: 11px;">Mark Paid</button>
+                    </form>
+                    {% endif %}
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr style="font-weight: bold; background: #f5f5f5;">
+                <td colspan="3">Total for {{ data.umpire.first_name }}</td>
+                <td style="text-align: right;">${{ "%.2f"|format(data.total_amount) }}</td>
+                <td colspan="{% if can_edit %}2{% else %}1{% endif %}">
+                    {% if data.pending_amount > 0 %}
+                    <span style="color: #f0ad4e;">Pending: ${{ "%.2f"|format(data.pending_amount) }}</span>
+                    {% endif %}
+                    {% if data.approved_amount > 0 %}
+                    <span style="color: #5cb85c;">Approved: ${{ "%.2f"|format(data.approved_amount) }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+{% endfor %}
+{% else %}
+<div class="card" style="text-align: center; padding: 40px;">
+    <p style="color: var(--text-muted); margin: 0;">
+        No payment events found for the selected criteria.
+    </p>
+    {% if can_edit %}
+    <p style="margin-top: 15px;">
+        <a href="{{ url_for('umpires.new_payment_event') }}" class="btn btn-primary">Create Payment Event</a>
+    </p>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

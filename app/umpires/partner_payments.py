@@ -17,8 +17,12 @@ from flask_login import login_required, current_user
 
 from app.extensions import db
 from app.models.umpire_partner import UmpirePartner
+from app.models.umpire_profile import UmpireProfile
 from app.models.partner_payment import PartnerPaymentRecord, PartnerCredit
+from app.models.umpire_payment_event import UmpirePaymentEvent
+from app.models.game import Game
 from app.models.org_season import OrgSeason
+from app.models.league import League
 
 from . import umpires_bp, logger
 
@@ -532,3 +536,349 @@ def void_partner_credit(id):
     logger.info(f'Voided credit #{credit.id}')
     flash('Credit voided.', 'success')
     return redirect(url_for('umpires.partner_credits'))
+
+
+# =============================================================================
+# Umpire Payment Events - Standalone payment tracking (rainouts, bonuses, etc.)
+# =============================================================================
+
+@umpires_bp.route('/payment-events')
+@login_required
+@payment_view_required
+def payment_events():
+    """List all umpire payment events."""
+    # Get filter parameters
+    status = request.args.get('status')
+    event_type = request.args.get('event_type')
+    payee_type = request.args.get('payee_type')
+    org_season_id = request.args.get('org_season_id', type=int)
+
+    # Build query
+    query = UmpirePaymentEvent.query
+
+    if status:
+        query = query.filter_by(status=status)
+    if event_type:
+        query = query.filter_by(event_type=event_type)
+    if payee_type == 'umpire':
+        query = query.filter(UmpirePaymentEvent.umpire_profile_id.isnot(None))
+    elif payee_type == 'partner':
+        query = query.filter(UmpirePaymentEvent.partner_id.isnot(None))
+    if org_season_id:
+        query = query.filter_by(org_season_id=org_season_id)
+
+    events = query.order_by(UmpirePaymentEvent.original_date.desc()).all()
+
+    # Get seasons and partners for filters
+    seasons = OrgSeason.query.filter_by(org_id=1).order_by(
+        OrgSeason.year.desc(), OrgSeason.is_spring.desc()
+    ).all()
+
+    # Calculate summary stats
+    pending_count = sum(1 for e in events if e.is_pending)
+    pending_amount = sum(e.amount for e in events if e.is_pending)
+    approved_count = sum(1 for e in events if e.is_approved)
+    approved_amount = sum(e.amount for e in events if e.is_approved)
+
+    return render_template(
+        'umpires/payment_events.html',
+        events=events,
+        seasons=seasons,
+        event_types=UmpirePaymentEvent.EVENT_TYPES,
+        event_type_labels=UmpirePaymentEvent.EVENT_TYPE_LABELS,
+        statuses=UmpirePaymentEvent.STATUSES,
+        status_labels=UmpirePaymentEvent.STATUS_LABELS,
+        selected_status=status,
+        selected_event_type=event_type,
+        selected_payee_type=payee_type,
+        selected_org_season_id=org_season_id,
+        pending_count=pending_count,
+        pending_amount=pending_amount,
+        approved_count=approved_count,
+        approved_amount=approved_amount,
+        can_edit=can_record_payments()
+    )
+
+
+@umpires_bp.route('/payment-events/new', methods=['GET', 'POST'])
+@login_required
+@payment_edit_required
+def new_payment_event():
+    """Create a new payment event manually."""
+    # Get partners (for partner payments)
+    partners = UmpirePartner.query.filter_by(active=True).order_by(UmpirePartner.name).all()
+
+    # Get managed partner (SDL Academy) for getting umpires
+    managed_partner = UmpirePartner.query.filter_by(is_managed_by_org=True).first()
+
+    # Get umpires (for individual umpire payments)
+    umpires = []
+    if managed_partner:
+        umpires = UmpireProfile.query.filter_by(
+            partner_id=managed_partner.id,
+            status='active'
+        ).order_by(UmpireProfile.last_name, UmpireProfile.first_name).all()
+
+    # Get seasons
+    seasons = OrgSeason.query.filter_by(org_id=1).order_by(
+        OrgSeason.year.desc(), OrgSeason.is_spring.desc()
+    ).all()
+    current_season = OrgSeason.query.filter_by(org_id=1, is_current=1).first()
+
+    # Get leagues for rate lookup
+    leagues = League.get_all_active()
+
+    if request.method == 'POST':
+        event_type = request.form.get('event_type')
+        payee_type = request.form.get('payee_type')
+
+        # Get payee
+        umpire_profile_id = None
+        partner_id = None
+        if payee_type == 'umpire':
+            umpire_profile_id = request.form.get('umpire_profile_id', type=int)
+        else:
+            partner_id = request.form.get('partner_id', type=int)
+
+        # Get game info
+        original_date_str = request.form.get('original_date')
+        original_time_str = request.form.get('original_time')
+        original_league = request.form.get('original_league', '').strip()
+        original_field_name = request.form.get('original_field_name', '').strip()
+
+        # Parse date/time
+        original_date = None
+        original_time = None
+        if original_date_str:
+            try:
+                original_date = datetime.strptime(original_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                flash('Invalid date format.', 'error')
+                return redirect(url_for('umpires.new_payment_event'))
+
+        if original_time_str:
+            try:
+                original_time = datetime.strptime(original_time_str, '%H:%M').time()
+            except ValueError:
+                pass
+
+        # Get payment details
+        amount_str = request.form.get('amount', '').strip()
+        reason = request.form.get('reason', '').strip()
+        notes = request.form.get('notes', '').strip()
+        org_season_id = request.form.get('org_season_id', type=int)
+
+        if not original_date or not amount_str:
+            flash('Date and amount are required.', 'error')
+            return redirect(url_for('umpires.new_payment_event'))
+
+        try:
+            amount = Decimal(amount_str)
+        except (ValueError, TypeError):
+            flash('Invalid amount.', 'error')
+            return redirect(url_for('umpires.new_payment_event'))
+
+        # Create event
+        event = UmpirePaymentEvent(
+            event_type=event_type,
+            original_date=original_date,
+            original_time=original_time,
+            original_league=original_league or None,
+            original_field_name=original_field_name or None,
+            umpire_profile_id=umpire_profile_id,
+            partner_id=partner_id,
+            amount=amount,
+            reason=reason or None,
+            notes=notes or None,
+            org_season_id=org_season_id or None,
+            created_by_user_id=current_user.ID,
+            status=UmpirePaymentEvent.STATUS_PENDING
+        )
+
+        db.session.add(event)
+        db.session.commit()
+
+        logger.info(f'Created payment event #{event.id}: {event.event_type_label} ${amount}')
+        flash(f'Created payment event: {event.event_type_label} ${amount:.2f}', 'success')
+        return redirect(url_for('umpires.view_payment_event', id=event.id))
+
+    return render_template(
+        'umpires/payment_event_form.html',
+        partners=partners,
+        umpires=umpires,
+        seasons=seasons,
+        leagues=leagues,
+        current_season=current_season,
+        event_types=UmpirePaymentEvent.EVENT_TYPES,
+        event_type_labels=UmpirePaymentEvent.EVENT_TYPE_LABELS,
+        event=None
+    )
+
+
+@umpires_bp.route('/payment-events/<int:id>')
+@login_required
+@payment_view_required
+def view_payment_event(id):
+    """View a payment event."""
+    event = UmpirePaymentEvent.query.get_or_404(id)
+
+    return render_template(
+        'umpires/payment_event_detail.html',
+        event=event,
+        can_edit=can_record_payments()
+    )
+
+
+@umpires_bp.route('/payment-events/<int:id>/approve', methods=['POST'])
+@login_required
+@payment_edit_required
+def approve_payment_event(id):
+    """Approve a pending payment event."""
+    event = UmpirePaymentEvent.query.get_or_404(id)
+
+    if not event.is_pending:
+        flash(f'Cannot approve event in status {event.status_label}.', 'error')
+        return redirect(url_for('umpires.view_payment_event', id=id))
+
+    event.approve(current_user.ID)
+    db.session.commit()
+
+    logger.info(f'Approved payment event #{event.id}')
+    flash('Payment event approved.', 'success')
+    return redirect(url_for('umpires.view_payment_event', id=id))
+
+
+@umpires_bp.route('/payment-events/<int:id>/mark-paid', methods=['POST'])
+@login_required
+@payment_edit_required
+def mark_payment_event_paid(id):
+    """Mark a payment event as paid."""
+    event = UmpirePaymentEvent.query.get_or_404(id)
+
+    if event.is_voided:
+        flash('Cannot mark a voided event as paid.', 'error')
+        return redirect(url_for('umpires.view_payment_event', id=id))
+
+    if event.is_paid:
+        flash('Event is already marked as paid.', 'info')
+        return redirect(url_for('umpires.view_payment_event', id=id))
+
+    event.mark_paid(current_user.ID)
+    db.session.commit()
+
+    logger.info(f'Marked payment event #{event.id} as paid')
+    flash('Payment event marked as paid.', 'success')
+    return redirect(url_for('umpires.view_payment_event', id=id))
+
+
+@umpires_bp.route('/payment-events/<int:id>/void', methods=['POST'])
+@login_required
+@payment_edit_required
+def void_payment_event(id):
+    """Void a payment event."""
+    event = UmpirePaymentEvent.query.get_or_404(id)
+    reason = request.form.get('reason', '').strip()
+
+    if event.is_voided:
+        flash('Event is already voided.', 'info')
+        return redirect(url_for('umpires.view_payment_event', id=id))
+
+    event.void(current_user.ID, reason)
+    db.session.commit()
+
+    logger.info(f'Voided payment event #{event.id}')
+    flash('Payment event voided.', 'success')
+    return redirect(url_for('umpires.payment_events'))
+
+
+# =============================================================================
+# Managed Umpire Invoice Report
+# =============================================================================
+
+@umpires_bp.route('/managed-invoice')
+@login_required
+@payment_view_required
+def managed_umpire_invoice():
+    """Invoice report for SDL umpires - what's owed to each managed umpire."""
+    # Get season filter
+    org_season_id = request.args.get('org_season_id', type=int)
+    status_filter = request.args.get('status', 'pending')  # pending, all
+
+    # Get current season if not specified
+    if not org_season_id:
+        current_season = OrgSeason.query.filter_by(org_id=1, is_current=1).first()
+        if current_season:
+            org_season_id = current_season.ID
+
+    # Get managed partner (SDL Academy)
+    managed_partner = UmpirePartner.query.filter_by(is_managed_by_org=True).first()
+    if not managed_partner:
+        flash('No managed umpire partner configured.', 'error')
+        return redirect(url_for('umpires.partner_payments'))
+
+    # Get all active umpires for this partner
+    umpires = UmpireProfile.query.filter_by(
+        partner_id=managed_partner.id,
+        status='active'
+    ).order_by(UmpireProfile.last_name, UmpireProfile.first_name).all()
+
+    # Build invoice data per umpire
+    invoice_data = []
+    for umpire in umpires:
+        # Get payment events for this umpire
+        query = UmpirePaymentEvent.query.filter_by(umpire_profile_id=umpire.id)
+
+        if org_season_id:
+            query = query.filter_by(org_season_id=org_season_id)
+
+        if status_filter == 'pending':
+            query = query.filter(UmpirePaymentEvent.status.in_([
+                UmpirePaymentEvent.STATUS_PENDING,
+                UmpirePaymentEvent.STATUS_APPROVED
+            ]))
+        else:
+            query = query.filter(UmpirePaymentEvent.status != UmpirePaymentEvent.STATUS_VOIDED)
+
+        events = query.order_by(UmpirePaymentEvent.original_date.desc()).all()
+
+        if events:
+            total_amount = sum(e.amount for e in events)
+            pending_amount = sum(e.amount for e in events if e.is_pending)
+            approved_amount = sum(e.amount for e in events if e.is_approved)
+            paid_amount = sum(e.amount for e in events if e.is_paid)
+
+            invoice_data.append({
+                'umpire': umpire,
+                'events': events,
+                'event_count': len(events),
+                'total_amount': total_amount,
+                'pending_amount': pending_amount,
+                'approved_amount': approved_amount,
+                'paid_amount': paid_amount,
+                'unpaid_amount': pending_amount + approved_amount,
+            })
+
+    # Calculate grand totals
+    grand_total = sum(d['total_amount'] for d in invoice_data)
+    grand_pending = sum(d['pending_amount'] for d in invoice_data)
+    grand_approved = sum(d['approved_amount'] for d in invoice_data)
+    grand_paid = sum(d['paid_amount'] for d in invoice_data)
+
+    # Get seasons for filter
+    seasons = OrgSeason.query.filter_by(org_id=1).order_by(
+        OrgSeason.year.desc(), OrgSeason.is_spring.desc()
+    ).all()
+
+    return render_template(
+        'umpires/managed_umpire_invoice.html',
+        invoice_data=invoice_data,
+        seasons=seasons,
+        selected_org_season_id=org_season_id,
+        selected_status=status_filter,
+        grand_total=grand_total,
+        grand_pending=grand_pending,
+        grand_approved=grand_approved,
+        grand_paid=grand_paid,
+        managed_partner=managed_partner,
+        can_edit=can_record_payments()
+    )

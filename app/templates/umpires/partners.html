@@ -89,6 +89,8 @@
                 <td>
                     <a href="{{ url_for('umpires.edit_partner', id=partner.id) }}"
                        class="btn btn-outline" style="padding: 3px 10px;">Edit</a>
+                    <a href="{{ url_for('umpires.partner_league_rates', id=partner.id) }}"
+                       class="btn btn-outline" style="padding: 3px 10px;">Rates</a>
                 </td>
             </tr>
             {% else %}

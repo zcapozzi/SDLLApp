@@ -336,15 +336,27 @@ def delegation_report(year=None, is_spring=None):
 
         league_rows = []
         for league_name, data in sorted(summary[partner_code].items()):
+            # Get league-specific rate if available
+            league_obj = league_lookup.get(league_name.lower().strip())
+            league_id = league_obj.ID if league_obj else None
+
+            # Use league-specific rate if partner has one configured
+            if partner_obj and league_id:
+                league_rate_normal = float(partner_obj.get_rate_for_league(league_id, is_ntl=False))
+                league_rate_ntl = float(partner_obj.get_rate_for_league(league_id, is_ntl=True))
+            else:
+                league_rate_normal = rate_normal
+                league_rate_ntl = rate_ntl
+
             # Calculate umpire/game costs based on rate type
             if is_flat_rate:
                 # Flat rate: cost per game regardless of umpire count
-                cost_normal_umpires = data['games'] * rate_normal
-                cost_ntl_umpires = data['ntl_games'] * rate_ntl
+                cost_normal_umpires = data['games'] * league_rate_normal
+                cost_ntl_umpires = data['ntl_games'] * league_rate_ntl
             else:
                 # Per-umpire rate
-                cost_normal_umpires = data['umpires'] * rate_normal
-                cost_ntl_umpires = data['ntl_umpires'] * rate_ntl
+                cost_normal_umpires = data['umpires'] * league_rate_normal
+                cost_ntl_umpires = data['ntl_umpires'] * league_rate_ntl
 
             cost_umpires = cost_normal_umpires + cost_ntl_umpires
 
@@ -360,6 +372,8 @@ def delegation_report(year=None, is_spring=None):
                 'ntl_games': data['ntl_games'],
                 'umpires': data['umpires'],
                 'ntl_umpires': data['ntl_umpires'],
+                'rate_normal': league_rate_normal,
+                'rate_ntl': league_rate_ntl,
                 'cost_umpires': cost_umpires,
                 'cost_booking': cost_booking,
                 'cost_total': cost_total

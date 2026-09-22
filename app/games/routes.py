@@ -1530,7 +1530,8 @@ def rainout(year, is_spring):
                     )
                     GameChangeService.queue_notifications_for_change(change, game)
 
-                    # Create credit for prepay partners
+                    # Create credit for prepay partners (rainout pre-cancel - umpire did NOT arrive)
+                    # Note: If umpire DID arrive, use UmpirePaymentEvent instead
                     if game.umpire_override:
                         partner = UmpirePartner.query.filter_by(
                             short_code=game.umpire_override.upper(),
@@ -1548,8 +1549,17 @@ def rainout(year, is_spring):
                                 umpire_count = 1
 
                             if umpire_count > 0:
-                                rate = float(partner.rate_ntl if game.no_time_limit else partner.rate_normal) or 35.0
-                                credit = PartnerCredit.create_from_postponed_game(
+                                # Use league-specific rate if available
+                                if league:
+                                    rate = float(partner.get_rate_for_league(
+                                        league.ID,
+                                        is_ntl=game.no_time_limit
+                                    ))
+                                else:
+                                    rate = float(partner.rate_ntl if game.no_time_limit else partner.rate_normal) or 35.0
+
+                                # Create credit for pre-cancelled rainout (umpire did not arrive)
+                                credit = PartnerCredit.create_from_rainout_precancel(
                                     game, partner, rate, umpire_count, current_user.ID
                                 )
                                 db.session.add(credit)

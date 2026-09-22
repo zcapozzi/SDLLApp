@@ -98,6 +98,8 @@
 <div class="btn-row">
     <h1 style="margin: 0;">Partner Payments</h1>
     <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('umpires.payment_events') }}" class="btn btn-secondary">Payment Events</a>
+        <a href="{{ url_for('umpires.managed_umpire_invoice') }}" class="btn btn-secondary">Umpire Invoice</a>
         <a href="{{ url_for('umpires.partner_credits') }}" class="btn btn-outline">View Credits</a>
         {% if can_edit %}
         <a href="{{ url_for('umpires.new_partner_payment') }}" class="btn btn-primary">Record Payment</a>

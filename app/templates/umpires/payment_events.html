@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}Payment Events{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.partner_payments') }}">&larr; Back to Partner Payments</a>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Payment Events</h1>
+    {% if can_edit %}
+    <a href="{{ url_for('umpires.new_payment_event') }}" class="btn btn-primary">New Payment Event</a>
+    {% endif %}
+</div>
+
+<p style="color: var(--text-muted); margin-bottom: 20px;">
+    Standalone payment events for rainout arrivals, bonuses, and other umpire payments not tied to completed games.
+</p>
+
+<!-- Summary Stats -->
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px;">
+    <div class="card" style="padding: 15px; text-align: center;">
+        <div style="font-size: 24px; font-weight: bold; color: #f0ad4e;">{{ pending_count }}</div>
+        <div style="font-size: 12px; color: var(--text-muted);">Pending</div>
+        <div style="font-size: 14px; color: #f0ad4e;">${{ "%.2f"|format(pending_amount) }}</div>
+    </div>
+    <div class="card" style="padding: 15px; text-align: center;">
+        <div style="font-size: 24px; font-weight: bold; color: #5cb85c;">{{ approved_count }}</div>
+        <div style="font-size: 12px; color: var(--text-muted);">Approved</div>
+        <div style="font-size: 14px; color: #5cb85c;">${{ "%.2f"|format(approved_amount) }}</div>
+    </div>
+    <div class="card" style="padding: 15px; text-align: center;">
+        <div style="font-size: 24px; font-weight: bold;">{{ events|length }}</div>
+        <div style="font-size: 12px; color: var(--text-muted);">Total Events</div>
+    </div>
+    <div class="card" style="padding: 15px; text-align: center;">
+        <div style="font-size: 24px; font-weight: bold;">${{ "%.2f"|format(pending_amount + approved_amount) }}</div>
+        <div style="font-size: 12px; color: var(--text-muted);">Total Unpaid</div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card" style="margin-bottom: 20px;">
+    <form method="GET" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="status" style="font-size: 12px;">Status</label>
+            <select name="status" id="status" class="form-control" style="width: auto;">
+                <option value="">All Statuses</option>
+                {% for s in statuses %}
+                <option value="{{ s }}" {{ 'selected' if selected_status == s }}>{{ status_labels[s] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="event_type" style="font-size: 12px;">Event Type</label>
+            <select name="event_type" id="event_type" class="form-control" style="width: auto;">
+                <option value="">All Types</option>
+                {% for t in event_types %}
+                <option value="{{ t }}" {{ 'selected' if selected_event_type == t }}>{{ event_type_labels[t] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="payee_type" style="font-size: 12px;">Payee</label>
+            <select name="payee_type" id="payee_type" class="form-control" style="width: auto;">
+                <option value="">All Payees</option>
+                <option value="umpire" {{ 'selected' if selected_payee_type == 'umpire' }}>Individual Umpires</option>
+                <option value="partner" {{ 'selected' if selected_payee_type == 'partner' }}>Partners</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="org_season_id" style="font-size: 12px;">Season</label>
+            <select name="org_season_id" id="org_season_id" class="form-control" style="width: auto;">
+                <option value="">All Seasons</option>
+                {% for season in seasons %}
+                <option value="{{ season.ID }}" {{ 'selected' if selected_org_season_id == season.ID }}>
+                    {{ season.display_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-secondary">Filter</button>
+        <a href="{{ url_for('umpires.payment_events') }}" class="btn btn-outline">Clear</a>
+    </form>
+</div>
+
+<!-- Events Table -->
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Payee</th>
+                <th>Details</th>
+                <th style="text-align: right;">Amount</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for event in events %}
+            <tr>
+                <td>
+                    <strong>{{ event.original_date.strftime('%m/%d/%Y') }}</strong>
+                    {% if event.original_time %}
+                    <br><span style="font-size: 12px; color: var(--text-muted);">{{ event.original_time.strftime('%I:%M %p').lstrip('0') }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="badge {% if event.event_type == 'rainout_arrival' %}badge-warning{% elif event.event_type == 'bonus' %}badge-spring{% else %}badge{% endif %}">
+                        {{ event.event_type_label }}
+                    </span>
+                </td>
+                <td>
+                    {% if event.umpire_profile %}
+                    <strong>{{ event.umpire_profile.display_name }}</strong>
+                    <br><span style="font-size: 12px; color: var(--text-muted);">Umpire</span>
+                    {% elif event.partner %}
+                    <strong>{{ event.partner.name }}</strong>
+                    <br><span style="font-size: 12px; color: var(--text-muted);">Partner</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if event.original_league %}
+                    {{ event.original_league }}
+                    {% endif %}
+                    {% if event.original_field_name %}
+                    <br><span style="font-size: 12px; color: var(--text-muted);">@ {{ event.original_field_name }}</span>
+                    {% endif %}
+                    {% if event.reason %}
+                    <br><span style="font-size: 11px; color: var(--text-muted);">{{ event.reason }}</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: right;">
+                    <strong>${{ "%.2f"|format(event.amount) }}</strong>
+                </td>
+                <td>
+                    {% if event.is_pending %}
+                    <span class="badge badge-warning">Pending</span>
+                    {% elif event.is_approved %}
+                    <span class="badge badge-spring">Approved</span>
+                    {% elif event.is_paid %}
+                    <span class="badge" style="background: #004085; color: white;">Paid</span>
+                    {% elif event.is_voided %}
+                    <span class="badge" style="background: #999;">Voided</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('umpires.view_payment_event', id=event.id) }}"
+                       class="btn btn-outline" style="padding: 3px 10px; font-size: 12px;">View</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7" style="text-align: center; color: var(--text-muted);">
+                    No payment events found.
+                    {% if can_edit %}
+                    <a href="{{ url_for('umpires.new_payment_event') }}">Create one</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

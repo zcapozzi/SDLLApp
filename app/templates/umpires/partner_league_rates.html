@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}League Rates - {{ partner.name }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.edit_partner', id=partner.id) }}">&larr; Back to {{ partner.name }}</a>
+</div>
+
+<h1>League Rates: {{ partner.name }}</h1>
+
+<p style="color: var(--text-muted); margin-bottom: 20px;">
+    Set different rates per league. Leave blank to use the partner's default rate
+    (<strong>${{ partner.rate_normal }}</strong> normal
+    {% if partner.rate_ntl %}, <strong>${{ partner.rate_ntl }}</strong> NTL{% endif %}).
+</p>
+
+{% if partner.is_flat_rate %}
+<div class="alert alert-info" style="margin-bottom: 20px;">
+    <strong>Note:</strong> {{ partner.name }} uses flat-rate pricing (per game, not per umpire).
+    League-specific rates will override the flat rate for that league.
+</div>
+{% endif %}
+
+<div class="card">
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 200px;">League</th>
+                    <th style="width: 120px;">Normal Rate</th>
+                    <th style="width: 120px;">NTL Rate</th>
+                    <th>Effective Rate</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for lr in league_rates %}
+                <tr id="league-{{ lr.league.ID }}">
+                    <td>
+                        <strong>{{ lr.league.display_name }}</strong>
+                        {% if lr.league.sport == 'softball' %}
+                        <span class="badge" style="background: #f0e0f0; color: #905090; margin-left: 5px;">Softball</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="input-group" style="display: flex; align-items: center;">
+                            <span style="margin-right: 3px;">$</span>
+                            <input type="number"
+                                   name="rate_normal_{{ lr.league.ID }}"
+                                   class="form-control"
+                                   style="width: 80px; padding: 5px 8px;"
+                                   step="0.01"
+                                   min="0"
+                                   value="{{ lr.rate_normal if lr.rate_normal is not none else '' }}"
+                                   placeholder="{{ partner.rate_normal }}">
+                        </div>
+                    </td>
+                    <td>
+                        <div class="input-group" style="display: flex; align-items: center;">
+                            <span style="margin-right: 3px;">$</span>
+                            <input type="number"
+                                   name="rate_ntl_{{ lr.league.ID }}"
+                                   class="form-control"
+                                   style="width: 80px; padding: 5px 8px;"
+                                   step="0.01"
+                                   min="0"
+                                   value="{{ lr.rate_ntl if lr.rate_ntl is not none else '' }}"
+                                   placeholder="{{ partner.rate_ntl or partner.rate_normal }}">
+                        </div>
+                    </td>
+                    <td>
+                        <span style="color: var(--text-muted);">
+                            ${{ lr.effective_normal }}
+                            {% if lr.effective_ntl != lr.effective_normal %}
+                            / ${{ lr.effective_ntl }} NTL
+                            {% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        {% if lr.has_override %}
+                        <span class="badge badge-spring">Override</span>
+                        {% else %}
+                        <span style="color: var(--text-muted); font-size: 12px;">Default</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div style="margin-top: 20px; display: flex; gap: 10px;">
+            <button type="submit" class="btn btn-primary">Save Rates</button>
+            <a href="{{ url_for('umpires.edit_partner', id=partner.id) }}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<div class="card" style="margin-top: 30px;">
+    <h3 style="margin-top: 0;">Rate Structure</h3>
+    <p>{{ partner.get_rate_description() }}</p>
+
+    <h4>How League Rates Work</h4>
+    <ul>
+        <li><strong>Default:</strong> Partner's base rate applies to all leagues</li>
+        <li><strong>Override:</strong> Enter a specific rate for a league to override the default</li>
+        <li><strong>NTL (No Time Limit):</strong> Rate for playoff/championship games. Falls back to normal rate if not set.</li>
+    </ul>
+
+    <h4>Example</h4>
+    <p>
+        If {{ partner.name }} charges ${{ partner.rate_normal }}/{{ 'game' if partner.is_flat_rate else 'umpire' }} normally,
+        but T-Ball only needs $40/{{ 'game' if partner.is_flat_rate else 'umpire' }}, enter "40" in the T-Ball Normal Rate field.
+    </p>
+</div>
+{% endblock %}

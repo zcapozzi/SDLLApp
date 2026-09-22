@@ -188,13 +188,25 @@ class PartnerCredit(db.Model):
     SOURCE_UNFULFILLED = 'unfulfilled'
     SOURCE_OVERPAYMENT = 'overpayment'
     SOURCE_ADJUSTMENT = 'adjustment'
+    # New: Distinguish rainout scenarios by whether umpire arrived
+    SOURCE_RAINOUT_PRECANCEL = 'rainout_precancel'  # Cancelled BEFORE umpire arrived - generates credit
+    SOURCE_RAINOUT_ARRIVAL = 'rainout_arrival'  # Umpire arrived - NO credit (payment event instead)
 
-    SOURCE_TYPES = [SOURCE_POSTPONED_GAME, SOURCE_UNFULFILLED, SOURCE_OVERPAYMENT, SOURCE_ADJUSTMENT]
+    SOURCE_TYPES = [
+        SOURCE_POSTPONED_GAME,
+        SOURCE_UNFULFILLED,
+        SOURCE_OVERPAYMENT,
+        SOURCE_ADJUSTMENT,
+        SOURCE_RAINOUT_PRECANCEL,
+        SOURCE_RAINOUT_ARRIVAL,
+    ]
     SOURCE_TYPE_LABELS = {
         SOURCE_POSTPONED_GAME: 'Postponed Game',
         SOURCE_UNFULFILLED: 'Unfulfilled Assignment',
         SOURCE_OVERPAYMENT: 'Overpayment',
-        SOURCE_ADJUSTMENT: 'Manual Adjustment'
+        SOURCE_ADJUSTMENT: 'Manual Adjustment',
+        SOURCE_RAINOUT_PRECANCEL: 'Rainout (Pre-Cancelled)',
+        SOURCE_RAINOUT_ARRIVAL: 'Rainout (Umpire Arrived)',
     }
 
     # Status constants
@@ -320,6 +332,50 @@ class PartnerCredit(db.Model):
             umpire_games=umpire_count,
             org_season_id=org_season_id,
             description=f'Postponed: {game.league} - {game.game_date.strftime("%m/%d/%Y")}',
+            created_by_user_id=user_id
+        )
+        return credit
+
+    @classmethod
+    def create_from_rainout_precancel(cls, game, partner, rate, umpire_count, user_id=None, org_season_id=None):
+        """Create a credit from a rainout where umpire did NOT arrive (pre-cancelled).
+
+        This should be used when a game is rained out and the umpire was notified
+        before arriving at the field. In this case, we owe the partner nothing,
+        so we generate a credit to offset any prepayment.
+
+        For rainouts where the umpire DID arrive, use UmpirePaymentEvent instead.
+
+        Args:
+            game: The rained-out Game object
+            partner: The UmpirePartner
+            rate: Per-umpire rate
+            umpire_count: Number of umpires that were assigned
+            user_id: User creating the credit (optional)
+            org_season_id: OrgSeason ID (optional, looked up from game if not provided)
+
+        Returns:
+            New PartnerCredit instance (not yet committed)
+        """
+        amount = Decimal(str(rate)) * umpire_count
+
+        # Look up org_season_id from game if not provided
+        if org_season_id is None:
+            from app.models.org_season import OrgSeason
+            org_season = OrgSeason.query.filter_by(
+                year=game.year,
+                is_spring=1 if game.is_spring else 0
+            ).first()
+            org_season_id = org_season.ID if org_season else None
+
+        credit = cls(
+            partner_id=partner.id,
+            source_type=cls.SOURCE_RAINOUT_PRECANCEL,
+            source_game_id=game.ID,
+            amount=amount,
+            umpire_games=umpire_count,
+            org_season_id=org_season_id,
+            description=f'Rainout (Pre-Cancelled): {game.league} - {game.game_date.strftime("%m/%d/%Y")}',
             created_by_user_id=user_id
         )
         return credit

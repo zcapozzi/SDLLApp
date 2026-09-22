@@ -14,6 +14,8 @@ from app.extensions import db
 from app.models.user import User
 from app.models.umpire_partner import UmpirePartner
 from app.models.partner_contact import PartnerContact
+from app.models.partner_league_rate import PartnerLeagueRate
+from app.models.league import League
 
 from . import umpires_bp, umpire_coordinator_required, logger
 
@@ -182,3 +184,95 @@ def generate_partner_token(id):
     logger.info(f'Generated schedule token for partner: {partner.name}')
     flash(f'Generated new schedule token for {partner.name}', 'success')
     return redirect(url_for('umpires.partners'))
+
+
+@umpires_bp.route('/partners/<int:id>/league-rates')
+@login_required
+@umpire_coordinator_required
+def partner_league_rates(id):
+    """View and manage league-specific rates for a partner."""
+    partner = UmpirePartner.query.get_or_404(id)
+    leagues = League.get_all_active()
+
+    # Get existing rate records
+    rates = PartnerLeagueRate.get_for_partner(partner.id)
+    rate_by_league = {r.league_id: r for r in rates if r.org_season_id is None}
+
+    # Build rate data for template
+    league_rates = []
+    for league in leagues:
+        rate_record = rate_by_league.get(league.ID)
+        league_rates.append({
+            'league': league,
+            'rate_normal': rate_record.rate_normal if rate_record else None,
+            'rate_ntl': rate_record.rate_ntl if rate_record else None,
+            'has_override': rate_record is not None and rate_record.has_override,
+            'effective_normal': partner.get_rate_for_league(league.ID, is_ntl=False),
+            'effective_ntl': partner.get_rate_for_league(league.ID, is_ntl=True),
+        })
+
+    return render_template('umpires/partner_league_rates.html',
+                           partner=partner,
+                           league_rates=league_rates)
+
+
+@umpires_bp.route('/partners/<int:id>/league-rates', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def save_partner_league_rates(id):
+    """Save league-specific rate overrides for a partner."""
+    from decimal import Decimal, InvalidOperation
+
+    partner = UmpirePartner.query.get_or_404(id)
+    leagues = League.get_all_active()
+    updated_count = 0
+    anchor = None
+
+    for league in leagues:
+        rate_normal_str = request.form.get(f'rate_normal_{league.ID}', '').strip()
+        rate_ntl_str = request.form.get(f'rate_ntl_{league.ID}', '').strip()
+
+        # Parse values (empty string = None = use partner default)
+        rate_normal = None
+        rate_ntl = None
+        try:
+            if rate_normal_str:
+                rate_normal = Decimal(rate_normal_str)
+            if rate_ntl_str:
+                rate_ntl = Decimal(rate_ntl_str)
+        except InvalidOperation:
+            flash(f'Invalid rate value for {league.display_name}', 'error')
+            continue
+
+        # Get or create rate record
+        rate_record, created = PartnerLeagueRate.get_or_create(
+            partner_id=partner.id,
+            league_id=league.ID,
+            org_season_id=None  # All seasons
+        )
+
+        # Check if anything changed
+        old_normal = rate_record.rate_normal
+        old_ntl = rate_record.rate_ntl
+
+        if rate_normal != old_normal or rate_ntl != old_ntl:
+            rate_record.rate_normal = rate_normal
+            rate_record.rate_ntl = rate_ntl
+
+            if created:
+                db.session.add(rate_record)
+
+            updated_count += 1
+            anchor = f'league-{league.ID}'
+
+    if updated_count > 0:
+        db.session.commit()
+        logger.info(f'Updated {updated_count} league rate(s) for partner {partner.name}')
+        flash(f'Updated {updated_count} league rate(s)', 'success')
+    else:
+        flash('No changes made', 'info')
+
+    redirect_url = url_for('umpires.partner_league_rates', id=id)
+    if anchor:
+        redirect_url += f'#{anchor}'
+    return redirect(redirect_url)

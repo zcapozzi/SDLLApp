@@ -64,6 +64,16 @@
             <a href="{{ url_for('umpires.partners') }}" class="btn btn-outline">Cancel</a>
         </div>
     </form>
+
+    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+        <h3 style="margin-top: 0;">Payment Rates</h3>
+        <p style="color: var(--text-muted);">
+            Default: {{ partner.get_rate_description() }}
+        </p>
+        <a href="{{ url_for('umpires.partner_league_rates', id=partner.id) }}" class="btn btn-secondary">
+            Configure League-Specific Rates
+        </a>
+    </div>
 </div>
 
 <div id="contacts" class="card" style="margin-top: 30px;">

@@ -249,3 +249,109 @@ class UmpirePartner(db.Model):
             parts.append(f"${self.booking_fee_per_season}/season")
 
         return " + ".join(parts) if parts else "No rates set"
+
+    def get_rate_for_league(self, league_id, is_ntl=False, org_season_id=None):
+        """Get rate for specific league, falling back to partner default.
+
+        Lookup hierarchy:
+        1. PartnerLeagueRate (partner + league + season) - most specific
+        2. PartnerLeagueRate (partner + league + NULL) - all seasons
+        3. UmpirePartner.rate_ntl / rate_normal - partner default
+
+        Args:
+            league_id: League ID to get rate for
+            is_ntl: True for no-time-limit games
+            org_season_id: Optional season context for season-specific rates
+
+        Returns:
+            Decimal rate amount
+        """
+        from decimal import Decimal
+        from app.models.partner_league_rate import PartnerLeagueRate
+
+        # Use PartnerLeagueRate's lookup which handles the hierarchy
+        league_rate = PartnerLeagueRate.get_rate(
+            partner_id=self.id,
+            league_id=league_id,
+            is_ntl=is_ntl,
+            org_season_id=org_season_id
+        )
+
+        if league_rate is not None:
+            return league_rate
+
+        # Fall back to partner default
+        if is_ntl and self.rate_ntl:
+            return Decimal(str(self.rate_ntl))
+        if self.rate_normal:
+            return Decimal(str(self.rate_normal))
+
+        return Decimal('0')
+
+    def calculate_game_cost_for_league(self, league_id, umpire_count, is_ntl=False, org_season_id=None):
+        """Calculate total cost for a game in a specific league.
+
+        Uses league-specific rate if available, then applies flat_rate logic
+        and adds booking fee.
+
+        Args:
+            league_id: League ID for the game
+            umpire_count: Number of umpires assigned
+            is_ntl: True for no-time-limit games
+            org_season_id: Optional season context
+
+        Returns:
+            Decimal total cost for the game
+
+        Examples:
+            Diamond (per-umpire, $85 default, $75 for AA): 2 umpires AA = $150 + $18 = $168
+            Dynamic (flat rate, $100): 2 umpires Majors = $100 + $0 = $100
+        """
+        from decimal import Decimal
+
+        # Get the league-specific rate
+        base_rate = self.get_rate_for_league(league_id, is_ntl, org_season_id)
+
+        # Calculate umpire cost
+        if self.is_flat_rate:
+            # Flat rate per game regardless of umpire count
+            umpire_cost = base_rate
+        else:
+            # Per-umpire rate
+            umpire_cost = base_rate * umpire_count
+
+        # Add per-game booking fee
+        booking_fee = Decimal(str(self.booking_fee_per_game or 0))
+
+        return umpire_cost + booking_fee
+
+    def get_league_rates_summary(self, org_season_id=None):
+        """Get a summary of all league-specific rates for this partner.
+
+        Args:
+            org_season_id: Optional season filter
+
+        Returns:
+            List of dicts with league info and rates
+        """
+        from app.models.league import League
+        from app.models.partner_league_rate import PartnerLeagueRate
+
+        leagues = League.get_all_active()
+        rates = PartnerLeagueRate.get_for_partner(self.id, org_season_id)
+        rate_by_league = {r.league_id: r for r in rates}
+
+        summary = []
+        for league in leagues:
+            rate_record = rate_by_league.get(league.ID)
+            summary.append({
+                'league_id': league.ID,
+                'league_name': league.display_name,
+                'rate_normal': rate_record.rate_normal if rate_record else None,
+                'rate_ntl': rate_record.rate_ntl if rate_record else None,
+                'has_override': rate_record is not None and rate_record.has_override,
+                'effective_rate_normal': self.get_rate_for_league(league.ID, False, org_season_id),
+                'effective_rate_ntl': self.get_rate_for_league(league.ID, True, org_season_id),
+            })
+
+        return summary

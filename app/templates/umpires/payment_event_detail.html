@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}Payment Event #{{ event.id }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 30px;">
+    <a href="{{ url_for('umpires.payment_events') }}">&larr; Back to Payment Events</a>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+    <div>
+        <h1 style="margin-bottom: 5px;">Payment Event #{{ event.id }}</h1>
+        <p style="color: var(--text-muted);">{{ event.event_type_label }}</p>
+    </div>
+    <div>
+        {% if event.is_pending %}
+        <span class="badge badge-warning" style="font-size: 16px; padding: 8px 15px;">Pending</span>
+        {% elif event.is_approved %}
+        <span class="badge badge-spring" style="font-size: 16px; padding: 8px 15px;">Approved</span>
+        {% elif event.is_paid %}
+        <span class="badge" style="background: #004085; color: white; font-size: 16px; padding: 8px 15px;">Paid</span>
+        {% elif event.is_voided %}
+        <span class="badge" style="background: #999; font-size: 16px; padding: 8px 15px;">Voided</span>
+        {% endif %}
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+    <!-- Main Details -->
+    <div class="card">
+        <h2 style="margin-top: 0;">Payment Details</h2>
+
+        <table style="width: 100%;">
+            <tr>
+                <th style="width: 150px;">Amount</th>
+                <td style="font-size: 24px; font-weight: bold;">${{ "%.2f"|format(event.amount) }}</td>
+            </tr>
+            <tr>
+                <th>Payee</th>
+                <td>
+                    {% if event.umpire_profile %}
+                    <strong>{{ event.umpire_profile.display_name }}</strong>
+                    <span style="color: var(--text-muted);">(Umpire)</span>
+                    {% elif event.partner %}
+                    <strong>{{ event.partner.name }}</strong>
+                    <span style="color: var(--text-muted);">({{ event.partner.short_code }})</span>
+                    {% else %}
+                    <span style="color: var(--text-muted);">Unknown</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th>Event Type</th>
+                <td>{{ event.event_type_label }}</td>
+            </tr>
+            {% if event.reason %}
+            <tr>
+                <th>Reason</th>
+                <td>{{ event.reason }}</td>
+            </tr>
+            {% endif %}
+            {% if event.season_display %}
+            <tr>
+                <th>Season</th>
+                <td>{{ event.season_display }}</td>
+            </tr>
+            {% endif %}
+        </table>
+
+        <h3 style="margin-top: 30px;">Original Game</h3>
+        <table style="width: 100%;">
+            <tr>
+                <th style="width: 150px;">Date</th>
+                <td>{{ event.original_date.strftime('%A, %B %d, %Y') }}</td>
+            </tr>
+            {% if event.original_time %}
+            <tr>
+                <th>Time</th>
+                <td>{{ event.original_time.strftime('%I:%M %p').lstrip('0') }}</td>
+            </tr>
+            {% endif %}
+            {% if event.original_league %}
+            <tr>
+                <th>League</th>
+                <td>{{ event.original_league }}</td>
+            </tr>
+            {% endif %}
+            {% if event.original_field_name %}
+            <tr>
+                <th>Field</th>
+                <td>{{ event.original_field_name }}</td>
+            </tr>
+            {% endif %}
+            {% if event.original_home_team or event.original_away_team %}
+            <tr>
+                <th>Teams</th>
+                <td>{{ event.original_home_team or 'TBD' }} vs {{ event.original_away_team or 'TBD' }}</td>
+            </tr>
+            {% endif %}
+            {% if event.original_game_id %}
+            <tr>
+                <th>Game ID</th>
+                <td>
+                    <code>{{ event.original_game_id }}</code>
+                    {% if event.original_assignr_id %}
+                    <span style="color: var(--text-muted);">(Assignr: {{ event.original_assignr_id }})</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endif %}
+        </table>
+
+        {% if event.notes %}
+        <h3 style="margin-top: 30px;">Notes</h3>
+        <p style="white-space: pre-wrap; color: var(--text-muted);">{{ event.notes }}</p>
+        {% endif %}
+    </div>
+
+    <!-- Sidebar: Actions & Audit -->
+    <div>
+        {% if can_edit and event.is_active %}
+        <div class="card">
+            <h3 style="margin-top: 0;">Actions</h3>
+
+            {% if event.is_pending %}
+            <form method="POST" action="{{ url_for('umpires.approve_payment_event', id=event.id) }}"
+                  style="margin-bottom: 10px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Approve</button>
+            </form>
+            {% endif %}
+
+            {% if event.is_pending or event.is_approved %}
+            <form method="POST" action="{{ url_for('umpires.mark_payment_event_paid', id=event.id) }}"
+                  style="margin-bottom: 10px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-secondary" style="width: 100%;">Mark as Paid</button>
+            </form>
+            {% endif %}
+
+            <form method="POST" action="{{ url_for('umpires.void_payment_event', id=event.id) }}"
+                  onsubmit="return confirm('Void this payment event?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="text" name="reason" class="form-control" placeholder="Reason for voiding"
+                       style="margin-bottom: 5px;">
+                <button type="submit" class="btn btn-danger" style="width: 100%;">Void Event</button>
+            </form>
+        </div>
+        {% endif %}
+
+        <div class="card" style="margin-top: 20px;">
+            <h3 style="margin-top: 0;">Audit Trail</h3>
+            <table style="width: 100%; font-size: 12px;">
+                <tr>
+                    <th style="width: 80px;">Created</th>
+                    <td>
+                        {{ event.created_at.strftime('%m/%d/%Y %I:%M %p').lstrip('0') }}
+                        {% if event.created_by %}
+                        <br><span style="color: var(--text-muted);">by {{ event.created_by.name }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% if event.approved_at %}
+                <tr>
+                    <th>Approved</th>
+                    <td>
+                        {{ event.approved_at.strftime('%m/%d/%Y %I:%M %p').lstrip('0') }}
+                        {% if event.approved_by %}
+                        <br><span style="color: var(--text-muted);">by {{ event.approved_by.name }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endif %}
+                {% if event.paid_at %}
+                <tr>
+                    <th>Paid</th>
+                    <td>
+                        {{ event.paid_at.strftime('%m/%d/%Y %I:%M %p').lstrip('0') }}
+                        {% if event.paid_by %}
+                        <br><span style="color: var(--text-muted);">by {{ event.paid_by.name }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endif %}
+                {% if event.voided_at %}
+                <tr>
+                    <th>Voided</th>
+                    <td>
+                        {{ event.voided_at.strftime('%m/%d/%Y %I:%M %p').lstrip('0') }}
+                        {% if event.voided_by %}
+                        <br><span style="color: var(--text-muted);">by {{ event.voided_by.name }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endif %}
+            </table>
+        </div>
+
+        {% if event.rate_applied %}
+        <div class="card" style="margin-top: 20px;">
+            <h3 style="margin-top: 0;">Rate Info</h3>
+            <table style="width: 100%; font-size: 12px;">
+                <tr>
+                    <th>Rate Applied</th>
+                    <td>${{ "%.2f"|format(event.rate_applied) }}</td>
+                </tr>
+                {% if event.booking_fee_applied %}
+                <tr>
+                    <th>Booking Fee</th>
+                    <td>${{ "%.2f"|format(event.booking_fee_applied) }}</td>
+                </tr>
+                {% endif %}
+                {% if event.umpire_count and event.umpire_count > 1 %}
+                <tr>
+                    <th>Umpire Count</th>
+                    <td>{{ event.umpire_count }}</td>
+                </tr>
+                {% endif %}
+                {% if event.position %}
+                <tr>
+                    <th>Position</th>
+                    <td>{{ event.position }}</td>
+                </tr>
+                {% endif %}
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
