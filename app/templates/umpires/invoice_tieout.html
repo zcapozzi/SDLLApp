@@ -156,14 +156,15 @@
         {% for ps in partner_summaries %}
         <div class="partner-card" data-partner="{{ ps.code }}" onclick="filterByPartner('{{ ps.code }}', '{{ ps.name }}')">
             <h4>{{ ps.name }} ({{ ps.code }})</h4>
+            <div style="font-size: 11px; color: #666; margin-bottom: 8px;">{{ ps.rate_description }}</div>
             <div class="partner-stats">
                 <div class="stat">
-                    <span class="stat-label">Regular</span>
-                    <span class="stat-value">{{ ps.games }} games / {{ ps.umpires }} umps</span>
+                    <span class="stat-label">Games</span>
+                    <span class="stat-value">{{ ps.games + ps.ntl_games }} total</span>
                 </div>
                 <div class="stat">
-                    <span class="stat-label"><abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr></span>
-                    <span class="stat-value">{{ ps.ntl_games }} games / {{ ps.ntl_umpires }} umps</span>
+                    <span class="stat-label">Umpires</span>
+                    <span class="stat-value">{{ ps.umpires + ps.ntl_umpires }} assignments</span>
                 </div>
                 <div class="stat">
                     <span class="stat-label">Total</span>
@@ -180,12 +181,22 @@
         <div class="partner-stats">
             <div class="stat">
                 <span class="stat-label">Regular Games</span>
-                <span class="stat-value">{{ totals.games }} games / {{ totals.umpires }} umpires = ${{ "%.2f"|format(totals.cost_normal) }}</span>
+                <span class="stat-value">{{ totals.games }} games / {{ totals.umpires }} umpires</span>
             </div>
             <div class="stat">
                 <span class="stat-label"><abbr title="No Time Limit - extended playoff-style games with higher pay rate">NTL</abbr> Games</span>
-                <span class="stat-value">{{ totals.ntl_games }} games / {{ totals.ntl_umpires }} umpires = ${{ "%.2f"|format(totals.cost_ntl) }}</span>
+                <span class="stat-value">{{ totals.ntl_games }} games / {{ totals.ntl_umpires }} umpires</span>
             </div>
+            <div class="stat">
+                <span class="stat-label">Umpire Cost</span>
+                <span class="stat-value">${{ "%.2f"|format(totals.cost_umpires) }}</span>
+            </div>
+            {% if totals.cost_booking > 0 %}
+            <div class="stat">
+                <span class="stat-label">Booking Fees</span>
+                <span class="stat-value">${{ "%.2f"|format(totals.cost_booking) }}</span>
+            </div>
+            {% endif %}
             <div class="stat">
                 <span class="stat-label">Grand Total</span>
                 <span class="stat-value total" style="font-size: 1.3em;">${{ "%.2f"|format(totals.cost_total) }}</span>
