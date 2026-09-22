@@ -55,7 +55,8 @@
                 <select name="org_season_id" id="org_season_id" class="form-control">
                     <option value="">No Season</option>
                     {% for s in seasons %}
-                    <option value="{{ s.ID }}">
+                    <option value="{{ s.ID }}"
+                            {% if current_season and current_season.ID == s.ID %}selected{% endif %}>
                         {{ s.display_name }}
                     </option>
                     {% endfor %}

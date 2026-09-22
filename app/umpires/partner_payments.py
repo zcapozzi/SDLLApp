@@ -73,18 +73,19 @@ def partner_payments():
     org_season_id = request.args.get('org_season_id', type=int)
     status = request.args.get('status')
 
-    # Get prepay partners only
-    partners = UmpirePartner.query.filter_by(
-        active=True, prepays_invoices=True
+    # Get all active external partners (exclude league-managed like SDL)
+    partners = UmpirePartner.query.filter(
+        UmpirePartner.active == True,
+        UmpirePartner.short_code != 'SDL'  # Exclude league-managed
     ).order_by(UmpirePartner.name).all()
 
     # Build query
     query = PartnerPaymentRecord.query
 
-    # Filter to prepay partners only
-    prepay_partner_ids = [p.id for p in partners]
-    if prepay_partner_ids:
-        query = query.filter(PartnerPaymentRecord.partner_id.in_(prepay_partner_ids))
+    # Filter to external partners only
+    external_partner_ids = [p.id for p in partners]
+    if external_partner_ids:
+        query = query.filter(PartnerPaymentRecord.partner_id.in_(external_partner_ids))
 
     if partner_id:
         query = query.filter_by(partner_id=partner_id)
@@ -130,14 +131,19 @@ def partner_payments():
 @payment_edit_required
 def new_partner_payment():
     """Create a new partner payment record."""
-    partners = UmpirePartner.query.filter_by(
-        active=True, prepays_invoices=True
+    # Get all active external partners (exclude league-managed like SDL)
+    partners = UmpirePartner.query.filter(
+        UmpirePartner.active == True,
+        UmpirePartner.short_code != 'SDL'  # Exclude league-managed
     ).order_by(UmpirePartner.name).all()
 
     # Get available seasons
     seasons = OrgSeason.query.filter_by(org_id=1).order_by(
         OrgSeason.year.desc(), OrgSeason.is_spring.desc()
     ).all()
+
+    # Get current season for default selection
+    current_season = OrgSeason.query.filter_by(org_id=1, is_current=1).first()
 
     if request.method == 'POST':
         partner_id = request.form.get('partner_id', type=int)
@@ -156,7 +162,8 @@ def new_partner_payment():
         if not partner_id:
             flash('Please select a partner.', 'error')
             return render_template('umpires/partner_payment_form.html',
-                                   partners=partners, seasons=seasons, payment=None)
+                                   partners=partners, seasons=seasons, payment=None,
+                                   current_season=current_season)
 
         # Parse dates and amounts
         invoice_date = None
@@ -210,7 +217,8 @@ def new_partner_payment():
         return redirect(url_for('umpires.view_partner_payment', id=payment.id))
 
     return render_template('umpires/partner_payment_form.html',
-                           partners=partners, seasons=seasons, payment=None)
+                           partners=partners, seasons=seasons, payment=None,
+                           current_season=current_season)
 
 
 @umpires_bp.route('/partner-payments/<int:id>')
@@ -245,8 +253,10 @@ def view_partner_payment(id):
 def edit_partner_payment(id):
     """Edit a partner payment record."""
     payment = PartnerPaymentRecord.query.get_or_404(id)
-    partners = UmpirePartner.query.filter_by(
-        active=True, prepays_invoices=True
+    # Get all active external partners (exclude league-managed like SDL)
+    partners = UmpirePartner.query.filter(
+        UmpirePartner.active == True,
+        UmpirePartner.short_code != 'SDL'  # Exclude league-managed
     ).order_by(UmpirePartner.name).all()
 
     seasons = OrgSeason.query.filter_by(org_id=1).order_by(
@@ -366,17 +376,18 @@ def partner_credits():
     partner_id = request.args.get('partner_id', type=int)
     status = request.args.get('status')
 
-    # Get prepay partners
-    partners = UmpirePartner.query.filter_by(
-        active=True, prepays_invoices=True
+    # Get all active external partners (exclude league-managed like SDL)
+    partners = UmpirePartner.query.filter(
+        UmpirePartner.active == True,
+        UmpirePartner.short_code != 'SDL'  # Exclude league-managed
     ).order_by(UmpirePartner.name).all()
 
     # Build query
     query = PartnerCredit.query
 
-    prepay_partner_ids = [p.id for p in partners]
-    if prepay_partner_ids:
-        query = query.filter(PartnerCredit.partner_id.in_(prepay_partner_ids))
+    external_partner_ids = [p.id for p in partners]
+    if external_partner_ids:
+        query = query.filter(PartnerCredit.partner_id.in_(external_partner_ids))
 
     if partner_id:
         query = query.filter_by(partner_id=partner_id)
@@ -407,13 +418,18 @@ def partner_credits():
 @payment_edit_required
 def new_partner_credit():
     """Create a manual credit adjustment."""
-    partners = UmpirePartner.query.filter_by(
-        active=True, prepays_invoices=True
+    # Get all active external partners (exclude league-managed like SDL)
+    partners = UmpirePartner.query.filter(
+        UmpirePartner.active == True,
+        UmpirePartner.short_code != 'SDL'  # Exclude league-managed
     ).order_by(UmpirePartner.name).all()
 
     seasons = OrgSeason.query.filter_by(org_id=1).order_by(
         OrgSeason.year.desc(), OrgSeason.is_spring.desc()
     ).all()
+
+    # Get current season for default selection
+    current_season = OrgSeason.query.filter_by(org_id=1, is_current=1).first()
 
     if request.method == 'POST':
         partner_id = request.form.get('partner_id', type=int)
@@ -426,14 +442,16 @@ def new_partner_credit():
         if not partner_id or not amount_str:
             flash('Partner and amount are required.', 'error')
             return render_template('umpires/partner_credit_form.html',
-                                   partners=partners, seasons=seasons)
+                                   partners=partners, seasons=seasons,
+                                   current_season=current_season)
 
         try:
             amount = Decimal(amount_str)
         except (ValueError, TypeError):
             flash('Invalid amount.', 'error')
             return render_template('umpires/partner_credit_form.html',
-                                   partners=partners, seasons=seasons)
+                                   partners=partners, seasons=seasons,
+                                   current_season=current_season)
 
         umpire_games = None
         if umpire_games_str:
@@ -461,7 +479,8 @@ def new_partner_credit():
         return redirect(url_for('umpires.partner_credits'))
 
     return render_template('umpires/partner_credit_form.html',
-                           partners=partners, seasons=seasons)
+                           partners=partners, seasons=seasons,
+                           current_season=current_season)
 
 
 @umpires_bp.route('/partner-credits/<int:id>/apply', methods=['POST'])

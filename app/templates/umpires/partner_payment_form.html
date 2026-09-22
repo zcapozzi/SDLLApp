@@ -34,7 +34,9 @@
                     <option value="">No Season</option>
                     {% for s in seasons %}
                     <option value="{{ s.ID }}"
-                            {% if payment and payment.org_season_id == s.ID %}selected{% endif %}>
+                            {% if payment %}
+                                {% if payment.org_season_id == s.ID %}selected{% endif %}
+                            {% elif current_season and current_season.ID == s.ID %}selected{% endif %}>
                         {{ s.display_name }}
                     </option>
                     {% endfor %}
@@ -63,29 +65,6 @@
                        value="{{ payment.invoice_amount if payment and payment.invoice_amount else '' }}"
                        step="0.01" min="0" placeholder="0.00">
             </div>
-        </div>
-
-        <!-- Calculated Values -->
-        <h3 style="border-bottom: 1px solid #eee; padding-bottom: 10px;">Calculated Values</h3>
-        <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 15px;">
-            What we calculated based on our game records (use for reconciliation).
-        </p>
-        <div style="display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 20px; margin-bottom: 30px;">
-            <div class="form-group">
-                <label for="calculated_games">Umpire-Games</label>
-                <input type="number" name="calculated_games" id="calculated_games" class="form-control"
-                       value="{{ payment.calculated_games if payment and payment.calculated_games else '' }}"
-                       min="0" placeholder="e.g., 50">
-                <p style="font-size: 11px; color: var(--text-muted);">Number of umpire assignments</p>
-            </div>
-            <div class="form-group">
-                <label for="calculated_amount">Calculated Amount ($)</label>
-                <input type="number" name="calculated_amount" id="calculated_amount" class="form-control"
-                       value="{{ payment.calculated_amount if payment and payment.calculated_amount else '' }}"
-                       step="0.01" min="0" placeholder="0.00">
-                <p style="font-size: 11px; color: var(--text-muted);">What we calculated we owe</p>
-            </div>
-            <div></div>
         </div>
 
         <!-- Notes -->
