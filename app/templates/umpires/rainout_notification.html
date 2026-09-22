@@ -73,7 +73,13 @@
                             <tr>
                                 <td>
                                     <strong>{{ umpire.name }}</strong><br>
-                                    <small class="text-muted">{{ umpire.email }}</small>
+                                    {% if umpire.all_emails %}
+                                        {% for email in umpire.all_emails %}
+                                        <small class="text-muted">{{ email }}</small>{% if not loop.last %}<br>{% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        <small class="text-muted">{{ umpire.email }}</small>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     {% for game in umpire.games %}

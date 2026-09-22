@@ -7,7 +7,7 @@ from collections import defaultdict
 from app.extensions import db
 from app.models.scheduled_email import ScheduledEmail
 from app.models.team import TeamSeason
-from app.models.coach import CoachSeason
+from app.models.coach import CoachSeason, CoachUser
 from app.models.user import User
 from app.services.notification_service import GmailService
 from sqlalchemy.orm import joinedload
@@ -16,6 +16,9 @@ from sqlalchemy.orm import joinedload
 def get_coaches_by_leagues(year, is_spring, leagues):
     """
     Get all coaches for the specified leagues in a season.
+
+    Only includes coaches with linked User accounts (sdll_users).
+    Uses the User's email from sdll_users, NOT the email stored in CoachSeason.
 
     Returns a list of dicts with coach info:
     [
@@ -33,6 +36,7 @@ def get_coaches_by_leagues(year, is_spring, leagues):
     seen_emails = set()
 
     # Get teams for the specified leagues
+    # Eager load coaches -> coach (CoachUser) -> user to get current email
     teams = TeamSeason.query.filter(
         TeamSeason.year == year,
         TeamSeason.is_spring == is_spring,
@@ -40,12 +44,16 @@ def get_coaches_by_leagues(year, is_spring, leagues):
         TeamSeason.is_placeholder == 0,
         TeamSeason.league.in_(leagues) if leagues else True
     ).options(
-        joinedload(TeamSeason.coaches)
+        joinedload(TeamSeason.coaches).joinedload(CoachSeason.coach).joinedload(CoachUser.user)
     ).all()
 
     for team in teams:
         for coach_season in team.coaches:
-            email = coach_season.email
+            # Only use email from linked User account (sdll_users)
+            # Skip coaches without a linked user or without an email
+            if not coach_season.coach or not coach_season.coach.user:
+                continue
+            email = coach_season.coach.user.email
             if not email:
                 continue
 
@@ -57,7 +65,7 @@ def get_coaches_by_leagues(year, is_spring, leagues):
 
             coaches.append({
                 'email': email,
-                'name': coach_season.name or 'Coach',
+                'name': coach_season.coach.user.name or coach_season.name or 'Coach',
                 'team': team.scheduler_display_name or team.display_name,
                 'league': team.league,
                 'role': coach_season.role or 'coach'
@@ -70,6 +78,9 @@ def get_coaches_grouped_by_team(year, is_spring, leagues):
     """
     Get coaches grouped by team for individual mode sending.
 
+    Only includes coaches with linked User accounts (sdll_users).
+    Uses the User's email from sdll_users, NOT the email stored in CoachSeason.
+
     Returns a dict:
     {
         'BB Majors Team 1': [
@@ -81,6 +92,7 @@ def get_coaches_grouped_by_team(year, is_spring, leagues):
     """
     teams_data = defaultdict(list)
 
+    # Eager load coaches -> coach (CoachUser) -> user to get current email
     teams = TeamSeason.query.filter(
         TeamSeason.year == year,
         TeamSeason.is_spring == is_spring,
@@ -88,18 +100,21 @@ def get_coaches_grouped_by_team(year, is_spring, leagues):
         TeamSeason.is_placeholder == 0,
         TeamSeason.league.in_(leagues) if leagues else True
     ).options(
-        joinedload(TeamSeason.coaches)
+        joinedload(TeamSeason.coaches).joinedload(CoachSeason.coach).joinedload(CoachUser.user)
     ).all()
 
     for team in teams:
         team_key = f"{team.league} - {team.scheduler_display_name or team.display_name}"
         for coach_season in team.coaches:
-            email = coach_season.email
+            # Only use email from linked User account (sdll_users)
+            if not coach_season.coach or not coach_season.coach.user:
+                continue
+            email = coach_season.coach.user.email
             if not email:
                 continue
             teams_data[team_key].append({
                 'email': email,
-                'name': coach_season.name or 'Coach',
+                'name': coach_season.coach.user.name or coach_season.name or 'Coach',
                 'role': coach_season.role or 'coach'
             })
 

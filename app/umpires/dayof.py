@@ -203,16 +203,16 @@ def rainout_notification():
             umpire_name = f"{first_name} {last_name}".strip()
 
             if official_id not in umpires:
-                # Fetch email from Assignr
+                # Fetch all emails from Assignr (primary + secondary)
                 umpire_details = assignr.get_official(official_id)
                 email_addresses = umpire_details.get('email_addresses', []) if umpire_details else []
-                email = email_addresses[0] if email_addresses else None
 
-                if email:
+                if email_addresses:
                     umpires[official_id] = {
                         'official_id': official_id,
                         'name': umpire_name,
-                        'email': email,
+                        'email': email_addresses[0],  # Primary for display
+                        'all_emails': email_addresses,  # All emails for sending
                         'games': []
                     }
 
@@ -318,11 +318,11 @@ def send_rainout_notification():
                 continue
             official_ids_seen.add(official_id)
 
-            # Fetch email from Assignr
+            # Fetch all emails from Assignr (primary + secondary)
             umpire_details = assignr.get_official(official_id)
             email_addresses = umpire_details.get('email_addresses', []) if umpire_details else []
-            if email_addresses:
-                emails.add(email_addresses[0])
+            for email in email_addresses:
+                emails.add(email)
 
     if not emails:
         flash('No umpires with games on this date', 'warning')
