@@ -720,7 +720,6 @@ def invoice_tieout():
         end_date=end_date,
         game_rows=game_rows,
         totals=totals,
-        partner_rates=partner_rates,
         quick_ranges=quick_ranges,
         partner_summaries=partner_summaries_list
     )
