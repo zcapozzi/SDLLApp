@@ -11,6 +11,7 @@ Handles:
 from flask import render_template, request, redirect, url_for, flash
 from flask_login import login_required
 from datetime import date
+from decimal import Decimal
 
 from app.extensions import db
 from app.models.umpire_partner import UmpirePartner
@@ -446,20 +447,21 @@ def delegation_report(year=None, is_spring=None):
             # Get games used from report_data
             partner_report = next((p for p in report_data if p['code'] == partner.short_code), None)
             games_used = 0
-            cost_used = 0
+            cost_used = Decimal('0')
             if partner_report:
                 games_used = partner_report['totals']['umpires'] + partner_report['totals']['ntl_umpires']
-                cost_used = partner_report['totals']['cost_total']
+                cost_used = Decimal(str(partner_report['totals']['cost_total']))
 
+            # Ensure all monetary values are Decimal for consistent arithmetic
             prepay_reconciliation[partner.id] = {
                 'partner': partner,
-                'payments_total': payment_totals['total_paid'],
+                'payments_total': Decimal(str(payment_totals['total_paid'] or 0)),
                 'payments_games': payment_totals['total_games'],
                 'games_used': games_used,
                 'cost_used': cost_used,
-                'postponed_amount': postponed_amount,
+                'postponed_amount': Decimal(str(postponed_amount or 0)),
                 'postponed_games': postponed_games,
-                'available_credits': available_credits,
+                'available_credits': Decimal(str(available_credits or 0)),
                 'payment_count': payment_totals['record_count']
             }
     except Exception as e:
