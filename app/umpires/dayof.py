@@ -14,9 +14,8 @@ from flask_login import login_required, current_user
 
 from app.extensions import db
 from app.models.umpire_dayof_notification import UmpireDayOfNotification
-from app.models.game_umpire import GameUmpire
-from app.models.game import Game
 from app.services.dayof_notification_service import DayOfNotificationService
+from app.services.assignr_service import get_assignr_service
 from app.services.notification_service import GmailService
 
 from . import umpires_bp, umpire_coordinator_required
@@ -152,7 +151,10 @@ def send_all_dayof():
 @login_required
 @umpire_coordinator_required
 def rainout_notification():
-    """Show rainout notification form for league-wide cancellations."""
+    """Show rainout notification form for league-wide cancellations.
+
+    Uses Assignr API to get today's SDL-managed games and their assigned umpires.
+    """
     # Get target date (default to today)
     target_date_str = request.args.get('date')
     if target_date_str:
@@ -163,35 +165,74 @@ def rainout_notification():
     else:
         target_date = date.today()
 
-    # Get all SDL umpire assignments for games on target date
-    # Only assigned/confirmed (not cancelled)
-    assignments = GameUmpire.query.join(Game).filter(
-        GameUmpire.umpire_profile_id.isnot(None),  # SDL umpires only
-        db.func.date(Game.game_date) == target_date,
-        GameUmpire.status.in_([GameUmpire.STATUS_ASSIGNED, GameUmpire.STATUS_CONFIRMED]),
-        Game.status.in_(['scheduled', 'confirmed'])  # Not already cancelled/postponed
-    ).all()
+    # Get Assignr service
+    assignr = get_assignr_service()
+    if not assignr.is_configured():
+        flash('Assignr is not configured.', 'error')
+        return redirect(url_for('umpires.dayof_notifications'))
 
-    # Collect unique umpires with their contact info
+    # Fetch games from Assignr for the target date
+    start_dt = datetime.combine(target_date, datetime.min.time())
+    end_dt = datetime.combine(target_date, datetime.max.time())
+
+    assignr_games = assignr.get_all_games(start_dt, end_dt)
+    assignr_games = assignr.enrich_games_with_local_data(assignr_games)
+
+    # Filter to SDL-managed games only (umpire_override == 'SDL')
+    sdl_games = [
+        g for g in assignr_games
+        if g.get('_local') and g['_local'].get('umpire_override') == 'SDL'
+        and not g.get('is_cancelled')
+    ]
+
+    # Collect unique umpires with their contact info from Assignr
     umpires = {}
-    for assignment in assignments:
-        profile = assignment.umpire
-        if profile and profile.id not in umpires:
-            email = profile.contact_email
-            if email:  # Only include if we have an email
-                umpires[profile.id] = {
-                    'profile': profile,
-                    'name': profile.full_name,
-                    'email': email,
-                    'games': []
-                }
-        if profile and profile.id in umpires:
-            game = assignment.game
-            umpires[profile.id]['games'].append({
-                'time': game.game_date.strftime('%I:%M %p').lstrip('0'),
-                'league': game.league,
-                'field': game.field_name
-            })
+    for game in sdl_games:
+        assignments = game.get('_embedded', {}).get('assignments', []) or []
+
+        for assignment in assignments:
+            embedded = assignment.get('_embedded', {}) or {}
+            official = embedded.get('official', {}) or {}
+
+            official_id = official.get('id')
+            if not official_id:
+                continue
+
+            first_name = official.get('first_name', '')
+            last_name = official.get('last_name', '')
+            umpire_name = f"{first_name} {last_name}".strip()
+
+            if official_id not in umpires:
+                # Fetch email from Assignr
+                umpire_details = assignr.get_official(official_id)
+                email_addresses = umpire_details.get('email_addresses', []) if umpire_details else []
+                email = email_addresses[0] if email_addresses else None
+
+                if email:
+                    umpires[official_id] = {
+                        'official_id': official_id,
+                        'name': umpire_name,
+                        'email': email,
+                        'games': []
+                    }
+
+            if official_id in umpires:
+                # Get game details
+                local = game.get('_local', {}) or {}
+                game_time = game.get('localized_time', '')
+                if game_time and len(game_time) >= 5:
+                    # Convert 24h to 12h format
+                    try:
+                        t = datetime.strptime(game_time[:5], '%H:%M')
+                        game_time = t.strftime('%I:%M %p').lstrip('0')
+                    except ValueError:
+                        pass
+
+                umpires[official_id]['games'].append({
+                    'time': game_time,
+                    'league': local.get('league') or game.get('game_type', ''),
+                    'field': local.get('field') or game.get('venue_name', '')
+                })
 
     # Sort by name
     umpire_list = sorted(umpires.values(), key=lambda x: x['name'])
@@ -211,7 +252,10 @@ def rainout_notification():
 @login_required
 @umpire_coordinator_required
 def send_rainout_notification():
-    """Send rainout notification to all SDL umpires with games on target date."""
+    """Send rainout notification to all SDL umpires with games on target date.
+
+    Uses Assignr API to get umpire email addresses.
+    """
     import os
     import json
     import urllib.request
@@ -238,22 +282,47 @@ def send_rainout_notification():
     if not subject:
         subject = f"SDLL Games Cancelled - {target_date.strftime('%B %d, %Y')}"
 
-    # Get all SDL umpire assignments for games on target date
-    assignments = GameUmpire.query.join(Game).filter(
-        GameUmpire.umpire_profile_id.isnot(None),
-        db.func.date(Game.game_date) == target_date,
-        GameUmpire.status.in_([GameUmpire.STATUS_ASSIGNED, GameUmpire.STATUS_CONFIRMED]),
-        Game.status.in_(['scheduled', 'confirmed'])
-    ).all()
+    # Get Assignr service
+    assignr = get_assignr_service()
+    if not assignr.is_configured():
+        flash('Assignr is not configured.', 'error')
+        return redirect(url_for('umpires.rainout_notification', date=target_date_str))
 
-    # Collect unique emails
+    # Fetch games from Assignr for the target date
+    start_dt = datetime.combine(target_date, datetime.min.time())
+    end_dt = datetime.combine(target_date, datetime.max.time())
+
+    assignr_games = assignr.get_all_games(start_dt, end_dt)
+    assignr_games = assignr.enrich_games_with_local_data(assignr_games)
+
+    # Filter to SDL-managed games only
+    sdl_games = [
+        g for g in assignr_games
+        if g.get('_local') and g['_local'].get('umpire_override') == 'SDL'
+        and not g.get('is_cancelled')
+    ]
+
+    # Collect unique emails from Assignr
     emails = set()
-    for assignment in assignments:
-        profile = assignment.umpire
-        if profile:
-            email = profile.contact_email
-            if email:
-                emails.add(email)
+    official_ids_seen = set()
+
+    for game in sdl_games:
+        assignments = game.get('_embedded', {}).get('assignments', []) or []
+
+        for assignment in assignments:
+            embedded = assignment.get('_embedded', {}) or {}
+            official = embedded.get('official', {}) or {}
+            official_id = official.get('id')
+
+            if not official_id or official_id in official_ids_seen:
+                continue
+            official_ids_seen.add(official_id)
+
+            # Fetch email from Assignr
+            umpire_details = assignr.get_official(official_id)
+            email_addresses = umpire_details.get('email_addresses', []) if umpire_details else []
+            if email_addresses:
+                emails.add(email_addresses[0])
 
     if not emails:
         flash('No umpires with games on this date', 'warning')
