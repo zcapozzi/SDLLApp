@@ -1404,10 +1404,11 @@ def master_schedule():
     - Logged in with permission: Full schedule view
     """
     from datetime import date, datetime
-    from sqlalchemy.orm import joinedload
+    from sqlalchemy.orm import joinedload, subqueryload
     from app.models.org_season import OrgSeason
     from app.models.league_season import LeagueSeason
     from app.models.field import Field
+    from app.models.team import TeamSeason
 
     # Get current season info
     current_season = OrgSeason.get_current_season()
@@ -1464,9 +1465,10 @@ def master_schedule():
 
     # Build query - load all data for the date range, filter client-side
     # Include cancelled events - client-side JS hides them by default
+    # Eager load coaches for get_display_name('coach') to avoid N+1 queries
     query = Game.query.options(
-        joinedload(Game.home_team),
-        joinedload(Game.away_team),
+        joinedload(Game.home_team).subqueryload(TeamSeason.coaches),
+        joinedload(Game.away_team).subqueryload(TeamSeason.coaches),
         joinedload(Game.field_rel)
     ).filter(
         Game.year == year,

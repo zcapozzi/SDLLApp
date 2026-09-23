@@ -610,9 +610,8 @@ def send_postgame_email(game_id, team_id):
 @games_bp.route('/upcoming')
 @login_required
 def upcoming():
-    """View upcoming games"""
-    games = Game.get_upcoming(limit=50)
-    return render_template('games/upcoming.html', games=games)
+    """Redirect to Master Schedule - this route is deprecated."""
+    return redirect(url_for('main.master_schedule'))
 
 
 @games_bp.route('/<int:year>/<int:is_spring>/manage', methods=['GET', 'POST'])

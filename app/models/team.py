@@ -190,14 +190,14 @@ class TeamSeason(db.Model):
             return self.team_name or self.display_name
 
         elif style == 'coach':
-            # Look up head coach from sdll_coach_seasons
-            from app.models.coach import CoachSeason
-            head_coach = CoachSeason.get_head_coach(self.team_ID)
-            if head_coach and head_coach.name:
-                # Extract last name (assume "First Last" format)
-                name_parts = head_coach.name.strip().split()
-                if name_parts:
-                    return name_parts[-1]  # Return last name
+            # Use coaches relationship (works with eager loading)
+            # The 'coaches' backref is defined in CoachSeason model
+            for coach in self.coaches:
+                if coach.role == 'head' and coach.name:
+                    # Extract last name (assume "First Last" format)
+                    name_parts = coach.name.strip().split()
+                    if name_parts:
+                        return name_parts[-1]  # Return last name
 
             # Fall back to coach_name field on team
             if self.coach_name:

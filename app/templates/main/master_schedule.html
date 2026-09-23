@@ -116,7 +116,7 @@
                 data-date="{{ game.game_date.strftime('%Y-%m-%d %H:%M') }}"
                 data-time="{{ game.game_date.strftime('%H:%M') }}"
                 data-division="{{ game.league or '' }}"
-                data-matchup="{{ (game.home_team.computed_display_name if game.home_team else 'TBD') }}"
+                data-matchup="{{ (game.home_team.get_display_name('coach') if game.home_team else 'TBD') }}"
                 data-location="{{ game.field_rel.name if game.field_rel else '' }}"
                 data-field-id="{{ game.field_rel.ID if game.field_rel else '' }}"
                 data-event-type="{{ event_type }}"
@@ -132,9 +132,9 @@
                     {% if game.game_type == 'practice' %}
                     <span class="type-badge practice">Practice</span>
                     {% if game.home_team and game.home_team.schedule_token %}
-                    <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
+                    <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.get_display_name('coach') }}</a>
                     {% else %}
-                    {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                    {{ game.home_team.get_display_name('coach') if game.home_team else 'TBD' }}
                     {% endif %}
                     {% else %}
                     {% if game.is_scrimmage %}
@@ -143,15 +143,15 @@
                     <span class="type-badge playoff">Playoff</span>
                     {% endif %}
                     {% if game.home_team and game.home_team.schedule_token %}
-                    <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
+                    <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.get_display_name('coach') }}</a>
                     {% else %}
-                    {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                    {{ game.home_team.get_display_name('coach') if game.home_team else 'TBD' }}
                     {% endif %}
                     <span style="color: var(--text-muted);"> vs </span>
                     {% if game.away_team and game.away_team.schedule_token %}
-                    <a href="{{ url_for('public.team_schedule', token=game.away_team.schedule_token) }}" class="team-link">{{ game.away_team.computed_display_name }}</a>
+                    <a href="{{ url_for('public.team_schedule', token=game.away_team.schedule_token) }}" class="team-link">{{ game.away_team.get_display_name('coach') }}</a>
                     {% else %}
-                    {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                    {{ game.away_team.get_display_name('coach') if game.away_team else 'TBD' }}
                     {% endif %}
                     {% endif %}
                 </td>
@@ -237,9 +237,9 @@
                 {% if game.game_type == 'practice' %}
                 <span class="type-badge practice">Practice</span>
                 {% if game.home_team and game.home_team.schedule_token %}
-                <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
+                <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.get_display_name('coach') }}</a>
                 {% else %}
-                {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                {{ game.home_team.get_display_name('coach') if game.home_team else 'TBD' }}
                 {% endif %}
                 {% else %}
                 {% if game.is_scrimmage %}
@@ -248,15 +248,15 @@
                 <span class="type-badge playoff">Playoff</span>
                 {% endif %}
                 {% if game.home_team and game.home_team.schedule_token %}
-                <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
+                <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.get_display_name('coach') }}</a>
                 {% else %}
-                {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                {{ game.home_team.get_display_name('coach') if game.home_team else 'TBD' }}
                 {% endif %}
                 <span style="color: var(--text-muted);"> vs </span>
                 {% if game.away_team and game.away_team.schedule_token %}
-                <a href="{{ url_for('public.team_schedule', token=game.away_team.schedule_token) }}" class="team-link">{{ game.away_team.computed_display_name }}</a>
+                <a href="{{ url_for('public.team_schedule', token=game.away_team.schedule_token) }}" class="team-link">{{ game.away_team.get_display_name('coach') }}</a>
                 {% else %}
-                {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                {{ game.away_team.get_display_name('coach') if game.away_team else 'TBD' }}
                 {% endif %}
                 {% endif %}
             </div>
@@ -298,11 +298,11 @@
                         {% elif event_type == 'playoff' %}<span class="type-dot playoff"></span>
                         {% endif %}
                         {% if game.game_type == 'practice' %}
-                            {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                            {{ game.home_team.get_display_name('coach') if game.home_team else 'TBD' }}
                         {% else %}
-                            {{ (game.home_team.computed_display_name if game.home_team else 'TBD')[:12] }}{% if game.home_team and game.home_team.computed_display_name|length > 12 %}..{% endif %}
+                            {{ (game.home_team.get_display_name('coach') if game.home_team else 'TBD')[:12] }}{% if game.home_team and game.home_team.get_display_name('coach')|length > 12 %}..{% endif %}
                             <span style="color:#999">v</span>
-                            {{ (game.away_team.computed_display_name if game.away_team else 'TBD')[:12] }}{% if game.away_team and game.away_team.computed_display_name|length > 12 %}..{% endif %}
+                            {{ (game.away_team.get_display_name('coach') if game.away_team else 'TBD')[:12] }}{% if game.away_team and game.away_team.get_display_name('coach')|length > 12 %}..{% endif %}
                         {% endif %}
                     </td>
                     <td class="compact-expand">▼</td>
@@ -317,24 +317,24 @@
                                 {% if game.game_type == 'practice' %}
                                 <span class="type-badge practice">Practice</span>
                                 {% if game.home_team and game.home_team.schedule_token %}
-                                <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
+                                <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.get_display_name('coach') }}</a>
                                 {% else %}
-                                {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                                {{ game.home_team.get_display_name('coach') if game.home_team else 'TBD' }}
                                 {% endif %}
                                 {% else %}
                                 {% if game.is_scrimmage %}<span class="type-badge scrimmage">Scrimmage</span>
                                 {% elif game.game_type == 'playoff' %}<span class="type-badge playoff">Playoff</span>
                                 {% endif %}
                                 {% if game.home_team and game.home_team.schedule_token %}
-                                <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.computed_display_name }}</a>
+                                <a href="{{ url_for('public.team_schedule', token=game.home_team.schedule_token) }}" class="team-link">{{ game.home_team.get_display_name('coach') }}</a>
                                 {% else %}
-                                {{ game.home_team.computed_display_name if game.home_team else 'TBD' }}
+                                {{ game.home_team.get_display_name('coach') if game.home_team else 'TBD' }}
                                 {% endif %}
                                 <span style="color: var(--text-muted);"> vs </span>
                                 {% if game.away_team and game.away_team.schedule_token %}
-                                <a href="{{ url_for('public.team_schedule', token=game.away_team.schedule_token) }}" class="team-link">{{ game.away_team.computed_display_name }}</a>
+                                <a href="{{ url_for('public.team_schedule', token=game.away_team.schedule_token) }}" class="team-link">{{ game.away_team.get_display_name('coach') }}</a>
                                 {% else %}
-                                {{ game.away_team.computed_display_name if game.away_team else 'TBD' }}
+                                {{ game.away_team.get_display_name('coach') if game.away_team else 'TBD' }}
                                 {% endif %}
                                 {% endif %}
                             </div>

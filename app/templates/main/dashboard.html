@@ -30,8 +30,8 @@
             </table>
             {% if upcoming_games|length > 5 %}
             <p style="text-align: center; margin-top: 15px;">
-                <a href="{{ url_for('games.upcoming') }}" class="btn btn-secondary">
-                    View All {{ upcoming_games|length }} Games
+                <a href="{{ url_for('main.master_schedule') }}" class="btn btn-secondary">
+                    View Master Schedule
                 </a>
             </p>
             {% endif %}

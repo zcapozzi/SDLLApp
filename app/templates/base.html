@@ -190,8 +190,7 @@
             <div class="nav-item">
                 <a href="#" class="nav-link">Schedule ▾</a>
                 <div class="dropdown-menu">
-                    <a href="{{ url_for('games.upcoming') }}">Upcoming Games</a>
-                    <a href="{{ url_for('games.index') }}">All Games</a>
+                    <a href="{{ url_for('main.master_schedule') }}">Upcoming Games</a>
                     {% if current_user.can_edit_schedule() and current_season_year %}
                     <a href="{{ url_for('games.manage', year=current_season_year, is_spring=current_season_is_spring) }}">
                         <strong>Manage Games</strong>
@@ -314,6 +313,7 @@
                     <a href="{{ url_for('umpires.weekly_digests', year=current_season_year, is_spring=current_season_is_spring) }}">Weekly Digests</a>
                     {% endif %}
                     <a href="{{ url_for('umpires.dayof_notifications') }}">Day-of Emails</a>
+                    <a href="{{ url_for('umpires.rainout_notification') }}">Rainout Notification</a>
                     {% if current_season %}
                     <a href="{{ url_for('umpires.campaigns', org_season_id=current_season.ID) }}">Email Campaigns</a>
                     <a href="{{ url_for('umpires.leads', org_season_id=current_season.ID) }}">Prospective Leads</a>
