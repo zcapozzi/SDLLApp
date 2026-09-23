@@ -100,9 +100,10 @@ def postgame_form(game_id, team_id):
         flash('The edit window for this report has expired (24 hours after submission).', 'warning')
         return redirect(url_for('coach.postgame_success', game_id=game_id, team_id=team_id))
 
-    # Check if league is kid-pitch
+    # Check if league is kid-pitch and baseball (softball doesn't have pitch count rules)
     league = League.get_by_name(game.league)
     is_kid_pitch = league and league.pitch_type == 'kid_pitch' if league else False
+    is_baseball = league and league.is_baseball if league else True
 
     if request.method == 'POST':
         action = request.form.get('action')
@@ -157,6 +158,7 @@ def postgame_form(game_id, team_id):
                                        opponent=opponent,
                                        report=report,
                                        is_kid_pitch=is_kid_pitch,
+                                       is_baseball=is_baseball,
                                        form_data=request.form)
 
             # Store in session for review
@@ -184,6 +186,7 @@ def postgame_form(game_id, team_id):
                            opponent=opponent,
                            report=report,
                            is_kid_pitch=is_kid_pitch,
+                           is_baseball=is_baseball,
                            ratings=PostGameReport.RATINGS,
                            rating_labels=PostGameReport.RATING_LABELS,
                            form_data={})
