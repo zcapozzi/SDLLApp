@@ -105,6 +105,14 @@ def postgame_form(game_id, team_id):
     is_kid_pitch = league and league.pitch_type == 'kid_pitch' if league else False
     is_baseball = league and league.is_baseball if league else True
 
+    # Check if SDLL provided an umpire for this game
+    # SDLL didn't provide if: umpire_override is NULL, umpire_was_unassigned=1, or umpire_count_override=0
+    sdll_provided_umpire = (
+        game.umpire_override is not None and
+        game.umpire_was_unassigned != 1 and
+        game.umpire_count_override != 0
+    )
+
     if request.method == 'POST':
         action = request.form.get('action')
 
@@ -141,12 +149,17 @@ def postgame_form(game_id, team_id):
             if not innings_fielded:
                 errors.append('Innings fielded is required')
 
-            if not umpire_name:
-                errors.append('Umpire name is required')
+            # Umpire feedback is only required if SDLL provided the umpire
+            if sdll_provided_umpire:
+                if not umpire_name:
+                    errors.append('Umpire name is required')
 
-            if not umpire_rating:
-                errors.append('Umpire rating is required')
-            elif umpire_rating not in PostGameReport.RATINGS:
+                if not umpire_rating:
+                    errors.append('Umpire rating is required')
+                elif umpire_rating not in PostGameReport.RATINGS:
+                    errors.append('Invalid umpire rating')
+            elif umpire_rating and umpire_rating not in PostGameReport.RATINGS:
+                # If they provided a rating anyway, validate it
                 errors.append('Invalid umpire rating')
 
             if errors:
@@ -159,6 +172,7 @@ def postgame_form(game_id, team_id):
                                        report=report,
                                        is_kid_pitch=is_kid_pitch,
                                        is_baseball=is_baseball,
+                                       sdll_provided_umpire=sdll_provided_umpire,
                                        form_data=request.form)
 
             # Store in session for review
@@ -187,6 +201,7 @@ def postgame_form(game_id, team_id):
                            report=report,
                            is_kid_pitch=is_kid_pitch,
                            is_baseball=is_baseball,
+                           sdll_provided_umpire=sdll_provided_umpire,
                            ratings=PostGameReport.RATINGS,
                            rating_labels=PostGameReport.RATING_LABELS,
                            form_data={})

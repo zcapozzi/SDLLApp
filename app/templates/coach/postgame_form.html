@@ -109,16 +109,22 @@
             <!-- Umpire Section -->
             <h3 style="border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Umpire Evaluation</h3>
 
+            {% if not sdll_provided_umpire %}
+            <div style="background: rgba(100, 100, 100, 0.1); padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #666;">
+                <strong>Note:</strong> SDLL did not provide the umpire for this game, but if you would like to share feedback, we may pass it along.
+            </div>
+            {% endif %}
+
             <div class="form-group">
-                <label for="umpire_name">Umpire Name</label>
+                <label for="umpire_name">Umpire Name{% if sdll_provided_umpire %} <span style="color: #c33;">*</span>{% else %} (optional){% endif %}</label>
                 <input type="text" id="umpire_name" name="umpire_name" class="form-control"
-                       placeholder="Enter the umpire's name" required
+                       placeholder="Enter the umpire's name"{% if sdll_provided_umpire %} required{% endif %}
                        value="{{ form_data.get('umpire_name', report.umpire_name if report else '') }}">
             </div>
 
             <div class="form-group">
-                <label for="umpire_rating">Rating</label>
-                <select id="umpire_rating" name="umpire_rating" class="form-control" required>
+                <label for="umpire_rating">Rating{% if sdll_provided_umpire %} <span style="color: #c33;">*</span>{% else %} (optional){% endif %}</label>
+                <select id="umpire_rating" name="umpire_rating" class="form-control"{% if sdll_provided_umpire %} required{% endif %}>
                     <option value="">Select a rating...</option>
                     {% for rating in ratings %}
                     <option value="{{ rating }}" {% if (form_data.get('umpire_rating') == rating) or (report and report.umpire_rating == rating) %}selected{% endif %}>{{ rating_labels[rating] }}</option>
