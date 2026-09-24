@@ -366,8 +366,12 @@ class AssignrService:
                     'field': local_game.field_name,
                     'status': local_game.status,
                     'umpire_override': local_game.umpire_override,
-                    'umpire_count_override': local_game.umpire_count_override
+                    'umpire_count_override': local_game.umpire_count_override,
+                    'game_date': local_game.game_date,  # Full datetime from local DB
                 }
+                # Override the Assignr date with local date when available
+                if local_game.game_date:
+                    game['_game_date'] = local_game.game_date
             else:
                 game['_local'] = None
 

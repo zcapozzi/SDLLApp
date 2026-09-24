@@ -56,7 +56,7 @@
             <tr>
                 <td class="date-cell">
                     <div>{{ game._game_date.strftime('%a %b %d') if game._game_date else '-' }}</div>
-                    <div style="color: var(--text-muted); font-size: 13px;">{{ game.localized_time or '' }}</div>
+                    <div style="color: var(--text-muted); font-size: 13px;">{{ game._game_date.strftime('%I:%M %p').lstrip('0') if game._game_date else '' }}</div>
                 </td>
                 <td>{{ local.league if local else game.league_name or '-' }}</td>
                 <td>
@@ -208,7 +208,7 @@
                         {{ game._game_date.strftime('%a %b %d') if game._game_date else '-' }}
                         {% if is_unpublished %}<span class="badge-unpublished">UNPUB</span>{% endif %}
                     </div>
-                    <div style="color: var(--text-muted); font-size: 13px;">{{ game.localized_time or '' }}</div>
+                    <div style="color: var(--text-muted); font-size: 13px;">{{ game._game_date.strftime('%I:%M %p').lstrip('0') if game._game_date else '' }}</div>
                 </td>
                 <td>
                     {% if local %}
