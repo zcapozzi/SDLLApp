@@ -1496,7 +1496,7 @@ def master_schedule():
     from app.models.league import League
     all_leagues = League.get_all_active()
     league_display_names = {
-        league.display_name: league.get_display_name(is_spring)
+        league.display_name: league.get_seasonal_name(is_spring)
         for league in all_leagues
     }
 
