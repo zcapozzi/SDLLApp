@@ -56,7 +56,7 @@
                 <select id="league" class="form-control" onchange="applyFilters()">
                     <option value="">All Divisions</option>
                     {% for league in leagues %}
-                    <option value="{{ league }}">{{ league }}</option>
+                    <option value="{{ league }}">{{ league_display_names.get(league, league) }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -124,7 +124,7 @@
                 data-game-id="{{ game.ID }}">
                 <td>{{ game.game_date.strftime('%a, %b %d') }}</td>
                 <td>{{ game.game_date.strftime('%I:%M %p').lstrip('0') }}</td>
-                <td>{{ game.league or '-' }}</td>
+                <td>{{ league_display_names.get(game.league, game.league) or '-' }}</td>
                 <td>
                     {% if game.status == 'cancelled' %}
                     <span class="cancelled-badge">Cancelled</span>
@@ -261,7 +261,7 @@
                 {% endif %}
             </div>
             <div class="event-details">
-                <span class="event-division">{{ game.league or '-' }}</span>
+                <span class="event-division">{{ league_display_names.get(game.league, game.league) or '-' }}</span>
                 <span class="event-location">{{ game.field_rel.name if game.field_rel else '-' }}</span>
             </div>
         </div>
@@ -339,7 +339,7 @@
                                 {% endif %}
                             </div>
                             <div class="expand-detail">
-                                <span class="expand-label">Division:</span> {{ game.league or '-' }}
+                                <span class="expand-label">Division:</span> {{ league_display_names.get(game.league, game.league) or '-' }}
                             </div>
                             <div class="expand-detail">
                                 <span class="expand-label">Field:</span> {{ game.field_rel.name if game.field_rel else '-' }}

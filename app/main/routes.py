@@ -1491,6 +1491,15 @@ def master_schedule():
     ).distinct().order_by(Game.league).all()
     leagues = [l[0] for l in leagues if l[0]]
 
+    # Build league display name lookup (maps league name to seasonal display name)
+    # e.g., "BB AA" -> "BB Cactus" for Fall
+    from app.models.league import League
+    all_leagues = League.get_all_active()
+    league_display_names = {
+        league.display_name: league.get_display_name(is_spring)
+        for league in all_leagues
+    }
+
     # Get available event types for filter dropdown
     # Game uses display_type property: 'regular', 'practice', 'scrimmage', 'playoff'
     # We need to check both game_type and is_scrimmage fields
@@ -1560,6 +1569,7 @@ def master_schedule():
         is_spring=is_spring,
         games=games,
         leagues=leagues,
+        league_display_names=league_display_names,
         fields=fields,
         event_types=event_types,
         start_date=start_date,
