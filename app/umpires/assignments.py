@@ -157,16 +157,35 @@ def missing_umpire(date_str=None):
         if game.away_ID:
             team_ids.add(game.away_ID)
 
-    # Batch fetch all coaches for these teams (avoid N+1)
+    # Batch fetch head coaches for these teams (avoid N+1)
+    # Eagerly load coach -> user relationship for email/phone
     coaches_by_team = {}
     if team_ids:
-        all_coaches = CoachSeason.query.filter(
-            CoachSeason.team_id.in_(team_ids)
-        ).order_by(CoachSeason.role).all()  # Head coaches first
-        for coach in all_coaches:
-            if coach.team_id not in coaches_by_team:
-                coaches_by_team[coach.team_id] = []
-            coaches_by_team[coach.team_id].append(coach)
+        from app.models.coach import CoachUser
+        head_coaches = CoachSeason.query.options(
+            joinedload(CoachSeason.coach).joinedload(CoachUser.user)
+        ).filter(
+            CoachSeason.team_id.in_(team_ids),
+            CoachSeason.role == 'head'
+        ).all()
+
+        for cs in head_coaches:
+            # Get email/phone from User via CoachUser
+            email = None
+            phone = None
+            if cs.coach and cs.coach.user:
+                email = cs.coach.user.email
+                phone = cs.coach.user.phone
+
+            coach_info = {
+                'name': cs.name,
+                'email': email,
+                'phone': phone,
+                'role': cs.role
+            }
+            if cs.team_id not in coaches_by_team:
+                coaches_by_team[cs.team_id] = []
+            coaches_by_team[cs.team_id].append(coach_info)
 
     # For each game, determine if it needs an umpire alert
     # (needs umpire based on league, but doesn't have one assigned and count_override != 0)
