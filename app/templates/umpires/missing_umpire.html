@@ -720,20 +720,19 @@ function copyCoachSMS(field, time, league, homeTeam, awayTeam) {
 }
 
 function copyCoachEmail(homeEmail, awayEmail, field, time, league, homeTeam, awayTeam) {
-    var subject = 'Umpire Running Late - ' + field + ' ' + time;
-    var body = "Hi coaches,\n\nQuick heads up that the umpire for your " + time + " " + league + " game at " + field + " (" + homeTeam + " vs " + awayTeam + ") is running a few minutes late. They should be there shortly.\n\nThanks for your patience!\n\nSDLL";
-
     // Build recipient list
     var recipients = [];
     if (homeEmail) recipients.push(homeEmail);
     if (awayEmail) recipients.push(awayEmail);
 
-    navigator.clipboard.writeText(body).then(function() {
-        showToast('Coach email copied! Opening email...');
-        if (recipients.length > 0) {
-            window.location.href = 'mailto:' + recipients.join(',') + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
-        }
-    });
+    if (recipients.length === 0) {
+        showToast('No coach emails available');
+        return;
+    }
+
+    // Redirect to email-coaches route with emails pre-populated
+    var emailCoachesUrl = '{{ url_for("scheduler.email_coaches") }}?to=' + encodeURIComponent(recipients.join(', '));
+    window.location.href = emailCoachesUrl;
 }
 </script>
 {% endblock %}
