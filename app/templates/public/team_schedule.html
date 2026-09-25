@@ -1476,7 +1476,7 @@
     // Authentication check
     var isAuthenticated = {{ 'true' if current_user.is_authenticated else 'false' }};
     // Debug: log auth state (remove after debugging)
-    console.log('Auth state:', isAuthenticated, 'User:', '{{ current_user.email if current_user.is_authenticated else "anonymous" }}');
+    console.log('Auth state:', isAuthenticated, 'User:', '{{ (current_user.email or current_user.name or "no-email") if current_user.is_authenticated else "anonymous" }}');
 
     // Login Modal Functions
     function showLoginModal() {
