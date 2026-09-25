@@ -501,6 +501,10 @@ def team_schedule(token):
 
     response = make_response(render_template('public/team_schedule.html', **template_vars))
 
+    # Prevent browser caching since page contains user-specific content (isAuthenticated)
+    response.headers['Cache-Control'] = 'private, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+
     # =========================================================================
     # PHASE 4: SAFELY LOG TRACKING (optional, fail silently, AFTER response built)
     # =========================================================================
