@@ -77,17 +77,20 @@ class DayOfNotificationService:
     def get_games_for_timeframe(
         self,
         hours_ahead: int = 7,
-        hours_start: int = 0
-    ) -> List[Dict]:
+        hours_start: int = 0,
+        include_non_scheduled: bool = False
+    ) -> Tuple[List[Dict], List[Dict]]:
         """
         Get games from Assignr within a time window.
 
         Args:
             hours_ahead: Hours in the future to look (end of window)
             hours_start: Hours in the future to start looking (start of window)
+            include_non_scheduled: If True, return non-scheduled games separately
 
         Returns:
-            List of enriched game dicts from Assignr
+            Tuple of (scheduled_games, non_scheduled_games) if include_non_scheduled
+            Otherwise just (scheduled_games, [])
         """
         # Use Eastern time (Durham, NC) regardless of server timezone
         now = datetime.now(EASTERN_TZ)
@@ -98,21 +101,30 @@ class DayOfNotificationService:
 
         games = self.assignr.get_all_games(start_dt, end_dt)
 
-        # Filter out cancelled games
+        # Filter out cancelled games from Assignr
         games = [g for g in games if not g.get('is_cancelled')]
 
         # Enrich with local data
         games = self.assignr.enrich_games_with_local_data(games)
 
-        # Filter out rainouts and cancelled local games
-        filtered = []
+        # Separate scheduled vs non-scheduled games
+        scheduled = []
+        non_scheduled = []
         for g in games:
             local = g.get('_local')
-            if local and local.get('status') in ('cancelled', 'rainout'):
-                continue
-            filtered.append(g)
+            # Only include games that are scheduled (or have no local record)
+            if local:
+                status = local.get('status')
+                if status == 'scheduled' or status is None:
+                    scheduled.append(g)
+                elif include_non_scheduled:
+                    non_scheduled.append(g)
+                    logger.info(f"Non-scheduled game found: {g.get('id')} status={status}")
+            else:
+                # No local record - assume scheduled (Assignr-only game)
+                scheduled.append(g)
 
-        return filtered
+        return scheduled, non_scheduled
 
     def get_coach_for_team_by_id(self, team_id: int) -> Optional[str]:
         """Get head coach name for a team by team_ID.
@@ -163,9 +175,9 @@ class DayOfNotificationService:
             List of created notification objects
         """
         year, is_spring = self.get_current_season()
-        games = self.get_games_for_timeframe(hours_ahead, hours_start)
+        games, _ = self.get_games_for_timeframe(hours_ahead, hours_start)
 
-        logger.info(f"Found {len(games)} games in timeframe")
+        logger.info(f"Found {len(games)} scheduled games in timeframe")
 
         notifications = []
 
@@ -537,17 +549,19 @@ Here are some resources that are good to have handy.<BR><BR>
     def get_games_for_time_window(
         self,
         start_hour: int,
-        end_hour: int
-    ) -> List[Dict]:
+        end_hour: int,
+        include_non_scheduled: bool = False
+    ) -> Tuple[List[Dict], List[Dict]]:
         """
         Get games from Assignr within a specific time window today.
 
         Args:
             start_hour: Start hour (0-23) in Eastern time
             end_hour: End hour (0-23) in Eastern time
+            include_non_scheduled: If True, return non-scheduled games separately
 
         Returns:
-            List of enriched game dicts from Assignr
+            Tuple of (scheduled_games, non_scheduled_games)
         """
         now = datetime.now(EASTERN_TZ)
         today = now.date()
@@ -565,36 +579,48 @@ Here are some resources that are good to have handy.<BR><BR>
         # Fetch all games for today
         games = self.assignr.get_all_games(start_dt, end_dt)
 
-        # Filter out cancelled games
+        # Filter out cancelled games from Assignr
         games = [g for g in games if not g.get('is_cancelled')]
 
         # Enrich with local data
         games = self.assignr.enrich_games_with_local_data(games)
 
-        # Filter out rainouts and cancelled local games
-        # Also filter by time window
-        filtered = []
+        # Separate scheduled vs non-scheduled games, filtered by time window
+        scheduled = []
+        non_scheduled = []
         for g in games:
-            local = g.get('_local')
-            if local and local.get('status') in ('cancelled', 'rainout'):
+            game_date = g.get('_game_date')
+            if not game_date:
                 continue
 
-            game_date = g.get('_game_date')
-            if game_date:
-                # Make game_date timezone-aware if it isn't
-                if game_date.tzinfo is None:
-                    game_date = EASTERN_TZ.localize(game_date)
-                game_hour = game_date.hour
-                if start_hour <= game_hour < end_hour:
-                    filtered.append(g)
+            # Make game_date timezone-aware if it isn't
+            if game_date.tzinfo is None:
+                game_date = EASTERN_TZ.localize(game_date)
+            game_hour = game_date.hour
 
-        return filtered
+            # Check if in time window
+            if not (start_hour <= game_hour < end_hour):
+                continue
+
+            local = g.get('_local')
+            if local:
+                status = local.get('status')
+                if status == 'scheduled' or status is None:
+                    scheduled.append(g)
+                elif include_non_scheduled:
+                    non_scheduled.append(g)
+                    logger.info(f"Non-scheduled game in window: {g.get('id')} status={status}")
+            else:
+                # No local record - assume scheduled
+                scheduled.append(g)
+
+        return scheduled, non_scheduled
 
     def generate_notifications_for_time_window(
         self,
         start_hour: int,
         end_hour: int
-    ) -> List[UmpireDayOfNotification]:
+    ) -> Tuple[List[UmpireDayOfNotification], List[Dict]]:
         """
         Generate day-of notifications for games within a specific time window.
 
@@ -603,12 +629,16 @@ Here are some resources that are good to have handy.<BR><BR>
             end_hour: End hour (0-23) in Eastern time
 
         Returns:
-            List of created notification objects
+            Tuple of (created notifications, non-scheduled games that were skipped)
         """
         year, is_spring = self.get_current_season()
-        games = self.get_games_for_time_window(start_hour, end_hour)
+        games, non_scheduled_games = self.get_games_for_time_window(
+            start_hour, end_hour, include_non_scheduled=True
+        )
 
-        logger.info(f"Found {len(games)} games between {start_hour}:00 and {end_hour}:00")
+        logger.info(f"Found {len(games)} scheduled games between {start_hour}:00 and {end_hour}:00")
+        if non_scheduled_games:
+            logger.info(f"Found {len(non_scheduled_games)} non-scheduled games (cancelled/rainout/postponed)")
 
         notifications = []
 
@@ -716,14 +746,22 @@ Here are some resources that are good to have handy.<BR><BR>
                 logger.info(f"Created notification for {umpire_name} - game {assignr_game_id}")
 
         db.session.commit()
-        return notifications
+        return notifications, non_scheduled_games
 
-    def generate_morning_notifications(self) -> List[UmpireDayOfNotification]:
-        """Generate notifications for games before 3pm (7am cron run)."""
+    def generate_morning_notifications(self) -> Tuple[List[UmpireDayOfNotification], List[Dict]]:
+        """Generate notifications for games before 3pm (7am cron run).
+
+        Returns:
+            Tuple of (notifications, non_scheduled_games)
+        """
         return self.generate_notifications_for_time_window(0, 15)  # Midnight to 3pm
 
-    def generate_afternoon_notifications(self) -> List[UmpireDayOfNotification]:
-        """Generate notifications for games after 3pm (1pm cron run)."""
+    def generate_afternoon_notifications(self) -> Tuple[List[UmpireDayOfNotification], List[Dict]]:
+        """Generate notifications for games after 3pm (1pm cron run).
+
+        Returns:
+            Tuple of (notifications, non_scheduled_games)
+        """
         return self.generate_notifications_for_time_window(15, 24)  # 3pm to midnight
 
     def regenerate_notification(
@@ -827,7 +865,8 @@ Here are some resources that are good to have handy.<BR><BR>
     def notify_coordinator_of_drafts(
         self,
         notifications: List[UmpireDayOfNotification],
-        run_type: str = 'morning'
+        run_type: str = 'morning',
+        skipped_games: Optional[List[Dict]] = None
     ) -> bool:
         """
         Send email to umpire coordinator about pending day-of notifications.
@@ -835,12 +874,13 @@ Here are some resources that are good to have handy.<BR><BR>
         Args:
             notifications: List of draft notifications generated
             run_type: 'morning' or 'afternoon' to indicate which cron run
+            skipped_games: List of games that were skipped (cancelled/rainout/postponed)
 
         Returns:
             True if notification sent successfully
         """
-        if not notifications:
-            logger.info("No notifications to report to coordinator")
+        if not notifications and not skipped_games:
+            logger.info("No notifications or skipped games to report to coordinator")
             return True
 
         from app.models.user import User
@@ -864,7 +904,13 @@ Here are some resources that are good to have handy.<BR><BR>
         today_str = now.strftime('%A, %B %d')
         time_window = "before 3pm" if run_type == 'morning' else "after 3pm"
 
-        subject = f"SDLL Day-of Umpire Emails Ready ({len(notifications)} drafts)"
+        # Build subject line
+        subject_parts = []
+        if notifications:
+            subject_parts.append(f"{len(notifications)} drafts")
+        if skipped_games:
+            subject_parts.append(f"{len(skipped_games)} skipped")
+        subject = f"SDLL Day-of Umpire Emails ({', '.join(subject_parts)})"
 
         # Build notification list HTML
         notif_rows = []
@@ -886,22 +932,39 @@ Here are some resources that are good to have handy.<BR><BR>
             </tr>
             """)
 
+        # Build skipped games HTML
+        skipped_rows = []
+        skipped_games = skipped_games or []
+        for g in skipped_games:
+            local = g.get('_local', {}) or {}
+            status = local.get('status', 'unknown')
+            game_date = g.get('_game_date')
+            time_str = game_date.strftime('%I:%M %p').lstrip('0') if game_date else 'TBD'
+            location = local.get('field') or g.get('venue_name', 'TBD')
+            home_team = local.get('home_team') or g.get('home_team', 'TBD')
+            away_team = local.get('away_team') or g.get('away_team', 'TBD')
+
+            status_color = '#dc3545' if status in ('cancelled', 'rainout') else '#ffc107'
+            skipped_rows.append(f"""
+            <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                    <span style="background: {status_color}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px; text-transform: uppercase;">{status}</span>
+                </td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                    {time_str} @ {location}
+                </td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                    {home_team} vs {away_team}
+                </td>
+            </tr>
+            """)
+
         inbox_url = f"{base_url}/umpires/dayof"
 
-        body_html = f"""
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #228B22;">Day-of Umpire Emails Ready</h2>
-            <p>
-                <strong>{len(notifications)}</strong> day-of notification(s) have been drafted
-                for games {time_window} on {today_str}.
-            </p>
-            <p>
-                <a href="{inbox_url}" style="display: inline-block; padding: 10px 20px;
-                   background-color: #228B22; color: white; text-decoration: none;
-                   border-radius: 4px; font-weight: bold;">
-                    Go to Day-of Inbox
-                </a>
-            </p>
+        # Build HTML sections
+        notifications_section = ""
+        if notifications:
+            notifications_section = f"""
             <h3>Pending Notifications:</h3>
             <table style="width: 100%; border-collapse: collapse;">
                 <tr style="background-color: #f5f5f5;">
@@ -911,20 +974,69 @@ Here are some resources that are good to have handy.<BR><BR>
                 </tr>
                 {''.join(notif_rows)}
             </table>
+            """
+
+        skipped_section = ""
+        if skipped_games:
+            skipped_section = f"""
+            <h3 style="color: #dc3545;">Skipped Games (No Draft Created):</h3>
+            <p style="color: #666; font-size: 13px;">
+                These games have umpires assigned in Assignr but are not status=scheduled locally.
+                No pregame email was drafted for these games.
+            </p>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr style="background-color: #fff3cd;">
+                    <th style="padding: 8px; text-align: left;">Status</th>
+                    <th style="padding: 8px; text-align: left;">Game</th>
+                    <th style="padding: 8px; text-align: left;">Teams</th>
+                </tr>
+                {''.join(skipped_rows)}
+            </table>
+            """
+
+        body_html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #228B22;">Day-of Umpire Emails Summary</h2>
+            <p>
+                Summary for games {time_window} on {today_str}:
+                <ul>
+                    <li><strong>{len(notifications)}</strong> notification(s) drafted</li>
+                    <li><strong>{len(skipped_games)}</strong> game(s) skipped (not scheduled)</li>
+                </ul>
+            </p>
+            <p>
+                <a href="{inbox_url}" style="display: inline-block; padding: 10px 20px;
+                   background-color: #228B22; color: white; text-decoration: none;
+                   border-radius: 4px; font-weight: bold;">
+                    Go to Day-of Inbox
+                </a>
+            </p>
+            {notifications_section}
+            {skipped_section}
             <p style="color: #666; font-size: 12px; margin-top: 20px;">
                 This is an automated notification from the SDLL Umpire System.
             </p>
         </div>
         """
 
-        body_text = f"""Day-of Umpire Emails Ready
+        # Build plain text version
+        skipped_text = ""
+        if skipped_games:
+            skipped_text = "\n\nSkipped games (not scheduled):\n" + "\n".join([
+                f"- [{g.get('_local', {}).get('status', 'unknown')}] {g.get('_game_date').strftime('%I:%M %p').lstrip('0') if g.get('_game_date') else 'TBD'} @ {g.get('_local', {}).get('field') or g.get('venue_name', 'TBD')}"
+                for g in skipped_games
+            ])
 
-{len(notifications)} day-of notification(s) have been drafted for games {time_window} on {today_str}.
+        body_text = f"""Day-of Umpire Emails Summary
+
+Summary for games {time_window} on {today_str}:
+- {len(notifications)} notification(s) drafted
+- {len(skipped_games)} game(s) skipped (not scheduled)
 
 Go to Day-of Inbox: {inbox_url}
 
 Pending notifications:
-""" + "\n".join([f"- {n.umpire_name}: {n.game_time_str} @ {n.game_location}" for n in notifications])
+""" + "\n".join([f"- {n.umpire_name}: {n.game_time_str} @ {n.game_location}" for n in notifications]) + skipped_text
 
         try:
             self.gmail.send_email(

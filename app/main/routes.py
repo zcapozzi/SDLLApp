@@ -1125,16 +1125,19 @@ def cron_dayof_morning():
 
     try:
         service = DayOfNotificationService()
-        notifications = service.generate_morning_notifications()
+        notifications, skipped_games = service.generate_morning_notifications()
 
-        # Notify coordinator if there are drafts
+        # Notify coordinator if there are drafts or skipped games
         notified = False
-        if notifications:
-            notified = service.notify_coordinator_of_drafts(notifications, 'morning')
+        if notifications or skipped_games:
+            notified = service.notify_coordinator_of_drafts(
+                notifications, 'morning', skipped_games=skipped_games
+            )
 
         return jsonify({
             'status': 'ok',
             'drafts_created': len(notifications),
+            'games_skipped': len(skipped_games),
             'coordinator_notified': notified,
             'umpires': [n.umpire_name for n in notifications]
         }), 200
@@ -1175,16 +1178,19 @@ def cron_dayof_afternoon():
 
     try:
         service = DayOfNotificationService()
-        notifications = service.generate_afternoon_notifications()
+        notifications, skipped_games = service.generate_afternoon_notifications()
 
-        # Notify coordinator if there are drafts
+        # Notify coordinator if there are drafts or skipped games
         notified = False
-        if notifications:
-            notified = service.notify_coordinator_of_drafts(notifications, 'afternoon')
+        if notifications or skipped_games:
+            notified = service.notify_coordinator_of_drafts(
+                notifications, 'afternoon', skipped_games=skipped_games
+            )
 
         return jsonify({
             'status': 'ok',
             'drafts_created': len(notifications),
+            'games_skipped': len(skipped_games),
             'coordinator_notified': notified,
             'umpires': [n.umpire_name for n in notifications]
         }), 200
