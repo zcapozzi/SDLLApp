@@ -1272,8 +1272,8 @@
     <script>
     (function() {
         var pageLoadTime = Date.now();
-        var pageViewId = {{ page_view_id|default('null') }};
-        var impressionToken = {{ impression_token|tojson if impression_token else 'null' }};
+        var pageViewId = {{ page_view_id|tojson }};
+        var impressionToken = {{ impression_token|tojson }};
 
         // Send beacon on page unload with time on page
         function sendPageBeacon() {
