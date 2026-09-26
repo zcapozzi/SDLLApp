@@ -1475,6 +1475,8 @@
 
     // Authentication check
     var isAuthenticated = {{ 'true' if current_user.is_authenticated else 'false' }};
+    // DEBUG: Show auth state in console (safe - no template vars in string)
+    console.log('isAuthenticated =', isAuthenticated);
 
     // Login Modal Functions
     function showLoginModal() {
