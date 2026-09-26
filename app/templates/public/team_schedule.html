@@ -1475,8 +1475,6 @@
 
     // Authentication check
     var isAuthenticated = {{ 'true' if current_user.is_authenticated else 'false' }};
-    // DEBUG: Show auth state in console (safe - no template vars in string)
-    console.log('isAuthenticated =', isAuthenticated);
 
     // Login Modal Functions
     function showLoginModal() {
@@ -1532,16 +1530,15 @@
             return;
         }
 
-        // Get game ID from button's data attribute (hero card) or from parent card
-        var gameId = menuItem.dataset.gameId;
-        if (!gameId) {
-            var card = menuItem.closest('.game-card');
-            gameId = card ? card.dataset.gameId : null;
-        }
-        if (!gameId) return;
+        // Find the form within the same container as the menu (handles duplicate IDs)
+        // For game cards, find form within .game-card; for hero, find within .next-game
+        var container = menuItem.closest('.game-card') || menuItem.closest('.next-game');
+        if (!container) return;
 
-        var form = document.getElementById('start-form-' + gameId);
-        var timeInput = document.getElementById('start-time-' + gameId);
+        var form = container.querySelector('.game-start-form');
+        var timeInput = form ? form.querySelector('input[type="time"]') : null;
+
+        if (!form || !timeInput) return;
 
         // Show form
         form.classList.add('show');
