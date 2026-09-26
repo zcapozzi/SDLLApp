@@ -344,6 +344,11 @@ def get_games_needing_reports(year, is_spring):
         list: List of Game objects needing reports
     """
     from sqlalchemy.orm import joinedload
+    import pytz
+
+    # IMPORTANT: game_date is stored in local time (Eastern), not UTC
+    eastern = pytz.timezone('America/New_York')
+    now_local = datetime.now(eastern).replace(tzinfo=None)
 
     # Get leagues with postgame enabled
     enabled_leagues = LeagueSeason.query.filter_by(
@@ -365,7 +370,7 @@ def get_games_needing_reports(year, is_spring):
         Game.year == year,
         Game.is_spring == is_spring,
         Game.active == 1,
-        Game.game_date < datetime.utcnow(),
+        Game.game_date < now_local,
         Game.game_type.in_(['regular', 'playoff']),
         Game.is_scrimmage == 0,
         Game.league.in_(enabled_league_names),
@@ -408,9 +413,15 @@ def get_games_needing_emails(minutes_after_start=105, max_hours_ago=18):
     Returns:
         list: List of (Game, team_id) tuples needing emails
     """
-    now = datetime.utcnow()
-    cutoff_min = now - timedelta(minutes=minutes_after_start)
-    cutoff_max = now - timedelta(hours=max_hours_ago)
+    import pytz
+
+    # IMPORTANT: game_date is stored in local time (Eastern), not UTC
+    # We must compare using local time, not UTC
+    eastern = pytz.timezone('America/New_York')
+    now_local = datetime.now(eastern).replace(tzinfo=None)  # Naive local time
+
+    cutoff_min = now_local - timedelta(minutes=minutes_after_start)
+    cutoff_max = now_local - timedelta(hours=max_hours_ago)
 
     # Get games that:
     # - Started before cutoff_min (enough time has passed since game start)
