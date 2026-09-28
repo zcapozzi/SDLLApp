@@ -942,11 +942,13 @@ def cron_process_scheduled_emails():
 @main_bp.route('/cron/generate-weekly-digests')
 def cron_generate_weekly_digests():
     """
-    Cron endpoint to generate weekly umpire partner digest emails.
+    Cron endpoint to generate weekly umpire digest emails.
 
-    Runs Sunday 6pm ET (23:00 UTC). Generates digest drafts for all partners
-    with games in the upcoming week. Partners with auto_send_digest=True
-    will have their digests sent immediately.
+    Runs Sunday 6pm ET (23:00 UTC). Generates digest drafts for:
+    1. External partners (Diamond, Dynamic, etc.) - org-level digests
+    2. SDL Academy umpires - individual umpire digests
+
+    Partners/umpires with auto_send enabled will have digests sent immediately.
 
     Protected by CRON_SECRET token. Call with ?token=YOUR_SECRET
 
@@ -968,19 +970,35 @@ def cron_generate_weekly_digests():
 
     try:
         service = WeeklyDigestService()
-        digests = service.generate_all_digests()
 
-        results = {
-            'total': len(digests),
-            'drafts': sum(1 for d in digests if d.status == 'draft'),
-            'sent': sum(1 for d in digests if d.status == 'sent'),
-            'skipped': sum(1 for d in digests if d.status == 'skipped'),
-            'partners': [d.partner_code for d in digests]
+        # Generate partner digests (external partners like Diamond, Dynamic)
+        partner_digests = service.generate_all_digests()
+
+        partner_results = {
+            'total': len(partner_digests),
+            'drafts': sum(1 for d in partner_digests if d.status == 'draft'),
+            'sent': sum(1 for d in partner_digests if d.status == 'sent'),
+            'skipped': sum(1 for d in partner_digests if d.status == 'skipped'),
+            'partners': [d.partner_code for d in partner_digests]
         }
+
+        # Generate SDL Academy umpire digests (individual umpires)
+        umpire_results = {'total': 0, 'drafts': 0, 'sent': 0, 'error': None}
+        try:
+            umpire_digests = service.generate_umpire_digests(auto_send=False)
+            umpire_results = {
+                'total': len(umpire_digests),
+                'drafts': sum(1 for d in umpire_digests if d.status == 'draft'),
+                'sent': sum(1 for d in umpire_digests if d.status == 'sent'),
+                'error': None
+            }
+        except Exception as e:
+            umpire_results['error'] = str(e)
 
         return jsonify({
             'status': 'ok',
-            'results': results
+            'partner_digests': partner_results,
+            'umpire_digests': umpire_results
         }), 200
 
     except Exception as e:
