@@ -172,8 +172,8 @@
     <textarea id="email-text" readonly></textarea>
 </div>
 
-{# Games Table #}
-<div class="card">
+{# Games Table - Desktop #}
+<div class="card desktop-table">
     {% if games %}
     <table id="games-table">
         <thead>
@@ -295,6 +295,115 @@
     <p style="text-align: center; color: var(--text-muted); padding: 40px;">
         No games found in this date range.
     </p>
+    {% endif %}
+</div>
+
+{# Mobile Cards View #}
+<div class="mobile-cards">
+    {% if games %}
+    <div id="mobile-games-list">
+        {% for game in games %}
+        {% set local = game._local %}
+        {% set has_accepted = game._accepted_umpires|length > 0 if game._accepted_umpires else false %}
+        {% set has_pending = game._pending_umpires|length > 0 if game._pending_umpires else false %}
+        {% set has_assignment = has_accepted or has_pending %}
+        {% set needs_alert = game._needs_umpire and not has_assignment %}
+        {% set is_unpublished = not game.published %}
+        <div class="game-card {{ 'needs-alert' if needs_alert else '' }}{{ ' unpublished' if is_unpublished else '' }}"
+             data-league="{{ local.league if local else game.league_name or '' }}"
+             data-status="{{ 'assigned' if has_assignment else 'unassigned' }}"
+             data-published="{{ 'true' if game.published else 'false' }}"
+             {% if is_unpublished and not show_unpublished %}style="display: none;"{% endif %}>
+            {# Main card content - always visible #}
+            <div class="game-card-main" onclick="toggleCardExpand(this.parentElement)">
+                <div class="game-card-header">
+                    <div class="game-datetime">
+                        <span class="game-date">{{ game._game_date.strftime('%a %b %d') if game._game_date else '-' }}</span>
+                        <span class="game-time">{{ game._game_date.strftime('%I:%M %p').lstrip('0') if game._game_date else '' }}</span>
+                        {% if is_unpublished %}<span class="badge-unpublished">UNPUB</span>{% endif %}
+                    </div>
+                    <div class="game-league">{{ local.league if local else game.league_name or '-' }}</div>
+                </div>
+                <div class="game-card-body">
+                    <div class="game-location">
+                        <span class="location-icon">&#128205;</span>
+                        {{ local.field if local else game.venue_name or '-' }}
+                    </div>
+                    <div class="game-officials">
+                        {% if game._accepted_umpires or game._pending_umpires %}
+                        <div class="officials-compact">
+                            {% for umpire_name in game._accepted_umpires %}
+                            <span class="official-chip accepted">{{ umpire_name }}</span>
+                            {% endfor %}
+                            {% for umpire_name in game._pending_umpires %}
+                            <span class="official-chip pending">{{ umpire_name }}</span>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <span class="unassigned-chip">Unassigned</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="expand-indicator">&#9660;</div>
+            </div>
+
+            {# Expanded content - hidden by default #}
+            <div class="game-card-details">
+                <div class="detail-row">
+                    <span class="detail-label">Matchup</span>
+                    <span class="detail-value">
+                        {% if local %}
+                        {{ local.home_team or 'TBD' }} vs {{ local.away_team or 'TBD' }}
+                        {% else %}
+                        {{ game.home_team or 'TBD' }} vs {{ game.away_team or 'TBD' }}
+                        {% endif %}
+                    </span>
+                </div>
+                {% if local %}
+                <div class="detail-row">
+                    <span class="detail-label">Source</span>
+                    <select class="umpire-source-select form-control"
+                            data-game-id="{{ local.game_id }}"
+                            data-current-source="{{ local.umpire_override or '' }}"
+                            onclick="event.stopPropagation()"
+                            onchange="setUmpireSource(this)">
+                        <option value="">None</option>
+                        {% for partner in partners %}
+                        <option value="{{ partner.short_code }}" {% if local.umpire_override == partner.short_code %}selected{% endif %}>{{ partner.short_code }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Count</span>
+                    <select class="umpire-count-select form-control"
+                            data-game-id="{{ local.game_id }}"
+                            onclick="event.stopPropagation()"
+                            onchange="setUmpireCount(this)">
+                        <option value="">Default</option>
+                        <option value="0" {% if local.umpire_count_override == 0 %}selected{% endif %}>0</option>
+                        <option value="1" {% if local.umpire_count_override == 1 %}selected{% endif %}>1</option>
+                        <option value="2" {% if local.umpire_count_override == 2 %}selected{% endif %}>2</option>
+                    </select>
+                </div>
+                {% endif %}
+                <div class="detail-actions">
+                    <a href="https://sdll.assignr.com/games/{{ game.id }}" target="_blank" class="btn btn-sm btn-primary" onclick="event.stopPropagation()">
+                        Open in Assignr
+                    </a>
+                    {% if local %}
+                    <a href="{{ url_for('games.view', game_id=local.game_id) }}" class="btn btn-sm btn-outline" onclick="event.stopPropagation()">
+                        View Local
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card" style="text-align: center; color: var(--text-muted); padding: 40px;">
+        No games found in this date range.
+    </div>
     {% endif %}
 </div>
 
@@ -511,7 +620,14 @@ tr.unpublished-row td {
     color: white;
 }
 
+/* Desktop table / Mobile cards visibility */
+.desktop-table { display: block; }
+.mobile-cards { display: none; }
+
 @media (max-width: 768px) {
+    .desktop-table { display: none; }
+    .mobile-cards { display: block; }
+
     /* Stats grid: 2x2 on mobile */
     .stats-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -539,34 +655,214 @@ tr.unpublished-row td {
         bottom: 10px;
         right: 10px;
     }
+
+    /* Filter form adjustments for mobile */
+    .filter-group {
+        flex: 1 1 45%;
+    }
+    .filter-group label {
+        font-size: 12px;
+    }
+}
+
+/* Mobile Game Cards */
+.game-card {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+.game-card.needs-alert {
+    border-left: 4px solid var(--danger-color);
+    background: #fff5f5;
+}
+.game-card.unpublished {
+    opacity: 0.7;
+    background: #f8f9fa;
+}
+.game-card-main {
+    padding: 12px;
+    cursor: pointer;
+    position: relative;
+}
+.game-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+.game-datetime {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.game-date {
+    font-weight: 600;
+    font-size: 14px;
+}
+.game-time {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+.game-league {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--primary-color);
+    background: #f0f7ff;
+    padding: 3px 8px;
+    border-radius: 4px;
+}
+.game-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.game-location {
+    font-size: 13px;
+    color: var(--text-color);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.location-icon {
+    font-size: 12px;
+}
+.game-officials {
+    margin-top: 4px;
+}
+.officials-compact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.official-chip {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    background: #e3f2fd;
+    color: #1565c0;
+}
+.official-chip.accepted {
+    background: #d4edda;
+    color: #155724;
+}
+.official-chip.pending {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px dashed #856404;
+}
+.unassigned-chip {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    background: #f8d7da;
+    color: #721c24;
+}
+.expand-indicator {
+    position: absolute;
+    right: 12px;
+    bottom: 8px;
+    font-size: 10px;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+}
+.game-card.expanded .expand-indicator {
+    transform: rotate(180deg);
+}
+.game-card-details {
+    display: none;
+    padding: 0 12px 12px 12px;
+    border-top: 1px solid var(--border-color);
+    margin-top: 8px;
+    padding-top: 12px;
+}
+.game-card.expanded .game-card-details {
+    display: block;
+}
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+.detail-row:last-of-type {
+    border-bottom: none;
+}
+.detail-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+.detail-value {
+    font-size: 13px;
+    text-align: right;
+}
+.detail-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #f0f0f0;
+}
+.detail-actions .btn {
+    flex: 1;
+    text-align: center;
+}
+.game-card-details .umpire-source-select,
+.game-card-details .umpire-count-select {
+    width: 100px;
+    padding: 6px 10px;
+    font-size: 13px;
 }
 </style>
 
 <script>
-// v2 - Fixed timezone parsing for email dates
+// v3 - Added mobile card view support
+function toggleCardExpand(card) {
+    card.classList.toggle('expanded');
+}
+
 function filterGames() {
     var leagueFilter = document.getElementById('league_select').value.toLowerCase();
     var statusFilter = document.getElementById('status_filter').value.toLowerCase();
     var showUnpublished = document.getElementById('show_unpublished').checked;
+
+    // Filter desktop table rows
     var rows = document.querySelectorAll('#games-table tbody tr');
     var visibleCount = 0;
 
     rows.forEach(function(row) {
-        var rowLeague = (row.dataset.league || '').toLowerCase();
-        var rowStatus = (row.dataset.status || '').toLowerCase();
-        var rowPublished = row.dataset.published === 'true';
-        var show = true;
-
-        if (leagueFilter && rowLeague !== leagueFilter) show = false;
-        if (statusFilter && rowStatus !== statusFilter) show = false;
-        // Hide unpublished games unless checkbox is checked
-        if (!showUnpublished && !rowPublished) show = false;
-
+        var show = shouldShowItem(row, leagueFilter, statusFilter, showUnpublished);
         row.style.display = show ? '' : 'none';
         if (show) visibleCount++;
     });
 
+    // Filter mobile cards
+    var cards = document.querySelectorAll('#mobile-games-list .game-card');
+    cards.forEach(function(card) {
+        var show = shouldShowItem(card, leagueFilter, statusFilter, showUnpublished);
+        card.style.display = show ? '' : 'none';
+    });
+
     document.getElementById('visible-count').textContent = visibleCount;
+}
+
+function shouldShowItem(item, leagueFilter, statusFilter, showUnpublished) {
+    var rowLeague = (item.dataset.league || '').toLowerCase();
+    var rowStatus = (item.dataset.status || '').toLowerCase();
+    var rowPublished = item.dataset.published === 'true';
+    var show = true;
+
+    if (leagueFilter && rowLeague !== leagueFilter) show = false;
+    if (statusFilter && rowStatus !== statusFilter) show = false;
+    // Hide unpublished games unless checkbox is checked
+    if (!showUnpublished && !rowPublished) show = false;
+
+    return show;
 }
 
 // Apply filters on page load to set correct initial count
