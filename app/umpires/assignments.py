@@ -827,3 +827,101 @@ def api_mark_no_umpire_required():
         'success': True,
         'message': f'Game marked as no umpire required'
     })
+
+
+# ============================================================================
+# Notification Muting
+# ============================================================================
+
+@umpires_bp.route('/mute-notification', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def mute_notification():
+    """Mute a notification for a specific game.
+
+    Prevents the game from appearing in SDLL Alert emails until
+    the game is played or the mute expires.
+    """
+    from app.models.notification_mute import NotificationMute
+
+    game_id = request.form.get('game_id', type=int)
+    notification_type = request.form.get('notification_type', 'missing_umpire')
+    reason = request.form.get('reason', '').strip()
+    redirect_url = request.form.get('redirect_url') or request.referrer
+
+    if not game_id:
+        flash('Game ID required', 'error')
+        return redirect(redirect_url or url_for('umpires.schedule'))
+
+    game = Game.query.get(game_id)
+    if not game:
+        flash('Game not found', 'error')
+        return redirect(redirect_url or url_for('umpires.schedule'))
+
+    # Mute until the game is played
+    NotificationMute.mute_game_until_played(
+        game_id=game_id,
+        notification_type=notification_type,
+        reason=reason or f'Muted by {current_user.name}',
+        user_id=current_user.ID
+    )
+
+    game_desc = f"{game.game_date.strftime('%m/%d %I:%M %p')} {game.league}" if game.game_date else f"Game {game_id}"
+    flash(f'Muted alerts for {game_desc}', 'success')
+
+    return redirect(redirect_url or url_for('umpires.schedule'))
+
+
+@umpires_bp.route('/unmute-notification', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def unmute_notification():
+    """Unmute a notification for a specific game."""
+    from app.models.notification_mute import NotificationMute
+
+    game_id = request.form.get('game_id', type=int)
+    notification_type = request.form.get('notification_type', 'missing_umpire')
+    redirect_url = request.form.get('redirect_url') or request.referrer
+
+    if not game_id:
+        flash('Game ID required', 'error')
+        return redirect(redirect_url or url_for('umpires.schedule'))
+
+    NotificationMute.unmute(notification_type, 'game', game_id)
+    flash('Notifications re-enabled for this game', 'success')
+
+    return redirect(redirect_url or url_for('umpires.schedule'))
+
+
+@umpires_bp.route('/muted-notifications')
+@login_required
+@umpire_coordinator_required
+def muted_notifications():
+    """View and manage all muted notifications."""
+    from app.models.notification_mute import NotificationMute
+
+    mutes = NotificationMute.get_active_mutes()
+
+    # Enrich with game info where applicable
+    game_ids = [m.entity_id for m in mutes if m.entity_type == 'game' and m.entity_id]
+    games = {}
+    if game_ids:
+        games_query = Game.query.options(
+            joinedload(Game.home_team),
+            joinedload(Game.away_team)
+        ).filter(Game.ID.in_(game_ids)).all()
+        games = {g.ID: g for g in games_query}
+
+    # Build enriched list
+    mute_data = []
+    for mute in mutes:
+        data = {
+            'mute': mute,
+            'game': games.get(mute.entity_id) if mute.entity_type == 'game' else None
+        }
+        mute_data.append(data)
+
+    return render_template(
+        'umpires/muted_notifications.html',
+        mutes=mute_data
+    )

@@ -43,6 +43,7 @@ from .field_captain import FieldCaptain
 from .umpire_group_assignment import UmpireGroupAssignment
 from .umpire_game_payment import UmpireGamePayment
 from .umpire_dayof_notification import UmpireDayOfNotification
+from .notification_mute import NotificationMute
 
 # Email campaign system
 from .email_campaign_template import EmailCampaignTemplate

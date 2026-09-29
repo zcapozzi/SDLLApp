@@ -100,8 +100,12 @@ class RedFlagService:
             self._leagues[league_name] = League.get_by_name(league_name)
         return self._leagues[league_name]
 
-    def run_all_checks(self) -> RedFlagReport:
-        """Run all red flag checks and return a report."""
+    def run_all_checks(self, filter_muted: bool = True) -> RedFlagReport:
+        """Run all red flag checks and return a report.
+
+        Args:
+            filter_muted: If True, exclude games/issues that have been muted
+        """
         report = RedFlagReport()
 
         # Run each check
@@ -109,6 +113,33 @@ class RedFlagService:
         report.practices_with_umpires = self.check_practices_with_umpires()
         report.umpire_overlaps = self.check_umpire_overlaps()
         report.sdl_without_assignr = self.check_sdl_without_assignr_assignments()
+
+        # Filter out muted notifications
+        if filter_muted:
+            report = self._filter_muted_flags(report)
+
+        return report
+
+    def _filter_muted_flags(self, report: RedFlagReport) -> RedFlagReport:
+        """Filter out red flags for muted games."""
+        from app.models.notification_mute import NotificationMute
+
+        def is_not_muted(flag: RedFlag) -> bool:
+            """Check if this flag should be included (not muted)."""
+            if flag.game_id:
+                # Check for game-specific mute
+                if NotificationMute.is_muted(flag.flag_type, 'game', flag.game_id):
+                    return False
+                # Also check general 'red_flag' mute for the game
+                if NotificationMute.is_muted('red_flag', 'game', flag.game_id):
+                    return False
+            return True
+
+        # Filter each list
+        report.missing_assignments = [f for f in report.missing_assignments if is_not_muted(f)]
+        report.practices_with_umpires = [f for f in report.practices_with_umpires if is_not_muted(f)]
+        report.umpire_overlaps = [f for f in report.umpire_overlaps if is_not_muted(f)]
+        report.sdl_without_assignr = [f for f in report.sdl_without_assignr if is_not_muted(f)]
 
         return report
 

@@ -364,11 +364,24 @@ def cron_unassigned_umpires():
             is_owned = is_slot_sdll_owned(game)
             games_needing_umpires.append((game, league, required_count, active_assignments, is_owned))
 
+    # Filter out muted games
+    from app.models.notification_mute import NotificationMute
+    unmuted_games = []
+    muted_count = 0
+    for game_tuple in games_needing_umpires:
+        game = game_tuple[0]
+        if NotificationMute.is_muted('missing_umpire', 'game', game.ID):
+            muted_count += 1
+        else:
+            unmuted_games.append(game_tuple)
+    games_needing_umpires = unmuted_games
+
     if not games_needing_umpires:
         return jsonify({
             'status': 'ok',
-            'message': 'All upcoming games have umpire assignments',
+            'message': 'All upcoming games have umpire assignments' + (f' ({muted_count} muted)' if muted_count else ''),
             'games_checked': len(upcoming_games),
+            'muted_count': muted_count,
             'days': days
         }), 200
 

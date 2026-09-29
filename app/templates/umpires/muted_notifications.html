@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Muted Notifications{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <a href="{{ url_for('umpires.schedule') }}" style="color: var(--text-muted); text-decoration: none;">&larr; Back to Schedule</a>
+    <h1 style="margin: 10px 0 0 0;">Muted Notifications</h1>
+    <p style="color: var(--text-muted); margin: 5px 0 0 0;">
+        Games with muted notifications won't appear in SDLL Alert emails
+    </p>
+</div>
+
+{% if mutes %}
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Game</th>
+                <th>Muted Until</th>
+                <th>Reason</th>
+                <th>Muted By</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in mutes %}
+            <tr>
+                <td>
+                    <span class="badge">{{ item.mute.notification_type }}</span>
+                </td>
+                <td>
+                    {% if item.game %}
+                        <a href="{{ url_for('games.view', game_id=item.game.ID) }}">
+                            {{ item.game.game_date.strftime('%m/%d %I:%M %p') if item.game.game_date else 'TBD' }}
+                        </a>
+                        <br>
+                        <small style="color: var(--text-muted);">
+                            {{ item.game.league }} -
+                            {{ item.game.home_team.computed_display_name if item.game.home_team else 'TBD' }}
+                            vs {{ item.game.away_team.computed_display_name if item.game.away_team else 'TBD' }}
+                        </small>
+                    {% elif item.mute.entity_type == 'game' %}
+                        Game #{{ item.mute.entity_id }}
+                    {% else %}
+                        {{ item.mute.entity_type or 'All' }}
+                        {% if item.mute.entity_id %} #{{ item.mute.entity_id }}{% endif %}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if item.mute.muted_until %}
+                        {{ item.mute.muted_until.strftime('%m/%d/%Y %I:%M %p') }}
+                    {% else %}
+                        <span style="color: var(--text-muted);">Indefinitely</span>
+                    {% endif %}
+                </td>
+                <td>{{ item.mute.reason or '-' }}</td>
+                <td>
+                    {% if item.mute.created_by %}
+                        {{ item.mute.created_by.name }}
+                    {% else %}
+                        -
+                    {% endif %}
+                    <br>
+                    <small style="color: var(--text-muted);">
+                        {{ item.mute.created_at.strftime('%m/%d/%Y') if item.mute.created_at else '' }}
+                    </small>
+                </td>
+                <td>
+                    <form method="POST" action="{{ url_for('umpires.unmute_notification') }}" style="display: inline;">
+                        <input type="hidden" name="game_id" value="{{ item.mute.entity_id }}">
+                        <input type="hidden" name="notification_type" value="{{ item.mute.notification_type }}">
+                        <button type="submit" class="btn btn-sm btn-outline"
+                                onclick="return confirm('Re-enable notifications for this game?')">
+                            Unmute
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card" style="text-align: center; padding: 40px; color: var(--text-muted);">
+    <p>No muted notifications</p>
+    <p style="font-size: 14px;">
+        When you mute a game, it won't appear in SDLL Alert emails until the game is played.
+    </p>
+</div>
+{% endif %}
+
+<style>
+.badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+}
+</style>
+{% endblock %}

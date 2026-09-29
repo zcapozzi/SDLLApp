@@ -3,9 +3,14 @@
 {% block title %}Missing Umpire Lookup{% endblock %}
 
 {% block content %}
-<div style="margin-bottom: 20px;">
-    <h1 style="margin: 0;">Missing Umpire Lookup</h1>
-    <p style="color: var(--text-muted); margin: 5px 0 0 0;">Find game details and contact the responsible umpire organization</p>
+<div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start;">
+    <div>
+        <h1 style="margin: 0;">Missing Umpire Lookup</h1>
+        <p style="color: var(--text-muted); margin: 5px 0 0 0;">Find game details and contact the responsible umpire organization</p>
+    </div>
+    <a href="{{ url_for('umpires.muted_notifications') }}" class="btn btn-sm btn-outline" style="margin-top: 5px;">
+        Muted Alerts
+    </a>
 </div>
 
 {# Date selector #}
@@ -55,6 +60,7 @@
                 <th>Umpire Source</th>
                 <th>Contact Partner</th>
                 <th>Contact Coaches</th>
+                <th>Alerts</th>
             </tr>
         </thead>
         <tbody>
@@ -143,6 +149,16 @@
                     {% else %}
                     <span style="color: var(--text-muted);">No coaches</span>
                     {% endif %}
+                </td>
+                <td>
+                    <form method="POST" action="{{ url_for('umpires.mute_notification') }}" style="display: inline;">
+                        <input type="hidden" name="game_id" value="{{ game.ID }}">
+                        <input type="hidden" name="notification_type" value="missing_umpire">
+                        <input type="hidden" name="reason" value="Muted from missing umpire page">
+                        <button type="submit" class="btn btn-sm btn-outline" title="Mute alerts for this game">
+                            Mute
+                        </button>
+                    </form>
                 </td>
             </tr>
             {% endfor %}
