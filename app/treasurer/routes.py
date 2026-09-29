@@ -208,16 +208,14 @@ def managed_umpires(year=None, is_spring=None):
                     if email_addresses:
                         official_info[official_id]['email'] = email_addresses[0].get('email', '')
 
-                # Track game info including position
+                # Track game info (position determined later from league pitch_type)
                 local_data = game.get('_local', {}) or {}
-                position = assignment.get('position', 'Plate')  # Default to Plate if unknown
                 games_by_official[official_id].append({
                     'game_id': local_data.get('game_id') if local_data else None,
                     'assignr_id': game.get('id'),
                     'game_date': game.get('_game_date'),
                     'league': local_data.get('league') if local_data else game.get('league_name', 'Unknown'),
-                    'is_ntl': game.get('no_time_limit', False) or (local_data.get('status') == 'ntl' if local_data else False),
-                    'position': position  # 'Plate', 'Base', etc.
+                    'is_ntl': game.get('no_time_limit', False) or (local_data.get('status') == 'ntl' if local_data else False)
                 })
 
     # Get all local game IDs for multiplier lookup
@@ -252,17 +250,18 @@ def managed_umpires(year=None, is_spring=None):
         base_pay = Decimal('0')
 
         for g in games:
-            # Determine position and get appropriate rate
-            position = g.get('position', 'Plate')
-            is_plate = position.lower() in ('plate', 'umpire', 'unknown', '')
-
-            # Get rate based on league (with override support)
+            # Determine position based on league pitch_type from local DB
+            # kid_pitch = plate umpire, machine_pitch/tee_ball = base umpire
             league_name = g.get('league', '')
             league = league_lookup.get(league_name)
+
             if league:
+                is_plate = league.pitch_type == 'kid_pitch'
                 game_rate = league.get_umpire_rate('plate' if is_plate else 'base', org)
             else:
-                game_rate = Decimal(str(rate_plate if is_plate else rate_base))
+                # Default to plate if league not found
+                is_plate = True
+                game_rate = Decimal(str(rate_plate))
 
             # Check for multiplier
             multiplier = Decimal('1.0')
