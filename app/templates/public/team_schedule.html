@@ -1596,85 +1596,100 @@
             body: JSON.stringify(requestBody)
         })
         .then(function(response) {
+            // Check HTTP status first
+            if (!response.ok) {
+                return response.json().then(function(data) {
+                    throw new Error(data.error || 'Server error');
+                });
+            }
             return response.json();
         })
         .then(function(data) {
+            // Double-check for error in response body
             if (data.error) {
                 alert(data.error);
                 return;
             }
 
-            // Show success message
-            successEl.textContent = 'First pitch recorded!';
-            successEl.style.display = 'block';
+            // Save succeeded - update UI in try/catch so errors don't mask success
+            try {
+                // Show success message
+                successEl.textContent = 'First pitch recorded!';
+                successEl.style.display = 'block';
 
-            var formattedTime = formatTime(timeInput.value);
+                var formattedTime = formatTime(timeInput.value);
 
-            // Update game card if exists
-            var card = document.querySelector('[data-game-id="' + gameId + '"]');
-            if (card) {
-                var badge = card.querySelector('.game-start-badge');
-                if (badge) {
-                    badge.textContent = 'First pitch: ' + formattedTime;
-                } else {
-                    var gameInfo = card.querySelector('.game-info');
-                    badge = document.createElement('div');
-                    badge.className = 'game-start-badge';
-                    badge.textContent = 'First pitch: ' + formattedTime;
-                    gameInfo.appendChild(badge);
-                }
-            }
-
-            // Update hero card if exists
-            var heroCard = document.querySelector('.next-game');
-            if (heroCard) {
-                var heroBadge = heroCard.querySelector('.game-start-badge');
-                if (!heroBadge) {
-                    // Add badge before the form
-                    var heroForm = heroCard.querySelector('.game-start-form');
-                    heroBadge = document.createElement('div');
-                    heroBadge.className = 'game-start-badge';
-                    heroBadge.style.cssText = 'background: rgba(255,255,255,0.2); color: white; margin-top: 10px;';
-                    heroBadge.textContent = 'First pitch: ' + formattedTime;
-                    if (heroForm) {
-                        heroCard.insertBefore(heroBadge, heroForm);
-                    } else {
-                        heroCard.appendChild(heroBadge);
-                    }
-                } else {
-                    heroBadge.textContent = 'First pitch: ' + formattedTime;
-                }
-            }
-
-            // Hide form and menu button permanently (cannot edit once recorded)
-            setTimeout(function() {
-                hideStartForm(gameId);
-                successEl.style.display = 'none';
-
-                // Remove menu from game card
+                // Update game card if exists
+                var card = document.querySelector('[data-game-id="' + gameId + '"]');
                 if (card) {
-                    var menuBtn = card.querySelector('.game-menu-btn');
-                    var menuDiv = card.querySelector('.game-menu');
-                    if (menuBtn) menuBtn.remove();
-                    if (menuDiv) menuDiv.remove();
+                    var badge = card.querySelector('.game-start-badge');
+                    if (badge) {
+                        badge.textContent = 'First pitch: ' + formattedTime;
+                    } else {
+                        var gameInfo = card.querySelector('.game-info');
+                        if (gameInfo) {
+                            badge = document.createElement('div');
+                            badge.className = 'game-start-badge';
+                            badge.textContent = 'First pitch: ' + formattedTime;
+                            gameInfo.appendChild(badge);
+                        }
+                    }
                 }
 
-                // Remove menu from hero card
+                // Update hero card if exists
+                var heroCard = document.querySelector('.next-game');
                 if (heroCard) {
-                    var heroMenuBtn = heroCard.querySelector('.game-menu-btn');
-                    var heroMenuDiv = heroCard.querySelector('.game-menu');
-                    if (heroMenuBtn) heroMenuBtn.remove();
-                    if (heroMenuDiv) heroMenuDiv.remove();
+                    var heroBadge = heroCard.querySelector('.game-start-badge');
+                    if (!heroBadge) {
+                        // Add badge before the form
+                        var heroForm = heroCard.querySelector('.game-start-form');
+                        heroBadge = document.createElement('div');
+                        heroBadge.className = 'game-start-badge';
+                        heroBadge.style.cssText = 'background: rgba(255,255,255,0.2); color: white; margin-top: 10px;';
+                        heroBadge.textContent = 'First pitch: ' + formattedTime;
+                        if (heroForm) {
+                            heroCard.insertBefore(heroBadge, heroForm);
+                        } else {
+                            heroCard.appendChild(heroBadge);
+                        }
+                    } else {
+                        heroBadge.textContent = 'First pitch: ' + formattedTime;
+                    }
                 }
 
-                // Remove the form entirely (both locations)
-                var form = document.getElementById('start-form-' + gameId);
-                if (form) form.remove();
-            }, 1500);
+                // Hide form and menu button permanently (cannot edit once recorded)
+                setTimeout(function() {
+                    hideStartForm(gameId);
+                    successEl.style.display = 'none';
+
+                    // Remove menu from game card
+                    if (card) {
+                        var menuBtn = card.querySelector('.game-menu-btn');
+                        var menuDiv = card.querySelector('.game-menu');
+                        if (menuBtn) menuBtn.remove();
+                        if (menuDiv) menuDiv.remove();
+                    }
+
+                    // Remove menu from hero card
+                    if (heroCard) {
+                        var heroMenuBtn = heroCard.querySelector('.game-menu-btn');
+                        var heroMenuDiv = heroCard.querySelector('.game-menu');
+                        if (heroMenuBtn) heroMenuBtn.remove();
+                        if (heroMenuDiv) heroMenuDiv.remove();
+                    }
+
+                    // Remove the form entirely (both locations)
+                    var form = document.getElementById('start-form-' + gameId);
+                    if (form) form.remove();
+                }, 1500);
+            } catch (uiError) {
+                // UI update failed but save succeeded - just log it
+                console.error('UI update error (save succeeded):', uiError);
+            }
         })
         .catch(function(err) {
             console.error('Error saving game start:', err);
-            alert('Failed to save. Please try again.');
+            alert(err.message || 'Failed to save. Please try again.');
         });
     }
 
