@@ -934,7 +934,8 @@ def quick_mute(token):
     This endpoint doesn't require login - authorization is via the signed token.
     The token encodes the game_id, notification_type, and expiration.
     """
-    from app.utils.mute_tokens import verify_mute_token
+    import os
+    from app.utils.mute_tokens import verify_mute_token, generate_unmute_token
     from app.models.notification_mute import NotificationMute
 
     # Verify the token
@@ -944,6 +945,7 @@ def quick_mute(token):
         return render_template(
             'umpires/quick_mute_result.html',
             success=False,
+            action='mute',
             error=error
         )
 
@@ -956,6 +958,7 @@ def quick_mute(token):
         return render_template(
             'umpires/quick_mute_result.html',
             success=False,
+            action='mute',
             error="Game not found"
         )
 
@@ -968,10 +971,69 @@ def quick_mute(token):
 
     game_desc = f"{game.game_date.strftime('%m/%d %I:%M %p')} {game.league}" if game.game_date else f"Game {game_id}"
 
+    # Generate unmute token for the undo button
+    unmute_token = generate_unmute_token(game_id, notification_type)
+
     return render_template(
         'umpires/quick_mute_result.html',
         success=True,
+        action='mute',
         game=game,
         game_desc=game_desc,
-        notification_type=notification_type
+        notification_type=notification_type,
+        unmute_token=unmute_token
+    )
+
+
+@umpires_bp.route('/quick-unmute/<token>')
+def quick_unmute(token):
+    """Unmute a notification via signed URL.
+
+    This endpoint doesn't require login - authorization is via the signed token.
+    Used to reverse a mute action from the confirmation page.
+    """
+    from app.utils.mute_tokens import verify_mute_token, generate_mute_token
+    from app.models.notification_mute import NotificationMute
+
+    # Verify the token (unmute tokens use the same structure)
+    is_valid, payload, error = verify_mute_token(token)
+
+    if not is_valid:
+        return render_template(
+            'umpires/quick_mute_result.html',
+            success=False,
+            action='unmute',
+            error=error
+        )
+
+    game_id = payload['game_id']
+    notification_type = payload['notification_type']
+
+    # Get game info for display
+    game = Game.query.get(game_id)
+    if not game:
+        return render_template(
+            'umpires/quick_mute_result.html',
+            success=False,
+            action='unmute',
+            error="Game not found"
+        )
+
+    # Remove the mute
+    was_unmuted = NotificationMute.unmute(notification_type, 'game', game_id)
+
+    game_desc = f"{game.game_date.strftime('%m/%d %I:%M %p')} {game.league}" if game.game_date else f"Game {game_id}"
+
+    # Generate mute token in case they want to re-mute
+    mute_token = generate_mute_token(game_id, notification_type)
+
+    return render_template(
+        'umpires/quick_mute_result.html',
+        success=True,
+        action='unmute',
+        game=game,
+        game_desc=game_desc,
+        notification_type=notification_type,
+        was_unmuted=was_unmuted,
+        mute_token=mute_token
     )

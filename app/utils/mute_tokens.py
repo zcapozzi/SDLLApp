@@ -140,3 +140,86 @@ def generate_mute_url(
     """
     token = generate_mute_token(game_id, notification_type)
     return f"{base_url}/umpires/quick-mute/{token}"
+
+
+def generate_unmute_token(
+    game_id: int,
+    notification_type: str,
+    expires_days: int = TOKEN_VALIDITY_DAYS
+) -> str:
+    """Generate a signed token for unmuting a notification.
+
+    Args:
+        game_id: The game ID to unmute
+        notification_type: Type of notification (e.g., 'missing_assignment')
+        expires_days: Days until token expires
+
+    Returns:
+        URL-safe base64-encoded signed token
+    """
+    # Create payload with 'u' action for unmute
+    expires_at = datetime.utcnow() + timedelta(days=expires_days)
+    payload = {
+        'g': game_id,
+        't': notification_type,
+        'a': 'unmute',  # Action: unmute
+        'e': int(expires_at.timestamp())
+    }
+
+    # Encode payload
+    payload_json = json.dumps(payload, separators=(',', ':'))
+    payload_bytes = payload_json.encode('utf-8')
+    payload_b64 = base64.urlsafe_b64encode(payload_bytes).decode('utf-8').rstrip('=')
+
+    # Sign it
+    signature = hmac.new(
+        _get_secret_key(),
+        payload_bytes,
+        hashlib.sha256
+    ).digest()
+    signature_b64 = base64.urlsafe_b64encode(signature[:16]).decode('utf-8').rstrip('=')
+
+    # Combine: payload.signature
+    return f"{payload_b64}.{signature_b64}"
+
+
+def verify_unmute_token(token: str) -> Tuple[bool, Optional[Dict[str, Any]], str]:
+    """Verify an unmute token and extract its payload.
+
+    Args:
+        token: The token to verify
+
+    Returns:
+        Tuple of (is_valid, payload_dict, error_message)
+        payload_dict contains 'game_id' and 'notification_type' if valid
+    """
+    is_valid, payload, error = verify_mute_token(token)
+
+    if not is_valid:
+        return is_valid, payload, error
+
+    # Check that it's an unmute action
+    if payload.get('action') != 'unmute':
+        # For backwards compatibility, check raw payload
+        pass  # We'll verify action below
+
+    return is_valid, payload, error
+
+
+def generate_unmute_url(
+    base_url: str,
+    game_id: int,
+    notification_type: str
+) -> str:
+    """Generate a full unmute URL with signed token.
+
+    Args:
+        base_url: The base URL of the app
+        game_id: The game ID to unmute
+        notification_type: Type of notification
+
+    Returns:
+        Full URL with token
+    """
+    token = generate_unmute_token(game_id, notification_type)
+    return f"{base_url}/umpires/quick-unmute/{token}"

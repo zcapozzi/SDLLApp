@@ -1,16 +1,26 @@
 {% extends 'base.html' %}
 
-{% block title %}Notification Muted{% endblock %}
+{% block title %}{% if action == 'unmute' %}Notifications Enabled{% else %}Notification Muted{% endif %}{% endblock %}
 
 {% block content %}
 <div class="container" style="max-width: 600px; padding: 40px 20px;">
     {% if success %}
     <div style="text-align: center;">
-        <div style="font-size: 64px; margin-bottom: 20px;">&#9989;</div>
+        {% if action == 'unmute' %}
+        {# Unmute success #}
+        <div style="font-size: 64px; margin-bottom: 20px;">&#128276;</div>
+        <h1 style="color: rgb(34, 139, 34); margin-bottom: 15px;">Notifications Enabled</h1>
+        <p style="font-size: 18px; color: #555; margin-bottom: 30px;">
+            You will now receive alerts for this game again.
+        </p>
+        {% else %}
+        {# Mute success #}
+        <div style="font-size: 64px; margin-bottom: 20px;">&#128263;</div>
         <h1 style="color: rgb(34, 139, 34); margin-bottom: 15px;">Notification Muted</h1>
         <p style="font-size: 18px; color: #555; margin-bottom: 30px;">
             You won't receive alerts for this game until it's played.
         </p>
+        {% endif %}
 
         <div class="card" style="text-align: left; margin-bottom: 30px;">
             <h3 style="margin-top: 0; border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Game Details</h3>
@@ -42,6 +52,23 @@
             </p>
         </div>
 
+        {# Reverse action button #}
+        <div style="margin-bottom: 30px;">
+            {% if action == 'unmute' and mute_token %}
+            <a href="{{ url_for('umpires.quick_mute', token=mute_token) }}"
+               class="btn btn-outline"
+               style="border-color: #888; color: #888;">
+                Mute This Notification Again
+            </a>
+            {% elif action == 'mute' and unmute_token %}
+            <a href="{{ url_for('umpires.quick_unmute', token=unmute_token) }}"
+               class="btn btn-outline"
+               style="border-color: #888; color: #888;">
+                Undo - Enable Notifications
+            </a>
+            {% endif %}
+        </div>
+
         <p style="color: #888; font-size: 14px;">
             To view all muted notifications, <a href="{{ url_for('umpires.muted_notifications') }}">click here</a>.
         </p>
@@ -49,20 +76,20 @@
     {% else %}
     <div style="text-align: center;">
         <div style="font-size: 64px; margin-bottom: 20px;">&#10060;</div>
-        <h1 style="color: #c33; margin-bottom: 15px;">Mute Failed</h1>
+        <h1 style="color: #c33; margin-bottom: 15px;">{% if action == 'unmute' %}Unmute{% else %}Mute{% endif %} Failed</h1>
         <p style="font-size: 18px; color: #555; margin-bottom: 30px;">
-            {{ error or 'Unable to process the mute request.' }}
+            {{ error or 'Unable to process the request.' }}
         </p>
 
         <div class="card" style="background: rgba(200, 50, 50, 0.1); border-left: 4px solid #c33;">
             <p style="margin: 0;">
                 This link may have expired or been used already.
-                Mute links are valid for 7 days.
+                Links are valid for 7 days.
             </p>
         </div>
 
         <p style="margin-top: 30px; color: #888; font-size: 14px;">
-            <a href="{{ url_for('auth.login') }}">Log in</a> to manually mute notifications.
+            <a href="{{ url_for('auth.login') }}">Log in</a> to manually manage notifications.
         </p>
     </div>
     {% endif %}
