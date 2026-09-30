@@ -1537,8 +1537,22 @@ def rainout(year, is_spring):
                             active=True
                         ).first()
                         if partner and partner.prepays_invoices:
+                            # Check if credit already exists for this game (prevent duplicates)
+                            existing_credit = PartnerCredit.query.filter_by(
+                                partner_id=partner.id,
+                                source_game_id=game.ID,
+                                source_type=PartnerCredit.SOURCE_RAINOUT_PRECANCEL
+                            ).first()
+                            if existing_credit:
+                                logger.warning(f'Credit already exists for game {game.ID}, skipping')
+                                continue
+
                             # Get umpire count and rate
+                            # Search by both display_name and fall_display_name
                             league = League.query.filter_by(display_name=game.league).first()
+                            if not league:
+                                league = League.query.filter_by(fall_display_name=game.league).first()
+
                             if game.umpire_count_override is not None:
                                 umpire_count = game.umpire_count_override
                             elif league:

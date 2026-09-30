@@ -155,7 +155,12 @@
             {% for credit in credits %}
             <tr>
                 <td><strong>{{ credit.partner.short_code }}</strong></td>
-                <td>{{ credit.source_type_label }}</td>
+                <td{% if current_user.is_admin() and credit.source_game_id %} title="Game ID: {{ credit.source_game_id }}" style="cursor: help;"{% endif %}>
+                    {{ credit.source_type_label }}
+                    {% if current_user.is_admin() and credit.source_game_id %}
+                    <span style="color: var(--text-muted); font-size: 11px;"> (#{{ credit.source_game_id }})</span>
+                    {% endif %}
+                </td>
                 <td>{{ credit.description or '-' }}</td>
                 <td>{{ credit.season_name or '-' }}</td>
                 <td>{{ credit.umpire_games or '-' }}</td>
