@@ -448,15 +448,15 @@ def delegation_report(year=None, is_spring=None):
                 partner.id, org_season_id
             )
 
-            # Get postponed credits for this season
-            postponed_credits = PartnerCredit.get_for_season(
+            # Get credits for this season
+            season_credits = PartnerCredit.get_for_season(
                 partner.id, org_season_id
             ) if org_season_id else []
-            postponed_amount = sum(c.amount for c in postponed_credits if c.source_type == 'postponed_game')
-            postponed_games = sum(c.umpire_games or 0 for c in postponed_credits if c.source_type == 'postponed_game')
+            postponed_amount = sum(c.amount for c in season_credits if c.source_type == 'postponed_game')
+            postponed_games = sum(c.umpire_games or 0 for c in season_credits if c.source_type == 'postponed_game')
 
-            # Get available credits
-            available_credits = PartnerCredit.get_total_available(partner.id)
+            # Get available credits (season-scoped to match balance calculation)
+            available_credits = sum(c.amount for c in season_credits if c.status == PartnerCredit.STATUS_AVAILABLE)
 
             # Get games used from report_data
             partner_report = next((p for p in report_data if p['code'] == partner.short_code), None)
