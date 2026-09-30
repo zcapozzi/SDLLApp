@@ -148,44 +148,59 @@ def submit_report(game_id, team_id, user_id, data):
     Returns:
         tuple: (success: bool, report: PostGameReport or None, error: str or None)
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.info(f'PostGame submit_report started: game={game_id}, team={team_id}, user={user_id}')
+
     can_submit, role, error = can_user_submit(user_id, game_id, team_id)
     if not can_submit:
+        logger.warning(f'PostGame submit denied: game={game_id}, team={team_id}, user={user_id}, error={error}')
         return False, None, error
 
-    # Get or create the report
-    report = PostGameReport.get_or_create(game_id, team_id)
+    try:
+        # Get or create the report
+        report = PostGameReport.get_or_create(game_id, team_id)
+        logger.info(f'PostGame report retrieved/created: id={report.id}, status={report.status}')
 
-    # Check if editable
-    if not report.is_editable:
-        return False, None, "Edit window has expired (24 hours after submission)"
+        # Check if editable
+        if not report.is_editable:
+            logger.warning(f'PostGame edit window expired: report={report.id}')
+            return False, None, "Edit window has expired (24 hours after submission)"
 
-    # Update fields
-    report.our_score = data.get('our_score')
-    report.opponent_score = data.get('opponent_score')
-    report.innings_batted = data.get('innings_batted')
-    report.innings_fielded = data.get('innings_fielded')
-    report.umpire_name = data.get('umpire_name')
-    report.umpire_rating = data.get('umpire_rating')
-    report.umpire_comments = data.get('umpire_comments')
+        # Update fields
+        report.our_score = data.get('our_score')
+        report.opponent_score = data.get('opponent_score')
+        report.innings_batted = data.get('innings_batted')
+        report.innings_fielded = data.get('innings_fielded')
+        report.umpire_name = data.get('umpire_name')
+        report.umpire_rating = data.get('umpire_rating')
+        report.umpire_comments = data.get('umpire_comments')
 
-    report.status = PostGameReport.STATUS_SUBMITTED
-    report.submitted_by_user_id = user_id
-    report.submitted_by_role = role
-    report.submitted_at = datetime.utcnow()
+        report.status = PostGameReport.STATUS_SUBMITTED
+        report.submitted_by_user_id = user_id
+        report.submitted_by_role = role
+        report.submitted_at = datetime.utcnow()
 
-    # Clear any not-played fields
-    report.not_played_reason = None
-    report.not_played_notes = None
+        # Clear any not-played fields
+        report.not_played_reason = None
+        report.not_played_notes = None
 
-    # Check for unusual rating pattern (flag detection)
-    check_and_flag_report(report, user_id)
+        # Check for unusual rating pattern (flag detection)
+        check_and_flag_report(report, user_id)
 
-    db.session.commit()
+        db.session.commit()
+        logger.info(f'PostGame report submitted successfully: id={report.id}, game={game_id}, team={team_id}')
 
-    # Try to reconcile scores if both teams have submitted
-    reconcile_scores(game_id)
+        # Try to reconcile scores if both teams have submitted
+        reconcile_scores(game_id)
 
-    return True, report, None
+        return True, report, None
+
+    except Exception as e:
+        logger.error(f'PostGame submit_report failed: game={game_id}, team={team_id}, user={user_id}, error={str(e)}', exc_info=True)
+        db.session.rollback()
+        return False, None, f"Database error: {str(e)}"
 
 
 def mark_not_played(game_id, team_id, user_id, reason, notes=None):
@@ -201,37 +216,51 @@ def mark_not_played(game_id, team_id, user_id, reason, notes=None):
     Returns:
         tuple: (success: bool, report: PostGameReport or None, error: str or None)
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.info(f'PostGame mark_not_played started: game={game_id}, team={team_id}, user={user_id}, reason={reason}')
+
     can_submit, role, error = can_user_submit(user_id, game_id, team_id)
     if not can_submit:
+        logger.warning(f'PostGame mark_not_played denied: game={game_id}, team={team_id}, user={user_id}, error={error}')
         return False, None, error
 
-    # Get or create the report
-    report = PostGameReport.get_or_create(game_id, team_id)
+    try:
+        # Get or create the report
+        report = PostGameReport.get_or_create(game_id, team_id)
 
-    # Check if editable
-    if not report.is_editable:
-        return False, None, "Edit window has expired (24 hours after submission)"
+        # Check if editable
+        if not report.is_editable:
+            logger.warning(f'PostGame edit window expired: report={report.id}')
+            return False, None, "Edit window has expired (24 hours after submission)"
 
-    # Clear score/umpire fields
-    report.our_score = None
-    report.opponent_score = None
-    report.innings_batted = None
-    report.innings_fielded = None
-    report.umpire_name = None
-    report.umpire_rating = None
-    report.umpire_comments = None
+        # Clear score/umpire fields
+        report.our_score = None
+        report.opponent_score = None
+        report.innings_batted = None
+        report.innings_fielded = None
+        report.umpire_name = None
+        report.umpire_rating = None
+        report.umpire_comments = None
 
-    # Set not-played fields
-    report.status = PostGameReport.STATUS_NOT_PLAYED
-    report.not_played_reason = reason
-    report.not_played_notes = notes
-    report.submitted_by_user_id = user_id
-    report.submitted_by_role = role
-    report.submitted_at = datetime.utcnow()
+        # Set not-played fields
+        report.status = PostGameReport.STATUS_NOT_PLAYED
+        report.not_played_reason = reason
+        report.not_played_notes = notes
+        report.submitted_by_user_id = user_id
+        report.submitted_by_role = role
+        report.submitted_at = datetime.utcnow()
 
-    db.session.commit()
+        db.session.commit()
+        logger.info(f'PostGame marked not_played successfully: report={report.id}, game={game_id}, team={team_id}')
 
-    return True, report, None
+        return True, report, None
+
+    except Exception as e:
+        logger.error(f'PostGame mark_not_played failed: game={game_id}, team={team_id}, user={user_id}, error={str(e)}', exc_info=True)
+        db.session.rollback()
+        return False, None, f"Database error: {str(e)}"
 
 
 def reconcile_scores(game_id):

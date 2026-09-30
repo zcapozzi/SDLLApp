@@ -120,8 +120,8 @@ def postgame_form(game_id, team_id):
             # Redirect to not-played form
             return redirect(url_for('coach.postgame_not_played', game_id=game_id, team_id=team_id))
 
-        elif action == 'review':
-            # Validate form data
+        elif action == 'submit':
+            # Validate and submit directly (no review step)
             errors = []
 
             our_score = request.form.get('our_score', '').strip()
@@ -173,10 +173,12 @@ def postgame_form(game_id, team_id):
                                        is_kid_pitch=is_kid_pitch,
                                        is_baseball=is_baseball,
                                        sdll_provided_umpire=sdll_provided_umpire,
+                                       ratings=PostGameReport.RATINGS,
+                                       rating_labels=PostGameReport.RATING_LABELS,
                                        form_data=request.form)
 
-            # Store in session for review
-            review_data = {
+            # Submit directly
+            data = {
                 'our_score': int(our_score),
                 'opponent_score': int(opponent_score),
                 'innings_batted': int(innings_batted),
@@ -186,12 +188,24 @@ def postgame_form(game_id, team_id):
                 'umpire_comments': umpire_comments
             }
 
-            return render_template('coach/postgame_review.html',
-                                   game=game,
-                                   team=team,
-                                   opponent=opponent,
-                                   data=review_data,
-                                   rating_labels=PostGameReport.RATING_LABELS)
+            success, report_obj, error = post_game_service.submit_report(game_id, team_id, current_user.ID, data)
+
+            if success:
+                flash('Post-game report submitted successfully.', 'success')
+                return redirect(url_for('coach.postgame_success', game_id=game_id, team_id=team_id))
+            else:
+                flash(f'Failed to submit report: {error}', 'error')
+                return render_template('coach/postgame_form.html',
+                                       game=game,
+                                       team=team,
+                                       opponent=opponent,
+                                       report=report,
+                                       is_kid_pitch=is_kid_pitch,
+                                       is_baseball=is_baseball,
+                                       sdll_provided_umpire=sdll_provided_umpire,
+                                       ratings=PostGameReport.RATINGS,
+                                       rating_labels=PostGameReport.RATING_LABELS,
+                                       form_data=request.form)
 
     # GET request - show form
     return render_template('coach/postgame_form.html',
