@@ -642,6 +642,9 @@ def manage(year, is_spring):
                     # Capture old values before update
                     old_values = GameChangeService.capture_old_values(game)
 
+                    # Track if game was postponed (for auto-status change)
+                    was_postponed = game.status == 'postponed'
+
                     # Parse date and time
                     game_date_str = request.form.get('game_date')
                     game_time_str = request.form.get('game_time')
@@ -682,9 +685,29 @@ def manage(year, is_spring):
                         return redirect(url_for('games.manage', year=year, is_spring=is_spring) + f'#game-{game_id}')
 
                     game.game_type = new_game_type
-                    game.status = request.form.get('status', 'scheduled')
+                    form_status = request.form.get('status', 'scheduled')
+
+                    # Auto-change postponed to scheduled when date is moved to future
+                    auto_status_change = False
+                    if was_postponed and game.game_date and game.game_date > datetime.now():
+                        if form_status == 'postponed':
+                            # User didn't manually change status, so auto-update it
+                            game.status = 'scheduled'
+                            auto_status_change = True
+                        else:
+                            # User explicitly chose a different status
+                            game.status = form_status
+                    else:
+                        game.status = form_status
+
                     game.is_scrimmage = 1 if request.form.get('is_scrimmage') else 0
                     game.no_time_limit = 1 if request.form.get('no_time_limit') else 0
+
+                    # Void any credits if game was postponed and is now being rescheduled
+                    if was_postponed and game.status == 'scheduled':
+                        voided = PartnerCredit.void_for_rescheduled_game(int(game_id))
+                        if voided > 0:
+                            logger.info(f'Voided {voided} credit(s) for rescheduled game {game_id}')
 
                     db.session.commit()
 
@@ -696,7 +719,11 @@ def manage(year, is_spring):
                         GameChangeService.queue_notifications_for_change(change, game)
 
                     logger.info(f'Updated game {game_id}: {game.home_team.scheduler_display_name if game.home_team else "TBD"} vs {game.away_team.scheduler_display_name if game.away_team else "N/A"}')
-                    flash('Game updated successfully.', 'success')
+
+                    if auto_status_change:
+                        flash('Game updated successfully. Status automatically changed from "postponed" to "scheduled" since the game date is now in the future.', 'success')
+                    else:
+                        flash('Game updated successfully.', 'success')
 
                 elif action == 'delete_game':
                     # Import change tracking service
