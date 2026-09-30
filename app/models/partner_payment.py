@@ -399,3 +399,36 @@ class PartnerCredit(db.Model):
         if status is not None:
             query = query.filter_by(status=status)
         return query.order_by(cls.created_at.desc()).all()
+
+    @classmethod
+    def void_for_rescheduled_game(cls, game_id, reason=None):
+        """Void any available credits for a game that has been rescheduled.
+
+        When a postponed game is rescheduled and played, any credits generated
+        from the postponement should be voided since the partner will now
+        provide umpires for the rescheduled game.
+
+        Args:
+            game_id: The game ID that was rescheduled
+            reason: Optional reason (defaults to 'Game rescheduled')
+
+        Returns:
+            int: Number of credits voided
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        reason = reason or 'Game rescheduled'
+
+        credits = cls.query.filter_by(
+            source_game_id=game_id,
+            status=cls.STATUS_AVAILABLE
+        ).all()
+
+        count = 0
+        for credit in credits:
+            credit.void(reason)
+            count += 1
+            logger.info(f'Voided credit {credit.id} (${credit.amount}) for rescheduled game {game_id}')
+
+        return count

@@ -7,6 +7,7 @@ from app.models.game import Game
 from app.models.team import TeamSeason
 from app.models.field import Field
 from app.models.organization import Organization
+from app.models.partner_payment import PartnerCredit
 from app.extensions import db
 from app.utils.logging import SDLLLogger
 
@@ -1597,6 +1598,7 @@ def rainout(year, is_spring):
             if game and new_date_str:
                 # Capture old values
                 old_values = GameChangeService.capture_old_values(game)
+                was_postponed = game.status == 'postponed'
 
                 if new_time_str:
                     game.game_date = datetime.strptime(f'{new_date_str} {new_time_str}', '%Y-%m-%d %H:%M')
@@ -1613,6 +1615,13 @@ def rainout(year, is_spring):
                     game.field_id = field_obj.ID if field_obj else None
 
                 game.status = 'scheduled'
+
+                # Void any credits from when this game was postponed
+                if was_postponed:
+                    voided = PartnerCredit.void_for_rescheduled_game(game_id)
+                    if voided > 0:
+                        logger.info(f'Voided {voided} credit(s) for rescheduled game {game_id}')
+
                 db.session.commit()
 
                 # Log the change
@@ -1634,11 +1643,19 @@ def rainout(year, is_spring):
             if game and practice_date_str:
                 # Capture old values
                 old_values = GameChangeService.capture_old_values(game)
+                was_postponed = game.status == 'postponed'
 
                 practice_date = datetime.strptime(practice_date_str, '%Y-%m-%d').date()
                 original_time = game.game_date.time() if game.game_date else datetime.strptime('17:30', '%H:%M').time()
                 game.game_date = datetime.combine(practice_date, original_time)
                 game.status = 'scheduled'
+
+                # Void any credits from when this game was postponed
+                if was_postponed:
+                    voided = PartnerCredit.void_for_rescheduled_game(game_id)
+                    if voided > 0:
+                        logger.info(f'Voided {voided} credit(s) for rescheduled game {game_id}')
+
                 db.session.commit()
 
                 # Log the change
@@ -1661,12 +1678,14 @@ def rainout(year, is_spring):
 
             if game_ids and new_date_str:
                 count = 0
+                credits_voided = 0
                 games_to_log = []
                 for game_id in game_ids:
                     game = Game.query.get(int(game_id))
                     if game:
                         # Capture old values
                         old_values = GameChangeService.capture_old_values(game)
+                        was_postponed = game.status == 'postponed'
 
                         # Update date/time
                         if new_time_str:
@@ -1682,6 +1701,11 @@ def rainout(year, is_spring):
                             game.field_id = field_obj.ID if field_obj else None
 
                         game.status = 'scheduled'
+
+                        # Void any credits from when this game was postponed
+                        if was_postponed:
+                            credits_voided += PartnerCredit.void_for_rescheduled_game(int(game_id))
+
                         count += 1
                         games_to_log.append((game, old_values))
 
@@ -1697,7 +1721,10 @@ def rainout(year, is_spring):
                         GameChangeService.queue_notifications_for_change(change, game)
 
                 logger.info(f'Bulk rescheduled {count} games to {new_date_str}')
-                flash(f'Rescheduled {count} games to {new_date_str}', 'success')
+                msg = f'Rescheduled {count} games to {new_date_str}'
+                if credits_voided > 0:
+                    msg += f' ({credits_voided} credits voided)'
+                flash(msg, 'success')
 
         return redirect(url_for('games.rainout', year=year, is_spring=is_spring))
 
