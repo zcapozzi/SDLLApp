@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block title %}Notification Muted{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 600px; padding: 40px 20px;">
+    {% if success %}
+    <div style="text-align: center;">
+        <div style="font-size: 64px; margin-bottom: 20px;">&#9989;</div>
+        <h1 style="color: rgb(34, 139, 34); margin-bottom: 15px;">Notification Muted</h1>
+        <p style="font-size: 18px; color: #555; margin-bottom: 30px;">
+            You won't receive alerts for this game until it's played.
+        </p>
+
+        <div class="card" style="text-align: left; margin-bottom: 30px;">
+            <h3 style="margin-top: 0; border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Game Details</h3>
+            <p style="margin: 10px 0;">
+                <strong>Date/Time:</strong>
+                {% if game and game.game_date %}
+                    {{ game.game_date.strftime('%A, %B %d at %I:%M %p').replace(' 0', ' ') }}
+                {% else %}
+                    TBD
+                {% endif %}
+            </p>
+            <p style="margin: 10px 0;">
+                <strong>League:</strong> {{ game.league if game else 'Unknown' }}
+            </p>
+            <p style="margin: 10px 0;">
+                <strong>Field:</strong> {{ game.field_name if game else 'TBD' }}
+            </p>
+            <p style="margin: 10px 0;">
+                <strong>Notification Type:</strong>
+                {% if notification_type == 'missing_assignment' %}
+                    Missing Umpire Delegation
+                {% elif notification_type == 'sdl_without_assignr' %}
+                    SDL Without Assignr Assignment
+                {% elif notification_type == 'practice_with_umpire' %}
+                    Practice with Umpire Override
+                {% else %}
+                    {{ notification_type }}
+                {% endif %}
+            </p>
+        </div>
+
+        <p style="color: #888; font-size: 14px;">
+            To view all muted notifications, <a href="{{ url_for('umpires.muted_notifications') }}">click here</a>.
+        </p>
+    </div>
+    {% else %}
+    <div style="text-align: center;">
+        <div style="font-size: 64px; margin-bottom: 20px;">&#10060;</div>
+        <h1 style="color: #c33; margin-bottom: 15px;">Mute Failed</h1>
+        <p style="font-size: 18px; color: #555; margin-bottom: 30px;">
+            {{ error or 'Unable to process the mute request.' }}
+        </p>
+
+        <div class="card" style="background: rgba(200, 50, 50, 0.1); border-left: 4px solid #c33;">
+            <p style="margin: 0;">
+                This link may have expired or been used already.
+                Mute links are valid for 7 days.
+            </p>
+        </div>
+
+        <p style="margin-top: 30px; color: #888; font-size: 14px;">
+            <a href="{{ url_for('auth.login') }}">Log in</a> to manually mute notifications.
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

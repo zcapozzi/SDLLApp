@@ -425,25 +425,56 @@ class RedFlagService:
         except Exception:
             return flags
 
-        # Build lookup of Assignr games with accepted assignments
-        assignr_with_assignments = set()
+        # Build lookup of Assignr games with assignment status
+        # Track both accepted assignments and pending (unconfirmed) assignments
+        assignr_game_info = {}
         for game in assignr_games:
+            game_id = str(game.get('id'))
             assignments = game.get('_embedded', {}).get('assignments', []) or []
-            has_accepted = any(a.get('accepted') in [True, 'True'] for a in assignments)
-            if has_accepted:
-                assignr_with_assignments.add(str(game.get('id')))
+
+            accepted_umpires = []
+            pending_umpires = []
+
+            for assignment in assignments:
+                # Get umpire name from the assignment
+                official = assignment.get('_embedded', {}).get('official', {}) or {}
+                name = official.get('name', 'Unknown')
+
+                if assignment.get('accepted') in [True, 'True']:
+                    accepted_umpires.append(name)
+                else:
+                    # Assigned but not yet confirmed
+                    pending_umpires.append(name)
+
+            assignr_game_info[game_id] = {
+                'accepted': accepted_umpires,
+                'pending': pending_umpires,
+                'has_accepted': len(accepted_umpires) > 0
+            }
 
         # Check local SDL games against Assignr
         for game in sdl_games:
-            if str(game.assignr_id) not in assignr_with_assignments:
+            assignr_id_str = str(game.assignr_id)
+            game_info = assignr_game_info.get(assignr_id_str, {})
+
+            if not game_info.get('has_accepted', False):
                 # Get required count
                 league = self._get_league(game.league)
                 required = game.umpire_count
 
+                # Determine if there are pending (unconfirmed) umpires
+                pending_umpires = game_info.get('pending', [])
+                has_pending = len(pending_umpires) > 0
+
+                if has_pending:
+                    message = f"SDL-assigned game has umpire(s) pending acceptance"
+                else:
+                    message = f"SDL-assigned game has no Assignr assignments"
+
                 flags.append(RedFlag(
                     flag_type='sdl_without_assignr',
                     severity='error',
-                    message=f"SDL-assigned game has no accepted Assignr assignments",
+                    message=message,
                     game_id=game.ID,
                     game=game,
                     details={
@@ -451,7 +482,9 @@ class RedFlagService:
                         'required_umpires': required,
                         'game_date': game.game_date,
                         'field': game.field_name,
-                        'league': game.league
+                        'league': game.league,
+                        'pending_umpires': pending_umpires,
+                        'has_pending': has_pending
                     }
                 ))
 
@@ -465,6 +498,7 @@ def generate_red_flag_email(report: RedFlagReport, days: int = 7, base_url: str 
         Tuple of (subject, body_text, body_html)
     """
     import os
+    from app.utils.mute_tokens import generate_mute_url
 
     if base_url is None:
         base_url = os.environ.get('APP_URL', 'https://www.southdurhamlittleleague.org')
@@ -526,13 +560,20 @@ def generate_red_flag_email(report: RedFlagReport, days: int = 7, base_url: str 
         lines.append("")
 
     if report.sdl_without_assignr:
-        lines.append(f"❌ SDL GAMES WITHOUT ASSIGNR ASSIGNMENTS ({len(report.sdl_without_assignr)}):")
+        lines.append(f"❌ SDL GAMES WITHOUT CONFIRMED UMPIRES ({len(report.sdl_without_assignr)}):")
         for flag in report.sdl_without_assignr:
             game = flag.game
             game_date = game.game_date.strftime('%a, %b %d at %I:%M %p') if game.game_date else 'TBD'
             field = flag.details.get('field', 'TBD')
             lines.append(f"  - {game_date} @ {field}")
-            lines.append(f"    Needs {flag.details.get('required_umpires', '?')} umpire(s)")
+
+            # Show pending vs unassigned
+            pending_umpires = flag.details.get('pending_umpires', [])
+            if pending_umpires:
+                pending_names = ', '.join(pending_umpires)
+                lines.append(f"    Pending acceptance: {pending_names}")
+            else:
+                lines.append(f"    Needs {flag.details.get('required_umpires', '?')} umpire(s) - None assigned")
         lines.append("")
 
     lines.append("- SDLL Automated Alert")
@@ -567,6 +608,9 @@ def generate_red_flag_email(report: RedFlagReport, days: int = 7, base_url: str 
             if not flag.details.get('is_sdll_owned_slot', True):
                 slot_badge = '<span style="background: #ffc107; color: #000; padding: 2px 6px; border-radius: 3px; font-size: 11px; margin-left: 8px;">AWAY-ONLY</span>'
 
+            # Generate mute link
+            mute_url = generate_mute_url(base_url, game.ID, 'missing_assignment')
+
             html.append(
                 f'<tr style="border-bottom: 1px solid #eee;">'
                 f'<td style="padding: 8px 0;">'
@@ -574,8 +618,10 @@ def generate_red_flag_email(report: RedFlagReport, days: int = 7, base_url: str 
                 f'<span style="color: #555;">{away} vs {home}</span><br>'
                 f'<span style="color: #888; font-size: 12px;">{flag.details.get("league", "")}</span>'
                 f'</td>'
-                f'<td style="padding: 8px; text-align: right; vertical-align: top;">'
-                f'<a href="{calendar_url}" style="color: #1976d2;">View Day</a>'
+                f'<td style="padding: 8px; text-align: right; vertical-align: top; white-space: nowrap;">'
+                f'<a href="{calendar_url}" style="color: #1976d2;">View</a>'
+                f' &middot; '
+                f'<a href="{mute_url}" style="color: #888; font-size: 12px;">Mute</a>'
                 f'</td>'
                 f'</tr>'
             )
@@ -593,12 +639,18 @@ def generate_red_flag_email(report: RedFlagReport, days: int = 7, base_url: str 
             team = flag.details.get('team', 'Unknown')
             umpire_override = flag.details.get('umpire_override', 'Unknown')
 
+            # Generate mute link
+            mute_url = generate_mute_url(base_url, game.ID, 'practice_with_umpire')
+
             html.append(
                 f'<tr style="border-bottom: 1px solid #eee;">'
                 f'<td style="padding: 8px 0;">'
                 f'<strong>{game_date}</strong> {game_time}<br>'
                 f'<span style="color: #555;">{team} Practice</span><br>'
                 f'<span style="color: #c33; font-size: 12px;">Umpire override: {umpire_override}</span>'
+                f'</td>'
+                f'<td style="padding: 8px; text-align: right; vertical-align: top;">'
+                f'<a href="{mute_url}" style="color: #888; font-size: 12px;">Mute</a>'
                 f'</td>'
                 f'</tr>'
             )
@@ -626,8 +678,8 @@ def generate_red_flag_email(report: RedFlagReport, days: int = 7, base_url: str 
 
     # SDL without Assignr section
     if report.sdl_without_assignr:
-        html.append('<h3 style="color: #c33;">❌ SDL Games Without Assignr Assignments</h3>')
-        html.append('<p style="font-size: 13px; color: #666;">These games are assigned to SDL Academy but have no accepted umpires in Assignr.</p>')
+        html.append('<h3 style="color: #c33;">❌ SDL Games Without Confirmed Umpires</h3>')
+        html.append('<p style="font-size: 13px; color: #666;">These games are assigned to SDL Academy but have no confirmed umpires in Assignr.</p>')
         html.append('<table style="border-collapse: collapse; width: 100%; margin-bottom: 15px;">')
         for flag in report.sdl_without_assignr:
             game = flag.game
@@ -636,11 +688,31 @@ def generate_red_flag_email(report: RedFlagReport, days: int = 7, base_url: str 
             field = flag.details.get('field', 'TBD')
             required = flag.details.get('required_umpires', '?')
 
+            # Check for pending (unconfirmed) umpires
+            pending_umpires = flag.details.get('pending_umpires', [])
+            has_pending = flag.details.get('has_pending', False)
+
+            if has_pending and pending_umpires:
+                # Show pending umpire names with warning color
+                pending_names = ', '.join(pending_umpires)
+                status_text = f'<span style="color: #f0ad4e; font-size: 12px;">Pending acceptance: {pending_names}</span>'
+                status_icon = '&#9203;'  # Hourglass
+            else:
+                # No umpire assigned at all
+                status_text = f'<span style="color: #c33; font-size: 12px;">Needs {required} umpire(s) - None assigned</span>'
+                status_icon = '&#10060;'  # Red X
+
+            # Generate mute link
+            mute_url = generate_mute_url(base_url, game.ID, 'sdl_without_assignr')
+
             html.append(
                 f'<tr style="border-bottom: 1px solid #eee;">'
                 f'<td style="padding: 8px 0;">'
-                f'<strong>{game_date}</strong> {game_time} @ {field}<br>'
-                f'<span style="color: #c33; font-size: 12px;">Needs {required} umpire(s) - None assigned in Assignr</span>'
+                f'{status_icon} <strong>{game_date}</strong> {game_time} @ {field}<br>'
+                f'{status_text}'
+                f'</td>'
+                f'<td style="padding: 8px; text-align: right; vertical-align: top;">'
+                f'<a href="{mute_url}" style="color: #888; font-size: 12px;">Mute</a>'
                 f'</td>'
                 f'</tr>'
             )

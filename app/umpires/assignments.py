@@ -925,3 +925,53 @@ def muted_notifications():
         'umpires/muted_notifications.html',
         mutes=mute_data
     )
+
+
+@umpires_bp.route('/quick-mute/<token>')
+def quick_mute(token):
+    """Mute a notification via signed URL (for email links).
+
+    This endpoint doesn't require login - authorization is via the signed token.
+    The token encodes the game_id, notification_type, and expiration.
+    """
+    from app.utils.mute_tokens import verify_mute_token
+    from app.models.notification_mute import NotificationMute
+
+    # Verify the token
+    is_valid, payload, error = verify_mute_token(token)
+
+    if not is_valid:
+        return render_template(
+            'umpires/quick_mute_result.html',
+            success=False,
+            error=error
+        )
+
+    game_id = payload['game_id']
+    notification_type = payload['notification_type']
+
+    # Get game info for display
+    game = Game.query.get(game_id)
+    if not game:
+        return render_template(
+            'umpires/quick_mute_result.html',
+            success=False,
+            error="Game not found"
+        )
+
+    # Create the mute
+    NotificationMute.mute_game_until_played(
+        game_id=game_id,
+        notification_type=notification_type,
+        reason='Muted via email link'
+    )
+
+    game_desc = f"{game.game_date.strftime('%m/%d %I:%M %p')} {game.league}" if game.game_date else f"Game {game_id}"
+
+    return render_template(
+        'umpires/quick_mute_result.html',
+        success=True,
+        game=game,
+        game_desc=game_desc,
+        notification_type=notification_type
+    )
