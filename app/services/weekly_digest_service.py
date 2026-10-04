@@ -521,23 +521,28 @@ This is an automated reminder.
         """
         recipients = []
 
+        def is_valid_email(email):
+            """Check if email is valid (not None, not empty, not decryption error)."""
+            return email and email != '[DECRYPTION_ERROR]' and '@' in email
+
         # Add umpire's own emails from Assignr
         for email in official.get('emails', []):
-            if email and email not in recipients:
+            if is_valid_email(email) and email not in recipients:
                 recipients.append(email)
 
         # Add parent/guardian emails from local profile
         if umpire_profile:
             # Check parent_email field
-            if umpire_profile.parent_email:
-                if umpire_profile.parent_email not in recipients:
-                    recipients.append(umpire_profile.parent_email)
+            parent_email = umpire_profile.parent_email
+            if is_valid_email(parent_email) and parent_email not in recipients:
+                recipients.append(parent_email)
 
             # Check guardians
             for ug in umpire_profile.guardians:
-                if ug.guardian and ug.guardian.email:
-                    if ug.guardian.email not in recipients:
-                        recipients.append(ug.guardian.email)
+                if ug.guardian:
+                    guardian_email = ug.guardian.email
+                    if is_valid_email(guardian_email) and guardian_email not in recipients:
+                        recipients.append(guardian_email)
 
         return recipients
 

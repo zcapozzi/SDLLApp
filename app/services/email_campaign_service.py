@@ -132,6 +132,10 @@ class EmailCampaignService:
         Returns:
             List of recipient dicts: [{"email": "...", "name": "...", "type": "..."}]
         """
+        def is_valid_email(email):
+            """Check if email is valid (not None, not empty, not decryption error)."""
+            return email and email != '[DECRYPTION_ERROR]' and '@' in email
+
         recipients = []
         recipient_type = template.recipient_type
         status_filter = template.recipient_status_list
@@ -144,7 +148,7 @@ class EmailCampaignService:
                 contacts = partner.contacts
                 if contacts:
                     for contact in contacts:
-                        if contact.email:
+                        if is_valid_email(contact.email):
                             recipients.append({
                                 'email': contact.email,
                                 'name': contact.name or partner.name,
@@ -152,7 +156,7 @@ class EmailCampaignService:
                                 'partner_id': partner.id,
                                 'partner_name': partner.name
                             })
-                elif partner.email:
+                elif is_valid_email(partner.email):
                     # Fallback to partner's main email
                     recipients.append({
                         'email': partner.email,
@@ -183,7 +187,7 @@ class EmailCampaignService:
             leads = query.all()
             for lead in leads:
                 email = lead.contact_email
-                if email:
+                if is_valid_email(email):
                     recipients.append({
                         'email': email,
                         'name': lead.name,
@@ -196,7 +200,7 @@ class EmailCampaignService:
             umpires = UmpireProfile.query.filter_by(status=UmpireProfile.STATUS_ACTIVE).all()
             for umpire in umpires:
                 email = umpire.contact_email
-                if email:
+                if is_valid_email(email):
                     recipients.append({
                         'email': email,
                         'name': umpire.name,
@@ -214,7 +218,7 @@ class EmailCampaignService:
                 )
             ).all()
             for user in users:
-                if user.email:
+                if is_valid_email(user.email):
                     recipients.append({
                         'email': user.email,
                         'name': user.name,
@@ -232,7 +236,7 @@ class EmailCampaignService:
                 )
             ).all()
             for user in users:
-                if user.email:
+                if is_valid_email(user.email):
                     recipients.append({
                         'email': user.email,
                         'name': user.name,
