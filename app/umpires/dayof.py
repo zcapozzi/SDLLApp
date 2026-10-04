@@ -40,6 +40,8 @@ def dayof_notifications():
     notifications = UmpireDayOfNotification.get_for_date(target_date)
 
     # Group by status
+    scheduled_notifications = [n for n in notifications if n.is_scheduled and not n.deactivated]
+    deactivated_notifications = [n for n in notifications if n.deactivated]
     draft_notifications = [n for n in notifications if n.is_draft]
     sent_notifications = [n for n in notifications if n.is_sent]
     skipped_notifications = [n for n in notifications if n.is_skipped]
@@ -47,6 +49,8 @@ def dayof_notifications():
     return render_template(
         'umpires/dayof_inbox.html',
         target_date=target_date,
+        scheduled_notifications=scheduled_notifications,
+        deactivated_notifications=deactivated_notifications,
         draft_notifications=draft_notifications,
         sent_notifications=sent_notifications,
         skipped_notifications=skipped_notifications
@@ -246,6 +250,131 @@ def rainout_notification():
         umpires=umpire_list,
         default_message=default_message
     )
+
+
+@umpires_bp.route('/dayof/quick-deactivate/<token>')
+def quick_deactivate_dayof(token):
+    """Quick deactivate a scheduled day-of notification from email link.
+
+    No login required - uses signed token for authentication.
+    After deactivating, redirects to inbox showing all remaining scheduled notifications.
+    """
+    from app.utils.mute_tokens import verify_dayof_deactivate_token
+
+    is_valid, payload, error = verify_dayof_deactivate_token(token)
+
+    if not is_valid:
+        return render_template(
+            'umpires/dayof_deactivate_result.html',
+            success=False,
+            error=error
+        )
+
+    notification_id = payload['notification_id']
+    notification = UmpireDayOfNotification.query.get(notification_id)
+
+    if not notification:
+        return render_template(
+            'umpires/dayof_deactivate_result.html',
+            success=False,
+            error="Notification not found"
+        )
+
+    # Check if already sent
+    if notification.is_sent:
+        return render_template(
+            'umpires/dayof_deactivate_result.html',
+            success=False,
+            error="This notification has already been sent",
+            notification=notification
+        )
+
+    # Check if already deactivated
+    if notification.deactivated:
+        # Still success, but show different message
+        remaining = UmpireDayOfNotification.get_scheduled_for_today()
+        return render_template(
+            'umpires/dayof_deactivate_result.html',
+            success=True,
+            already_deactivated=True,
+            notification=notification,
+            remaining_scheduled=remaining
+        )
+
+    # Deactivate the notification
+    notification.deactivate(reason=UmpireDayOfNotification.REASON_MANUAL)
+
+    # Get remaining scheduled notifications for today
+    remaining = UmpireDayOfNotification.get_scheduled_for_today()
+
+    return render_template(
+        'umpires/dayof_deactivate_result.html',
+        success=True,
+        notification=notification,
+        remaining_scheduled=remaining
+    )
+
+
+@umpires_bp.route('/dayof/deactivate-all', methods=['GET', 'POST'])
+@login_required
+@umpire_coordinator_required
+def deactivate_all_dayof():
+    """Deactivate all scheduled day-of notifications for today."""
+    if request.method == 'POST':
+        count = UmpireDayOfNotification.deactivate_all_scheduled(
+            reason=UmpireDayOfNotification.REASON_BULK_DEACTIVATE
+        )
+
+        if count > 0:
+            flash(f'Deactivated {count} scheduled notification(s)', 'success')
+        else:
+            flash('No scheduled notifications to deactivate', 'info')
+
+        return redirect(url_for('umpires.dayof_notifications'))
+
+    # GET request - show confirmation page
+    scheduled = UmpireDayOfNotification.get_scheduled_for_today()
+
+    return render_template(
+        'umpires/dayof_deactivate_all.html',
+        scheduled_notifications=scheduled
+    )
+
+
+@umpires_bp.route('/dayof/<int:id>/deactivate', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def deactivate_dayof(id):
+    """Deactivate a single scheduled notification."""
+    notification = UmpireDayOfNotification.query.get_or_404(id)
+
+    if notification.is_sent:
+        flash('Cannot deactivate - notification already sent', 'error')
+    elif notification.deactivated:
+        flash('Notification already deactivated', 'info')
+    else:
+        notification.deactivate(reason=UmpireDayOfNotification.REASON_MANUAL)
+        flash(f'Deactivated notification for {notification.umpire_name}', 'success')
+
+    return redirect(url_for('umpires.dayof_notifications'))
+
+
+@umpires_bp.route('/dayof/<int:id>/reactivate', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def reactivate_dayof(id):
+    """Reactivate a deactivated notification."""
+    notification = UmpireDayOfNotification.query.get_or_404(id)
+
+    if not notification.deactivated:
+        flash('Notification is not deactivated', 'info')
+    elif notification.is_sent:
+        flash('Cannot reactivate - notification already sent', 'error')
+    else:
+        notification.reactivate()
+        flash(f'Reactivated notification for {notification.umpire_name}', 'success')
+
+    return redirect(url_for('umpires.dayof_notifications'))
 
 
 @umpires_bp.route('/rainout-notification/send', methods=['POST'])

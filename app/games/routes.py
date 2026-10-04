@@ -1545,8 +1545,10 @@ def rainout(year, is_spring):
                 from app.models.umpire_partner import UmpirePartner
                 from app.models.partner_payment import PartnerCredit
                 from app.models.league import League
+                from app.models.umpire_dayof_notification import UmpireDayOfNotification
 
                 credits_created = 0
+                dayof_deactivated = 0
                 for game in games:
                     change = GameChangeService.log_change(
                         game_id=game.ID,
@@ -1556,6 +1558,12 @@ def rainout(year, is_spring):
                         reason=f'Rainout on {rainout_date.strftime("%B %d, %Y")}'
                     )
                     GameChangeService.queue_notifications_for_change(change, game)
+
+                    # Deactivate any scheduled day-of notifications for this game
+                    dayof_deactivated += UmpireDayOfNotification.deactivate_for_game(
+                        game.ID,
+                        reason=UmpireDayOfNotification.REASON_GAME_POSTPONED
+                    )
 
                     # Create credit for prepay partners (rainout pre-cancel - umpire did NOT arrive)
                     # Note: If umpire DID arrive, use UmpirePaymentEvent instead
@@ -1611,8 +1619,13 @@ def rainout(year, is_spring):
 
                 logger.info(f'Postponed {count} games for rainout on {rainout_date}')
                 msg = f'Postponed {count} games for {rainout_date.strftime("%B %d, %Y")}'
+                extras = []
                 if credits_created > 0:
-                    msg += f' ({credits_created} credits created for prepay partners)'
+                    extras.append(f'{credits_created} credits for prepay partners')
+                if dayof_deactivated > 0:
+                    extras.append(f'{dayof_deactivated} day-of emails stopped')
+                if extras:
+                    msg += f' ({", ".join(extras)})'
                 flash(msg, 'success')
 
         elif action == 'reschedule_game':

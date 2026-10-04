@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if success %}Email Stopped{% else %}Deactivate Failed{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 800px; padding: 40px 20px;">
+    {% if success %}
+    <div style="text-align: center; margin-bottom: 30px;">
+        <div style="font-size: 64px; margin-bottom: 20px;">&#9989;</div>
+        {% if already_deactivated %}
+        <h1 style="color: #666; margin-bottom: 15px;">Already Stopped</h1>
+        <p style="font-size: 18px; color: #555; margin-bottom: 20px;">
+            This notification was already deactivated. It will not be sent.
+        </p>
+        {% else %}
+        <h1 style="color: rgb(34, 139, 34); margin-bottom: 15px;">Email Stopped</h1>
+        <p style="font-size: 18px; color: #555; margin-bottom: 20px;">
+            The pregame email for <strong>{{ notification.umpire_name }}</strong> will not be sent.
+        </p>
+        {% endif %}
+
+        <div class="card" style="text-align: left; margin-bottom: 30px;">
+            <h3 style="margin-top: 0; border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Stopped Email Details</h3>
+            <p style="margin: 10px 0;">
+                <strong>Umpire:</strong> {{ notification.umpire_name }}
+            </p>
+            <p style="margin: 10px 0;">
+                <strong>Game:</strong>
+                {% if notification.home_team and notification.away_team %}
+                    {{ notification.home_team }} vs {{ notification.away_team }}
+                {% else %}
+                    {{ notification.game_league or 'Game' }}
+                {% endif %}
+            </p>
+            <p style="margin: 10px 0;">
+                <strong>Time:</strong> {{ notification.game_time_str }} @ {{ notification.game_location }}
+            </p>
+        </div>
+    </div>
+
+    <!-- Remaining scheduled notifications -->
+    {% if remaining_scheduled %}
+    <div class="card mb-4 border-warning">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0">Remaining Scheduled Emails ({{ remaining_scheduled|length }})</h5>
+        </div>
+        <div class="card-body p-0">
+            <p style="padding: 15px 15px 0 15px; color: #666;">
+                These emails are still scheduled to send. Click "Stop" to prevent any email from being sent.
+            </p>
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Umpire</th>
+                        <th>Game</th>
+                        <th>Time</th>
+                        <th>Location</th>
+                        <th style="text-align: center;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for n in remaining_scheduled %}
+                    <tr>
+                        <td>{{ n.umpire_name }}</td>
+                        <td>
+                            {% if n.home_team and n.away_team %}
+                                {{ n.home_team }} vs {{ n.away_team }}
+                            {% else %}
+                                {{ n.game_league or 'Game' }}
+                            {% endif %}
+                        </td>
+                        <td>{{ n.game_time_str }}</td>
+                        <td>{{ n.game_location }}</td>
+                        <td style="text-align: center;">
+                            <form method="POST" action="{{ url_for('umpires.deactivate_dayof', id=n.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Stop</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 20px;">
+        <a href="{{ url_for('umpires.dayof_notifications') }}" class="btn btn-primary">
+            Go to Day-of Inbox
+        </a>
+        <form method="POST" action="{{ url_for('umpires.deactivate_all_dayof') }}" style="display: inline; margin-left: 10px;">
+            <button type="submit" class="btn btn-outline-danger"
+                    onclick="return confirm('Stop all {{ remaining_scheduled|length }} remaining scheduled emails?')">
+                Stop All Remaining
+            </button>
+        </form>
+    </div>
+    {% else %}
+    <div style="text-align: center;">
+        <div class="card" style="background: #d4edda; border: 1px solid #c3e6cb;">
+            <p style="margin: 0; color: #155724;">
+                <strong>All clear!</strong> No more emails are scheduled to send.
+            </p>
+        </div>
+        <p style="margin-top: 20px;">
+            <a href="{{ url_for('umpires.dayof_notifications') }}" class="btn btn-primary">
+                Go to Day-of Inbox
+            </a>
+        </p>
+    </div>
+    {% endif %}
+
+    {% else %}
+    {# Error state #}
+    <div style="text-align: center;">
+        <div style="font-size: 64px; margin-bottom: 20px;">&#10060;</div>
+        <h1 style="color: #c33; margin-bottom: 15px;">Deactivate Failed</h1>
+        <p style="font-size: 18px; color: #555; margin-bottom: 30px;">
+            {{ error or 'Unable to process the request.' }}
+        </p>
+
+        {% if notification %}
+        <div class="card" style="text-align: left; margin-bottom: 30px;">
+            <h3 style="margin-top: 0;">Email Details</h3>
+            <p style="margin: 10px 0;">
+                <strong>Umpire:</strong> {{ notification.umpire_name }}
+            </p>
+            <p style="margin: 10px 0;">
+                <strong>Status:</strong>
+                {% if notification.is_sent %}
+                    <span style="color: green;">Already sent at {{ notification.sent_at.strftime('%I:%M %p').lstrip('0') if notification.sent_at else 'Unknown' }}</span>
+                {% elif notification.deactivated %}
+                    <span style="color: #666;">Already deactivated</span>
+                {% else %}
+                    {{ notification.status }}
+                {% endif %}
+            </p>
+        </div>
+        {% endif %}
+
+        <div class="card" style="background: rgba(200, 50, 50, 0.1); border-left: 4px solid #c33;">
+            <p style="margin: 0;">
+                This link may have expired or the email may have already been sent.
+                Links are valid for 1 hour.
+            </p>
+        </div>
+
+        <p style="margin-top: 30px; color: #888; font-size: 14px;">
+            <a href="{{ url_for('auth.login') }}">Log in</a> to manage day-of notifications.
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

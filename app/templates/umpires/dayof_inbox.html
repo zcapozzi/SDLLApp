@@ -36,36 +36,153 @@
                         </button>
                     </form>
 
-                    {% if draft_notifications %}
-                    <!-- Regenerate all drafts -->
-                    <form method="POST" action="{{ url_for('umpires.generate_dayof_notifications') }}" class="d-inline"
-                          onsubmit="return confirm('Regenerate {{ draft_notifications|length }} existing draft(s) with updated team names?')">
-                        <input type="hidden" name="hours_ahead" value="7">
-                        <input type="hidden" name="hours_start" value="0">
-                        <input type="hidden" name="regenerate_existing" value="1">
-                        <button type="submit" class="btn btn-outline-primary">
-                            Regenerate Drafts ({{ draft_notifications|length }})
-                        </button>
-                    </form>
-
-                    <!-- Send all -->
-                    <form method="POST" action="{{ url_for('umpires.send_all_dayof') }}" class="d-inline">
-                        <button type="submit" class="btn btn-success"
-                                onclick="return confirm('Send {{ draft_notifications|length }} email(s)?')">
-                            Send All ({{ draft_notifications|length }})
-                        </button>
-                    </form>
+                    {% if scheduled_notifications %}
+                    <!-- Deactivate all -->
+                    <a href="{{ url_for('umpires.deactivate_all_dayof') }}" class="btn btn-outline-danger">
+                        Deactivate All ({{ scheduled_notifications|length }})
+                    </a>
                     {% endif %}
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Draft notifications -->
+    <!-- Scheduled notifications (auto-send pending) -->
+    {% if scheduled_notifications %}
+    <div class="card mb-4 border-warning">
+        <div class="card-header bg-warning text-dark">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Scheduled to Send ({{ scheduled_notifications|length }})</h5>
+                {% if scheduled_notifications[0].scheduled_send_at %}
+                <span class="badge bg-dark">
+                    Auto-sends at {{ scheduled_notifications[0].scheduled_send_at.strftime('%I:%M %p').lstrip('0') }}
+                    {% set mins = scheduled_notifications[0].minutes_until_send %}
+                    {% if mins and mins > 0 %}
+                        ({{ mins }} min)
+                    {% elif mins and mins <= 0 %}
+                        (sending now)
+                    {% endif %}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Umpire</th>
+                        <th>Game</th>
+                        <th>Time</th>
+                        <th>Location</th>
+                        <th>Recipients</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for n in scheduled_notifications %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('umpires.dayof_preview', id=n.id) }}">
+                                {{ n.umpire_name }}
+                            </a>
+                        </td>
+                        <td>
+                            {% if n.home_team and n.away_team %}
+                                {{ n.home_team }} vs {{ n.away_team }}
+                            {% else %}
+                                {{ n.game_league or 'Game' }}
+                            {% endif %}
+                        </td>
+                        <td>{{ n.game_time_str }}</td>
+                        <td>{{ n.game_location }}</td>
+                        <td>
+                            <small class="text-muted">{{ n.recipient_emails_list|length }} email(s)</small>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{{ url_for('umpires.dayof_preview', id=n.id) }}"
+                                   class="btn btn-outline-primary">Preview</a>
+                                <form method="POST" action="{{ url_for('umpires.dayof_action', id=n.id) }}" class="d-inline">
+                                    <input type="hidden" name="action" value="send">
+                                    <button type="submit" class="btn btn-success">Send Now</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('umpires.deactivate_dayof', id=n.id) }}" class="d-inline">
+                                    <button type="submit" class="btn btn-outline-danger">Stop</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Deactivated notifications -->
+    {% if deactivated_notifications %}
+    <div class="card mb-4">
+        <div class="card-header bg-secondary-subtle">
+            <h5 class="mb-0">Deactivated ({{ deactivated_notifications|length }})</h5>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Umpire</th>
+                        <th>Game</th>
+                        <th>Time</th>
+                        <th>Location</th>
+                        <th>Reason</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for n in deactivated_notifications %}
+                    <tr class="table-secondary">
+                        <td>{{ n.umpire_name }}</td>
+                        <td>
+                            {% if n.home_team and n.away_team %}
+                                {{ n.home_team }} vs {{ n.away_team }}
+                            {% else %}
+                                {{ n.game_league or 'Game' }}
+                            {% endif %}
+                        </td>
+                        <td>{{ n.game_time_str }}</td>
+                        <td>{{ n.game_location }}</td>
+                        <td>
+                            <small class="text-muted">
+                                {% if n.deactivated_reason == 'manual' %}
+                                    Manually stopped
+                                {% elif n.deactivated_reason == 'game_postponed' %}
+                                    Game postponed
+                                {% elif n.deactivated_reason == 'game_cancelled' %}
+                                    Game cancelled
+                                {% elif n.deactivated_reason == 'bulk_deactivate' %}
+                                    Bulk stopped
+                                {% else %}
+                                    {{ n.deactivated_reason or 'Unknown' }}
+                                {% endif %}
+                            </small>
+                        </td>
+                        <td>
+                            <form method="POST" action="{{ url_for('umpires.reactivate_dayof', id=n.id) }}" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-success">Reactivate</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Legacy draft notifications (if any) -->
     {% if draft_notifications %}
     <div class="card mb-4">
         <div class="card-header bg-warning-subtle">
-            <h5 class="mb-0">Pending ({{ draft_notifications|length }})</h5>
+            <h5 class="mb-0">Pending Manual Approval ({{ draft_notifications|length }})</h5>
         </div>
         <div class="card-body p-0">
             <table class="table table-hover mb-0">
@@ -207,11 +324,11 @@
     {% endif %}
 
     <!-- Empty state -->
-    {% if not draft_notifications and not sent_notifications and not skipped_notifications %}
+    {% if not scheduled_notifications and not deactivated_notifications and not draft_notifications and not sent_notifications and not skipped_notifications %}
     <div class="card">
         <div class="card-body text-center py-5">
             <h5 class="text-muted">No day-of notifications for {{ target_date.strftime('%B %d, %Y') }}</h5>
-            <p class="text-muted mb-3">Click "Generate" to create notifications for Academy umpires with games in the next 7 hours.</p>
+            <p class="text-muted mb-3">Click "Generate" to schedule notifications for Academy umpires with games in the next 7 hours.</p>
             <form method="POST" action="{{ url_for('umpires.generate_dayof_notifications') }}">
                 <input type="hidden" name="hours_ahead" value="7">
                 <input type="hidden" name="hours_start" value="0">

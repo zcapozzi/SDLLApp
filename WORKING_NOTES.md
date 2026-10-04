@@ -4,7 +4,197 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Implemented institutional knowledge and email routing system for preserving board member knowledge across transitions.
+Last session: Implemented auto-scheduled day-of umpire notifications with 15-minute review period.
+
+---
+
+## Session: October 4, 2026 - Auto-Scheduled Day-of Notifications
+
+### Overview
+Changed day-of umpire notification workflow from manual approval to auto-send with 15-minute review period:
+1. Notifications are now created with `status='scheduled'` instead of `'draft'`
+2. Set `scheduled_send_at` to 15 minutes from creation time
+3. Cron job auto-sends after `scheduled_send_at` passes unless deactivated
+4. Admin can deactivate individual or all notifications during review period
+5. When a game is postponed, day-of notifications are auto-deactivated
+
+### Files Modified
+
+#### Model Updates
+1. **app/models/umpire_dayof_notification.py** - Added scheduling fields and methods:
+   - `STATUS_SCHEDULED` constant
+   - Deactivation reason constants: `REASON_MANUAL`, `REASON_GAME_POSTPONED`, `REASON_GAME_CANCELLED`, `REASON_BULK_DEACTIVATE`
+   - `scheduled_send_at` column (when to auto-send)
+   - `deactivated`, `deactivated_at`, `deactivated_reason` columns
+   - `is_ready_to_send`, `minutes_until_send`, `send_time_display` properties
+   - `deactivate()`, `reactivate()` methods
+   - `get_scheduled_for_today()`, `get_ready_to_send_all()`, `deactivate_for_game()`, `deactivate_all_scheduled()` class methods
+
+#### Service Updates
+2. **app/services/dayof_notification_service.py** - Changed workflow:
+   - `generate_notifications()` and `generate_notifications_for_time_window()` now create with `status='scheduled'` and `scheduled_send_at`
+   - Added `send_scheduled_notifications()` for cron auto-sending
+   - Renamed `notify_coordinator_of_drafts()` to `notify_coordinator_of_scheduled()` with new urgent format (countdown, deactivate links)
+
+#### Route Updates
+3. **app/umpires/dayof.py** - Added new routes:
+   - `quick_deactivate_dayof(token)` - Token-based deactivate from email (no login)
+   - `deactivate_all_dayof()` - Deactivate all scheduled for today
+   - `deactivate_dayof(id)` - Deactivate single notification
+   - `reactivate_dayof(id)` - Reactivate deactivated notification
+   - Updated `dayof_notifications()` to group by scheduled/deactivated/draft/sent/skipped
+
+4. **app/main/routes.py** - Cron updates:
+   - Updated `cron_dayof_morning()` and `cron_dayof_afternoon()` to use `notify_coordinator_of_scheduled()`
+   - Added `cron_dayof_send_scheduled()` - runs every 5 minutes to auto-send ready notifications
+
+5. **app/games/routes.py** - Rainout integration:
+   - In `postpone_all` action: calls `UmpireDayOfNotification.deactivate_for_game()` to auto-deactivate day-of emails
+   - Flash message includes count of deactivated day-of emails
+
+#### Token Utils
+6. **app/utils/mute_tokens.py** - Added deactivate token functions:
+   - `generate_dayof_deactivate_token(notification_id)` - 60-minute expiry
+   - `verify_dayof_deactivate_token(token)` - verify and extract notification_id
+
+#### Templates
+7. **app/templates/umpires/dayof_inbox.html** - Updated to show:
+   - Scheduled notifications with countdown and "Stop" buttons
+   - Deactivated notifications with reason and "Reactivate" buttons
+   - "Deactivate All" button in header
+
+8. **app/templates/umpires/dayof_deactivate_result.html** (NEW) - Shows after quick-deactivate:
+   - Success message with stopped notification details
+   - Remaining scheduled notifications with Stop buttons
+   - "Stop All Remaining" button
+
+9. **app/templates/umpires/dayof_deactivate_all.html** (NEW) - Confirmation page:
+   - Lists all notifications that will be stopped
+   - Confirm/Cancel buttons
+
+#### Migration
+10. **scripts/add_dayof_scheduling.sql** (NEW) - Database migration:
+    - Add 'scheduled' to status enum
+    - Add `scheduled_send_at` column
+    - Add `deactivated`, `deactivated_at`, `deactivated_reason` columns
+    - Add index on `(status, deactivated, scheduled_send_at)` for efficient cron queries
+
+### New Cron Job Required
+Add to external cron service (run every 5 minutes):
+```
+https://your-app.railway.app/cron/dayof-send-scheduled?token=YOUR_CRON_SECRET
+```
+
+### Workflow Summary
+1. **7am / 1pm cron**: Creates notifications with `status='scheduled'`, `scheduled_send_at = now + 15 min`
+2. **Coordinator email**: Urgent email with countdown, individual "Stop" links, bulk "Stop All" link
+3. **Review period**: Admin has 15 minutes to click "Stop" for any notification they don't want sent
+4. **Auto-send cron** (every 5 min): Sends notifications where `scheduled_send_at <= now` and `deactivated = False`
+5. **Rainout integration**: When games are postponed, day-of notifications are auto-deactivated
+
+---
+
+## Session: September 22, 2026 - Partner League Rates & Payment Events
+
+### Overview
+Implemented data infrastructure for:
+1. **Partner + League specific rates** - Custom rates per partner/league combination (e.g., Diamond + AA = $45, Diamond + T-Ball = $40)
+2. **Rainout umpire payment tracking** - Track when umpires show up for rained-out games and still need payment
+3. **Standalone umpire payment events** - Decouple payment obligations from game records
+4. **Managed umpire invoice report** - Show what's owed to each SDL umpire
+
+### Files Created
+
+#### New Models
+1. **app/models/partner_league_rate.py** - League-specific rate overrides for umpire partners
+   - PartnerLeagueRate class with rate_normal, rate_ntl per partner/league combo
+   - get_rate() class method with hierarchy: season-specific -> all-season -> partner default
+   - get_or_create() for managing rate records
+
+2. **app/models/umpire_payment_event.py** - Standalone payment events
+   - Event types: rainout_arrival, cancelled_arrival, completed, bonus, adjustment
+   - Status workflow: pending -> approved -> paid (or voided)
+   - Game snapshot fields (not FK) so game can be rescheduled/deleted independently
+   - create_from_rainout() factory method
+   - Totals methods for umpires and partners
+
+#### New Templates
+3. **app/templates/umpires/partner_league_rates.html** - Manage league rates per partner
+4. **app/templates/umpires/payment_events.html** - List payment events with filters
+5. **app/templates/umpires/payment_event_form.html** - Create payment event
+6. **app/templates/umpires/payment_event_detail.html** - View/approve/pay event
+7. **app/templates/umpires/managed_umpire_invoice.html** - Invoice report for SDL umpires
+
+#### Migration Scripts
+8. **scripts/add_partner_league_rates.sql** - sdll_partner_league_rates table
+9. **scripts/add_umpire_payment_events.sql** - sdll_umpire_payment_events table
+
+### Files Modified
+
+1. **app/models/umpire_partner.py** - Added league rate lookup methods:
+   - get_rate_for_league(league_id, is_ntl, org_season_id)
+   - calculate_game_cost_for_league(league_id, umpire_count, is_ntl, org_season_id)
+   - get_league_rates_summary(org_season_id)
+
+2. **app/models/partner_payment.py** - Added new source types:
+   - SOURCE_RAINOUT_PRECANCEL (credit for pre-cancelled rainouts)
+   - SOURCE_RAINOUT_ARRIVAL (no credit - use UmpirePaymentEvent instead)
+   - create_from_rainout_precancel() factory method
+
+3. **app/models/__init__.py** - Added imports for PartnerLeagueRate, UmpirePaymentEvent
+
+4. **app/umpires/partners.py** - Added league rates routes:
+   - partner_league_rates(id) - GET view
+   - save_partner_league_rates(id) - POST save
+
+5. **app/umpires/partner_payments.py** - Added payment event routes:
+   - payment_events() - List with filters
+   - new_payment_event() - Create form
+   - view_payment_event(id) - Detail view
+   - approve_payment_event(id) - Approve pending
+   - mark_payment_event_paid(id) - Mark paid
+   - void_payment_event(id) - Void event
+   - managed_umpire_invoice() - Invoice report
+
+6. **app/templates/umpires/partners.html** - Added "Rates" button
+7. **app/templates/umpires/edit_partner.html** - Added league rates link
+8. **app/templates/umpires/partner_payments.html** - Added Payment Events and Umpire Invoice links
+
+### Routes
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/umpires/partners/<id>/league-rates` | GET | View league rates for partner |
+| `/umpires/partners/<id>/league-rates` | POST | Save league rates |
+| `/umpires/payment-events` | GET | List payment events |
+| `/umpires/payment-events/new` | GET/POST | Create payment event |
+| `/umpires/payment-events/<id>` | GET | View payment event |
+| `/umpires/payment-events/<id>/approve` | POST | Approve event |
+| `/umpires/payment-events/<id>/mark-paid` | POST | Mark as paid |
+| `/umpires/payment-events/<id>/void` | POST | Void event |
+| `/umpires/managed-invoice` | GET | SDL umpire invoice report |
+
+### Key Concepts
+
+**Rate Lookup Hierarchy:**
+1. PartnerLeagueRate (partner + league + season) - most specific
+2. PartnerLeagueRate (partner + league + NULL) - all seasons
+3. UmpirePartner.rate_normal / rate_ntl - partner default
+
+**Rainout Payment Flow:**
+- Game rained out AFTER umpire arrives -> Create UmpirePaymentEvent (TYPE_RAINOUT_ARRIVAL)
+- Game rained out BEFORE umpire arrives -> Create PartnerCredit (SOURCE_RAINOUT_PRECANCEL) for prepay partners
+
+**Payment Event Lifecycle:**
+1. Event created (status: pending)
+2. Approved by coordinator/treasurer (status: approved)
+3. Paid out (status: paid)
+4. Or voided at any point (status: voided)
+
+### Next Steps
+- Update rainout handler in games routes to create payment events when umpire arrived
+- Update delegation report to use league-specific rates
+- Update invoice tieout to use league-specific rates
 
 ---
 
@@ -2588,4 +2778,115 @@ scripts/add_webhook_event_details.sql
 - `e33345e` - Improve webhooks UI and make post-game forms mobile-friendly
 - `3d138e6` - Show scores instead of Completed label on team schedule
 - `fc4e88f` - Fix reapportionment to filter by game umpire_override field
+
+---
+
+## Session: September 18, 2026 - Umpire Availability & Capacity Dashboard
+
+### Overview
+
+Implemented a self-service availability management system for umpires to mark their blocked dates, plus a capacity dashboard for coordinators to visualize umpire activity and availability.
+
+### Features Implemented
+
+1. **Umpire Availability Self-Service** (`/umpires/availability`)
+   - Calendar interface showing current month through end of season
+   - Click dates to toggle blocked (red) / available
+   - Shows upcoming scheduled games (green dots)
+   - Supports managed profiles (guardians managing minors)
+   - AJAX auto-save with visual indicator
+   - Today highlighted with orange border
+
+2. **Umpire Capacity Dashboard** (`/umpires/capacity`)
+   - GitHub-style activity heatmap
+   - Past 30 days showing games worked
+   - Future dates showing scheduled games + blocked dates
+   - Summary cards: active umpires, open SDL games, swap suggestions
+   - Open SDL games list (games needing internal umpire assignments)
+   - BTP swap suggestions (kid-pitch games where non-BTP umpire is on plate)
+   - BTP-qualified umpires marked with asterisk
+
+3. **Academy Registration Import** (`scripts/import_academy_registration.py`)
+   - Import umpire data from registration CSV
+   - Fuzzy matching against existing profiles by email/name
+   - Deduplication within batch
+   - Dry-run mode for preview
+   - Creates prospective profiles for new registrants
+
+### New Files Created
+
+| File | Purpose |
+|------|---------|
+| `app/models/umpire_blockout.py` | UmpireBlockout model for tracking blocked dates |
+| `app/umpires/availability.py` | Self-service availability routes |
+| `app/umpires/capacity.py` | Capacity dashboard routes |
+| `app/templates/umpires/availability.html` | Calendar-based availability UI |
+| `app/templates/umpires/capacity_dashboard.html` | Heatmap dashboard |
+| `scripts/add_umpire_blockouts.sql` | Database migration |
+| `scripts/import_academy_registration.py` | CSV registration import script |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `app/models/__init__.py` | Import UmpireBlockout model |
+| `app/umpires/__init__.py` | Import availability and capacity modules |
+| `app/templates/umpires/index.html` | Added "Capacity" button in nav |
+
+### Database Schema
+
+```sql
+CREATE TABLE sdll_umpire_blockouts (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    umpire_profile_id INT NOT NULL,
+    blocked_date DATE NOT NULL,
+    reason VARCHAR(100),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (umpire_profile_id) REFERENCES sdll_umpire_profiles(id) ON DELETE CASCADE,
+    UNIQUE KEY uq_profile_date (umpire_profile_id, blocked_date)
+);
+```
+
+### Routes Added
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/umpires/availability` | GET | Calendar view for self-service blockouts |
+| `/umpires/availability/api/toggle` | POST | Toggle single date blocked/available |
+| `/umpires/availability/api/set-range` | POST | Block a range of dates |
+| `/umpires/availability/api/clear-range` | POST | Clear blockouts for a range |
+| `/umpires/capacity` | GET | Coordinator capacity dashboard |
+
+### Key Features
+
+**Availability Page:**
+- Shows all months from today through end of season (or last game date)
+- Past dates are grayed out and non-clickable
+- Clicking a date sends AJAX request to toggle blockout status
+- Visual feedback: red = blocked, green = has scheduled game, orange border = today
+
+**Capacity Dashboard:**
+- Heatmap legend: No games (gray) → 1-4+ games (shades of green) | Blocked (red)
+- BTP-qualified umpires (max_baseball_age_rank >= 4) marked with asterisk
+- Swap suggestions show games where a non-BTP umpire has plate assignment
+- Available BTP umpires shown for each swap suggestion
+
+### Production Migration Required
+
+```bash
+mysql -u user -p database < scripts/add_umpire_blockouts.sql
+```
+
+### Usage
+
+**For Umpires:**
+1. Log in and navigate to "My Availability" (or access via dashboard)
+2. Click dates when you are NOT available to umpire
+3. Red dates = blocked, green dots = scheduled games
+
+**For Coordinators:**
+1. Navigate to Umpires > Capacity
+2. View heatmap to see umpire workload distribution
+3. Review open SDL games that need assignments
+4. Check swap suggestions for BTP optimization
 

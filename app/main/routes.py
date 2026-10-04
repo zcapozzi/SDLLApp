@@ -1133,8 +1133,9 @@ def cron_dayof_morning():
     Cron endpoint to generate day-of umpire notifications for morning/early games.
 
     Runs at 7am ET (11:00 or 12:00 UTC depending on DST).
-    Generates draft notifications for all games BEFORE 3pm today.
-    Sends notification email to umpire coordinator.
+    Schedules notifications for all games BEFORE 3pm today.
+    Notifications auto-send 15 minutes later unless deactivated.
+    Sends urgent notification email to umpire coordinator.
 
     Protected by CRON_SECRET token. Call with ?token=YOUR_SECRET
 
@@ -1158,16 +1159,16 @@ def cron_dayof_morning():
         service = DayOfNotificationService()
         notifications, skipped_games = service.generate_morning_notifications()
 
-        # Notify coordinator if there are drafts or skipped games
+        # Notify coordinator of scheduled notifications
         notified = False
         if notifications or skipped_games:
-            notified = service.notify_coordinator_of_drafts(
+            notified = service.notify_coordinator_of_scheduled(
                 notifications, 'morning', skipped_games=skipped_games
             )
 
         return jsonify({
             'status': 'ok',
-            'drafts_created': len(notifications),
+            'notifications_scheduled': len(notifications),
             'games_skipped': len(skipped_games),
             'coordinator_notified': notified,
             'umpires': [n.umpire_name for n in notifications]
@@ -1186,8 +1187,9 @@ def cron_dayof_afternoon():
     Cron endpoint to generate day-of umpire notifications for afternoon/evening games.
 
     Runs at 1pm ET (17:00 or 18:00 UTC depending on DST).
-    Generates draft notifications for all games AFTER 3pm today.
-    Sends notification email to umpire coordinator.
+    Schedules notifications for all games AFTER 3pm today.
+    Notifications auto-send 15 minutes later unless deactivated.
+    Sends urgent notification email to umpire coordinator.
 
     Protected by CRON_SECRET token. Call with ?token=YOUR_SECRET
 
@@ -1211,19 +1213,62 @@ def cron_dayof_afternoon():
         service = DayOfNotificationService()
         notifications, skipped_games = service.generate_afternoon_notifications()
 
-        # Notify coordinator if there are drafts or skipped games
+        # Notify coordinator of scheduled notifications
         notified = False
         if notifications or skipped_games:
-            notified = service.notify_coordinator_of_drafts(
+            notified = service.notify_coordinator_of_scheduled(
                 notifications, 'afternoon', skipped_games=skipped_games
             )
 
         return jsonify({
             'status': 'ok',
-            'drafts_created': len(notifications),
+            'notifications_scheduled': len(notifications),
             'games_skipped': len(skipped_games),
             'coordinator_notified': notified,
             'umpires': [n.umpire_name for n in notifications]
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
+@main_bp.route('/cron/dayof-send-scheduled')
+def cron_dayof_send_scheduled():
+    """
+    Cron endpoint to auto-send scheduled day-of umpire notifications.
+
+    Run every 5 minutes to process scheduled notifications whose
+    scheduled_send_at time has passed.
+
+    Protected by CRON_SECRET token. Call with ?token=YOUR_SECRET
+
+    Set up an external cron service to hit this every 5 minutes:
+    https://your-app.railway.app/cron/dayof-send-scheduled?token=YOUR_CRON_SECRET
+    """
+    import os
+    from app.services.dayof_notification_service import DayOfNotificationService
+
+    # Verify secret token
+    expected_token = os.environ.get('CRON_SECRET')
+    provided_token = request.args.get('token')
+
+    if not expected_token:
+        return jsonify({'error': 'CRON_SECRET not configured'}), 500
+
+    if provided_token != expected_token:
+        return jsonify({'error': 'Invalid token'}), 403
+
+    try:
+        service = DayOfNotificationService()
+        sent, failed = service.send_scheduled_notifications()
+
+        return jsonify({
+            'status': 'ok',
+            'emails_sent': sent,
+            'emails_failed': failed
         }), 200
 
     except Exception as e:

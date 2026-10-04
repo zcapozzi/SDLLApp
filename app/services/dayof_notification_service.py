@@ -278,7 +278,11 @@ class DayOfNotificationService:
                 # Get local game ID if available
                 local_game_id = local.get('game_id') if local else None
 
-                # Create notification
+                # Calculate scheduled send time (15 minutes from now)
+                now = datetime.now(EASTERN_TZ)
+                scheduled_send_at = now + timedelta(minutes=15)
+
+                # Create notification with scheduled status
                 notification = UmpireDayOfNotification(
                     game_id=local_game_id,
                     assignr_game_id=assignr_game_id,
@@ -294,13 +298,14 @@ class DayOfNotificationService:
                     game_league=league,
                     home_team=home_team,
                     away_team=away_team,
-                    status=UmpireDayOfNotification.STATUS_DRAFT
+                    status=UmpireDayOfNotification.STATUS_SCHEDULED,
+                    scheduled_send_at=scheduled_send_at
                 )
 
                 db.session.add(notification)
                 notifications.append(notification)
 
-                logger.info(f"Created notification for {umpire_name} - game {assignr_game_id}")
+                logger.info(f"Scheduled notification for {umpire_name} - game {assignr_game_id} (sends at {scheduled_send_at.strftime('%H:%M')})")
 
         db.session.commit()
         return notifications
@@ -721,7 +726,11 @@ Here are some resources that are good to have handy.<BR><BR>
                 # Get local game ID if available
                 local_game_id = local.get('game_id') if local else None
 
-                # Create notification
+                # Calculate scheduled send time (15 minutes from now)
+                now = datetime.now(EASTERN_TZ)
+                scheduled_send_at = now + timedelta(minutes=15)
+
+                # Create notification with scheduled status
                 notification = UmpireDayOfNotification(
                     game_id=local_game_id,
                     assignr_game_id=assignr_game_id,
@@ -737,13 +746,14 @@ Here are some resources that are good to have handy.<BR><BR>
                     game_league=league,
                     home_team=home_team,
                     away_team=away_team,
-                    status=UmpireDayOfNotification.STATUS_DRAFT
+                    status=UmpireDayOfNotification.STATUS_SCHEDULED,
+                    scheduled_send_at=scheduled_send_at
                 )
 
                 db.session.add(notification)
                 notifications.append(notification)
 
-                logger.info(f"Created notification for {umpire_name} - game {assignr_game_id}")
+                logger.info(f"Scheduled notification for {umpire_name} - game {assignr_game_id} (sends at {scheduled_send_at.strftime('%H:%M')})")
 
         db.session.commit()
         return notifications, non_scheduled_games
@@ -862,17 +872,43 @@ Here are some resources that are good to have handy.<BR><BR>
             db.session.rollback()
             return False
 
-    def notify_coordinator_of_drafts(
+    def send_scheduled_notifications(self) -> Tuple[int, int]:
+        """
+        Send all scheduled notifications that are ready (scheduled_send_at has passed).
+
+        This is called by cron to auto-send emails after the review period.
+
+        Returns:
+            Tuple of (sent_count, failed_count)
+        """
+        notifications = UmpireDayOfNotification.get_ready_to_send_all()
+
+        sent = 0
+        failed = 0
+
+        for notif in notifications:
+            if self.send_notification(notif):
+                sent += 1
+                logger.info(f"Auto-sent notification {notif.id} to {notif.umpire_name}")
+            else:
+                failed += 1
+                logger.error(f"Failed to auto-send notification {notif.id}")
+
+        return sent, failed
+
+    def notify_coordinator_of_scheduled(
         self,
         notifications: List[UmpireDayOfNotification],
         run_type: str = 'morning',
         skipped_games: Optional[List[Dict]] = None
     ) -> bool:
         """
-        Send email to umpire coordinator about pending day-of notifications.
+        Send urgent email to umpire coordinator about scheduled day-of notifications.
+
+        Includes countdown timer info and quick-deactivate links.
 
         Args:
-            notifications: List of draft notifications generated
+            notifications: List of scheduled notifications generated
             run_type: 'morning' or 'afternoon' to indicate which cron run
             skipped_games: List of games that were skipped (cancelled/rainout/postponed)
 
@@ -884,17 +920,29 @@ Here are some resources that are good to have handy.<BR><BR>
             return True
 
         from app.models.user import User
+        from app.utils.mute_tokens import generate_dayof_deactivate_token
 
         # Get umpire coordinators
         coordinators = User.query.filter(
-            User.role.in_(['admin', 'umpire_coordinator'])
+            User.role.contains('admin')
+        ).all()
+        coordinators += User.query.filter(
+            User.role.contains('umpire_coordinator')
         ).all()
 
-        if not coordinators:
+        # Deduplicate
+        seen_ids = set()
+        unique_coordinators = []
+        for u in coordinators:
+            if u.ID not in seen_ids:
+                seen_ids.add(u.ID)
+                unique_coordinators.append(u)
+
+        if not unique_coordinators:
             logger.warning("No umpire coordinators found to notify")
             return False
 
-        coordinator_emails = [u.email for u in coordinators if u.email]
+        coordinator_emails = [u.email for u in unique_coordinators if u.email]
         if not coordinator_emails:
             logger.warning("No coordinator emails found")
             return False
@@ -904,20 +952,23 @@ Here are some resources that are good to have handy.<BR><BR>
         today_str = now.strftime('%A, %B %d')
         time_window = "before 3pm" if run_type == 'morning' else "after 3pm"
 
-        # Build subject line
-        subject_parts = []
-        if notifications:
-            subject_parts.append(f"{len(notifications)} drafts")
-        if skipped_games:
-            subject_parts.append(f"{len(skipped_games)} skipped")
-        subject = f"SDLL Day-of Umpire Emails ({', '.join(subject_parts)})"
+        # Calculate send time (first notification's scheduled time)
+        send_time = notifications[0].scheduled_send_at if notifications else None
+        send_time_str = send_time.strftime('%I:%M %p').lstrip('0') if send_time else 'N/A'
+        minutes_until = notifications[0].minutes_until_send if notifications else 0
 
-        # Build notification list HTML
+        # Build subject line with urgency
+        subject = f"⏱️ SDLL Day-of Emails: {len(notifications)} scheduled (sends at {send_time_str})"
+
+        # Build notification list HTML with deactivate links
         notif_rows = []
         base_url = "https://www.southdurhamlittleleague.org"
 
         for n in notifications:
             preview_url = f"{base_url}/umpires/dayof/{n.id}"
+            deactivate_token = generate_dayof_deactivate_token(n.id)
+            deactivate_url = f"{base_url}/umpires/dayof/quick-deactivate/{deactivate_token}"
+
             notif_rows.append(f"""
             <tr>
                 <td style="padding: 8px; border-bottom: 1px solid #eee;">
@@ -928,6 +979,9 @@ Here are some resources that are good to have handy.<BR><BR>
                 </td>
                 <td style="padding: 8px; border-bottom: 1px solid #eee;">
                     {n.home_team} vs {n.away_team}
+                </td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
+                    <a href="{deactivate_url}" style="color: #c33; text-decoration: none; font-weight: bold;">✕ Stop</a>
                 </td>
             </tr>
             """)
@@ -960,17 +1014,23 @@ Here are some resources that are good to have handy.<BR><BR>
             """)
 
         inbox_url = f"{base_url}/umpires/dayof"
+        deactivate_all_url = f"{base_url}/umpires/dayof/deactivate-all"
+
+        # Build urgency banner
+        urgency_color = '#c33' if minutes_until <= 5 else '#ff8c00' if minutes_until <= 10 else '#228B22'
+        urgency_text = f"⏱️ Auto-sending in {minutes_until} minutes (at {send_time_str})"
 
         # Build HTML sections
         notifications_section = ""
         if notifications:
             notifications_section = f"""
-            <h3>Pending Notifications:</h3>
+            <h3>Scheduled Notifications:</h3>
             <table style="width: 100%; border-collapse: collapse;">
                 <tr style="background-color: #f5f5f5;">
                     <th style="padding: 8px; text-align: left;">Umpire</th>
                     <th style="padding: 8px; text-align: left;">Game</th>
                     <th style="padding: 8px; text-align: left;">Teams</th>
+                    <th style="padding: 8px; text-align: center; width: 70px;">Action</th>
                 </tr>
                 {''.join(notif_rows)}
             </table>
@@ -979,10 +1039,10 @@ Here are some resources that are good to have handy.<BR><BR>
         skipped_section = ""
         if skipped_games:
             skipped_section = f"""
-            <h3 style="color: #dc3545;">Skipped Games (No Draft Created):</h3>
+            <h3 style="color: #dc3545;">Skipped Games (No Email Scheduled):</h3>
             <p style="color: #666; font-size: 13px;">
                 These games have umpires assigned in Assignr but are not status=scheduled locally.
-                No pregame email was drafted for these games.
+                No pregame email was scheduled for these games.
             </p>
             <table style="width: 100%; border-collapse: collapse;">
                 <tr style="background-color: #fff3cd;">
@@ -995,26 +1055,41 @@ Here are some resources that are good to have handy.<BR><BR>
             """
 
         body_html = f"""
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #228B22;">Day-of Umpire Emails Summary</h2>
+        <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto;">
+            <!-- Urgency Banner -->
+            <div style="background-color: {urgency_color}; color: white; padding: 15px 20px;
+                        border-radius: 8px; margin-bottom: 20px; text-align: center;">
+                <strong style="font-size: 18px;">{urgency_text}</strong>
+                <p style="margin: 8px 0 0 0; font-size: 14px;">
+                    Click "Stop" next to any email to prevent it from sending.
+                </p>
+            </div>
+
+            <h2 style="color: #228B22; margin-top: 0;">Day-of Umpire Emails</h2>
             <p>
                 Summary for games {time_window} on {today_str}:
                 <ul>
-                    <li><strong>{len(notifications)}</strong> notification(s) drafted</li>
-                    <li><strong>{len(skipped_games)}</strong> game(s) skipped (not scheduled)</li>
+                    <li><strong>{len(notifications)}</strong> email(s) scheduled to send</li>
+                    <li><strong>{len(skipped_games)}</strong> game(s) skipped (not status=scheduled)</li>
                 </ul>
             </p>
-            <p>
+            <p style="margin-bottom: 25px;">
                 <a href="{inbox_url}" style="display: inline-block; padding: 10px 20px;
                    background-color: #228B22; color: white; text-decoration: none;
+                   border-radius: 4px; font-weight: bold; margin-right: 10px;">
+                    View All Scheduled
+                </a>
+                <a href="{deactivate_all_url}" style="display: inline-block; padding: 10px 20px;
+                   background-color: #c33; color: white; text-decoration: none;
                    border-radius: 4px; font-weight: bold;">
-                    Go to Day-of Inbox
+                    Stop All Emails
                 </a>
             </p>
             {notifications_section}
             {skipped_section}
             <p style="color: #666; font-size: 12px; margin-top: 20px;">
                 This is an automated notification from the SDLL Umpire System.
+                Emails will auto-send 15 minutes after scheduling unless deactivated.
             </p>
         </div>
         """
@@ -1027,15 +1102,15 @@ Here are some resources that are good to have handy.<BR><BR>
                 for g in skipped_games
             ])
 
-        body_text = f"""Day-of Umpire Emails Summary
+        body_text = f"""⏱️ Day-of Umpire Emails - AUTO-SENDING AT {send_time_str}
 
 Summary for games {time_window} on {today_str}:
-- {len(notifications)} notification(s) drafted
+- {len(notifications)} email(s) scheduled to send
 - {len(skipped_games)} game(s) skipped (not scheduled)
 
-Go to Day-of Inbox: {inbox_url}
+To stop any email, click "Stop" in the HTML version or go to: {inbox_url}
 
-Pending notifications:
+Scheduled notifications:
 """ + "\n".join([f"- {n.umpire_name}: {n.game_time_str} @ {n.game_location}" for n in notifications]) + skipped_text
 
         try:
@@ -1050,3 +1125,13 @@ Pending notifications:
         except Exception as e:
             logger.error(f"Failed to notify coordinators: {e}")
             return False
+
+    # Keep old method name for backwards compatibility during transition
+    def notify_coordinator_of_drafts(
+        self,
+        notifications: List[UmpireDayOfNotification],
+        run_type: str = 'morning',
+        skipped_games: Optional[List[Dict]] = None
+    ) -> bool:
+        """Deprecated: Use notify_coordinator_of_scheduled instead."""
+        return self.notify_coordinator_of_scheduled(notifications, run_type, skipped_games)
