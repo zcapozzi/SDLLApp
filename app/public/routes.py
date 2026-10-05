@@ -1180,20 +1180,55 @@ def get_game_start(game_id):
 
 
 def user_has_coach_access(user_id, year, is_spring, league):
-    """Check if user is an active coach in this specific league-season."""
+    """Check if user is an active coach in this specific league-season.
+
+    Access is granted if:
+    1. User's team is directly in the requested league, OR
+    2. User's team plays games in the requested league (cross-league schedules)
+    """
     from app.models.coach import CoachUser, CoachSeason
+    from app.models.game import Game
 
     coach = CoachUser.get_by_user(user_id)
     if not coach or coach.status != 'active':
         return False
 
-    return CoachSeason.query.join(TeamSeason).filter(
-        CoachSeason.coach_id == coach.id,
-        TeamSeason.year == year,
-        TeamSeason.is_spring == is_spring,
-        TeamSeason.league == league,
-        TeamSeason.active == 1
+    # Get all team IDs this coach manages for this season
+    coach_team_ids = [
+        cs.team_id for cs in CoachSeason.query.join(TeamSeason).filter(
+            CoachSeason.coach_id == coach.id,
+            TeamSeason.year == year,
+            TeamSeason.is_spring == is_spring,
+            TeamSeason.active == 1
+        ).all()
+    ]
+
+    if not coach_team_ids:
+        return False
+
+    # Check 1: Team is directly in this league
+    direct_match = TeamSeason.query.filter(
+        TeamSeason.team_ID.in_(coach_team_ids),
+        TeamSeason.league == league
     ).count() > 0
+
+    if direct_match:
+        return True
+
+    # Check 2: Team plays games in this league (cross-league schedule)
+    from sqlalchemy import or_
+    games_in_league = Game.query.filter(
+        Game.year == year,
+        Game.is_spring == is_spring,
+        Game.league == league,
+        Game.active == 1,
+        or_(
+            Game.home_ID.in_(coach_team_ids),
+            Game.away_ID.in_(coach_team_ids)
+        )
+    ).count() > 0
+
+    return games_in_league
 
 
 @public_bp.route('/division/<token>')
