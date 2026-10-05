@@ -2114,10 +2114,15 @@ def division_request_access(token):
 
     message = request.form.get('message', '').strip()
 
-    # Send email to scheduling coordinator
+    # Send email to league admin (VP) with CC to schedulers
     try:
         from app.services.notification_service import GmailService
+        from app.services.email_routing_service import EmailRoutingService
+        from app.models.league import League
+        from app.models.user import User
+
         email_service = GmailService()
+        routing_service = EmailRoutingService()
 
         season_name = f'{"Spring" if league_season.is_spring else "Fall"} {league_season.year}'
         subject = f'SDLL Division Schedule Access Request - {league_season.league} {season_name}'
@@ -2150,14 +2155,40 @@ This request was submitted from the division schedule page.
 <p><small>This request was submitted from the division schedule page.</small></p>
 """
 
-        # Send to scheduling coordinator
-        coordinator_email = 'scheduling@sdll.org'  # Default, could be configurable
+        # Determine primary recipient based on sport (BB_VP or SB_VP)
+        league_obj = League.get_by_name(league_season.league)
+        sport = league_obj.sport if league_obj else None
+
+        # Get the VP for this sport
+        vp_role = 'BB_VP' if sport == 'baseball' else 'SB_VP' if sport == 'softball' else None
+        primary_email = None
+
+        if vp_role:
+            vp_email = routing_service._get_role_holder_email(vp_role)
+            if vp_email:
+                primary_email = vp_email
+
+        # Fallback to scheduling@sdll.org if no VP found
+        if not primary_email:
+            primary_email = 'scheduling@sdll.org'
+
+        # Get scheduler role emails for CC
+        cc_emails = []
+        scheduler_users = User.query.filter(
+            User.active == 1,
+            User.role.like('%scheduler%')
+        ).all()
+        for user in scheduler_users:
+            if user.has_role('scheduler') and user.email and user.email != primary_email:
+                cc_emails.append(user.email)
+
         email_service.send_email(
-            to=coordinator_email,
+            to=primary_email,
             subject=subject,
             body_text=body_text,
             body_html=body_html,
-            reply_to=current_user.email
+            reply_to=current_user.email,
+            cc=cc_emails if cc_emails else None
         )
 
         flash('Your access request has been sent. You will be contacted by email.', 'success')
