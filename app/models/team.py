@@ -241,6 +241,27 @@ class TeamSeason(db.Model):
             return f"{prefixed_name} ({self.organization.short_name or self.organization.display_name})"
         return prefixed_name
 
+    @property
+    def scheduler_display_name_with_league(self):
+        """
+        Get scheduler display name (coach-first) prefixed with league/division.
+
+        Returns: "AA Smith" instead of "AA Blue Thunder"
+        Uses scheduler_display_name which prioritizes coach_name over team_name.
+        """
+        name = self.scheduler_display_name
+        league_prefix = self.league or ''
+
+        # Avoid duplication if name already starts with the league
+        if league_prefix and name.startswith(league_prefix):
+            prefixed_name = name
+        else:
+            prefixed_name = f"{league_prefix} {name}".strip()
+
+        if self.is_external and self.organization:
+            return f"{prefixed_name} ({self.organization.short_name or self.organization.display_name})"
+        return prefixed_name
+
     def get_practice_days(self, league_season=None):
         """Get the effective practice days for this team.
 

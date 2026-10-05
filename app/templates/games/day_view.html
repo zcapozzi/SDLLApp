@@ -684,7 +684,7 @@
                     <option value="">-- Select --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
-                        {{ team.display_name_with_league }}
+                        {{ team.scheduler_display_name_with_league }}
                     </option>
                     {% endfor %}
                 </select>
@@ -696,7 +696,7 @@
                     <option value="">-- Select --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
-                        {{ team.display_name_with_league }}
+                        {{ team.scheduler_display_name_with_league }}
                     </option>
                     {% endfor %}
                 </select>
@@ -789,7 +789,7 @@
                     <option value="">-- Select --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}">
-                        {{ team.display_name_with_league }}
+                        {{ team.scheduler_display_name_with_league }}
                     </option>
                     {% endfor %}
                 </select>
@@ -801,7 +801,7 @@
                     <option value="">-- None (Practice) --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}">
-                        {{ team.display_name_with_league }}
+                        {{ team.scheduler_display_name_with_league }}
                     </option>
                     {% endfor %}
                 </select>
@@ -1272,7 +1272,7 @@ addEventModal.addEventListener('click', function(e) {
                     <option value="">-- Select (optional) --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
-                        {{ team.display_name_with_league }}
+                        {{ team.scheduler_display_name_with_league }}
                     </option>
                     {% endfor %}
                 </select>
@@ -1285,7 +1285,7 @@ addEventModal.addEventListener('click', function(e) {
                     <option value="">-- None (Practice) --</option>
                     {% for team in teams %}
                     <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
-                        {{ team.display_name_with_league }}
+                        {{ team.scheduler_display_name_with_league }}
                     </option>
                     {% endfor %}
                 </select>
