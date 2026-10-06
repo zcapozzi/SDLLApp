@@ -64,7 +64,7 @@ class OrgEvent(db.Model):
     scope = db.Column(db.String(20), default=SCOPE_ORG)
     sport = db.Column(db.String(20))  # 'baseball', 'softball', or null
     league = db.Column(db.String(50))  # League name or null
-    team_id = db.Column(db.BigInteger, db.ForeignKey('sdll_teams.ID'))
+    team_id = db.Column(db.BigInteger, db.ForeignKey('sdll_team_seasons.team_ID'))
 
     # Season context
     year = db.Column(db.Integer, nullable=False)

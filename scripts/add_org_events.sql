@@ -39,7 +39,7 @@ CREATE TABLE sdll_org_events (
 
     -- Foreign keys
     FOREIGN KEY (field_id) REFERENCES sdll_fields(ID) ON DELETE SET NULL,
-    FOREIGN KEY (team_id) REFERENCES sdll_teams(ID) ON DELETE SET NULL,
+    FOREIGN KEY (team_id) REFERENCES sdll_team_seasons(team_ID) ON DELETE SET NULL,
     FOREIGN KEY (created_by_user_id) REFERENCES sdll_users(ID) ON DELETE SET NULL,
 
     -- Indexes
