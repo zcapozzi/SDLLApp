@@ -1004,10 +1004,19 @@ def external_teams():
     )
 
 
+@games_bp.route('/<int:year>/<int:is_spring>/today')
+@login_required
+def calendar_today(year, is_spring):
+    """Redirect to day view for today's date."""
+    from datetime import date
+    today = date.today().strftime('%Y-%m-%d')
+    return redirect(url_for('games.day_view', year=year, is_spring=is_spring, target_date=today))
+
+
 @games_bp.route('/<int:year>/<int:is_spring>/calendar')
 @login_required
 def calendar(year, is_spring):
-    """Calendar view of games for a season"""
+    """Calendar view of games for a season (week view)"""
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
 
     # Get week parameter (ISO week number) or default to current/opening week
