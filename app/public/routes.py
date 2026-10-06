@@ -438,19 +438,33 @@ def team_schedule(token):
         from app.models.org_event import OrgEvent
         org_events = OrgEvent.get_for_team(team)
 
-        upcoming_events = []
-        past_events = []
+        # Add marker and combine with upcoming games for chronological display
+        upcoming_events_to_merge = []
         for event in org_events:
             if event.event_date >= today:
-                upcoming_events.append(event)
-            else:
-                past_events.append(event)
+                # Add marker so template can identify events vs games
+                event._is_org_event = True
+                upcoming_events_to_merge.append(event)
 
-        template_vars['upcoming_events'] = upcoming_events
-        template_vars['past_events'] = past_events
+        # Merge events into upcoming_games and sort by date
+        upcoming_games = template_vars.get('upcoming_games', [])
+        combined_upcoming = list(upcoming_games) + upcoming_events_to_merge
+
+        # Sort by date (games have game_date datetime, events have event_date date)
+        def get_sort_date(item):
+            if hasattr(item, '_is_org_event') and item._is_org_event:
+                # Event: combine date and time for sorting
+                from datetime import datetime, time as dt_time
+                event_time = item.start_time or dt_time(23, 59)  # Events without time go last that day
+                return datetime.combine(item.event_date, event_time)
+            else:
+                # Game: game_date is already a datetime
+                return item.game_date if item.game_date else datetime.max
+
+        combined_upcoming.sort(key=get_sort_date)
+        template_vars['upcoming_games'] = combined_upcoming
     except Exception:
-        template_vars['upcoming_events'] = []
-        template_vars['past_events'] = []
+        pass  # Keep existing upcoming_games if org events fail
 
     # =========================================================================
     # PHASE 1.5: GET GAME START RECORDS FOR TODAY'S GAMES

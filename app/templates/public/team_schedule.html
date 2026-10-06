@@ -1008,52 +1008,45 @@
                 </div>
             </div>
 
-            {% if upcoming_events %}
-            <div class="events-section" style="margin-bottom: 20px;">
-                <div style="font-size: 13px; color: #666; font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">
-                    League Events
+            {% for game in upcoming_games %}
+            {% if game._is_org_event is defined and game._is_org_event %}
+            {# Render org event #}
+            <div class="game-card event {{ game.status }}" style="border-left: 4px solid #9c27b0;">
+                <div class="game-date-box">
+                    <div class="month">{{ game.event_date.strftime('%b') }}</div>
+                    <div class="day">{{ game.event_date.strftime('%d') }}</div>
+                    <div class="weekday">{{ game.event_date.strftime('%a') }}</div>
                 </div>
-                {% for event in upcoming_events %}
-                <div class="game-card event {{ event.status }}" style="border-left: 4px solid #9c27b0;">
-                    <div class="game-date-box" style="background: #9c27b0;">
-                        <div class="month">{{ event.event_date.strftime('%b') }}</div>
-                        <div class="day">{{ event.event_date.strftime('%d') }}</div>
-                        <div class="weekday">{{ event.event_date.strftime('%a') }}</div>
+                <div class="game-info">
+                    <div class="game-time">
+                        {{ game.time_display }}
+                        <span class="game-type-badge" style="background: #f3e5f5; color: #7b1fa2;">{{ game.event_type_display }}</span>
                     </div>
-                    <div class="game-info">
-                        <div class="game-time">
-                            {{ event.time_display }}
-                            <span class="game-type-badge" style="background: #9c27b0; color: white;">{{ event.event_type_display }}</span>
-                        </div>
-                        <div class="game-details">
-                            <strong>{{ event.title }}</strong>
-                            {% if event.description %}
-                            <div style="font-size: 12px; color: #666; margin-top: 4px;">{{ event.description }}</div>
-                            {% endif %}
-                        </div>
-                        <div class="game-location">
-                            {% if event.field %}
-                            {{ event.field.location_title }}
-                            {% elif event.location %}
-                            {{ event.location }}
-                            {% else %}
-                            Location TBD
-                            {% endif %}
-                        </div>
-                        {% if event.url %}
-                        <div style="margin-top: 8px;">
-                            <a href="{{ event.url }}" target="_blank" class="btn-calendar btn-calendar-outline" style="font-size: 12px; padding: 4px 10px;">
-                                More Info / Sign Up
-                            </a>
-                        </div>
+                    <div class="game-details">
+                        <strong>{{ game.title }}</strong>
+                        {% if game.description %}
+                        <div style="font-size: 12px; color: #666; margin-top: 4px;">{{ game.description }}</div>
                         {% endif %}
                     </div>
+                    <div class="game-location">
+                        {% if game.field %}
+                        {{ game.field.location_title }}
+                        {% elif game.location %}
+                        {{ game.location }}
+                        {% else %}
+                        Location TBD
+                        {% endif %}
+                    </div>
+                    {% if game.url %}
+                    <div style="margin-top: 8px;">
+                        <a href="{{ game.url }}" target="_blank" class="btn-calendar btn-calendar-outline" style="font-size: 12px; padding: 4px 10px;">
+                            More Info / Sign Up
+                        </a>
+                    </div>
+                    {% endif %}
                 </div>
-                {% endfor %}
             </div>
-            {% endif %}
-
-            {% for game in upcoming_games %}
+            {% else %}
             {% set is_recordable = game.ID in recordable_game_ids %}
             {% set existing_record = game_start_records.get(game.ID) if is_recordable else None %}
             {% set has_valid_id = game.ID is number %}
@@ -1166,6 +1159,7 @@
                 </div>
                 {% endif %}
             </div>
+            {% endif %}
             {% endfor %}
         </div>
         {% endif %}
