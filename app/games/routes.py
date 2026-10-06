@@ -1382,18 +1382,22 @@ def day_view(year, is_spring, target_date):
     except Exception:
         pass  # Continue without org events if there's an error
 
-    # Get all fields that have games on this day (skip org events)
+    # Get all fields that have games on this day
     fields_with_games = set()
     game_hours = set()
     for game in games:
-        # Skip org events - they don't have field_name or game_date in the same way
         if hasattr(game, '_is_org_event') and game._is_org_event:
-            continue
-        field_name = game.field_name
-        if field_name:
-            fields_with_games.add(field_name)
-        if game.game_date:
-            game_hours.add(game.game_date.hour)
+            # Org events use field relationship and start_time
+            if game.field:
+                fields_with_games.add(game.field.location_title)
+            if game.start_time:
+                game_hours.add(game.start_time.hour)
+        else:
+            field_name = game.field_name
+            if field_name:
+                fields_with_games.add(field_name)
+            if game.game_date:
+                game_hours.add(game.game_date.hour)
 
     # Get all fields for display (prioritize those with games)
     all_fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
@@ -1518,20 +1522,28 @@ def day_view(year, is_spring, target_date):
         for field in display_fields:
             grid[slot][field.location_title] = []
 
-    # Place games in grid (skip org events - they're displayed separately)
+    # Place games and org events in grid
     for game in games:
         if hasattr(game, '_is_org_event') and game._is_org_event:
-            continue
-        field_name = game.field_name
-        if game.game_date and field_name:
-            time_key = game.game_date.strftime('%H:%M')
-            # Round to nearest 30-minute slot
-            hour = game.game_date.hour
-            minute = 0 if game.game_date.minute < 30 else 30
-            time_key = f'{hour:02d}:{minute:02d}'
+            # Org events use field relationship and start_time
+            if game.field and game.start_time:
+                field_name = game.field.location_title
+                hour = game.start_time.hour
+                minute = 0 if game.start_time.minute < 30 else 30
+                time_key = f'{hour:02d}:{minute:02d}'
+                if time_key in grid and field_name in grid[time_key]:
+                    grid[time_key][field_name].append(game)
+        else:
+            field_name = game.field_name
+            if game.game_date and field_name:
+                time_key = game.game_date.strftime('%H:%M')
+                # Round to nearest 30-minute slot
+                hour = game.game_date.hour
+                minute = 0 if game.game_date.minute < 30 else 30
+                time_key = f'{hour:02d}:{minute:02d}'
 
-            if time_key in grid and field_name in grid[time_key]:
-                grid[time_key][field_name].append(game)
+                if time_key in grid and field_name in grid[time_key]:
+                    grid[time_key][field_name].append(game)
 
     # Calculate prev/next day links
     prev_date = view_date - timedelta(days=1)

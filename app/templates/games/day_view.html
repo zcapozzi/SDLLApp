@@ -237,6 +237,10 @@
         font-size: 10px;
         text-transform: uppercase;
     }
+    .game-slot.org-event {
+        background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+        border-left: 3px solid #9c27b0;
+    }
     .game-slot.div-practice {
         background: #fce4ec;
         border-left: 3px solid #c2185b;
@@ -557,6 +561,23 @@
                     {% set cell_games = grid.get(time_slot, {}).get(field.location_title, []) %}
                     {% if cell_games %}
                         {% for game in cell_games %}
+                        {% if game._is_org_event is defined and game._is_org_event %}
+                        {# Org Event in grid #}
+                        <div class="game-slot org-event {{ game.status }}"
+                             onclick="window.location.href='{{ url_for('seasons.edit_org_event', year=year, is_spring=is_spring, event_id=game.id) }}'">
+                            <div class="game-time">
+                                <span class="status-dot {{ game.status }}"></span>
+                                {{ game.time_display }}
+                            </div>
+                            <div class="game-league">
+                                <span class="org-event-badge">{{ game.event_type_display }}</span>
+                            </div>
+                            <div class="game-teams">
+                                <strong>{{ game.title }}</strong>
+                            </div>
+                        </div>
+                        {% else %}
+                        {# Regular game in grid #}
                         <div class="game-slot {{ game.display_type }} {{ game.status }}"
                              data-game-id="{{ game.ID }}"
                              data-is-proposed="{{ 'true' if game.is_proposed else 'false' }}"
@@ -573,6 +594,7 @@
                                 {% endif %}
                             </div>
                         </div>
+                        {% endif %}
                         {% endfor %}
                     {% elif is_blacked_out %}
                         <div class="blackout-marker">
@@ -611,6 +633,7 @@
         <span style="margin-left: 10px; padding: 2px 8px; background: #f3e5f5; border-radius: 4px;">Practice</span>
         <span style="margin-left: 10px; padding: 2px 8px; background: #e3f2fd; border-radius: 4px;">Scrimmage</span>
         <span style="margin-left: 10px; padding: 2px 8px; background: #fff3e0; border-radius: 4px;">Playoff</span>
+        <span style="margin-left: 10px; padding: 2px 8px; background: linear-gradient(135deg, #f3e5f5, #e1bee7); border-left: 3px solid #9c27b0; border-radius: 4px;">Org Event</span>
     </div>
     <div>
         <strong>Field Slots:</strong>
