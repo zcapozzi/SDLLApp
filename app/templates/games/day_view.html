@@ -204,6 +204,39 @@
         background: #e3f2fd;
         border-left: 3px solid #1565c0;
     }
+    /* Org Events Section */
+    .org-events-section {
+        background: white;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-left: 4px solid #9c27b0;
+    }
+    .org-events-section h4 {
+        margin: 0 0 10px 0;
+        color: #7b1fa2;
+    }
+    .org-event-card {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+        border-radius: 6px;
+        padding: 8px 12px;
+        margin: 4px;
+        cursor: pointer;
+    }
+    .org-event-card:hover {
+        box-shadow: 0 2px 8px rgba(156, 39, 176, 0.3);
+    }
+    .org-event-badge {
+        background: #9c27b0;
+        color: white;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 10px;
+        text-transform: uppercase;
+    }
     .game-slot.div-practice {
         background: #fce4ec;
         border-left: 3px solid #c2185b;
@@ -465,6 +498,22 @@
         <button type="button" class="btn btn-outline" onclick="jumpToDate()">Go</button>
     </form>
 </div>
+
+<!-- Org Events Section -->
+{% set org_events = games|selectattr('_is_org_event', 'defined')|selectattr('_is_org_event')|list %}
+{% if org_events %}
+<div class="org-events-section">
+    <h4>Organization Events</h4>
+    {% for event in org_events %}
+    <div class="org-event-card" onclick="window.location.href='{{ url_for('seasons.edit_org_event', year=year, is_spring=is_spring, event_id=event.id) }}'">
+        <span class="org-event-badge">{{ event.event_type_display }}</span>
+        <strong>{{ event.title }}</strong>
+        <span style="color: #666;">{{ event.time_display }}</span>
+        <span style="color: #999;">@ {{ event.field.location_title if event.field else (event.location or 'TBD') }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
 
 {% if display_fields %}
 <!-- Day Grid -->

@@ -1112,6 +1112,26 @@ def calendar(year, is_spring):
                 }
                 proposed_games_by_date[lp_date].append(lp_dict)
 
+    # Get org events for this week
+    from app.models.org_event import OrgEvent
+    try:
+        org_events_week = OrgEvent.query.filter(
+            OrgEvent.year == year,
+            OrgEvent.is_spring == is_spring,
+            OrgEvent.status == 'active',
+            OrgEvent.event_date >= week_start,
+            OrgEvent.event_date <= week_end
+        ).all()
+        # Group by date
+        org_events_by_date = {}
+        for event in org_events_week:
+            event._is_org_event = True
+            if event.event_date not in org_events_by_date:
+                org_events_by_date[event.event_date] = []
+            org_events_by_date[event.event_date].append(event)
+    except Exception:
+        org_events_by_date = {}
+
     for i in range(7):
         day_date = week_start + timedelta(days=i)
 
@@ -1164,10 +1184,24 @@ def calendar(year, is_spring):
 
             day_games = query.order_by(Game.game_date, Game.field_id).all()
 
+        # Add org events for this day
+        day_org_events = org_events_by_date.get(day_date, [])
+        combined_games = list(day_games) + day_org_events
+
+        # Sort combined list by time
+        def get_sort_time(item):
+            if hasattr(item, '_is_org_event') and item._is_org_event:
+                from datetime import time as dt_time
+                return item.start_time or dt_time(23, 59)
+            else:
+                return item.game_date.time() if item.game_date else datetime.max.time()
+
+        combined_games.sort(key=get_sort_time)
+
         week_days.append({
             'date': day_date,
             'is_today': day_date == today,
-            'games': day_games
+            'games': combined_games
         })
 
     # Calculate prev/next/current week
@@ -1324,6 +1358,29 @@ def day_view(year, is_spring, target_date):
             Game.is_spring == is_spring,
             db.func.date(Game.game_date) == view_date
         ).order_by(Game.game_date, Game.field_id).all()
+
+    # Add org events for this day
+    from app.models.org_event import OrgEvent
+    try:
+        org_events_day = OrgEvent.query.filter(
+            OrgEvent.year == year,
+            OrgEvent.is_spring == is_spring,
+            OrgEvent.status == 'active',
+            OrgEvent.event_date == view_date
+        ).all()
+        for event in org_events_day:
+            event._is_org_event = True
+        games = list(games) + org_events_day
+        # Re-sort by time
+        def get_sort_time(item):
+            if hasattr(item, '_is_org_event') and item._is_org_event:
+                from datetime import time as dt_time
+                return dt.combine(view_date, item.start_time or dt_time(23, 59))
+            else:
+                return item.game_date if item.game_date else dt.max
+        games.sort(key=get_sort_time)
+    except Exception:
+        pass  # Continue without org events if there's an error
 
     # Get all fields that have games on this day
     fields_with_games = set()
