@@ -64,3 +64,6 @@ from .post_game_report import PostGameReport
 from .email_routing_config import EmailRoutingConfig
 from .artifact import Artifact
 from .role_task import RoleTaskTemplate, RoleTaskInstance
+
+# Organization events (evaluations, signups, ceremonies, etc.)
+from .org_event import OrgEvent

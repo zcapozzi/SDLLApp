@@ -431,6 +431,28 @@ def team_schedule(token):
         template_vars['shared_practices'] = shared_practices
 
     # =========================================================================
+    # PHASE 1.4: GET ORG EVENTS FOR THIS TEAM
+    # =========================================================================
+
+    try:
+        from app.models.org_event import OrgEvent
+        org_events = OrgEvent.get_for_team(team)
+
+        upcoming_events = []
+        past_events = []
+        for event in org_events:
+            if event.event_date >= today:
+                upcoming_events.append(event)
+            else:
+                past_events.append(event)
+
+        template_vars['upcoming_events'] = upcoming_events
+        template_vars['past_events'] = past_events
+    except Exception:
+        template_vars['upcoming_events'] = []
+        template_vars['past_events'] = []
+
+    # =========================================================================
     # PHASE 1.5: GET GAME START RECORDS FOR TODAY'S GAMES
     # =========================================================================
 
@@ -1810,26 +1832,38 @@ def team_schedule_ics(token):
 
     games = query.order_by(Game.game_date).all()
 
-    if not games:
+    # Fetch org events for this team
+    try:
+        from app.models.org_event import OrgEvent
+        org_events = OrgEvent.get_for_team(team)
+    except Exception:
+        org_events = []
+
+    if not games and not org_events:
         abort(404)
 
-    # Calculate ETag based on a hash of all game details that affect the calendar
-    # This ensures any change to time, date, field, or status triggers a refresh
+    # Calculate ETag based on a hash of all game and event details
+    # This ensures any change triggers a refresh
     game_data_parts = []
     for g in games:
         # Include all fields that would change the calendar display
         game_str = f"{g.ID}|{g.game_date}|{g.field_id}|{g.status}|{g.home_ID}|{g.away_ID}"
         game_data_parts.append(game_str)
 
-    # Create hash of all game data
+    # Include org events in hash
+    for e in org_events:
+        event_str = f"evt-{e.id}|{e.event_date}|{e.start_time}|{e.status}"
+        game_data_parts.append(event_str)
+
+    # Create hash of all data
     combined = ";".join(sorted(game_data_parts))  # Sort for consistency
     content_hash = hashlib.md5(combined.encode()).hexdigest()[:12]
-    etag = f'"{team.team_ID}-{len(games)}-{content_hash}"'
+    etag = f'"{team.team_ID}-{len(games)}-{len(org_events)}-{content_hash}"'
 
     # Check If-None-Match for conditional GET (in case cache was stale but client has current)
     if if_none_match and if_none_match == etag:
         # 304 Not Modified - cache the result and track access
-        ics_content = _generate_ics_for_games(games, team, include_cancelled=True)
+        ics_content = _generate_ics_for_games(games, team, include_cancelled=True, org_events=org_events)
         _set_cached_ics(token, sync_type, etag, ics_content)
         try:
             user_agent = request.headers.get('User-Agent', '')
@@ -1857,7 +1891,7 @@ def team_schedule_ics(token):
         pass  # Don't fail the request if tracking fails
 
     # Generate ICS content and cache it
-    ics_content = _generate_ics_for_games(games, team, include_cancelled=True)
+    ics_content = _generate_ics_for_games(games, team, include_cancelled=True, org_events=org_events)
     _set_cached_ics(token, sync_type, etag, ics_content)
 
     response = Response(
@@ -1873,13 +1907,14 @@ def team_schedule_ics(token):
     return response
 
 
-def _generate_ics_for_games(games, team, include_cancelled=False):
-    """Generate iCal (.ics) content for a list of games.
+def _generate_ics_for_games(games, team, include_cancelled=False, org_events=None):
+    """Generate iCal (.ics) content for a list of games and org events.
 
     Args:
         games: List of Game objects
         team: TeamSeason object (the team viewing the schedule)
         include_cancelled: If True, include cancelled games with STATUS:CANCELLED
+        org_events: Optional list of OrgEvent objects to include
 
     Returns:
         String containing valid iCal format
@@ -2008,6 +2043,100 @@ def _generate_ics_for_games(games, team, include_cancelled=False):
             f'LAST-MODIFIED:{last_modified}',
             'END:VEVENT',
         ])
+
+    # Add org events to the calendar
+    if org_events:
+        for event in org_events:
+            if not event.event_date:
+                continue
+
+            # Skip cancelled events
+            is_cancelled = event.status == 'cancelled'
+            if is_cancelled and not include_cancelled:
+                continue
+
+            # Format datetime
+            if event.start_time:
+                event_datetime = datetime.combine(event.event_date, event.start_time)
+                dt_start = event_datetime.strftime('%Y%m%dT%H%M%S')
+                # Calculate end time
+                if event.end_time:
+                    end_datetime = datetime.combine(event.event_date, event.end_time)
+                else:
+                    end_datetime = event_datetime + timedelta(minutes=60)  # Default 1 hour
+                dt_end = end_datetime.strftime('%Y%m%dT%H%M%S')
+                use_datetime = True
+            else:
+                # All-day event
+                dt_start = event.event_date.strftime('%Y%m%d')
+                dt_end = (event.event_date + timedelta(days=1)).strftime('%Y%m%d')
+                use_datetime = False
+
+            # Build summary
+            summary = event.title
+            if is_cancelled:
+                summary = f'CANCELLED: {summary}'
+
+            # Location
+            location = ''
+            if event.field:
+                location = event.field.location_title
+                if event.field.address:
+                    location = f'{location}, {event.field.address}'
+            elif event.location:
+                location = event.location
+
+            # Description
+            description = event.description or ''
+            if event.url:
+                description += f'\\n\\nMore info: {event.url}'
+            if is_cancelled:
+                description += '\\n\\nThis event has been cancelled.'
+
+            # Escape for iCal
+            summary = _ics_escape(summary)
+            location = _ics_escape(location)
+            description = _ics_escape(description)
+
+            # Create unique ID
+            uid = f'event-{event.id}@southdurhamlittleleague.org'
+
+            # Status
+            status = 'CANCELLED' if is_cancelled else 'CONFIRMED'
+            sequence = 1 if is_cancelled else 0
+            last_modified = event.created_at.strftime('%Y%m%dT%H%M%SZ') if event.created_at else now_utc
+
+            if use_datetime:
+                lines.extend([
+                    'BEGIN:VEVENT',
+                    f'UID:{uid}',
+                    f'DTSTAMP:{now_utc}',
+                    f'DTSTART;TZID={timezone_id}:{dt_start}',
+                    f'DTEND;TZID={timezone_id}:{dt_end}',
+                    f'SUMMARY:{summary}',
+                    f'LOCATION:{location}',
+                    f'DESCRIPTION:{description}',
+                    f'STATUS:{status}',
+                    f'SEQUENCE:{sequence}',
+                    f'LAST-MODIFIED:{last_modified}',
+                    'END:VEVENT',
+                ])
+            else:
+                # All-day event format
+                lines.extend([
+                    'BEGIN:VEVENT',
+                    f'UID:{uid}',
+                    f'DTSTAMP:{now_utc}',
+                    f'DTSTART;VALUE=DATE:{dt_start}',
+                    f'DTEND;VALUE=DATE:{dt_end}',
+                    f'SUMMARY:{summary}',
+                    f'LOCATION:{location}',
+                    f'DESCRIPTION:{description}',
+                    f'STATUS:{status}',
+                    f'SEQUENCE:{sequence}',
+                    f'LAST-MODIFIED:{last_modified}',
+                    'END:VEVENT',
+                ])
 
     lines.append('END:VCALENDAR')
 

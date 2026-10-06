@@ -1721,3 +1721,286 @@ def api_generate_schedule_token(league_id):
         'token': token,
         'url': schedule_url
     })
+
+
+# =============================================================================
+# Org Events - Organization-wide events (evaluations, signups, ceremonies, etc.)
+# =============================================================================
+
+@seasons_bp.route('/<int:year>/<int:is_spring>/events')
+@login_required
+def org_events(year, is_spring):
+    """List org events for a season."""
+    if not current_user.can_edit_schedule():
+        flash('Access denied.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    from app.models.org_event import OrgEvent
+    from app.models.org_season import OrgSeason
+    from app.models.field import Field
+
+    org_season = OrgSeason.query.filter_by(year=year, is_spring=is_spring).first()
+    if not org_season:
+        flash('Season not found.', 'error')
+        return redirect(url_for('seasons.index'))
+
+    events = OrgEvent.get_for_season(year, is_spring, include_cancelled=True)
+
+    # Get leagues for the form dropdown
+    leagues = LeagueSeason.query.filter_by(
+        year=year, is_spring=is_spring, active=1
+    ).order_by(LeagueSeason.league).all()
+
+    # Get teams for the form dropdown
+    teams = TeamSeason.query.filter_by(
+        year=year, is_spring=is_spring, active=1, is_placeholder=0
+    ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+
+    # Get fields for the form dropdown
+    fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
+
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    return render_template(
+        'seasons/org_events.html',
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name,
+        events=events,
+        leagues=leagues,
+        teams=teams,
+        fields=fields,
+        event_types=OrgEvent.EVENT_TYPES,
+        scopes=OrgEvent.SCOPES
+    )
+
+
+@seasons_bp.route('/<int:year>/<int:is_spring>/events/add', methods=['POST'])
+@login_required
+def add_org_event(year, is_spring):
+    """Add a new org event."""
+    if not current_user.can_edit_schedule():
+        flash('Access denied.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    from app.models.org_event import OrgEvent
+    from datetime import datetime
+
+    title = request.form.get('title', '').strip()
+    if not title:
+        flash('Event title is required.', 'error')
+        return redirect(url_for('seasons.org_events', year=year, is_spring=is_spring))
+
+    event_date_str = request.form.get('event_date', '')
+    if not event_date_str:
+        flash('Event date is required.', 'error')
+        return redirect(url_for('seasons.org_events', year=year, is_spring=is_spring))
+
+    try:
+        event_date = datetime.strptime(event_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        flash('Invalid date format.', 'error')
+        return redirect(url_for('seasons.org_events', year=year, is_spring=is_spring))
+
+    # Parse optional times
+    start_time = None
+    end_time = None
+    start_time_str = request.form.get('start_time', '').strip()
+    end_time_str = request.form.get('end_time', '').strip()
+
+    if start_time_str:
+        try:
+            start_time = datetime.strptime(start_time_str, '%H:%M').time()
+        except ValueError:
+            pass
+
+    if end_time_str:
+        try:
+            end_time = datetime.strptime(end_time_str, '%H:%M').time()
+        except ValueError:
+            pass
+
+    # Get scope and related fields
+    scope = request.form.get('scope', OrgEvent.SCOPE_ORG)
+    sport = request.form.get('sport') if scope == OrgEvent.SCOPE_SPORT else None
+    league = request.form.get('league') if scope == OrgEvent.SCOPE_LEAGUE else None
+    team_id = request.form.get('team_id') if scope == OrgEvent.SCOPE_TEAM else None
+
+    if team_id:
+        try:
+            team_id = int(team_id)
+        except (ValueError, TypeError):
+            team_id = None
+
+    # Get field
+    field_id = request.form.get('field_id')
+    if field_id:
+        try:
+            field_id = int(field_id)
+        except (ValueError, TypeError):
+            field_id = None
+
+    event = OrgEvent(
+        title=title,
+        description=request.form.get('description', '').strip() or None,
+        event_date=event_date,
+        start_time=start_time,
+        end_time=end_time,
+        location=request.form.get('location', '').strip() or None,
+        field_id=field_id,
+        url=request.form.get('url', '').strip() or None,
+        event_type=request.form.get('event_type', OrgEvent.EVENT_TYPE_OTHER),
+        scope=scope,
+        sport=sport,
+        league=league,
+        team_id=team_id,
+        year=year,
+        is_spring=is_spring,
+        created_by_user_id=current_user.ID
+    )
+
+    db.session.add(event)
+    db.session.commit()
+
+    logger.info(f'Created org event: {event.title} on {event.event_date}')
+    flash(f'Event "{event.title}" created.', 'success')
+
+    return redirect(url_for('seasons.org_events', year=year, is_spring=is_spring))
+
+
+@seasons_bp.route('/<int:year>/<int:is_spring>/events/<int:event_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_org_event(year, is_spring, event_id):
+    """Edit an org event."""
+    if not current_user.can_edit_schedule():
+        flash('Access denied.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    from app.models.org_event import OrgEvent
+    from app.models.field import Field
+    from datetime import datetime
+
+    event = OrgEvent.query.get_or_404(event_id)
+
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        if not title:
+            flash('Event title is required.', 'error')
+            return redirect(url_for('seasons.edit_org_event', year=year, is_spring=is_spring, event_id=event_id))
+
+        event_date_str = request.form.get('event_date', '')
+        if not event_date_str:
+            flash('Event date is required.', 'error')
+            return redirect(url_for('seasons.edit_org_event', year=year, is_spring=is_spring, event_id=event_id))
+
+        try:
+            event_date = datetime.strptime(event_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            flash('Invalid date format.', 'error')
+            return redirect(url_for('seasons.edit_org_event', year=year, is_spring=is_spring, event_id=event_id))
+
+        # Parse optional times
+        start_time = None
+        end_time = None
+        start_time_str = request.form.get('start_time', '').strip()
+        end_time_str = request.form.get('end_time', '').strip()
+
+        if start_time_str:
+            try:
+                start_time = datetime.strptime(start_time_str, '%H:%M').time()
+            except ValueError:
+                pass
+
+        if end_time_str:
+            try:
+                end_time = datetime.strptime(end_time_str, '%H:%M').time()
+            except ValueError:
+                pass
+
+        # Get scope and related fields
+        scope = request.form.get('scope', OrgEvent.SCOPE_ORG)
+        sport = request.form.get('sport') if scope == OrgEvent.SCOPE_SPORT else None
+        league = request.form.get('league') if scope == OrgEvent.SCOPE_LEAGUE else None
+        team_id = request.form.get('team_id') if scope == OrgEvent.SCOPE_TEAM else None
+
+        if team_id:
+            try:
+                team_id = int(team_id)
+            except (ValueError, TypeError):
+                team_id = None
+
+        # Get field
+        field_id = request.form.get('field_id')
+        if field_id:
+            try:
+                field_id = int(field_id)
+            except (ValueError, TypeError):
+                field_id = None
+
+        event.title = title
+        event.description = request.form.get('description', '').strip() or None
+        event.event_date = event_date
+        event.start_time = start_time
+        event.end_time = end_time
+        event.location = request.form.get('location', '').strip() or None
+        event.field_id = field_id
+        event.url = request.form.get('url', '').strip() or None
+        event.event_type = request.form.get('event_type', OrgEvent.EVENT_TYPE_OTHER)
+        event.scope = scope
+        event.sport = sport
+        event.league = league
+        event.team_id = team_id
+        event.status = request.form.get('status', OrgEvent.STATUS_ACTIVE)
+
+        db.session.commit()
+
+        logger.info(f'Updated org event: {event.title}')
+        flash(f'Event "{event.title}" updated.', 'success')
+
+        return redirect(url_for('seasons.org_events', year=year, is_spring=is_spring))
+
+    # GET - show edit form
+    leagues = LeagueSeason.query.filter_by(
+        year=year, is_spring=is_spring, active=1
+    ).order_by(LeagueSeason.league).all()
+
+    teams = TeamSeason.query.filter_by(
+        year=year, is_spring=is_spring, active=1, is_placeholder=0
+    ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+
+    fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
+
+    season_name = f'{"Spring" if is_spring else "Fall"} {year}'
+
+    return render_template(
+        'seasons/org_event_form.html',
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name,
+        event=event,
+        leagues=leagues,
+        teams=teams,
+        fields=fields,
+        event_types=OrgEvent.EVENT_TYPES,
+        scopes=OrgEvent.SCOPES
+    )
+
+
+@seasons_bp.route('/<int:year>/<int:is_spring>/events/<int:event_id>/delete', methods=['POST'])
+@login_required
+def delete_org_event(year, is_spring, event_id):
+    """Delete (deactivate) an org event."""
+    if not current_user.can_edit_schedule():
+        flash('Access denied.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    from app.models.org_event import OrgEvent
+
+    event = OrgEvent.query.get_or_404(event_id)
+    event.active = 0
+    db.session.commit()
+
+    logger.info(f'Deleted org event: {event.title}')
+    flash(f'Event "{event.title}" deleted.', 'success')
+
+    return redirect(url_for('seasons.org_events', year=year, is_spring=is_spring))

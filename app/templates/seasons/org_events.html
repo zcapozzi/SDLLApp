@@ -1,0 +1,229 @@
+{% extends 'base.html' %}
+
+{% block title %}Org Events - {{ season_name }} - SDLL{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1>Organization Events</h1>
+        <p class="text-muted">{{ season_name }} - Events that appear on team/division schedules</p>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Add New Event</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('seasons.add_org_event', year=year, is_spring=is_spring) }}">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="title">Event Title *</label>
+                            <input type="text" name="title" id="title" class="form-control" required
+                                   placeholder="e.g., Final Inning, BB Majors Evaluations">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="event_type">Event Type</label>
+                            <select name="event_type" id="event_type" class="form-control">
+                                {% for code, name in event_types %}
+                                <option value="{{ code }}">{{ name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="event_date">Date *</label>
+                            <input type="date" name="event_date" id="event_date" class="form-control" required>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="start_time">Start Time</label>
+                            <input type="time" name="start_time" id="start_time" class="form-control">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="end_time">End Time</label>
+                            <input type="time" name="end_time" id="end_time" class="form-control">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="field_id">Location</label>
+                            <select name="field_id" id="field_id" class="form-control">
+                                <option value="">-- Select Field --</option>
+                                {% for field in fields %}
+                                <option value="{{ field.ID }}">{{ field.location_title }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Or enter custom location below</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="location">Custom Location</label>
+                            <input type="text" name="location" id="location" class="form-control"
+                                   placeholder="e.g., Main Pavilion, Registration Tent">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="url">URL (optional)</label>
+                            <input type="url" name="url" id="url" class="form-control"
+                                   placeholder="https://signup-link.com">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="scope">Who Sees This Event</label>
+                            <select name="scope" id="scope" class="form-control" onchange="updateScopeFields()">
+                                {% for code, name in scopes %}
+                                <option value="{{ code }}">{{ name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3" id="sport-group" style="display: none;">
+                        <div class="form-group">
+                            <label for="sport">Sport</label>
+                            <select name="sport" id="sport" class="form-control">
+                                <option value="baseball">Baseball</option>
+                                <option value="softball">Softball</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3" id="league-group" style="display: none;">
+                        <div class="form-group">
+                            <label for="league">League</label>
+                            <select name="league" id="league" class="form-control">
+                                <option value="">-- Select --</option>
+                                {% for ls in leagues %}
+                                <option value="{{ ls.league }}">{{ ls.league }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3" id="team-group" style="display: none;">
+                        <div class="form-group">
+                            <label for="team_id">Team</label>
+                            <select name="team_id" id="team_id" class="form-control">
+                                <option value="">-- Select --</option>
+                                {% for team in teams %}
+                                <option value="{{ team.team_ID }}">{{ team.scheduler_display_name_with_league }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Description (optional)</label>
+                    <textarea name="description" id="description" class="form-control" rows="2"
+                              placeholder="Additional details about the event..."></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Add Event</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Events ({{ events|length }})</h5>
+        </div>
+        <div class="card-body p-0">
+            {% if events %}
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Title</th>
+                        <th>Type</th>
+                        <th>Time</th>
+                        <th>Location</th>
+                        <th>Scope</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for event in events %}
+                    <tr class="{{ 'table-secondary' if event.status == 'cancelled' else '' }}">
+                        <td>{{ event.event_date.strftime('%a %b %d') }}</td>
+                        <td>
+                            <strong>{{ event.title }}</strong>
+                            {% if event.url %}
+                            <a href="{{ event.url }}" target="_blank" title="Event link">&#128279;</a>
+                            {% endif %}
+                        </td>
+                        <td>{{ event.event_type_display }}</td>
+                        <td>{{ event.time_display }}</td>
+                        <td>
+                            {% if event.field %}
+                                {{ event.field.location_title }}
+                            {% elif event.location %}
+                                {{ event.location }}
+                            {% else %}
+                                <span class="text-muted">TBD</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small>{{ event.scope_description }}</small>
+                        </td>
+                        <td>
+                            {% if event.status == 'cancelled' %}
+                            <span class="badge badge-secondary">Cancelled</span>
+                            {% else %}
+                            <span class="badge badge-success">Active</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('seasons.edit_org_event', year=year, is_spring=is_spring, event_id=event.id) }}"
+                               class="btn btn-sm btn-outline-primary">Edit</a>
+                            <form method="POST" style="display: inline;"
+                                  action="{{ url_for('seasons.delete_org_event', year=year, is_spring=is_spring, event_id=event.id) }}"
+                                  onsubmit="return confirm('Delete this event?');">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <p>No events yet. Add your first event above.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <a href="{{ url_for('seasons.overview', year=year, is_spring=is_spring) }}" class="btn btn-outline-secondary">
+            &larr; Back to Season Overview
+        </a>
+    </div>
+</div>
+
+<script>
+function updateScopeFields() {
+    var scope = document.getElementById('scope').value;
+    document.getElementById('sport-group').style.display = scope === 'sport' ? 'block' : 'none';
+    document.getElementById('league-group').style.display = scope === 'league' ? 'block' : 'none';
+    document.getElementById('team-group').style.display = scope === 'team' ? 'block' : 'none';
+}
+</script>
+{% endblock %}
