@@ -1382,10 +1382,13 @@ def day_view(year, is_spring, target_date):
     except Exception:
         pass  # Continue without org events if there's an error
 
-    # Get all fields that have games on this day
+    # Get all fields that have games on this day (skip org events)
     fields_with_games = set()
     game_hours = set()
     for game in games:
+        # Skip org events - they don't have field_name or game_date in the same way
+        if hasattr(game, '_is_org_event') and game._is_org_event:
+            continue
         field_name = game.field_name
         if field_name:
             fields_with_games.add(field_name)
@@ -1515,8 +1518,10 @@ def day_view(year, is_spring, target_date):
         for field in display_fields:
             grid[slot][field.location_title] = []
 
-    # Place games in grid
+    # Place games in grid (skip org events - they're displayed separately)
     for game in games:
+        if hasattr(game, '_is_org_event') and game._is_org_event:
+            continue
         field_name = game.field_name
         if game.game_date and field_name:
             time_key = game.game_date.strftime('%H:%M')
