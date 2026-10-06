@@ -179,6 +179,7 @@
                     <a href="{{ url_for('scheduler.index', year=current_season_year, is_spring=current_season_is_spring) }}">Generate Schedule</a>
                     <a href="{{ url_for('scheduler.review', year=current_season_year, is_spring=current_season_is_spring) }}">Review Proposal</a>
                     <div class="dropdown-divider"></div>
+                    <a href="{{ url_for('seasons.org_events', year=current_season_year, is_spring=current_season_is_spring) }}">Org Events</a>
                     <a href="{{ url_for('seasons.manage_leagues', year=current_season_year, is_spring=current_season_is_spring) }}">Playoffs</a>
                     {% if current_user.is_admin() %}
                     <a href="{{ url_for('seasons.reset_season', year=current_season_year, is_spring=current_season_is_spring) }}" style="color: #c33;">Reset Season</a>
@@ -203,6 +204,9 @@
                     </a>
                     <a href="{{ url_for('games.league_practice', year=current_season_year, is_spring=current_season_is_spring) }}">
                         Add Division-Practice
+                    </a>
+                    <a href="{{ url_for('seasons.org_events', year=current_season_year, is_spring=current_season_is_spring) }}">
+                        Org Events
                     </a>
                     {% endif %}
                     {% if current_user.can_edit_schedule() and current_season_year %}

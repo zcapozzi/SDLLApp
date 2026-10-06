@@ -1727,6 +1727,23 @@ def api_generate_schedule_token(league_id):
 # Org Events - Organization-wide events (evaluations, signups, ceremonies, etc.)
 # =============================================================================
 
+@seasons_bp.route('/events')
+@login_required
+def org_events_current():
+    """Redirect to org events for the current season."""
+    if not current_user.can_edit_schedule():
+        flash('Access denied.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    from app.models.org_season import OrgSeason
+    org_season = OrgSeason.query.filter_by(is_current=1).first()
+    if not org_season:
+        flash('No current season found.', 'error')
+        return redirect(url_for('seasons.index'))
+
+    return redirect(url_for('seasons.org_events', year=org_season.year, is_spring=org_season.is_spring))
+
+
 @seasons_bp.route('/<int:year>/<int:is_spring>/events')
 @login_required
 def org_events(year, is_spring):
