@@ -165,19 +165,27 @@ class UmpireDayOfNotification(db.Model):
             return False
         if not self.scheduled_send_at:
             return False
-        return self.scheduled_send_at <= datetime.utcnow()
+        # scheduled_send_at is stored in Eastern time, so compare to Eastern time
+        import pytz
+        eastern = pytz.timezone('America/New_York')
+        now_eastern = datetime.now(eastern).replace(tzinfo=None)
+        return self.scheduled_send_at <= now_eastern
 
     @property
     def minutes_until_send(self):
         """Get minutes until scheduled send (negative if past due)."""
         if not self.scheduled_send_at:
             return None
-        delta = self.scheduled_send_at - datetime.utcnow()
+        # scheduled_send_at is stored in Eastern time, so compare to Eastern time
+        import pytz
+        eastern = pytz.timezone('America/New_York')
+        now_eastern = datetime.now(eastern).replace(tzinfo=None)
+        delta = self.scheduled_send_at - now_eastern
         return int(delta.total_seconds() / 60)
 
     @property
     def send_time_display(self):
-        """Return formatted scheduled send time."""
+        """Return formatted scheduled send time (Eastern time)."""
         if self.scheduled_send_at:
             return self.scheduled_send_at.strftime('%I:%M %p').lstrip('0')
         return ''
@@ -264,10 +272,14 @@ class UmpireDayOfNotification(db.Model):
     @classmethod
     def get_ready_to_send_all(cls):
         """Get all notifications ready to auto-send (scheduled time has passed)."""
+        # scheduled_send_at is stored in Eastern time, so compare to Eastern time
+        import pytz
+        eastern = pytz.timezone('America/New_York')
+        now_eastern = datetime.now(eastern).replace(tzinfo=None)
         return cls.query.filter(
             cls.status == cls.STATUS_SCHEDULED,
             cls.deactivated == False,
-            cls.scheduled_send_at <= datetime.utcnow()
+            cls.scheduled_send_at <= now_eastern
         ).order_by(cls.scheduled_send_at).all()
 
     @classmethod
