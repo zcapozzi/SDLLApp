@@ -110,6 +110,47 @@
         </thead>
         <tbody>
             {% for game in games %}
+            {% if game._is_org_event is defined and game._is_org_event %}
+            {# Org Event Row #}
+            <tr class="org-event-row {{ 'cancelled-row' if game.status == 'cancelled' else '' }}"
+                data-date="{{ game.event_date.strftime('%Y-%m-%d') }} {{ game.start_time.strftime('%H:%M') if game.start_time else '00:00' }}"
+                data-time="{{ game.start_time.strftime('%H:%M') if game.start_time else '00:00' }}"
+                data-division="{{ game.league or '' }}"
+                data-matchup="{{ game.title }}"
+                data-location="{{ game.field.name if game.field else (game.location or '') }}"
+                data-field-id="{{ game.field.ID if game.field else '' }}"
+                data-event-type="org_event"
+                data-cancelled="{{ '1' if game.status == 'cancelled' else '0' }}"
+                data-game-id="">
+                <td>{{ game.event_date.strftime('%a, %b %d') }}</td>
+                <td>{{ game.time_display }}</td>
+                <td>{{ game.scope_description }}</td>
+                <td>
+                    {% if game.status == 'cancelled' %}
+                    <span class="cancelled-badge">Cancelled</span>
+                    {% endif %}
+                    <span class="type-badge org-event">{{ game.event_type_display }}</span>
+                    <strong>{{ game.title }}</strong>
+                    {% if game.description %}
+                    <span style="color: var(--text-muted); font-size: 12px;"> - {{ game.description[:50] }}{{ '...' if game.description|length > 50 else '' }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ game.field.name if game.field else (game.location or '-') }}</td>
+                {% if current_user.is_authenticated and current_user.has_role('admin', 'scheduler', 'SBPlayerAgent', 'BBPlayerAgent') %}
+                <td class="actions-cell">
+                    <div class="action-menu">
+                        <button class="action-btn" onclick="toggleActionMenu(this, event)">⋮</button>
+                        <div class="action-dropdown">
+                            <a href="{{ url_for('seasons.edit_org_event', year=year, is_spring=is_spring, event_id=game.id) }}">
+                                <span class="action-icon">✏️</span> Edit Event
+                            </a>
+                        </div>
+                    </div>
+                </td>
+                {% endif %}
+            </tr>
+            {% else %}
+            {# Regular Game Row #}
             {# Compute display type for filtering: game, practice, scrimmage, playoff #}
             {% set event_type = 'practice' if game.game_type == 'practice' else ('scrimmage' if game.is_scrimmage else ('playoff' if game.game_type == 'playoff' else 'game')) %}
             <tr class="{{ 'cancelled-row' if game.status == 'cancelled' else '' }}"
@@ -177,6 +218,7 @@
                 </td>
                 {% endif %}
             </tr>
+            {% endif %}
             {% endfor %}
         </tbody>
     </table>
@@ -199,6 +241,43 @@
     {# Cards View #}
     <div class="mobile-cards" id="mobile-cards-view">
         {% for game in games %}
+        {% if game._is_org_event is defined and game._is_org_event %}
+        {# Org Event Mobile Card #}
+        <div class="event-card org-event-card {{ 'cancelled' if game.status == 'cancelled' else '' }}"
+             data-division="{{ game.league or '' }}"
+             data-field-id="{{ game.field.ID if game.field else '' }}"
+             data-event-type="org_event"
+             data-cancelled="{{ '1' if game.status == 'cancelled' else '0' }}">
+            <div class="event-header">
+                <span class="event-date">{{ game.event_date.strftime('%a, %b %d') }}</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="event-time">{{ game.time_display }}</span>
+                    {% if current_user.is_authenticated and current_user.has_role('admin', 'scheduler', 'SBPlayerAgent', 'BBPlayerAgent') %}
+                    <div class="action-menu">
+                        <button class="action-btn" onclick="toggleActionMenu(this, event)">⋮</button>
+                        <div class="action-dropdown">
+                            <a href="{{ url_for('seasons.edit_org_event', year=year, is_spring=is_spring, event_id=game.id) }}">
+                                <span class="action-icon">✏️</span> Edit Event
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="event-matchup">
+                {% if game.status == 'cancelled' %}
+                <span class="cancelled-badge">Cancelled</span>
+                {% endif %}
+                <span class="type-badge org-event">{{ game.event_type_display }}</span>
+                <strong>{{ game.title }}</strong>
+            </div>
+            <div class="event-details">
+                <span class="event-division">{{ game.scope_description }}</span>
+                <span class="event-location">{{ game.field.name if game.field else (game.location or '-') }}</span>
+            </div>
+        </div>
+        {% else %}
+        {# Regular Game Mobile Card #}
         {# Compute display type for filtering: game, practice, scrimmage, playoff #}
         {% set event_type = 'practice' if game.game_type == 'practice' else ('scrimmage' if game.is_scrimmage else ('playoff' if game.game_type == 'playoff' else 'game')) %}
         <div class="event-card {{ 'cancelled' if game.status == 'cancelled' else '' }}"
@@ -265,6 +344,7 @@
                 <span class="event-location">{{ game.field_rel.name if game.field_rel else '-' }}</span>
             </div>
         </div>
+        {% endif %}
         {% endfor %}
     </div>
 
@@ -280,6 +360,58 @@
             </thead>
             <tbody>
                 {% for game in games %}
+                {% if game._is_org_event is defined and game._is_org_event %}
+                {# Org Event Compact Row #}
+                <tr class="compact-row org-event-row {{ 'cancelled-row' if game.status == 'cancelled' else '' }}"
+                    data-division="{{ game.league or '' }}"
+                    data-field-id="{{ game.field.ID if game.field else '' }}"
+                    data-event-type="org_event"
+                    data-cancelled="{{ '1' if game.status == 'cancelled' else '0' }}"
+                    onclick="toggleRowExpand(this)">
+                    <td class="compact-date">
+                        <div>{{ game.event_date.strftime('%b %d') }}</div>
+                        <div class="compact-time">{{ game.time_display }}</div>
+                    </td>
+                    <td class="compact-event">
+                        {% if game.status == 'cancelled' %}<span class="cancelled-badge-sm">X</span>{% endif %}
+                        <span class="type-dot org-event"></span>
+                        {{ game.title[:20] }}{% if game.title|length > 20 %}..{% endif %}
+                    </td>
+                    <td class="compact-expand">▼</td>
+                </tr>
+                <tr class="expand-row" style="display: none;">
+                    <td colspan="3">
+                        <div class="expand-content">
+                            <div class="expand-detail">
+                                <strong>{{ game.event_date.strftime('%A, %B %d') }} {{ game.time_display }}</strong>
+                            </div>
+                            <div class="expand-detail">
+                                <span class="type-badge org-event">{{ game.event_type_display }}</span>
+                                <strong>{{ game.title }}</strong>
+                            </div>
+                            <div class="expand-detail">
+                                <span class="expand-label">Scope:</span> {{ game.scope_description }}
+                            </div>
+                            <div class="expand-detail">
+                                <span class="expand-label">Location:</span> {{ game.field.name if game.field else (game.location or '-') }}
+                            </div>
+                            {% if game.status == 'cancelled' %}
+                            <div class="expand-detail" style="color: #c33;">
+                                <strong>CANCELLED</strong>
+                            </div>
+                            {% endif %}
+                            {% if current_user.is_authenticated and current_user.has_role('admin', 'scheduler', 'SBPlayerAgent', 'BBPlayerAgent') %}
+                            <div class="expand-actions">
+                                <a href="{{ url_for('seasons.edit_org_event', year=year, is_spring=is_spring, event_id=game.id) }}" class="expand-action-btn">
+                                    <span class="action-icon">✏️</span> Edit Event
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                {# Regular Game Compact Row #}
                 {% set event_type = 'practice' if game.game_type == 'practice' else ('scrimmage' if game.is_scrimmage else ('playoff' if game.game_type == 'playoff' else 'game')) %}
                 <tr class="compact-row {{ 'cancelled-row' if game.status == 'cancelled' else '' }}"
                     data-division="{{ game.league or '' }}"
@@ -367,6 +499,7 @@
                         </div>
                     </td>
                 </tr>
+                {% endif %}
                 {% endfor %}
             </tbody>
         </table>
@@ -501,6 +634,10 @@
     padding: 15px;
     margin-bottom: 10px;
 }
+.event-card.org-event-card {
+    border-left: 4px solid #9c27b0;
+    background: linear-gradient(to right, rgba(156, 39, 176, 0.05), white);
+}
 .event-card.cancelled {
     opacity: 0.6;
     background: #f9f9f9;
@@ -545,6 +682,14 @@
 .type-badge.scrimmage {
     background: #f3e5f5;
     color: #7b1fa2;
+}
+.type-badge.org-event {
+    background: #f3e5f5;
+    color: #7b1fa2;
+    border: 1px solid #9c27b0;
+}
+.org-event-row {
+    background: linear-gradient(to right, rgba(156, 39, 176, 0.08), transparent);
 }
 .type-badge.playoff {
     background: #ffebee;
@@ -750,6 +895,7 @@
 .type-dot.practice { background: #1976d2; }
 .type-dot.scrimmage { background: #7b1fa2; }
 .type-dot.playoff { background: #c62828; }
+.type-dot.org-event { background: #9c27b0; border: 2px solid #7b1fa2; }
 .cancelled-badge-sm {
     display: inline-block;
     width: 14px;

@@ -474,6 +474,9 @@ def team_schedule(token):
     # Normally only today's games, but allowStartTimeRecord=1 enables all upcoming games
     recordable_game_ids = set()
     for game in template_vars.get('upcoming_games', []):
+        # Skip org events - they don't have game_date or game_type
+        if hasattr(game, '_is_org_event') and game._is_org_event:
+            continue
         if game.game_date and game.game_type != 'practice':
             game_date = game.game_date.date() if hasattr(game.game_date, 'date') else game.game_date
             # Include if it's today, OR if testing flag is set

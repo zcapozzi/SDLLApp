@@ -1618,6 +1618,34 @@ def master_schedule():
 
     fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
 
+    # Get org events for the season and merge with games
+    try:
+        from app.models.org_event import OrgEvent
+        org_events = OrgEvent.get_for_season(year, is_spring)
+
+        # Filter to date range and add marker
+        from datetime import time as dt_time
+        for event in org_events:
+            if event.event_date >= start_date and (not end_date or event.event_date <= end_date):
+                event._is_org_event = True
+                games.append(event)
+
+        # Re-sort combined list by date
+        def get_sort_date(item):
+            if hasattr(item, '_is_org_event') and item._is_org_event:
+                event_time = item.start_time or dt_time(0, 0)
+                return datetime.combine(item.event_date, event_time)
+            else:
+                return item.game_date if item.game_date else datetime.max
+
+        games.sort(key=get_sort_date)
+
+        # Add 'org_event' to event types if we have any
+        if any(hasattr(g, '_is_org_event') and g._is_org_event for g in games):
+            event_types.append(('org_event', 'Org Event'))
+    except Exception:
+        pass  # Continue without org events if there's an error
+
     # Calculate season progress based on events completed
     # Count all events (games + practices) for the season
     total_events = db.session.query(db.func.count(Game.ID)).filter(
