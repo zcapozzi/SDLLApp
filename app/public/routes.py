@@ -1343,10 +1343,12 @@ def division_schedule(token):
         game_originals = {}
 
     # Get teams for filter dropdown
+    # Use canonical league name since teams are stored with spring names
+    team_league_name = league_obj.display_name if league_obj else league_season.league
     teams = TeamSeason.query.filter_by(
         year=league_season.year,
         is_spring=league_season.is_spring,
-        league=league_season.league,
+        league=team_league_name,
         active=1,
         is_placeholder=0
     ).order_by(TeamSeason.display_name).all()
@@ -1443,10 +1445,12 @@ def division_gamechanger(token):
         return redirect(url_for('public.division_schedule', token=token))
 
     # Get teams for this specific division only (non-placeholder, active)
+    # Use canonical league name since teams are stored with spring names
+    team_league_name = league_obj.display_name if league_obj else league_season.league
     teams = TeamSeason.query.filter_by(
         year=league_season.year,
         is_spring=league_season.is_spring,
-        league=league_season.league,
+        league=team_league_name,
         active=1,
         is_placeholder=0
     ).order_by(TeamSeason.display_name).all()
@@ -1472,6 +1476,8 @@ def division_gamechanger(token):
 @public_bp.route('/division/<token>/gamechanger/save-team', methods=['POST'])
 def division_gamechanger_save_team(token):
     """API endpoint to save a team's GameChanger name."""
+    from app.models.league import League
+
     league_season = LeagueSeason.get_by_schedule_token(token)
     if not league_season:
         return jsonify({'error': 'Invalid token'}), 404
@@ -1501,12 +1507,16 @@ def division_gamechanger_save_team(token):
     if not team_id:
         return jsonify({'error': 'No team_id provided'}), 400
 
+    # Use canonical league name since teams are stored with spring names
+    league_obj = League.get_by_name(league_season.league)
+    team_league_name = league_obj.display_name if league_obj else league_season.league
+
     # Find the team and verify it belongs to this division
     team = TeamSeason.query.filter_by(
         team_ID=team_id,
         year=league_season.year,
         is_spring=league_season.is_spring,
-        league=league_season.league,
+        league=team_league_name,
         active=1
     ).first()
 
@@ -1521,7 +1531,7 @@ def division_gamechanger_save_team(token):
     teams = TeamSeason.query.filter_by(
         year=league_season.year,
         is_spring=league_season.is_spring,
-        league=league_season.league,
+        league=team_league_name,
         active=1,
         is_placeholder=0
     ).all()
@@ -1634,11 +1644,17 @@ def division_schedule_csv(token):
     if not has_full_access and not has_coach_access:
         abort(403)
 
+    # Get league for duration lookup and canonical name
+    league_obj = League.get_by_name(league_season.league)
+
+    # Use canonical league name since teams are stored with spring names
+    team_league_name = league_obj.display_name if league_obj else league_season.league
+
     # Verify all teams in this division have GameChanger names
     teams = TeamSeason.query.filter_by(
         year=league_season.year,
         is_spring=league_season.is_spring,
-        league=league_season.league,
+        league=team_league_name,
         active=1,
         is_placeholder=0
     ).all()
@@ -1650,9 +1666,6 @@ def division_schedule_csv(token):
 
     # Build team lookup by ID for fast access
     team_gc_names = {t.team_ID: t.gameChangerName for t in teams}
-
-    # Get league for duration lookup
-    league_obj = League.get_by_name(league_season.league)
 
     # Pre-load fields for address lookup
     all_fields = {f.ID: f for f in Field.query.filter_by(active=1).all()}
