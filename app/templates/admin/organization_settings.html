@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block title %}Organization Settings{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 style="color: rgb(34, 139, 34); margin-bottom: 10px;">Organization Settings</h1>
+    <p style="color: #666; margin-bottom: 30px;">
+        Configure organization-wide settings for {{ org.name }}.
+    </p>
+
+    <div class="card">
+        <h2 style="margin-top: 0;">Coach Resources</h2>
+        <p style="color: #666; margin-bottom: 20px;">
+            These resources are shown to coaches on their team schedule pages.
+        </p>
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div style="margin-bottom: 20px;">
+                <label for="field_guide_url" style="display: block; margin-bottom: 5px; font-weight: bold;">
+                    Field Guide URL
+                </label>
+                <input type="url"
+                       name="field_guide_url"
+                       id="field_guide_url"
+                       value="{{ org.field_guide_url or '' }}"
+                       placeholder="https://docs.google.com/document/..."
+                       style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <p style="color: #666; font-size: 13px; margin-top: 5px;">
+                    When set, coaches will see a yellow warning icon
+                    <span style="display: inline-block; vertical-align: middle;">
+                        <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: #f9a825;"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+                    </span>
+                    next to field names on their team schedule. Clicking it opens this document.
+                    This is useful for sharing field-specific information like parking, restroom locations, etc.
+                </p>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button type="submit" class="btn btn-primary">Save Settings</button>
+                <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3 style="margin-top: 0;">Current Settings</h3>
+        <table>
+            <tr>
+                <td style="font-weight: bold; width: 200px;">Organization</td>
+                <td>{{ org.name }}</td>
+            </tr>
+            <tr>
+                <td style="font-weight: bold;">Field Guide</td>
+                <td>
+                    {% if org.field_guide_url %}
+                    <a href="{{ org.field_guide_url }}" target="_blank" rel="noopener">
+                        {{ org.field_guide_url[:60] }}{% if org.field_guide_url|length > 60 %}...{% endif %}
+                    </a>
+                    {% else %}
+                    <span style="color: #888;">Not set</span>
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
+    </div>
+</div>
+{% endblock %}

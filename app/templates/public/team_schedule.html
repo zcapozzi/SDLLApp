@@ -847,9 +847,11 @@
                 </a>
                 {% endif %}
                 {% if is_team_coach %}
-                <a href="https://docs.google.com/document/d/10SgqmmCzdqYFWPSyMbzDon-2kfzwuQ8I/edit?usp=drivesdk&ouid=104852418410065331619&rtpof=true&sd=true" target="_blank" rel="noopener" class="field-info-icon" title="Field Info">
+                {% if field_guide_url %}
+                <a href="{{ field_guide_url }}" target="_blank" rel="noopener" class="field-info-icon" title="Field Info">
                     <svg viewBox="0 0 24 24" style="fill: rgba(255,255,0,0.9);"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
                 </a>
+                {% endif %}
                 {% if rules_doc_url %}
                 <a href="{{ rules_doc_url }}" target="_blank" rel="noopener" class="rules-icon" title="Division Rules">
                     <svg viewBox="0 0 24 24" style="fill: rgba(200,200,255,0.9);"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
@@ -1150,9 +1152,11 @@
                         </a>
                         {% endif %}
                         {% if is_team_coach %}
-                        <a href="https://docs.google.com/document/d/10SgqmmCzdqYFWPSyMbzDon-2kfzwuQ8I/edit?usp=drivesdk&ouid=104852418410065331619&rtpof=true&sd=true" target="_blank" rel="noopener" class="field-info-icon" title="Field Info">
+                        {% if field_guide_url %}
+                        <a href="{{ field_guide_url }}" target="_blank" rel="noopener" class="field-info-icon" title="Field Info">
                             <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
                         </a>
+                        {% endif %}
                         {% if rules_doc_url %}
                         <a href="{{ rules_doc_url }}" target="_blank" rel="noopener" class="rules-icon" title="Division Rules">
                             <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
@@ -1305,9 +1309,11 @@
                         </a>
                         {% endif %}
                         {% if is_team_coach %}
-                        <a href="https://docs.google.com/document/d/10SgqmmCzdqYFWPSyMbzDon-2kfzwuQ8I/edit?usp=drivesdk&ouid=104852418410065331619&rtpof=true&sd=true" target="_blank" rel="noopener" class="field-info-icon" title="Field Info">
+                        {% if field_guide_url %}
+                        <a href="{{ field_guide_url }}" target="_blank" rel="noopener" class="field-info-icon" title="Field Info">
                             <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
                         </a>
+                        {% endif %}
                         {% if rules_doc_url %}
                         <a href="{{ rules_doc_url }}" target="_blank" rel="noopener" class="rules-icon" title="Division Rules">
                             <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>

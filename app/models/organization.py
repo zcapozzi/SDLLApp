@@ -27,6 +27,9 @@ class Organization(db.Model):
     umpire_rate_plate = db.Column(db.Numeric(6, 2), default=45.00)  # Behind-the-plate rate
     umpire_rate_base = db.Column(db.Numeric(6, 2), default=40.00)   # Base/field umpire rate
 
+    # Coach resources
+    field_guide_url = db.Column(db.String(500))  # URL to field guide document for coaches
+
     # Relationship to teams (defined via backref in TeamSeason)
 
     def __repr__(self):

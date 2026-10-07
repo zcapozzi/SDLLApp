@@ -911,6 +911,37 @@ def test_error():
     raise ValueError("TEST ERROR: This is a deliberate test error for the error diagnosis system. Error ID: test-" + str(int(__import__('time').time())))
 
 
+@main_bp.route('/admin/organization-settings', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def organization_settings():
+    """
+    Manage organization-wide settings like the field guide URL.
+
+    The field guide URL is shown to coaches on team schedule pages as a
+    "Field Info" icon. When set, coaches see a yellow warning triangle
+    icon next to fields that links to this document.
+    """
+    from app.models.organization import Organization
+
+    home_org = Organization.get_home_org()
+    if not home_org:
+        flash('Home organization not found.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    if request.method == 'POST':
+        field_guide_url = request.form.get('field_guide_url', '').strip()
+        home_org.field_guide_url = field_guide_url if field_guide_url else None
+        db.session.commit()
+        flash('Organization settings updated.', 'success')
+        return redirect(url_for('main.organization_settings'))
+
+    return render_template(
+        'admin/organization_settings.html',
+        org=home_org
+    )
+
+
 @main_bp.route('/cron/process-scheduled-emails')
 def cron_process_scheduled_emails():
     """

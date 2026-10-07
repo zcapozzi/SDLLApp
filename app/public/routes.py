@@ -262,9 +262,11 @@ def team_schedule(token):
     # Prepare session ID for tracking (but don't track yet)
     session_id = _get_or_create_session_id()
 
-    # Get organization timezone for calendar links
+    # Get organization timezone and field guide URL
     from app.models.organization import Organization
     org_timezone = Organization.get_default_timezone()
+    home_org = Organization.get_home_org()
+    field_guide_url = home_org.field_guide_url if home_org else None
 
     # Check if current user is a coach of this team
     is_team_coach = False
@@ -298,6 +300,7 @@ def team_schedule(token):
         'org_timezone': org_timezone,
         'is_team_coach': is_team_coach,
         'rules_doc_url': rules_doc_url,
+        'field_guide_url': field_guide_url,
     }
 
     # Determine what games/practices to show
