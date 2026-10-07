@@ -265,6 +265,20 @@ def team_schedule(token):
     from app.models.organization import Organization
     org_timezone = Organization.get_default_timezone()
 
+    # Check if current user is a coach of this team
+    is_team_coach = False
+    try:
+        if current_user.is_authenticated:
+            from app.models.coach import CoachUser, CoachSeason
+            coach_record = CoachUser.get_by_user(current_user.ID)
+            if coach_record:
+                is_team_coach = CoachSeason.query.filter_by(
+                    coach_id=coach_record.id,
+                    team_id=team.team_ID
+                ).first() is not None
+    except Exception:
+        pass  # Don't fail page load if coach check fails
+
     # Initialize template variables
     template_vars = {
         'team': team,
@@ -281,6 +295,7 @@ def team_schedule(token):
         'practice_duration': practice_duration,
         'timedelta': timedelta,
         'org_timezone': org_timezone,
+        'is_team_coach': is_team_coach,
     }
 
     # Determine what games/practices to show

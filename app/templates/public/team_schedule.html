@@ -372,6 +372,22 @@
             height: 16px;
             fill: #4285f4;
         }
+        .field-info-icon {
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 4px;
+            opacity: 0.9;
+            transition: opacity 0.2s;
+            cursor: pointer;
+        }
+        .field-info-icon:hover {
+            opacity: 1;
+        }
+        .field-info-icon svg {
+            width: 16px;
+            height: 16px;
+            fill: #f9a825;
+        }
         .game-opponent {
             font-size: 14px;
             margin-top: 5px;
@@ -814,6 +830,11 @@
                     <svg viewBox="0 0 24 24" style="fill: rgba(255,255,255,0.9);"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
                 </a>
                 {% endif %}
+                {% if is_team_coach %}
+                <span class="field-info-icon" title="Field Info">
+                    <svg viewBox="0 0 24 24" style="fill: rgba(255,255,0,0.9);"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+                </span>
+                {% endif %}
             </div>
             {% if next_game.game_type != 'practice' %}
             <div class="next-game-opponent">
@@ -1107,6 +1128,11 @@
                             <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
                         </a>
                         {% endif %}
+                        {% if is_team_coach %}
+                        <span class="field-info-icon" title="Field Info">
+                            <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+                        </span>
+                        {% endif %}
                     </div>
                     {% if game.game_type != 'practice' %}
                     <div class="game-opponent">
@@ -1251,6 +1277,11 @@
                         <a href="{{ game.directions_url }}" target="_blank" rel="noopener" class="directions-icon" title="Get directions">
                             <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
                         </a>
+                        {% endif %}
+                        {% if is_team_coach %}
+                        <span class="field-info-icon" title="Field Info">
+                            <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+                        </span>
                         {% endif %}
                     </div>
                     {% if game.game_type != 'practice' %}
