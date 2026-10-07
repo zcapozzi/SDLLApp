@@ -240,10 +240,11 @@ def team_schedule(token):
     season_name = f'{"Spring" if team.is_spring else "Fall"} {team.year}'
     is_locked = LeagueSeason.is_season_locked(team.year, team.is_spring)
 
-    # Get practice duration for this team's league
+    # Get practice duration and rules URL for this team's league
     from app.models.league import League
     league_obj = League.get_by_name(team.league)
     practice_duration = league_obj.get_practice_duration() if league_obj else 90
+    rules_doc_url = league_obj.rules_doc_url if league_obj else None
 
     # Check for testing flag to allow start time recording on non-game days
     allow_start_time_record = request.args.get('allowStartTimeRecord', '0') == '1'
@@ -296,6 +297,7 @@ def team_schedule(token):
         'timedelta': timedelta,
         'org_timezone': org_timezone,
         'is_team_coach': is_team_coach,
+        'rules_doc_url': rules_doc_url,
     }
 
     # Determine what games/practices to show
