@@ -376,17 +376,8 @@
             display: inline-block;
             vertical-align: middle;
             margin-left: 4px;
-            opacity: 0.9;
-            transition: opacity 0.2s;
-            cursor: pointer;
-        }
-        .field-info-icon:hover {
-            opacity: 1;
-        }
-        .field-info-icon svg {
-            width: 16px;
-            height: 16px;
-            fill: #f9a825;
+            text-decoration: none;
+            font-size: 14px;
         }
         .rules-icon {
             display: inline-block;
@@ -848,9 +839,7 @@
                 {% endif %}
                 {% if is_team_coach %}
                 {% if field_guide_url %}
-                <a href="{{ field_guide_url }}" target="_blank" rel="noopener" class="field-info-icon" title="Field Info">
-                    <svg viewBox="0 0 24 24" style="fill: rgba(255,255,0,0.9);"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
-                </a>
+                <a href="{{ field_guide_url }}" target="_blank" rel="noopener" class="field-info-icon" title="Field Info">🛠️</a>
                 {% endif %}
                 {% if rules_doc_url %}
                 <a href="{{ rules_doc_url }}" target="_blank" rel="noopener" class="rules-icon" title="Division Rules">
@@ -1153,9 +1142,7 @@
                         {% endif %}
                         {% if is_team_coach %}
                         {% if field_guide_url %}
-                        <a href="{{ field_guide_url }}" target="_blank" rel="noopener" class="field-info-icon" title="Field Info">
-                            <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
-                        </a>
+                        <a href="{{ field_guide_url }}" target="_blank" rel="noopener" class="field-info-icon" title="Field Info">🛠️</a>
                         {% endif %}
                         {% if rules_doc_url %}
                         <a href="{{ rules_doc_url }}" target="_blank" rel="noopener" class="rules-icon" title="Division Rules">
@@ -1310,9 +1297,7 @@
                         {% endif %}
                         {% if is_team_coach %}
                         {% if field_guide_url %}
-                        <a href="{{ field_guide_url }}" target="_blank" rel="noopener" class="field-info-icon" title="Field Info">
-                            <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
-                        </a>
+                        <a href="{{ field_guide_url }}" target="_blank" rel="noopener" class="field-info-icon" title="Field Info">🛠️</a>
                         {% endif %}
                         {% if rules_doc_url %}
                         <a href="{{ rules_doc_url }}" target="_blank" rel="noopener" class="rules-icon" title="Division Rules">
