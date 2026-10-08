@@ -105,7 +105,12 @@ def index():
     assignr_games = service.enrich_games_with_local_data(assignr_games)
 
     # Get league lookup for needs_umpire calculation
-    league_lookup = {l.display_name: l for l in League.query.all()}
+    # Include both spring (display_name) and fall (fall_display_name) names
+    league_lookup = {}
+    for l in League.query.all():
+        league_lookup[l.display_name] = l
+        if l.fall_display_name:
+            league_lookup[l.fall_display_name] = l
 
     # Add _needs_umpire flag to each game
     assignr_games = add_needs_umpire_flags(assignr_games, league_lookup)
@@ -244,7 +249,12 @@ def games_list():
     assignr_games = service.enrich_games_with_local_data(assignr_games)
 
     # Get league lookup for needs_umpire calculation
-    league_lookup = {l.display_name: l for l in League.query.all()}
+    # Include both spring (display_name) and fall (fall_display_name) names
+    league_lookup = {}
+    for l in League.query.all():
+        league_lookup[l.display_name] = l
+        if l.fall_display_name:
+            league_lookup[l.fall_display_name] = l
 
     # Add _needs_umpire flag to each game
     assignr_games = add_needs_umpire_flags(assignr_games, league_lookup)

@@ -240,7 +240,12 @@ def managed_umpires(year=None, is_spring=None):
     }
 
     # Build league lookup for rate calculations
-    league_lookup = {l.display_name: l for l in League.get_all_active()}
+    # Include both spring (display_name) and fall (fall_display_name) names
+    league_lookup = {}
+    for l in League.get_all_active():
+        league_lookup[l.display_name] = l
+        if l.fall_display_name:
+            league_lookup[l.fall_display_name] = l
 
     for official_id, games in sorted(games_by_official.items(), key=lambda x: official_info.get(x[0], {}).get('last_name', '')):
         info = official_info.get(official_id, {})

@@ -949,7 +949,12 @@ def manage_leagues(year, is_spring):
     ).order_by(LeagueSeason.league).all()
 
     # Get League objects to access spring/fall names
-    all_leagues = {l.display_name: l for l in League.get_all_active()}
+    # Include both spring (display_name) and fall (fall_display_name) names
+    all_leagues = {}
+    for l in League.get_all_active():
+        all_leagues[l.display_name] = l
+        if l.fall_display_name:
+            all_leagues[l.fall_display_name] = l
 
     # Count regular teams and placeholders per league
     teams_by_league = {}
@@ -1151,7 +1156,12 @@ def schedule_settings(year, is_spring):
     league_configs = LeagueSeason.get_by_season(year, is_spring)
 
     # Get League objects to access spring/fall names
-    all_leagues = {l.display_name: l for l in League.get_all_active()}
+    # Include both spring (display_name) and fall (fall_display_name) names
+    all_leagues = {}
+    for l in League.get_all_active():
+        all_leagues[l.display_name] = l
+        if l.fall_display_name:
+            all_leagues[l.fall_display_name] = l
 
     return render_template(
         'seasons/schedule_settings.html',

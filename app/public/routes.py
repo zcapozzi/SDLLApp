@@ -741,7 +741,12 @@ def partner_schedule(token):
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
 
     # Pre-load leagues and fields to avoid N+1 queries
-    all_leagues = {l.display_name: l for l in League.get_all_active()}
+    # Include both spring (display_name) and fall (fall_display_name) names
+    all_leagues = {}
+    for l in League.get_all_active():
+        all_leagues[l.display_name] = l
+        if l.fall_display_name:
+            all_leagues[l.fall_display_name] = l
     all_fields = {f.location_title: f for f in Field.query.filter_by(active=1).all()}
 
     # Get games with eager loading of relationships (exclude practices)
@@ -1015,7 +1020,12 @@ def partner_schedule_csv(token):
     partner_code = partner.short_code
 
     # Pre-load leagues for umpire count lookup
-    all_leagues = {l.display_name: l for l in League.get_all_active()}
+    # Include both spring (display_name) and fall (fall_display_name) names
+    all_leagues = {}
+    for l in League.get_all_active():
+        all_leagues[l.display_name] = l
+        if l.fall_display_name:
+            all_leagues[l.fall_display_name] = l
 
     # Get games with eager loading (exclude practices)
     games = Game.query.options(

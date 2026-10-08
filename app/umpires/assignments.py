@@ -147,7 +147,12 @@ def missing_umpire(date_str=None):
     leagues_list = sorted(set(g.league for g in games if g.league))
 
     # Get league umpire requirements
-    league_lookup = {l.display_name: l for l in League.query.all()}
+    # Include both spring (display_name) and fall (fall_display_name) names
+    league_lookup = {}
+    for l in League.query.all():
+        league_lookup[l.display_name] = l
+        if l.fall_display_name:
+            league_lookup[l.fall_display_name] = l
 
     # Get all team IDs from games for batch coach lookup
     team_ids = set()
