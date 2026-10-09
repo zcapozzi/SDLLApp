@@ -215,6 +215,8 @@ def managed_umpires(year=None, is_spring=None):
                     'assignr_id': game.get('id'),
                     'game_date': game.get('_game_date'),
                     'league': local_data.get('league') if local_data else game.get('league_name', 'Unknown'),
+                    'league_id': local_data.get('league_id') if local_data else None,
+                    'league_obj': local_data.get('league_obj') if local_data else None,
                     'is_ntl': game.get('no_time_limit', False) or (local_data.get('status') == 'ntl' if local_data else False)
                 })
 

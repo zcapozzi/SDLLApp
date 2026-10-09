@@ -360,7 +360,7 @@ class AssignrService:
                     'game_id': local_game.ID,
                     'league': local_game.league,  # String name (deprecated)
                     'league_id': local_game.league_id,  # FK to sdll_leagues
-                    'league_obj': local_game.league_rel,  # League object for direct access
+                    'league_obj': local_game.league_obj,  # League object (uses FK or falls back to string lookup)
                     'home_team': local_game.home_team.computed_display_name if local_game.home_team else None,
                     'away_team': local_game.away_team.computed_display_name if local_game.away_team else None,
                     'home_team_id': local_game.home_ID,
