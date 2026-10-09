@@ -27,7 +27,8 @@ class FieldAllocationSpecific(db.Model):
     allocation_date = db.Column(db.Date, nullable=False)
     start_time = db.Column(db.Time, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
-    league = db.Column(db.String(50))  # NULL = any league can use
+    league = db.Column(db.String(50))  # DEPRECATED: Use league_id instead. NULL = any league
+    league_id = db.Column(db.BigInteger, db.ForeignKey('sdll_leagues.ID'))  # NULL = any league can use
     is_owned = db.Column(db.SmallInteger, default=1)  # 1 = SDLL owns, 0 = away only
     notes = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
@@ -36,6 +37,30 @@ class FieldAllocationSpecific(db.Model):
 
     # Relationship to Field
     field = db.relationship('Field', backref=db.backref('specific_allocations', lazy='dynamic'))
+
+    # Relationship to League
+    league_rel = db.relationship('League', foreign_keys=[league_id], lazy='joined')
+
+    @property
+    def league_obj(self):
+        """Get the League object for this allocation.
+
+        Uses the league_id relationship if available, falls back to
+        string-based lookup for backward compatibility.
+
+        Returns:
+            League or None: The League object if found.
+        """
+        # Prefer the FK relationship
+        if self.league_rel:
+            return self.league_rel
+
+        # Fallback to string-based lookup (deprecated path)
+        if self.league:
+            from app.models.league import League
+            return League.get_by_name(self.league)
+
+        return None
 
     def __repr__(self):
         return f'<FieldAllocationSpecific {self.field.location_title if self.field else "?"} {self.allocation_date} {self.start_time}>'

@@ -239,13 +239,9 @@ def managed_umpires(year=None, is_spring=None):
         'total': Decimal('0')
     }
 
-    # Build league lookup for rate calculations
-    # Include both spring (display_name) and fall (fall_display_name) names
-    league_lookup = {}
-    for l in League.get_all_active():
-        league_lookup[l.display_name] = l
-        if l.fall_display_name:
-            league_lookup[l.fall_display_name] = l
+    # Build league lookup by ID for rate calculations
+    league_lookup = {l.ID: l for l in League.get_all_active()}
+    league_debug = [f"{l.display_name} (ID={l.ID}, {l.pitch_type})" for l in League.get_all_active()]
 
     for official_id, games in sorted(games_by_official.items(), key=lambda x: official_info.get(x[0], {}).get('last_name', '')):
         info = official_info.get(official_id, {})
@@ -253,20 +249,30 @@ def managed_umpires(year=None, is_spring=None):
         base_games = 0
         adjustment_total = Decimal('0')
         base_pay = Decimal('0')
+        game_details = []  # Debug: track each game's details
 
         for g in games:
             # Determine position based on league pitch_type from local DB
             # kid_pitch = plate umpire, machine_pitch/tee_ball = base umpire
-            league_name = g.get('league', '')
-            league = league_lookup.get(league_name)
+            # Use league_id (FK) for reliable lookup, fall back to league_obj if available
+            league_id = g.get('league_id')
+            league_obj = g.get('league_obj')  # Direct League object from enrichment
+            league_name = g.get('league', '')  # String name for display/debug
+
+            # Try league_obj first (already loaded), then ID lookup
+            league = league_obj or (league_lookup.get(league_id) if league_id else None)
 
             if league:
                 is_plate = league.pitch_type == 'kid_pitch'
                 game_rate = league.get_umpire_rate('plate' if is_plate else 'base', org)
+                league_found = True
+                pitch_type = league.pitch_type
             else:
                 # Default to plate if league not found
                 is_plate = True
                 game_rate = Decimal(str(rate_plate))
+                league_found = False
+                pitch_type = 'UNKNOWN'
 
             # Check for multiplier
             multiplier = Decimal('1.0')
@@ -287,6 +293,21 @@ def managed_umpires(year=None, is_spring=None):
             else:
                 base_games += 1
 
+            # Debug: store game details
+            game_details.append({
+                'game_id': g.get('game_id'),
+                'assignr_id': g.get('assignr_id'),
+                'game_date': g.get('game_date').strftime('%m/%d') if g.get('game_date') else '?',
+                'league_name': league_name,
+                'league_id': league_id,
+                'league_found': league_found,
+                'pitch_type': pitch_type,
+                'position': 'plate' if is_plate else 'base',
+                'rate': float(game_rate),
+                'multiplier': float(multiplier),
+                'pay': float(game_pay)
+            })
+
         total_pay = base_pay
 
         umpire_data.append({
@@ -300,7 +321,8 @@ def managed_umpires(year=None, is_spring=None):
             'total_games': plate_games + base_games,
             'base_pay': float(base_pay - adjustment_total),  # Base pay without adjustments
             'adjustments': float(adjustment_total),
-            'total_pay': float(total_pay)
+            'total_pay': float(total_pay),
+            'game_details': game_details  # Debug: include game breakdown
         })
 
         grand_total['games'] += plate_games + base_games
@@ -332,5 +354,6 @@ def managed_umpires(year=None, is_spring=None):
         rates=rates,
         grand_total=grand_total,
         start_date=start_date,
-        end_date=end_date
+        end_date=end_date,
+        league_debug=league_debug  # Debug: show available leagues
     )

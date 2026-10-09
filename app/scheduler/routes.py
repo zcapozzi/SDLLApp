@@ -569,13 +569,19 @@ def save(year, is_spring):
                 game_type = 'practice'
                 is_league_practice = True
 
+            # Look up league_id from league name
+            league_name = proposed_game['league']
+            league_obj = League.get_by_name(league_name) if league_name else None
+            league_id = league_obj.ID if league_obj else None
+
             # Create the game record
             # Set field_id FK only - field_name property handles display
             game = Game(
                 active=1,
                 year=year,
                 is_spring=is_spring,
-                league=proposed_game['league'],
+                league=league_name,
+                league_id=league_id,
                 home_ID=proposed_game['home_team_id'],
                 away_ID=proposed_game['away_team_id'],  # None for practices
                 field_id=proposed_game.get('field_id'),
@@ -940,6 +946,10 @@ def api_add_event(year, is_spring):
             field_obj = Field.query.filter_by(location_title=field_name, active=1).first()
             field_id = field_obj.ID if field_obj else None
 
+            # Look up league_id from league name
+            league_obj = League.get_by_name(league) if league else None
+            league_id = league_obj.ID if league_obj else None
+
             new_game = Game(
                 year=year,
                 is_spring=is_spring,
@@ -947,6 +957,7 @@ def api_add_event(year, is_spring):
                 home_ID=home_team_id,
                 away_ID=away_team_id,
                 league=league,
+                league_id=league_id,
                 field_id=field_id,
                 game_type=actual_game_type,
                 is_scrimmage=is_scrimmage,

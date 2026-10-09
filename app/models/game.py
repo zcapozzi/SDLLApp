@@ -13,7 +13,8 @@ class Game(db.Model):
     game_date = db.Column(db.DateTime)
     home_ID = db.Column(db.BigInteger, db.ForeignKey('sdll_team_seasons.team_ID'))
     away_ID = db.Column(db.BigInteger, db.ForeignKey('sdll_team_seasons.team_ID'))
-    league = db.Column(db.String(30))
+    league = db.Column(db.String(30))  # DEPRECATED: Use league_id instead
+    league_id = db.Column(db.BigInteger, db.ForeignKey('sdll_leagues.ID'))
     field_id = db.Column(db.BigInteger, db.ForeignKey('sdll_fields.ID'))  # FK to fields table
     status = db.Column(db.String(20), default='scheduled')  # scheduled, completed, postponed, cancelled
     assignr_id = db.Column(db.String(15))
@@ -35,6 +36,7 @@ class Game(db.Model):
     # Relationships
     # Note: home_team and away_team are created via backref from TeamSeason.home_games/away_games
     field_rel = db.relationship('Field', foreign_keys=[field_id], lazy='joined')
+    league_rel = db.relationship('League', foreign_keys=[league_id], lazy='joined')
 
     def __repr__(self):
         return f'<Game {self.ID}: {self.league} at {self.field_name} on {self.game_date}>'
@@ -162,6 +164,38 @@ class Game(db.Model):
         return None
 
     @property
+    def league_obj(self):
+        """Get the League object for this game.
+
+        Uses the league_id relationship if available, falls back to
+        string-based lookup for backward compatibility.
+
+        Returns:
+            League or None: The League object if found.
+        """
+        # Prefer the FK relationship
+        if self.league_rel:
+            return self.league_rel
+
+        # Fallback to string-based lookup (deprecated path)
+        if self.league:
+            from app.models.league import League
+            return League.get_by_name(self.league)
+
+        return None
+
+    @property
+    def league_display_name(self):
+        """Get the league display name appropriate for the season.
+
+        Returns:
+            str: League name for display, or empty string if not found.
+        """
+        if self.league_rel:
+            return self.league_rel.get_seasonal_name(self.is_spring)
+        return self.league or ''
+
+    @property
     def umpire_count(self):
         """Get the effective umpire count for this game.
 
@@ -175,12 +209,11 @@ class Game(db.Model):
         if self.umpire_count_override is not None:
             return self.umpire_count_override
 
-        # Fall back to league default
-        from app.models.league import League
-        league_obj = League.get_by_name(self.league)
-        if league_obj:
+        # Fall back to league default using relationship
+        league = self.league_obj
+        if league:
             is_playoff = self.game_type == 'playoff'
-            return league_obj.get_umpire_count(is_playoff=is_playoff)
+            return league.get_umpire_count(is_playoff=is_playoff)
 
         return 1  # Default fallback
 
@@ -191,10 +224,9 @@ class Game(db.Model):
         Returns:
             str or None: URL to rules document if configured.
         """
-        from app.models.league import League
-        league_obj = League.get_by_name(self.league)
-        if league_obj:
-            return league_obj.rules_doc_url
+        league = self.league_obj
+        if league:
+            return league.rules_doc_url
         return None
 
     @classmethod
@@ -254,6 +286,7 @@ class Game(db.Model):
                 home_ID=new_home_ID,
                 away_ID=new_away_ID,
                 league=game.league,
+                league_id=game.league_id,
                 field_id=game.field_id,
                 status='scheduled',
                 year=target_year,
@@ -287,11 +320,17 @@ class Game(db.Model):
         Returns:
             List of created Game objects (empty slots)
         """
+        # Look up league_id from league string
+        from app.models.league import League
+        league_obj = League.get_by_name(league) if league else None
+        league_id = league_obj.ID if league_obj else None
+
         new_games = []
         for _ in range(num_games):
             game = cls(
                 active=1,
                 league=league,
+                league_id=league_id,
                 year=year,
                 is_spring=is_spring,
                 game_type=game_type,
@@ -426,6 +465,11 @@ class Game(db.Model):
         if len(teams) < 2:
             return []
 
+        # Look up league_id from league string
+        from app.models.league import League
+        league_obj = League.get_by_name(league) if league else None
+        league_id = league_obj.ID if league_obj else None
+
         new_games = []
         team_ids = [t.team_ID for t in teams]
         n = len(team_ids)
@@ -462,6 +506,7 @@ class Game(db.Model):
                 home_ID=home_id,
                 away_ID=away_id,
                 league=league,
+                league_id=league_id,
                 status='scheduled',
                 year=year,
                 is_spring=is_spring,
@@ -495,6 +540,11 @@ class Game(db.Model):
         if n < 2:
             return []
 
+        # Look up league_id from league string
+        from app.models.league import League
+        league_obj = League.get_by_name(league) if league else None
+        league_id = league_obj.ID if league_obj else None
+
         # Sort by seed number
         seeds = sorted(seed_placeholders, key=lambda t: t.seed_number or 999)
 
@@ -526,6 +576,7 @@ class Game(db.Model):
                         home_ID=high_seed.team_ID,
                         away_ID=low_seed.team_ID,
                         league=league,
+                        league_id=league_id,
                         status='scheduled',
                         year=year,
                         is_spring=is_spring,
@@ -544,6 +595,7 @@ class Game(db.Model):
                     home_ID=None,  # TBD - winner of previous game
                     away_ID=None,  # TBD - winner of previous game
                     league=league,
+                    league_id=league_id,
                     status='scheduled',
                     year=year,
                     is_spring=is_spring,
@@ -568,6 +620,7 @@ class Game(db.Model):
                     home_ID=high_seed.team_ID,
                     away_ID=low_seed.team_ID,
                     league=league,
+                    league_id=league_id,
                     status='scheduled',
                     year=year,
                     is_spring=is_spring,
@@ -585,6 +638,7 @@ class Game(db.Model):
                     home_ID=None,
                     away_ID=None,
                     league=league,
+                    league_id=league_id,
                     status='scheduled',
                     year=year,
                     is_spring=is_spring,
@@ -603,6 +657,7 @@ class Game(db.Model):
                         home_ID=seeds[i].team_ID,
                         away_ID=seeds[j].team_ID,
                         league=league,
+                        league_id=league_id,
                         status='scheduled',
                         year=year,
                         is_spring=is_spring,
@@ -621,6 +676,7 @@ class Game(db.Model):
                     home_ID=None,
                     away_ID=None,
                     league=league,
+                    league_id=league_id,
                     status='scheduled',
                     year=year,
                     is_spring=is_spring,

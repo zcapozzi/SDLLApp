@@ -17,7 +17,8 @@ class TeamSeason(db.Model):
     team_ID = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     active = db.Column(db.SmallInteger, default=1)
     year = db.Column(db.Integer)
-    league = db.Column(db.String(50))
+    league = db.Column(db.String(50))  # DEPRECATED: Use league_id instead
+    league_id = db.Column(db.BigInteger, db.ForeignKey('sdll_leagues.ID'))
     display_name = db.Column(db.String(50))  # Placeholder name (e.g., "BB Majors Team 1")
     team_name = db.Column(db.String(50))  # Team/mascot name for public display (e.g., "Thunderbolts")
     coach_name = db.Column(db.String(100))  # Coach name for scheduler (e.g., "Smith")
@@ -61,6 +62,9 @@ class TeamSeason(db.Model):
     # Relationship to organization (for external teams)
     organization = db.relationship('Organization', backref='teams')
 
+    # Relationship to league
+    league_rel = db.relationship('League', foreign_keys=[league_id], lazy='joined')
+
     def __repr__(self):
         season = 'Spring' if self.is_spring else 'Fall'
         return f'<TeamSeason {self.display_name} ({season} {self.year})>'
@@ -79,6 +83,38 @@ class TeamSeason(db.Model):
     def full_season_name(self):
         """Return full season description"""
         return f'{self.season_name} {self.year}'
+
+    @property
+    def league_obj(self):
+        """Get the League object for this team.
+
+        Uses the league_id relationship if available, falls back to
+        string-based lookup for backward compatibility.
+
+        Returns:
+            League or None: The League object if found.
+        """
+        # Prefer the FK relationship
+        if self.league_rel:
+            return self.league_rel
+
+        # Fallback to string-based lookup (deprecated path)
+        if self.league:
+            from app.models.league import League
+            return League.get_by_name(self.league)
+
+        return None
+
+    @property
+    def league_display_name(self):
+        """Get the league display name appropriate for the season.
+
+        Returns:
+            str: League name for display, or empty string if not found.
+        """
+        if self.league_rel:
+            return self.league_rel.get_seasonal_name(self.is_spring)
+        return self.league or ''
 
     # Class-level cache for team name lookups
     _team_name_cache = {}
@@ -365,6 +401,9 @@ class TeamSeason(db.Model):
 
         # Create new teams with placeholder names
         for league, teams in teams_by_league.items():
+            # Look up league_id from the first source team (all in same league)
+            league_id = teams[0].league_id if teams else None
+
             for i, source_team in enumerate(teams, start=1):
                 # Create placeholder name: "BB Majors Team 1"
                 placeholder_name = f'{league} Team {i}'
@@ -373,6 +412,7 @@ class TeamSeason(db.Model):
                     active=1,
                     year=target_year,
                     league=league,
+                    league_id=league_id,
                     display_name=placeholder_name,
                     team_name=None,  # Reset - no chosen name yet
                     is_placeholder=source_team.is_placeholder,
@@ -424,6 +464,11 @@ class TeamSeason(db.Model):
         Generate seed placeholders (Seed 1, Seed 2, etc.) for a league's playoffs.
         Returns list of created placeholder teams.
         """
+        # Look up league_id from league name
+        from app.models.league import League
+        league_obj = League.get_by_name(league) if league else None
+        league_id = league_obj.ID if league_obj else None
+
         placeholders = []
 
         # Check for existing seed placeholders
@@ -443,6 +488,7 @@ class TeamSeason(db.Model):
                     active=1,
                     year=year,
                     league=league,
+                    league_id=league_id,
                     display_name=f'Seed {seed}',
                     is_placeholder=1,
                     seed_number=seed,
@@ -460,6 +506,11 @@ class TeamSeason(db.Model):
         Generate bracket placeholders (Winner Game 1, etc.) based on format.
         Returns list of created placeholder teams.
         """
+        # Look up league_id from league name
+        from app.models.league import League
+        league_obj = League.get_by_name(league) if league else None
+        league_id = league_obj.ID if league_obj else None
+
         placeholders = []
 
         if playoff_format == 'single_elimination':
@@ -480,6 +531,7 @@ class TeamSeason(db.Model):
                             active=1,
                             year=year,
                             league=league,
+                            league_id=league_id,
                             display_name=f'Winner Game {game_num}',
                             is_placeholder=1,
                             bracket_position=f'W{game_num}',
@@ -502,6 +554,7 @@ class TeamSeason(db.Model):
                     active=1,
                     year=year,
                     league=league,
+                    league_id=league_id,
                     display_name=f'Winner Game {game_num}',
                     is_placeholder=1,
                     bracket_position=f'W{game_num}',
@@ -516,6 +569,7 @@ class TeamSeason(db.Model):
                         active=1,
                         year=year,
                         league=league,
+                        league_id=league_id,
                         display_name=f'Loser Game {game_num}',
                         is_placeholder=1,
                         bracket_position=f'L{game_num}',

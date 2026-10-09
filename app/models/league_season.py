@@ -17,7 +17,8 @@ class LeagueSeason(db.Model):
     active = db.Column(db.SmallInteger, default=1)
     year = db.Column(db.Integer, nullable=False)
     is_spring = db.Column(db.SmallInteger, nullable=False)
-    league = db.Column(db.String(50), nullable=False)
+    league = db.Column(db.String(50), nullable=False)  # DEPRECATED: Use league_id instead
+    league_id = db.Column(db.BigInteger, db.ForeignKey('sdll_leagues.ID'))
     playoff_format = db.Column(db.String(30), default='single_elimination')
     playoff_teams = db.Column(db.Integer, default=0)  # 0 = all teams qualify
     regular_season_games = db.Column(db.Integer, default=10)  # Games per team in regular season
@@ -71,8 +72,43 @@ class LeagueSeason(db.Model):
     DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     DAY_ABBREVS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
+    # Relationship to league
+    league_rel = db.relationship('League', foreign_keys=[league_id], lazy='joined')
+
     def __repr__(self):
         return f'<LeagueSeason {self.league} {self.season_name}>'
+
+    @property
+    def league_obj(self):
+        """Get the League object for this season config.
+
+        Uses the league_id relationship if available, falls back to
+        string-based lookup for backward compatibility.
+
+        Returns:
+            League or None: The League object if found.
+        """
+        # Prefer the FK relationship
+        if self.league_rel:
+            return self.league_rel
+
+        # Fallback to string-based lookup (deprecated path)
+        if self.league:
+            from app.models.league import League
+            return League.get_by_name(self.league)
+
+        return None
+
+    @property
+    def league_display_name(self):
+        """Get the league display name appropriate for the season.
+
+        Returns:
+            str: League name for display, or empty string if not found.
+        """
+        if self.league_rel:
+            return self.league_rel.get_seasonal_name(self.is_spring)
+        return self.league or ''
 
     @property
     def season_name(self):
@@ -179,11 +215,17 @@ class LeagueSeason(db.Model):
                 config.active = 1
                 db.session.commit()
             else:
+                # Look up league_id from league name
+                from app.models.league import League
+                league_obj = League.get_by_name(league) if league else None
+                league_id = league_obj.ID if league_obj else None
+
                 # Create new
                 config = cls(
                     year=year,
                     is_spring=is_spring,
                     league=league,
+                    league_id=league_id,
                     playoff_format='single_elimination',
                     playoff_teams=0  # 0 = all teams qualify
                 )
@@ -213,6 +255,7 @@ class LeagueSeason(db.Model):
                     year=target_year,
                     is_spring=target_is_spring,
                     league=source.league,
+                    league_id=source.league_id,
                     playoff_format=source.playoff_format,
                     playoff_teams=source.playoff_teams,
                     regular_season_games=source.regular_season_games,
@@ -240,10 +283,19 @@ class LeagueSeason(db.Model):
         Creates configs with defaults for any missing leagues.
         Reactivates soft-deleted configs if they exist.
         """
+        from app.models.league import League
+
         existing = {c.league for c in cls.get_by_season(year, is_spring)}
 
         for league in leagues:
             league_name = league if isinstance(league, str) else league.display_name
+            league_id = league.ID if hasattr(league, 'ID') else None
+
+            # Look up league_id from name if not available
+            if not league_id and league_name:
+                league_obj = League.get_by_name(league_name)
+                league_id = league_obj.ID if league_obj else None
+
             if league_name not in existing:
                 # Check for soft-deleted config to reactivate
                 soft_deleted = cls.query.filter_by(
@@ -255,11 +307,15 @@ class LeagueSeason(db.Model):
 
                 if soft_deleted:
                     soft_deleted.active = 1
+                    # Update league_id if not set
+                    if not soft_deleted.league_id and league_id:
+                        soft_deleted.league_id = league_id
                 else:
                     config = cls(
                         year=year,
                         is_spring=is_spring,
                         league=league_name,
+                        league_id=league_id,
                         playoff_format='single_elimination',
                         playoff_teams=0  # 0 = all teams qualify
                     )

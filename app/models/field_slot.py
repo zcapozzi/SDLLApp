@@ -19,7 +19,8 @@ class FieldSlot(db.Model):
     day_of_week = db.Column(db.SmallInteger, nullable=False)  # 0=Mon, 1=Tue, ..., 6=Sun
     start_time = db.Column(db.Time, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
-    league = db.Column(db.String(50))  # NULL = any league can use
+    league = db.Column(db.String(50))  # DEPRECATED: Use league_id instead. NULL = any league
+    league_id = db.Column(db.BigInteger, db.ForeignKey('sdll_leagues.ID'))  # NULL = any league can use
     is_owned = db.Column(db.SmallInteger, default=1)  # 1 = SDLL owns, 0 = away only
     notes = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
@@ -28,6 +29,30 @@ class FieldSlot(db.Model):
 
     # Relationship to Field
     field = db.relationship('Field', backref=db.backref('slots', lazy='dynamic'))
+
+    # Relationship to League
+    league_rel = db.relationship('League', foreign_keys=[league_id], lazy='joined')
+
+    @property
+    def league_obj(self):
+        """Get the League object for this slot.
+
+        Uses the league_id relationship if available, falls back to
+        string-based lookup for backward compatibility.
+
+        Returns:
+            League or None: The League object if found.
+        """
+        # Prefer the FK relationship
+        if self.league_rel:
+            return self.league_rel
+
+        # Fallback to string-based lookup (deprecated path)
+        if self.league:
+            from app.models.league import League
+            return League.get_by_name(self.league)
+
+        return None
 
     # Day names for display
     DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -98,6 +123,7 @@ class FieldSlot(db.Model):
                 start_time=source_slot.start_time,
                 end_time=source_slot.end_time,
                 league=source_slot.league,
+                league_id=source_slot.league_id,
                 is_owned=source_slot.is_owned,
                 notes=source_slot.notes
             )

@@ -6,6 +6,7 @@ from flask_login import login_required, current_user
 from app.models.game import Game
 from app.models.team import TeamSeason
 from app.models.field import Field
+from app.models.league import League
 from app.models.organization import Organization
 from app.models.partner_payment import PartnerCredit
 from app.extensions import db
@@ -329,15 +330,19 @@ def api_add_event(year, is_spring):
             game_dt = datetime.strptime(f'{game_date} {game_time}', '%Y-%m-%d %H:%M')
 
             # Look up field_id from field_name
-            from app.models.field import Field
             field_obj = Field.query.filter_by(location_title=field_name, active=1).first()
             field_id = field_obj.ID if field_obj else None
+
+            # Look up league_id from league name
+            league_obj = League.get_by_name(league) if league else None
+            league_id = league_obj.ID if league_obj else None
 
             new_game = Game(
                 active=1,
                 year=year,
                 is_spring=is_spring,
                 league=league,
+                league_id=league_id,
                 game_type='practice' if event_type in ['practice', 'division_practice'] else 'regular',
                 game_date=game_dt,
                 field_id=field_id,
@@ -777,12 +782,17 @@ def manage(year, is_spring):
                     if field:
                         field_id = field.ID
 
+                # Look up league_id from league name
+                league_obj = League.get_by_name(league) if league else None
+                league_id = league_obj.ID if league_obj else None
+
                 # Create the game
                 new_game = Game(
                     active=1,
                     year=year,
                     is_spring=is_spring,
                     league=league,
+                    league_id=league_id,
                     game_type=game_type,
                     game_date=game_date,
                     field_id=field_id,
@@ -1973,6 +1983,10 @@ def league_practice(year, is_spring):
             flash(f'No teams found for {league}.', 'error')
             return redirect(url_for('games.league_practice', year=year, is_spring=is_spring))
 
+        # Look up league_id from league name
+        league_obj = League.get_by_name(league) if league else None
+        league_id = league_obj.ID if league_obj else None
+
         # Create a practice for each team, all marked as league practice
         created_count = 0
         for team in teams:
@@ -1982,6 +1996,7 @@ def league_practice(year, is_spring):
                 home_ID=team.team_ID,
                 away_ID=None,  # Practice = no away team
                 league=league,
+                league_id=league_id,
                 field_id=field.ID,
                 status='scheduled',
                 year=year,

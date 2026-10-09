@@ -40,6 +40,13 @@
         <br><span class="text-small text-muted">Individual leagues may have custom rates configured.</span>
     </div>
 
+    {% if league_debug %}
+    <div style="background: #fff3cd; padding: 15px; border-radius: 6px; margin-bottom: 20px; font-size: 12px;">
+        <strong>DEBUG - Leagues in lookup (name + pitch_type):</strong><br>
+        {{ league_debug | join(', ') }}
+    </div>
+    {% endif %}
+
     {% if umpire_data %}
     <table>
         <thead>
@@ -55,10 +62,10 @@
         </thead>
         <tbody>
             {% for umpire in umpire_data %}
-            <tr id="umpire-{{ umpire.official_id }}">
+            <tr id="umpire-{{ umpire.official_id }}" onclick="toggleDetails('{{ umpire.official_id }}')" style="cursor: pointer;">
                 <td>
                     <a href="https://app.assignr.com/users/{{ umpire.official_id }}" target="_blank"
-                       title="View in Assignr">
+                       title="View in Assignr" onclick="event.stopPropagation();">
                         {{ umpire.full_name }}
                     </a>
                     {% if umpire.email %}
@@ -79,6 +86,41 @@
                     {% endif %}
                 </td>
                 <td style="text-align: right;"><strong>${{ "%.2f"|format(umpire.total_pay) }}</strong></td>
+            </tr>
+            <tr id="details-{{ umpire.official_id }}" style="display: none; background: #f8f9fa;">
+                <td colspan="7" style="padding: 10px 20px;">
+                    <strong>Game Details (DEBUG):</strong>
+                    <table style="width: 100%; margin-top: 8px; font-size: 12px;">
+                        <thead style="background: #e9ecef;">
+                            <tr>
+                                <th>Date</th>
+                                <th>League</th>
+                                <th>ID</th>
+                                <th>Found?</th>
+                                <th>Pitch Type</th>
+                                <th>Position</th>
+                                <th>Rate</th>
+                                <th>Mult</th>
+                                <th>Pay</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for game in umpire.game_details %}
+                            <tr style="{{ 'background: #ffcccc;' if not game.league_found else '' }}">
+                                <td>{{ game.game_date }}</td>
+                                <td>{{ game.league_name or '(empty)' }}</td>
+                                <td>{{ game.league_id or '-' }}</td>
+                                <td>{{ 'YES' if game.league_found else 'NO' }}</td>
+                                <td>{{ game.pitch_type }}</td>
+                                <td style="{{ 'color: red; font-weight: bold;' if game.position == 'plate' and not game.league_found else '' }}">{{ game.position }}</td>
+                                <td>${{ "%.2f"|format(game.rate) }}</td>
+                                <td>{{ game.multiplier }}</td>
+                                <td>${{ "%.2f"|format(game.pay) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
@@ -124,5 +166,14 @@ document.getElementById('season-picker').addEventListener('change', function() {
     var parts = this.value.split('/');
     window.location.href = '{{ url_for("treasurer.managed_umpires") }}/' + parts[0] + '/' + parts[1];
 });
+
+function toggleDetails(officialId) {
+    var detailsRow = document.getElementById('details-' + officialId);
+    if (detailsRow.style.display === 'none') {
+        detailsRow.style.display = '';
+    } else {
+        detailsRow.style.display = 'none';
+    }
+}
 </script>
 {% endblock %}

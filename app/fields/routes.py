@@ -246,6 +246,12 @@ def manage_allocations(year, is_spring):
             start_time = time.fromisoformat(start_time_str)
             end_time = time.fromisoformat(end_time_str)
 
+            # Look up league_id from league name
+            league_id = None
+            if league:
+                league_obj = League.get_by_name(league)
+                league_id = league_obj.ID if league_obj else None
+
             slot = FieldSlot(
                 active=1,
                 field_ID=field_id,
@@ -255,6 +261,7 @@ def manage_allocations(year, is_spring):
                 start_time=start_time,
                 end_time=end_time,
                 league=league,
+                league_id=league_id,
                 is_owned=is_owned,
                 notes=notes
             )
@@ -287,7 +294,14 @@ def manage_allocations(year, is_spring):
                 slot.day_of_week = int(request.form.get('day_of_week'))
                 slot.start_time = time.fromisoformat(request.form.get('start_time'))
                 slot.end_time = time.fromisoformat(request.form.get('end_time'))
-                slot.league = request.form.get('league') or None
+                league = request.form.get('league') or None
+                slot.league = league
+                # Look up league_id from league name
+                if league:
+                    league_obj = League.get_by_name(league)
+                    slot.league_id = league_obj.ID if league_obj else None
+                else:
+                    slot.league_id = None
                 slot.is_owned = 1 if request.form.get('is_owned') else 0
                 slot.notes = request.form.get('notes') or None
                 db.session.commit()
@@ -334,6 +348,12 @@ def manage_allocations(year, is_spring):
             start_time = time.fromisoformat(start_time_str)
             end_time = time.fromisoformat(end_time_str)
 
+            # Look up league_id from league name
+            league_id = None
+            if league:
+                league_obj = League.get_by_name(league)
+                league_id = league_obj.ID if league_obj else None
+
             alloc = FieldAllocationSpecific(
                 active=1,
                 field_ID=field_id,
@@ -343,6 +363,7 @@ def manage_allocations(year, is_spring):
                 start_time=start_time,
                 end_time=end_time,
                 league=league,
+                league_id=league_id,
                 is_owned=is_owned,
                 notes=notes
             )
@@ -374,7 +395,14 @@ def manage_allocations(year, is_spring):
                 alloc.allocation_date = datetime.strptime(allocation_date_str, '%Y-%m-%d').date()
                 alloc.start_time = time.fromisoformat(request.form.get('start_time'))
                 alloc.end_time = time.fromisoformat(request.form.get('end_time'))
-                alloc.league = request.form.get('league') or None
+                league = request.form.get('league') or None
+                alloc.league = league
+                # Look up league_id from league name
+                if league:
+                    league_obj = League.get_by_name(league)
+                    alloc.league_id = league_obj.ID if league_obj else None
+                else:
+                    alloc.league_id = None
                 alloc.is_owned = 1 if request.form.get('is_owned') else 0
                 alloc.notes = request.form.get('notes') or None
                 db.session.commit()

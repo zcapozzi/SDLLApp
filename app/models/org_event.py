@@ -63,7 +63,8 @@ class OrgEvent(db.Model):
 
     scope = db.Column(db.String(20), default=SCOPE_ORG)
     sport = db.Column(db.String(20))  # 'baseball', 'softball', or null
-    league = db.Column(db.String(50))  # League name or null
+    league = db.Column(db.String(50))  # DEPRECATED: Use league_id instead
+    league_id = db.Column(db.BigInteger, db.ForeignKey('sdll_leagues.ID'))
     team_id = db.Column(db.BigInteger, db.ForeignKey('sdll_team_seasons.team_ID'))
 
     # Season context
@@ -86,6 +87,7 @@ class OrgEvent(db.Model):
     field = db.relationship('Field', foreign_keys=[field_id])
     team = db.relationship('TeamSeason', foreign_keys=[team_id])
     created_by = db.relationship('User', foreign_keys=[created_by_user_id])
+    league_rel = db.relationship('League', foreign_keys=[league_id], lazy='joined')
 
     def __repr__(self):
         return f'<OrgEvent {self.id}: {self.title} on {self.event_date}>'

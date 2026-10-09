@@ -1867,6 +1867,12 @@ def add_org_event(year, is_spring):
         except (ValueError, TypeError):
             field_id = None
 
+    # Look up league_id from league name
+    league_id = None
+    if league:
+        league_obj = League.get_by_name(league)
+        league_id = league_obj.ID if league_obj else None
+
     event = OrgEvent(
         title=title,
         description=request.form.get('description', '').strip() or None,
@@ -1880,6 +1886,7 @@ def add_org_event(year, is_spring):
         scope=scope,
         sport=sport,
         league=league,
+        league_id=league_id,
         team_id=team_id,
         year=year,
         is_spring=is_spring,
@@ -1964,6 +1971,12 @@ def edit_org_event(year, is_spring, event_id):
             except (ValueError, TypeError):
                 field_id = None
 
+        # Look up league_id from league name
+        league_id = None
+        if league:
+            league_obj = League.get_by_name(league)
+            league_id = league_obj.ID if league_obj else None
+
         event.title = title
         event.description = request.form.get('description', '').strip() or None
         event.event_date = event_date
@@ -1976,6 +1989,7 @@ def edit_org_event(year, is_spring, event_id):
         event.scope = scope
         event.sport = sport
         event.league = league
+        event.league_id = league_id
         event.team_id = team_id
         event.status = request.form.get('status', OrgEvent.STATUS_ACTIVE)
 
