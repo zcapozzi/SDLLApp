@@ -874,10 +874,10 @@
             </div>
             {% endif %}
             {% if next_is_recordable and not next_existing_record %}
-            <div class="game-start-form" id="start-form-{{ next_game.ID }}" style="background: rgba(0,0,0,0.15); border-top: 1px solid rgba(255,255,255,0.2); margin: 15px -20px -20px -20px; padding: 15px 20px; border-radius: 0 0 12px 12px;">
+            <div class="game-start-form show" id="start-form-{{ next_game.ID }}" style="background: rgba(0,0,0,0.15); border-top: 1px solid rgba(255,255,255,0.2); margin: 15px -20px -20px -20px; padding: 15px 20px; border-radius: 0 0 12px 12px;">
                 <label style="color: rgba(255,255,255,0.9);">When was the first pitch thrown?</label>
                 <div class="input-row">
-                    <input type="time" id="start-time-{{ next_game.ID }}" value="" style="flex: 1;">
+                    <input type="time" id="start-time-{{ next_game.ID }}" class="time-input-init" value="" style="flex: 1;" step="60">
                     <button class="btn-save" onclick="saveGameStart({{ next_game.ID }})" style="background: white; color: rgb(255, 140, 0);">Save</button>
                     <button class="btn-cancel" onclick="hideStartForm({{ next_game.ID }})" style="background: rgba(255,255,255,0.2); color: white; border-color: rgba(255,255,255,0.3);">Cancel</button>
                 </div>
@@ -1196,7 +1196,7 @@
                 <div class="game-start-form" id="start-form-{{ game.ID }}">
                     <label>When was the first pitch thrown?</label>
                     <div class="input-row">
-                        <input type="time" id="start-time-{{ game.ID }}" value="">
+                        <input type="time" id="start-time-{{ game.ID }}" value="" step="60">
                         <button class="btn-save" onclick="saveGameStart({{ game.ID }})">Save</button>
                         <button class="btn-cancel" onclick="hideStartForm({{ game.ID }})">Cancel</button>
                     </div>
@@ -1795,6 +1795,22 @@
         hours = hours % 12 || 12;
         return hours + ':' + minutes + ' ' + ampm;
     }
+
+    // Initialize time inputs that are already visible on page load
+    // (e.g., the "next game" card form which starts visible)
+    (function initTimeInputs() {
+        var timeInputs = document.querySelectorAll('.time-input-init');
+        timeInputs.forEach(function(input) {
+            // Only set default if input is visible (form has .show class) and empty
+            var form = input.closest('.game-start-form');
+            if (form && form.classList.contains('show') && !input.value) {
+                var now = new Date();
+                var hours = String(now.getHours()).padStart(2, '0');
+                var minutes = String(now.getMinutes()).padStart(2, '0');
+                input.value = hours + ':' + minutes;
+            }
+        });
+    })();
     </script>
 </body>
 </html>
