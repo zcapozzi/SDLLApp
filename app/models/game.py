@@ -384,7 +384,11 @@ class Game(db.Model):
         ).filter(cls.home_ID.is_(None))
 
         if league:
-            query = query.filter_by(league=league)
+            # Convert league name to ID if needed
+            from app.models.league import League
+            league_id = league if isinstance(league, int) else (League.get_by_name(league).ID if League.get_by_name(league) else None)
+            if league_id:
+                query = query.filter_by(league_id=league_id)
         if game_type:
             query = query.filter_by(game_type=game_type)
 
@@ -398,7 +402,7 @@ class Game(db.Model):
         Args:
             year: Season year
             is_spring: Whether spring season
-            league: Optional league filter
+            league: Optional league name or ID filter
             game_type: Optional game_type filter
 
         Returns:
@@ -411,7 +415,11 @@ class Game(db.Model):
         ).filter(cls.home_ID.isnot(None))
 
         if league:
-            query = query.filter_by(league=league)
+            # Convert league name to ID if needed
+            from app.models.league import League
+            league_id = league if isinstance(league, int) else (League.get_by_name(league).ID if League.get_by_name(league) else None)
+            if league_id:
+                query = query.filter_by(league_id=league_id)
         if game_type:
             query = query.filter_by(game_type=game_type)
 
@@ -425,7 +433,7 @@ class Game(db.Model):
         Args:
             year: Season year
             is_spring: Whether spring season
-            league: Optional league filter (clears only that league)
+            league: Optional league name or ID filter (clears only that league)
         """
         query = cls.query.filter_by(
             year=year,
@@ -433,7 +441,11 @@ class Game(db.Model):
             active=1
         )
         if league:
-            query = query.filter_by(league=league)
+            # Convert league name to ID if needed
+            from app.models.league import League
+            league_id = league if isinstance(league, int) else (League.get_by_name(league).ID if League.get_by_name(league) else None)
+            if league_id:
+                query = query.filter_by(league_id=league_id)
 
         games = query.all()
         for game in games:
