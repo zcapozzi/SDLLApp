@@ -185,7 +185,7 @@ class LeagueSeason(db.Model):
             year=year,
             is_spring=is_spring,
             active=1
-        ).order_by(cls.league).all()
+        ).order_by(cls.league_id).all()
 
     @classmethod
     def get_or_create(cls, year, is_spring, league):

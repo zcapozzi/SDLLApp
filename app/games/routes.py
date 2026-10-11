@@ -461,7 +461,7 @@ def api_event_options(year, is_spring):
         is_spring=is_spring,
         active=1,
         is_placeholder=0
-    ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+    ).order_by(TeamSeason.league_id, TeamSeason.display_name).all()
 
     teams_by_league = {}
     for team in teams:
@@ -890,7 +890,7 @@ def manage(year, is_spring):
         year=year,
         is_spring=is_spring,
         active=1
-    ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+    ).order_by(TeamSeason.league_id, TeamSeason.display_name).all()
 
     # Get all fields for location dropdown
     fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
@@ -1230,7 +1230,7 @@ def calendar(year, is_spring):
         year=year,
         is_spring=is_spring,
         active=1
-    ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+    ).order_by(TeamSeason.league_id, TeamSeason.display_name).all()
 
     fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
 
@@ -1556,7 +1556,7 @@ def day_view(year, is_spring, target_date):
         year=year,
         is_spring=is_spring,
         active=1
-    ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+    ).order_by(TeamSeason.league_id, TeamSeason.display_name).all()
 
     # Get leagues for create modal
     leagues = get_leagues_for_dropdown(year, is_spring)

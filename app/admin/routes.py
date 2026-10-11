@@ -826,7 +826,7 @@ def access_requests():
             is_spring=current_season.is_spring,
             active=1,
             is_placeholder=0
-        ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+        ).order_by(TeamSeason.league_id, TeamSeason.display_name).all()
 
     # Get available roles for admin assignment
     available_roles = User.ROLES

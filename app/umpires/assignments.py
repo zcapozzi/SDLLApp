@@ -340,7 +340,7 @@ def umpire_calendar(year, is_spring):
         year=year,
         is_spring=is_spring,
         active=1
-    ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+    ).order_by(TeamSeason.league_id, TeamSeason.display_name).all()
 
     fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
 

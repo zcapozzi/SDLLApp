@@ -342,7 +342,7 @@ class TeamSeason(db.Model):
             year=year,
             is_spring=is_spring,
             active=1
-        ).order_by(cls.league, cls.display_name).all()
+        ).order_by(cls.league_id, cls.display_name).all()
 
     @classmethod
     def get_by_schedule_token(cls, token):

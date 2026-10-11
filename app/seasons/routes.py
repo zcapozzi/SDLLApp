@@ -342,7 +342,7 @@ def manage_teams(year, is_spring):
         active=1
     ).options(
         joinedload(TeamSeason.coaches)
-    ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+    ).order_by(TeamSeason.league_id, TeamSeason.display_name).all()
 
     # Group by league
     teams_by_league = {}
@@ -946,7 +946,7 @@ def manage_leagues(year, is_spring):
     league_configs = LeagueSeason.query.filter_by(
         year=year,
         is_spring=is_spring
-    ).order_by(LeagueSeason.league).all()
+    ).order_by(LeagueSeason.league_id).all()
 
     # Get League objects to access spring/fall names
     # Include both spring (display_name) and fall (fall_display_name) names
@@ -1372,7 +1372,7 @@ def team_setup(year=None, is_spring=None):
         is_placeholder=0
     ).options(
         joinedload(TeamSeason.coaches).joinedload(CoachSeason.coach).joinedload(CoachUser.user)
-    ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+    ).order_by(TeamSeason.league_id, TeamSeason.display_name).all()
 
     # Get league sport and age_rank for sorting
     from app.models.league import League
@@ -1776,12 +1776,12 @@ def org_events(year, is_spring):
     # Get leagues for the form dropdown
     leagues = LeagueSeason.query.filter_by(
         year=year, is_spring=is_spring, active=1
-    ).order_by(LeagueSeason.league).all()
+    ).order_by(LeagueSeason.league_id).all()
 
     # Get teams for the form dropdown
     teams = TeamSeason.query.filter_by(
         year=year, is_spring=is_spring, active=1, is_placeholder=0
-    ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+    ).order_by(TeamSeason.league_id, TeamSeason.display_name).all()
 
     # Get fields for the form dropdown
     fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
@@ -2002,11 +2002,11 @@ def edit_org_event(year, is_spring, event_id):
     # GET - show edit form
     leagues = LeagueSeason.query.filter_by(
         year=year, is_spring=is_spring, active=1
-    ).order_by(LeagueSeason.league).all()
+    ).order_by(LeagueSeason.league_id).all()
 
     teams = TeamSeason.query.filter_by(
         year=year, is_spring=is_spring, active=1, is_placeholder=0
-    ).order_by(TeamSeason.league, TeamSeason.display_name).all()
+    ).order_by(TeamSeason.league_id, TeamSeason.display_name).all()
 
     fields = Field.query.filter_by(active=1).order_by(Field.location_title).all()
 
