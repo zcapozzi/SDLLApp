@@ -22,6 +22,7 @@ from app.models.league import League
 from app.models.team import TeamSeason
 from app.models.umpire_payment import UmpirePayment
 from app.utils.logging import SDLLLogger
+from app.utils.league_helpers import get_league_id_from_request
 
 umpire_portal_bp = Blueprint('umpire_portal', __name__)
 logger = SDLLLogger('umpire_portal')
@@ -190,7 +191,7 @@ def _get_available_games_query(profile):
         # Check if SDLL umpires can work this league
         if not league.can_use_sdll_umpires():
             continue
-        eligible_leagues.append(league.display_name)
+        eligible_leagues.append(league.ID)
 
     # Games needing umpires
     return Game.query.filter(
@@ -198,7 +199,7 @@ def _get_available_games_query(profile):
         Game.active == 1,
         Game.status == 'scheduled',
         Game.game_type.in_(['regular', 'playoff']),
-        Game.league.in_(eligible_leagues) if eligible_leagues else False,
+        Game.league_id.in_(eligible_leagues) if eligible_leagues else False,
         # No current umpire assignment
         ~Game.ID.in_(
             db.session.query(GameUmpire.game_id).filter(
@@ -218,7 +219,7 @@ def available():
 
     # Date filter
     date_filter = request.args.get('date', '')
-    league_filter = request.args.get('league', '')
+    league_id_filter = get_league_id_from_request('league')
 
     query = _get_available_games_query(profile)
 
@@ -229,8 +230,8 @@ def available():
         except ValueError:
             pass
 
-    if league_filter:
-        query = query.filter(Game.league == league_filter)
+    if league_id_filter:
+        query = query.filter(Game.league_id == league_id_filter)
 
     games = query.order_by(Game.game_date).limit(50).all()
 
@@ -238,12 +239,18 @@ def available():
     all_leagues = League.get_all_active()
     eligible_leagues = [l for l in all_leagues if l.needs_umpires and l.can_use_sdll_umpires()]
 
+    # Get current league name for filter display
+    current_league_name = None
+    if league_id_filter:
+        league_obj = League.query.get(league_id_filter)
+        current_league_name = league_obj.display_name if league_obj else None
+
     return render_template(
         'umpire_portal/available.html',
         games=games,
         leagues=eligible_leagues,
         date_filter=date_filter,
-        league_filter=league_filter
+        league_filter=current_league_name or ''
     )
 
 

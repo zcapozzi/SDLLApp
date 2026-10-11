@@ -13,6 +13,7 @@ from app.models.coach import CoachUser
 from app.models.org_season import OrgSeason
 from app.services.notification_service import GmailService
 from app.utils.logging import SDLLLogger
+from app.utils.league_helpers import get_league_id_from_request
 
 admin_bp = Blueprint('admin', __name__)
 logger = SDLLLogger('admin')
@@ -919,12 +920,12 @@ def postgame_reports():
 
     year = request.args.get('year', current_season.year, type=int)
     is_spring = request.args.get('is_spring', current_season.is_spring, type=int)
-    league_filter = request.args.get('league', '')
+    league_id_filter = get_league_id_from_request('league')
     status_filter = request.args.get('status', '')
 
     # Get leagues for filter dropdown
-    leagues = LeagueSeason.get_by_season(year, is_spring)
-    league_names = [ls.league for ls in leagues]
+    from app.utils.league_helpers import get_leagues_for_dropdown
+    leagues = get_leagues_for_dropdown(year, is_spring)
 
     # Build query
     query = PostGameReport.query.join(Game).options(
@@ -937,22 +938,29 @@ def postgame_reports():
         Game.is_spring == is_spring
     )
 
-    if league_filter:
-        query = query.filter(Game.league == league_filter)
+    if league_id_filter:
+        query = query.filter(Game.league_id == league_id_filter)
     if status_filter:
         query = query.filter(PostGameReport.status == status_filter)
 
     reports = query.order_by(Game.game_date.desc()).all()
 
+    # Get current league name for stats and display
+    current_league_name = None
+    if league_id_filter:
+        from app.models.league import League
+        league_obj = League.query.get(league_id_filter)
+        current_league_name = league_obj.display_name if league_obj else None
+
     # Get summary stats
-    stats = PostGameReport.get_completion_stats(year, is_spring, league_filter or None)
+    stats = PostGameReport.get_completion_stats(year, is_spring, current_league_name)
 
     return render_template(
         'admin/postgame_reports.html',
         reports=reports,
         stats=stats,
-        leagues=league_names,
-        league_filter=league_filter,
+        leagues=leagues,
+        league_filter=current_league_name or '',
         status_filter=status_filter,
         year=year,
         is_spring=is_spring

@@ -10,6 +10,7 @@ This service handles:
 from datetime import datetime, timedelta
 from collections import defaultdict
 from app.extensions import db
+from app.utils.league_helpers import get_league_id_from_param
 
 
 def is_partner_eligible(game):
@@ -158,9 +159,12 @@ def get_allocation_stats(league_id, year, is_spring):
     for p in partners:
         stats[p.short_code.lower()] = {'count': 0, 'pct': 0}
 
+    # Convert league_id to proper format (may be string name or int ID)
+    resolved_league_id = get_league_id_from_param(league_id) if isinstance(league_id, str) else league_id
+
     # Get all games for this league/season (exclude practices)
     games = Game.query.filter(
-        Game.league == (league_id if isinstance(league_id, str) else None),
+        Game.league_id == resolved_league_id if resolved_league_id else Game.league == league_id,
         Game.year == year,
         Game.is_spring == is_spring,
         Game.active == 1,

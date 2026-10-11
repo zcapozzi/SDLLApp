@@ -339,7 +339,11 @@ class PostGameReport(db.Model):
         Returns dict with counts of pending, submitted, and not_played.
         """
         from app.models.game import Game
+        from app.utils.league_helpers import get_league_id_from_param
         from sqlalchemy import func
+
+        # Convert league name to ID if provided
+        league_id = get_league_id_from_param(league) if league else None
 
         # Get all completed games count
         games_query = db.session.query(func.count(Game.ID)).filter(
@@ -352,7 +356,9 @@ class PostGameReport(db.Model):
             Game.away_ID.isnot(None)
         )
 
-        if league:
+        if league_id:
+            games_query = games_query.filter(Game.league_id == league_id)
+        elif league:
             games_query = games_query.filter(Game.league == league)
 
         total_games = games_query.scalar() or 0
@@ -369,7 +375,9 @@ class PostGameReport(db.Model):
             Game.active == 1
         )
 
-        if league:
+        if league_id:
+            reports_query = reports_query.filter(Game.league_id == league_id)
+        elif league:
             reports_query = reports_query.filter(Game.league == league)
 
         report_counts = dict(reports_query.group_by(cls.status).all())

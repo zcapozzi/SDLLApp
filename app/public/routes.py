@@ -66,6 +66,7 @@ from app.models.umpire_partner import UmpirePartner
 from app.models.game_change import GameChange
 from app.models.game_start_record import GameStartRecord
 from app.extensions import db
+from app.utils.league_helpers import get_league_id_from_param
 import sys
 import csv
 from io import StringIO
@@ -1275,10 +1276,13 @@ def user_has_coach_access(user_id, year, is_spring, league):
     if not coach_team_ids:
         return False
 
+    # Look up league_id for filtering
+    league_id = get_league_id_from_param(league)
+
     # Check 1: Team is directly in this league
     direct_match = TeamSeason.query.filter(
         TeamSeason.team_ID.in_(coach_team_ids),
-        TeamSeason.league == league
+        TeamSeason.league_id == league_id if league_id else TeamSeason.league == league
     ).count() > 0
 
     if direct_match:
@@ -1289,7 +1293,7 @@ def user_has_coach_access(user_id, year, is_spring, league):
     games_in_league = Game.query.filter(
         Game.year == year,
         Game.is_spring == is_spring,
-        Game.league == league,
+        Game.league_id == league_id if league_id else Game.league == league,
         Game.active == 1,
         or_(
             Game.home_ID.in_(coach_team_ids),
@@ -1347,7 +1351,7 @@ def division_schedule(token):
         Game.active == 1,
         Game.year == league_season.year,
         Game.is_spring == league_season.is_spring,
-        Game.league == league_season.league
+        Game.league_id == league_season.league_id if league_season.league_id else Game.league == league_season.league
     ).order_by(Game.game_date).all()
 
     today = date.today()
@@ -1709,7 +1713,7 @@ def division_schedule_csv(token):
         Game.active == 1,
         Game.year == league_season.year,
         Game.is_spring == league_season.is_spring,
-        Game.league == league_season.league,
+        Game.league_id == league_season.league_id if league_season.league_id else Game.league == league_season.league,
         Game.game_type != 'practice',  # Exclude practices from CSV
         Game.home_ID.isnot(None),  # Must have home team (exclude placeholders)
         Game.away_ID.isnot(None)   # Must have away team (exclude placeholders)

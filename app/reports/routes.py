@@ -16,6 +16,7 @@ from app.models.league_season import LeagueSeason
 from app.models.league import League
 from app.models.field import Field
 from app.extensions import db
+from app.utils.league_helpers import get_league_id_from_request, get_league_id_from_param
 
 
 @reports_bp.route('/')
@@ -234,11 +235,14 @@ def schedule_downloads():
         # Combine and add info
         all_leagues = sorted(saved_leagues | proposal_leagues)
         for league_name in all_leagues:
+            # Look up league_id for filtering
+            league_id = get_league_id_from_param(league_name)
+
             # Count games from saved (games and scrimmages, with dates)
             saved_count = Game.query.filter(
                 Game.year == year,
                 Game.is_spring == is_spring,
-                Game.league == league_name,
+                Game.league_id == league_id if league_id else Game.league == league_name,
                 Game.active == 1,
                 Game.game_type.in_(['regular', 'playoff']),
                 Game.game_date.isnot(None)
@@ -298,13 +302,16 @@ def download_league_schedule(year, is_spring, league):
     Games and scrimmages (no practices). Uses saved games if available, otherwise proposal.
     Only includes games with dates set.
     """
+    # Convert league name/ID to league_id for filtering
+    league_id = get_league_id_from_param(league)
+
     events = []
 
     # Check for saved games first (only those with dates)
     saved_games = Game.query.filter(
         Game.year == year,
         Game.is_spring == is_spring,
-        Game.league == league,
+        Game.league_id == league_id if league_id else Game.league == league,
         Game.active == 1,
         Game.game_type.in_(['regular', 'playoff']),
         Game.game_date.isnot(None)

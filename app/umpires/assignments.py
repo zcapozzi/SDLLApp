@@ -20,6 +20,7 @@ from app.models.umpire_partner import UmpirePartner
 from app.models.game_umpire import GameUmpire
 from app.models.league import League
 from app.models.game import Game
+from app.utils.league_helpers import get_league_id_from_request, get_leagues_for_dropdown
 
 from . import umpires_bp, umpire_coordinator_required, logger
 
@@ -235,7 +236,7 @@ def umpire_calendar(year, is_spring):
     week_param = request.args.get('week')
 
     # Get league filter
-    league = request.args.get('league')
+    league_id = get_league_id_from_request('league')
 
     # Determine the date range for this season
     configs = LeagueSeason.get_by_season(year, is_spring)
@@ -280,8 +281,8 @@ def umpire_calendar(year, is_spring):
         db.func.date(Game.game_date) <= week_end,
         Game.game_type.in_(['regular', 'playoff'])
     )
-    if league:
-        week_query = week_query.filter(Game.league == league)
+    if league_id:
+        week_query = week_query.filter(Game.league_id == league_id)
 
     all_week_games = week_query.order_by(Game.game_date, Game.field_id).all()
 
@@ -331,15 +332,8 @@ def umpire_calendar(year, is_spring):
     prev_week = (week_start - timedelta(days=7)).strftime('%G-%V')
     next_week = (week_start + timedelta(days=7)).strftime('%G-%V')
 
-    # Get leagues for filter
-    leagues = db.session.query(Game.league).filter(
-        Game.year == year,
-        Game.is_spring == is_spring,
-        Game.league.isnot(None),
-        Game.game_type.in_(['regular', 'playoff'])
-    ).distinct().all()
-    leagues = [l[0] for l in leagues if l[0]]
-    leagues.sort()
+    # Get leagues for filter dropdown
+    leagues = get_leagues_for_dropdown(year, is_spring)
 
     # Get teams and fields for reference
     teams = TeamSeason.query.filter_by(
@@ -416,7 +410,7 @@ def umpire_day_view(year, is_spring, date=None):
             view_date = datetime.today().date()
 
     # Get league filter
-    league = request.args.get('league')
+    league_id = get_league_id_from_request('league')
 
     # Query all games for the day with eager loading
     day_query = Game.query.options(
@@ -430,8 +424,8 @@ def umpire_day_view(year, is_spring, date=None):
         db.func.date(Game.game_date) == view_date,
         Game.game_type.in_(['regular', 'playoff'])
     )
-    if league:
-        day_query = day_query.filter(Game.league == league)
+    if league_id:
+        day_query = day_query.filter(Game.league_id == league_id)
 
     games = day_query.order_by(Game.game_date, Game.field_id).all()
 
@@ -467,15 +461,8 @@ def umpire_day_view(year, is_spring, date=None):
     prev_date = view_date - timedelta(days=1)
     next_date = view_date + timedelta(days=1)
 
-    # Get leagues for filter
-    leagues = db.session.query(Game.league).filter(
-        Game.year == year,
-        Game.is_spring == is_spring,
-        Game.league.isnot(None),
-        Game.game_type.in_(['regular', 'playoff'])
-    ).distinct().all()
-    leagues = [l[0] for l in leagues if l[0]]
-    leagues.sort()
+    # Get leagues for filter dropdown
+    leagues = get_leagues_for_dropdown(year, is_spring)
 
     # Get umpire partners for legend
     partners = UmpirePartner.get_active()

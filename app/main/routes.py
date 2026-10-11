@@ -5,6 +5,7 @@ from flask_login import login_required, current_user
 from app.models.game import Game
 from app.models.team import TeamSeason
 from app.extensions import db
+from app.utils.league_helpers import get_leagues_for_dropdown
 
 main_bp = Blueprint('main', __name__)
 
@@ -1596,21 +1597,14 @@ def master_schedule():
     games = query.order_by(Game.game_date).all()
 
     # Get unique leagues and fields for filter dropdowns
-    leagues = db.session.query(Game.league).filter(
-        Game.year == year,
-        Game.is_spring == is_spring,
-        Game.active == 1,
-        Game.league.isnot(None)
-    ).distinct().order_by(Game.league).all()
-    leagues = [l[0] for l in leagues if l[0]]
+    leagues_dropdown = get_leagues_for_dropdown(year, is_spring)
+    leagues = [l['name'] for l in leagues_dropdown if l.get('id')]
 
     # Build league display name lookup (maps league name to seasonal display name)
     # e.g., "BB AA" -> "BB Cactus" for Fall
-    from app.models.league import League
-    all_leagues = League.get_all_active()
     league_display_names = {
-        league.display_name: league.get_seasonal_name(is_spring)
-        for league in all_leagues
+        l['name']: l['display_name']
+        for l in leagues_dropdown if l.get('id')
     }
 
     # Get available event types for filter dropdown

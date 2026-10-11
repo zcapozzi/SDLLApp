@@ -11,6 +11,7 @@ from app.models.organization import Organization
 from app.models.partner_payment import PartnerCredit
 from app.extensions import db
 from app.utils.logging import SDLLLogger
+from app.utils.league_helpers import get_league_id_from_request, get_leagues_for_dropdown
 
 games_bp = Blueprint('games', __name__)
 logger = SDLLLogger('games')
@@ -502,7 +503,7 @@ def index():
     # Get filter parameters
     year = request.args.get('year', type=int)
     is_spring = request.args.get('is_spring', type=int)
-    league = request.args.get('league')
+    league_id = get_league_id_from_request('league')
     status = request.args.get('status')
     game_mode = request.args.get('game_mode', 'games')  # 'all', 'games', 'practices'
 
@@ -513,8 +514,8 @@ def index():
         query = query.filter(Game.year == year)
     if is_spring is not None:
         query = query.filter(Game.is_spring == is_spring)
-    if league:
-        query = query.filter(Game.league == league)
+    if league_id:
+        query = query.filter(Game.league_id == league_id)
     if status:
         query = query.filter(Game.status == status)
 
@@ -529,16 +530,23 @@ def index():
 
     games = query.order_by(Game.game_date.desc()).limit(100).all()
 
-    # Get filter options
-    leagues = db.session.query(Game.league).distinct().filter(
-        Game.league.isnot(None)
+    # Get filter options - use leagues that have games
+    league_ids_with_games = db.session.query(Game.league_id).distinct().filter(
+        Game.league_id.isnot(None)
     ).all()
-    leagues = [l[0] for l in leagues if l[0]]
+    league_ids_with_games = [l[0] for l in league_ids_with_games if l[0]]
+    leagues = League.query.filter(League.ID.in_(league_ids_with_games)).order_by(League.display_name).all()
 
     years = db.session.query(Game.year).distinct().filter(
         Game.year.isnot(None)
     ).order_by(Game.year.desc()).all()
     years = [y[0] for y in years]
+
+    # Get current league name for filter display
+    current_league = None
+    if league_id:
+        current_league_obj = League.query.get(league_id)
+        current_league = current_league_obj.display_name if current_league_obj else None
 
     return render_template(
         'games/index.html',
@@ -548,7 +556,7 @@ def index():
         current_filters={
             'year': year,
             'is_spring': is_spring,
-            'league': league,
+            'league': current_league,
             'status': status,
             'game_mode': game_mode
         }
@@ -826,7 +834,7 @@ def manage(year, is_spring):
 
     # GET - show management page
     # Get filter parameters
-    league = request.args.get('league')
+    league_id = get_league_id_from_request('league')
     game_mode = request.args.get('game_mode', 'all')
     field_filter = request.args.get('field')
     date_filter = request.args.get('date')
@@ -841,8 +849,8 @@ def manage(year, is_spring):
         Game.game_date.isnot(None)
     )
 
-    if league:
-        query = query.filter(Game.league == league)
+    if league_id:
+        query = query.filter(Game.league_id == league_id)
 
     if game_mode == 'games':
         query = query.filter(Game.away_ID.isnot(None))
@@ -875,12 +883,7 @@ def manage(year, is_spring):
     games = query.order_by(Game.game_date, Game.field_id).all()
 
     # Get leagues for filter dropdown
-    leagues = db.session.query(Game.league).filter(
-        Game.year == year,
-        Game.is_spring == is_spring,
-        Game.league.isnot(None)
-    ).distinct().all()
-    leagues = [l[0] for l in leagues if l[0]]
+    leagues = get_leagues_for_dropdown(year, is_spring)
 
     # Get all teams for the dropdowns (including external teams)
     teams = TeamSeason.query.filter_by(
@@ -1033,7 +1036,7 @@ def calendar(year, is_spring):
     week_param = request.args.get('week')
 
     # Get league filter
-    league = request.args.get('league')
+    league_id = get_league_id_from_request('league')
 
     # Check if there's a proposal for this season
     from app.models.schedule_proposal import ScheduleProposal
@@ -1189,8 +1192,8 @@ def calendar(year, is_spring):
                 Game.is_spring == is_spring,
                 db.func.date(Game.game_date) == day_date
             )
-            if league:
-                query = query.filter(Game.league == league)
+            if league_id:
+                query = query.filter(Game.league_id == league_id)
 
             day_games = query.order_by(Game.game_date, Game.field_id).all()
 
@@ -1219,19 +1222,8 @@ def calendar(year, is_spring):
     next_week = (week_start + timedelta(days=7)).strftime('%G-%V')
     current_week = week_start.strftime('%G-%V')
 
-    # Get leagues for filter
-    if has_proposal:
-        # Get leagues from proposal
-        leagues = list(set(g.get('league') for g in proposal.games if g.get('league')))
-    else:
-        # Get leagues from database
-        leagues = db.session.query(Game.league).filter(
-            Game.year == year,
-            Game.is_spring == is_spring,
-            Game.league.isnot(None)
-        ).distinct().all()
-        leagues = [l[0] for l in leagues if l[0]]
-    leagues.sort()
+    # Get leagues for filter dropdown
+    leagues = get_leagues_for_dropdown(year, is_spring)
 
     # Get teams and fields for edit modal
     teams = TeamSeason.query.filter_by(
@@ -1567,13 +1559,7 @@ def day_view(year, is_spring, target_date):
     ).order_by(TeamSeason.league, TeamSeason.display_name).all()
 
     # Get leagues for create modal
-    leagues = db.session.query(Game.league).filter(
-        Game.active == 1,
-        Game.year == year,
-        Game.is_spring == is_spring,
-        Game.league.isnot(None)
-    ).distinct().order_by(Game.league).all()
-    leagues = [l[0] for l in leagues]
+    leagues = get_leagues_for_dropdown(year, is_spring)
 
     return render_template(
         'games/day_view.html',
