@@ -37,22 +37,10 @@ class FieldSlot(db.Model):
     def league_obj(self):
         """Get the League object for this slot.
 
-        Uses the league_id relationship if available, falls back to
-        string-based lookup for backward compatibility.
-
         Returns:
-            League or None: The League object if found.
+            League or None: The League object via FK relationship.
         """
-        # Prefer the FK relationship
-        if self.league_rel:
-            return self.league_rel
-
-        # Fallback to string-based lookup (deprecated path)
-        if self.league:
-            from app.models.league import League
-            return League.get_by_name(self.league)
-
-        return None
+        return self.league_rel
 
     # Day names for display
     DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
