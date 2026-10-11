@@ -63,7 +63,8 @@ class OrgEvent(db.Model):
 
     scope = db.Column(db.String(20), default=SCOPE_ORG)
     sport = db.Column(db.String(20))  # 'baseball', 'softball', or null
-    league = db.Column(db.String(50))  # DEPRECATED: Use league_id instead
+    # league column removed - use league_id FK instead
+    # Backwards-compat property defined below
     league_id = db.Column(db.BigInteger, db.ForeignKey('sdll_leagues.ID'))
     team_id = db.Column(db.BigInteger, db.ForeignKey('sdll_team_seasons.team_ID'))
 
@@ -88,6 +89,19 @@ class OrgEvent(db.Model):
     team = db.relationship('TeamSeason', foreign_keys=[team_id])
     created_by = db.relationship('User', foreign_keys=[created_by_user_id])
     league_rel = db.relationship('League', foreign_keys=[league_id], lazy='joined')
+
+    @property
+    def league_obj(self):
+        """Get the League object for this event."""
+        return self.league_rel
+
+    @property
+    def league(self):
+        """Backwards-compatible property returning league display name.
+
+        This replaces the removed league db.Column.
+        """
+        return self.league_rel.display_name if self.league_rel else None
 
     def __repr__(self):
         return f'<OrgEvent {self.id}: {self.title} on {self.event_date}>'
@@ -164,24 +178,22 @@ class OrgEvent(db.Model):
 
         if self.scope == self.SCOPE_SPORT:
             # Get team's sport from league
-            from app.models.league import League
-            league_obj = League.get_by_name(team.league)
-            team_sport = league_obj.sport if league_obj else None
+            team_sport = team.league_obj.sport if team.league_obj else None
             return team_sport == self.sport
 
         if self.scope == self.SCOPE_LEAGUE:
-            return team.league == self.league
+            return team.league_id == self.league_id
 
         if self.scope == self.SCOPE_TEAM:
             return team.team_ID == self.team_id
 
         return False
 
-    def applies_to_league(self, league_name, sport=None):
+    def applies_to_league(self, league_id, sport=None):
         """Check if this event should appear on a division/league schedule.
 
         Args:
-            league_name: Name of the league
+            league_id: ID of the league
             sport: Sport of the league (optional, will look up if not provided)
 
         Returns:
@@ -196,12 +208,12 @@ class OrgEvent(db.Model):
         if self.scope == self.SCOPE_SPORT:
             if not sport:
                 from app.models.league import League
-                league_obj = League.get_by_name(league_name)
+                league_obj = League.query.get(league_id) if league_id else None
                 sport = league_obj.sport if league_obj else None
             return sport == self.sport
 
         if self.scope == self.SCOPE_LEAGUE:
-            return league_name == self.league
+            return league_id == self.league_id
 
         # Team-scoped events don't show on division schedules
         return False
@@ -217,11 +229,8 @@ class OrgEvent(db.Model):
         Returns:
             List of OrgEvent instances
         """
-        from app.models.league import League
-
-        # Get team's sport
-        league_obj = League.get_by_name(team.league)
-        team_sport = league_obj.sport if league_obj else None
+        # Get team's sport from league relationship
+        team_sport = team.league_obj.sport if team.league_obj else None
 
         query = cls.query.filter(
             cls.year == team.year,
@@ -237,7 +246,7 @@ class OrgEvent(db.Model):
         scope_filters = [
             cls.scope == cls.SCOPE_ORG,  # Org-wide
             db.and_(cls.scope == cls.SCOPE_TEAM, cls.team_id == team.team_ID),  # This team
-            db.and_(cls.scope == cls.SCOPE_LEAGUE, cls.league == team.league),  # This league
+            db.and_(cls.scope == cls.SCOPE_LEAGUE, cls.league_id == team.league_id),  # This league
         ]
 
         if team_sport:
@@ -250,11 +259,11 @@ class OrgEvent(db.Model):
         return query.order_by(cls.event_date, cls.start_time).all()
 
     @classmethod
-    def get_for_league(cls, league_name, year, is_spring, include_cancelled=False):
+    def get_for_league(cls, league_id, year, is_spring, include_cancelled=False):
         """Get all events that apply to a league/division schedule.
 
         Args:
-            league_name: Name of the league
+            league_id: ID of the league
             year: Season year
             is_spring: Spring (1) or Fall (0)
             include_cancelled: Include cancelled events
@@ -265,7 +274,7 @@ class OrgEvent(db.Model):
         from app.models.league import League
 
         # Get league's sport
-        league_obj = League.get_by_name(league_name)
+        league_obj = League.query.get(league_id) if league_id else None
         league_sport = league_obj.sport if league_obj else None
 
         query = cls.query.filter(
@@ -281,7 +290,7 @@ class OrgEvent(db.Model):
         from sqlalchemy import or_
         scope_filters = [
             cls.scope == cls.SCOPE_ORG,  # Org-wide
-            db.and_(cls.scope == cls.SCOPE_LEAGUE, cls.league == league_name),  # This league
+            db.and_(cls.scope == cls.SCOPE_LEAGUE, cls.league_id == league_id),  # This league
         ]
 
         if league_sport:

@@ -17,7 +17,8 @@ class TeamSeason(db.Model):
     team_ID = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     active = db.Column(db.SmallInteger, default=1)
     year = db.Column(db.Integer)
-    league = db.Column(db.String(50))  # DEPRECATED: Use league_id instead
+    # league column removed - use league_id FK instead
+    # Backwards-compat property defined below
     league_id = db.Column(db.BigInteger, db.ForeignKey('sdll_leagues.ID'))
     display_name = db.Column(db.String(50))  # Placeholder name (e.g., "BB Majors Team 1")
     team_name = db.Column(db.String(50))  # Team/mascot name for public display (e.g., "Thunderbolts")
@@ -94,6 +95,14 @@ class TeamSeason(db.Model):
         return self.league_rel
 
     @property
+    def league(self):
+        """Backwards-compatible property returning league display name.
+
+        This replaces the removed league db.Column.
+        """
+        return self.league_rel.display_name if self.league_rel else None
+
+    @property
     def league_display_name(self):
         """Get the league display name appropriate for the season.
 
@@ -102,7 +111,7 @@ class TeamSeason(db.Model):
         """
         if self.league_rel:
             return self.league_rel.get_seasonal_name(self.is_spring)
-        return self.league or ''
+        return ''
 
     # Class-level cache for team name lookups
     _team_name_cache = {}
@@ -144,13 +153,13 @@ class TeamSeason(db.Model):
         # If this team doesn't have a name, look for a matching team that does
         # This handles the case where games are linked to placeholder teams
         # but actual teams with names exist separately
-        if self.display_name and self.league and self.year is not None and self.is_spring is not None:
-            cache_key = (self.display_name, self.league, self.year, self.is_spring)
+        if self.display_name and self.league_id and self.year is not None and self.is_spring is not None:
+            cache_key = (self.display_name, self.league_id, self.year, self.is_spring)
 
             if cache_key not in TeamSeason._team_name_cache:
                 matching_team = TeamSeason.query.filter(
                     TeamSeason.display_name == self.display_name,
-                    TeamSeason.league == self.league,
+                    TeamSeason.league_id == self.league_id,
                     TeamSeason.year == self.year,
                     TeamSeason.is_spring == self.is_spring,
                     db.or_(

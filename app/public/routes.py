@@ -1278,11 +1278,13 @@ def user_has_coach_access(user_id, year, is_spring, league):
 
     # Look up league_id for filtering
     league_id = get_league_id_from_param(league)
+    if not league_id:
+        return False  # Invalid league
 
     # Check 1: Team is directly in this league
     direct_match = TeamSeason.query.filter(
         TeamSeason.team_ID.in_(coach_team_ids),
-        TeamSeason.league_id == league_id if league_id else TeamSeason.league == league
+        TeamSeason.league_id == league_id
     ).count() > 0
 
     if direct_match:
@@ -1293,7 +1295,7 @@ def user_has_coach_access(user_id, year, is_spring, league):
     games_in_league = Game.query.filter(
         Game.year == year,
         Game.is_spring == is_spring,
-        Game.league_id == league_id if league_id else Game.league == league,
+        Game.league_id == league_id,
         Game.active == 1,
         or_(
             Game.home_ID.in_(coach_team_ids),
@@ -1351,7 +1353,7 @@ def division_schedule(token):
         Game.active == 1,
         Game.year == league_season.year,
         Game.is_spring == league_season.is_spring,
-        Game.league_id == league_season.league_id if league_season.league_id else Game.league == league_season.league
+        Game.league_id == league_season.league_id
     ).order_by(Game.game_date).all()
 
     today = date.today()
@@ -1713,7 +1715,7 @@ def division_schedule_csv(token):
         Game.active == 1,
         Game.year == league_season.year,
         Game.is_spring == league_season.is_spring,
-        Game.league_id == league_season.league_id if league_season.league_id else Game.league == league_season.league,
+        Game.league_id == league_season.league_id,
         Game.game_type != 'practice',  # Exclude practices from CSV
         Game.home_ID.isnot(None),  # Must have home team (exclude placeholders)
         Game.away_ID.isnot(None)   # Must have away team (exclude placeholders)

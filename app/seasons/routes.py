@@ -1988,7 +1988,6 @@ def edit_org_event(year, is_spring, event_id):
         event.event_type = request.form.get('event_type', OrgEvent.EVENT_TYPE_OTHER)
         event.scope = scope
         event.sport = sport
-        event.league = league
         event.league_id = league_id
         event.team_id = team_id
         event.status = request.form.get('status', OrgEvent.STATUS_ACTIVE)

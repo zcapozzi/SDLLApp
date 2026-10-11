@@ -27,7 +27,8 @@ class FieldAllocationSpecific(db.Model):
     allocation_date = db.Column(db.Date, nullable=False)
     start_time = db.Column(db.Time, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
-    league = db.Column(db.String(50))  # DEPRECATED: Use league_id instead. NULL = any league
+    # league column removed - use league_id FK instead
+    # Backwards-compat property defined below
     league_id = db.Column(db.BigInteger, db.ForeignKey('sdll_leagues.ID'))  # NULL = any league can use
     is_owned = db.Column(db.SmallInteger, default=1)  # 1 = SDLL owns, 0 = away only
     notes = db.Column(db.String(200))
@@ -49,6 +50,14 @@ class FieldAllocationSpecific(db.Model):
             League or None: The League object via FK relationship.
         """
         return self.league_rel
+
+    @property
+    def league(self):
+        """Backwards-compatible property returning league display name.
+
+        This replaces the removed league db.Column.
+        """
+        return self.league_rel.display_name if self.league_rel else None
 
     def __repr__(self):
         return f'<FieldAllocationSpecific {self.field.location_title if self.field else "?"} {self.allocation_date} {self.start_time}>'

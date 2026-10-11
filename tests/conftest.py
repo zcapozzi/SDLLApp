@@ -128,15 +128,21 @@ def authenticated_client(client, test_user, app):
 @pytest.fixture
 def sample_teams(app):
     """Create sample teams for testing"""
+    from app.models.league import League
+
     with app.app_context():
         teams = []
-        leagues = ['BB Majors', 'BB AAA', 'SB Majors']
+        league_names = ['BB Majors', 'BB AAA', 'SB Majors']
 
-        for i, league in enumerate(leagues):
+        for i, league_name in enumerate(league_names):
+            # Look up league_id from league name
+            league_obj = League.get_by_name(league_name)
+            league_id = league_obj.ID if league_obj else None
+
             team = TeamSeason(
                 active=1,
                 year=2025,
-                league=league,
+                league_id=league_id,
                 display_name=f'Test Team {i+1}',
                 is_placeholder=0,
                 is_spring=0  # Fall
@@ -242,6 +248,8 @@ def team_factory(app):
         team = team_factory('Test Team', league='BB Majors')
         team = team_factory()  # uses defaults
     """
+    from app.models.league import League
+
     created = []
 
     def _create(name=None, **kwargs):
@@ -249,11 +257,16 @@ def team_factory(app):
             if name is None:
                 name = f'Test Team {uuid.uuid4().hex[:8]}'
 
+            # Convert league name to league_id if provided
+            league_name = kwargs.pop('league', 'BB Majors')
+            league_obj = League.get_by_name(league_name)
+            league_id = kwargs.pop('league_id', league_obj.ID if league_obj else None)
+
             defaults = {
                 'active': 1,
                 'year': 2026,
                 'is_spring': 0,
-                'league': 'BB Majors',
+                'league_id': league_id,
                 'display_name': name,
                 'is_placeholder': 0
             }

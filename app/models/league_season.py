@@ -17,7 +17,8 @@ class LeagueSeason(db.Model):
     active = db.Column(db.SmallInteger, default=1)
     year = db.Column(db.Integer, nullable=False)
     is_spring = db.Column(db.SmallInteger, nullable=False)
-    league = db.Column(db.String(50), nullable=False)  # DEPRECATED: Use league_id instead
+    # league column removed - use league_id FK instead
+    # Backwards-compat property defined below
     league_id = db.Column(db.BigInteger, db.ForeignKey('sdll_leagues.ID'))
     playoff_format = db.Column(db.String(30), default='single_elimination')
     playoff_teams = db.Column(db.Integer, default=0)  # 0 = all teams qualify
@@ -88,6 +89,14 @@ class LeagueSeason(db.Model):
         return self.league_rel
 
     @property
+    def league(self):
+        """Backwards-compatible property returning league display name.
+
+        This replaces the removed league db.Column.
+        """
+        return self.league_rel.display_name if self.league_rel else None
+
+    @property
     def league_display_name(self):
         """Get the league display name appropriate for the season.
 
@@ -96,7 +105,7 @@ class LeagueSeason(db.Model):
         """
         if self.league_rel:
             return self.league_rel.get_seasonal_name(self.is_spring)
-        return self.league or ''
+        return ''
 
     @property
     def season_name(self):
@@ -121,7 +130,7 @@ class LeagueSeason(db.Model):
         return TeamSeason.query.filter_by(
             year=self.year,
             is_spring=self.is_spring,
-            league=self.league,
+            league_id=self.league_id,
             is_placeholder=0,
             active=1
         ).count()

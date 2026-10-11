@@ -163,13 +163,15 @@ def get_allocation_stats(league_id, year, is_spring):
     resolved_league_id = get_league_id_from_param(league_id) if isinstance(league_id, str) else league_id
 
     # Get all games for this league/season (exclude practices)
-    games = Game.query.filter(
-        Game.league_id == resolved_league_id if resolved_league_id else Game.league == league_id,
+    query = Game.query.filter(
         Game.year == year,
         Game.is_spring == is_spring,
         Game.active == 1,
         Game.game_type.in_(['regular', 'playoff', 'scrimmage'])
-    ).all()
+    )
+    if resolved_league_id:
+        query = query.filter(Game.league_id == resolved_league_id)
+    games = query.all()
 
     # Count assignments by source (use umpire_override which stores short_code)
     for game in games:

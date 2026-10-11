@@ -19,7 +19,8 @@ class FieldSlot(db.Model):
     day_of_week = db.Column(db.SmallInteger, nullable=False)  # 0=Mon, 1=Tue, ..., 6=Sun
     start_time = db.Column(db.Time, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
-    league = db.Column(db.String(50))  # DEPRECATED: Use league_id instead. NULL = any league
+    # league column removed - use league_id FK instead
+    # Backwards-compat property defined below
     league_id = db.Column(db.BigInteger, db.ForeignKey('sdll_leagues.ID'))  # NULL = any league can use
     is_owned = db.Column(db.SmallInteger, default=1)  # 1 = SDLL owns, 0 = away only
     notes = db.Column(db.String(200))
@@ -41,6 +42,14 @@ class FieldSlot(db.Model):
             League or None: The League object via FK relationship.
         """
         return self.league_rel
+
+    @property
+    def league(self):
+        """Backwards-compatible property returning league display name.
+
+        This replaces the removed league db.Column.
+        """
+        return self.league_rel.display_name if self.league_rel else None
 
     # Day names for display
     DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -110,7 +119,6 @@ class FieldSlot(db.Model):
                 day_of_week=source_slot.day_of_week,
                 start_time=source_slot.start_time,
                 end_time=source_slot.end_time,
-                league=source_slot.league,
                 league_id=source_slot.league_id,
                 is_owned=source_slot.is_owned,
                 notes=source_slot.notes

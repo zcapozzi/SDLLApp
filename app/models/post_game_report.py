@@ -358,8 +358,6 @@ class PostGameReport(db.Model):
 
         if league_id:
             games_query = games_query.filter(Game.league_id == league_id)
-        elif league:
-            games_query = games_query.filter(Game.league == league)
 
         total_games = games_query.scalar() or 0
         # Each game has 2 potential reports (one per team)
@@ -377,8 +375,6 @@ class PostGameReport(db.Model):
 
         if league_id:
             reports_query = reports_query.filter(Game.league_id == league_id)
-        elif league:
-            reports_query = reports_query.filter(Game.league == league)
 
         report_counts = dict(reports_query.group_by(cls.status).all())
 

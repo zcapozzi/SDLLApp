@@ -294,12 +294,15 @@ def manage_allocations(year, is_spring):
                 slot.day_of_week = int(request.form.get('day_of_week'))
                 slot.start_time = time.fromisoformat(request.form.get('start_time'))
                 slot.end_time = time.fromisoformat(request.form.get('end_time'))
-                league = request.form.get('league') or None
-                slot.league = league
-                # Look up league_id from league name
-                if league:
-                    league_obj = League.get_by_name(league)
-                    slot.league_id = league_obj.ID if league_obj else None
+                # Set league_id (form may pass name or ID)
+                league_val = request.form.get('league') or None
+                if league_val:
+                    # Try as ID first, then as name
+                    try:
+                        slot.league_id = int(league_val)
+                    except (ValueError, TypeError):
+                        league_obj = League.get_by_name(league_val)
+                        slot.league_id = league_obj.ID if league_obj else None
                 else:
                     slot.league_id = None
                 slot.is_owned = 1 if request.form.get('is_owned') else 0
@@ -395,12 +398,15 @@ def manage_allocations(year, is_spring):
                 alloc.allocation_date = datetime.strptime(allocation_date_str, '%Y-%m-%d').date()
                 alloc.start_time = time.fromisoformat(request.form.get('start_time'))
                 alloc.end_time = time.fromisoformat(request.form.get('end_time'))
-                league = request.form.get('league') or None
-                alloc.league = league
-                # Look up league_id from league name
-                if league:
-                    league_obj = League.get_by_name(league)
-                    alloc.league_id = league_obj.ID if league_obj else None
+                # Set league_id (form may pass name or ID)
+                league_val = request.form.get('league') or None
+                if league_val:
+                    # Try as ID first, then as name
+                    try:
+                        alloc.league_id = int(league_val)
+                    except (ValueError, TypeError):
+                        league_obj = League.get_by_name(league_val)
+                        alloc.league_id = league_obj.ID if league_obj else None
                 else:
                     alloc.league_id = None
                 alloc.is_owned = 1 if request.form.get('is_owned') else 0
