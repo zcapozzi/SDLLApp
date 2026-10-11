@@ -4,7 +4,96 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Implemented auto-scheduled day-of umpire notifications with 15-minute review period.
+Last session: Completed league_id migration (Phases 7-8) - replaced league db.Column with backwards-compatible @property in 6 models, updated all SQL queries to use league_id, ready for database column drop.
+
+---
+
+## Session: October 11, 2026 - League ID Migration Phase 7-8
+
+### Overview
+Completed the final phases of the league_id migration, replacing the `league` string column with a read-only property that provides backwards compatibility.
+
+### Changes Made
+
+#### Phase 7 & 8: Replace Column with Property
+Replaced `league` db.Column with `@property league` in 6 models:
+- `app/models/game.py` - Removed column, added property returning `league_rel.display_name`
+- `app/models/team.py` - Removed column, added property, updated cache key to use `league_id`
+- `app/models/league_season.py` - Removed column, added property, updated `actual_playoff_teams` query
+- `app/models/field_slot.py` - Removed column, added property, updated `copy_to_new_season`
+- `app/models/field_allocation_specific.py` - Removed column, added property
+- `app/models/org_event.py` - Removed column, added `league_obj` and `league` properties, updated all query methods to use `league_id`
+
+#### Query Updates
+Updated SQL queries that used `.league` to use `.league_id`:
+- `app/models/post_game_report.py` - Removed string fallbacks in `get_completion_stats`
+- `app/public/routes.py` - Removed string fallbacks in `coach_has_access_to_league` and game queries
+- `app/services/umpire_delegation_service.py` - Removed string fallbacks in delegation stats
+
+#### Write Path Updates
+Updated code that set `.league =` to use `league_id` only:
+- `app/fields/routes.py` - Slot and allocation updates now set only `league_id`
+- `app/seasons/routes.py` - OrgEvent updates now set only `league_id`
+
+#### Test Updates
+Updated test fixtures to use `league_id`:
+- `tests/conftest.py` - Updated `sample_teams` and `team_factory` to look up and pass `league_id`
+
+### Commits
+- `1fbdb21` - Phase 7-8: Replace league column with backwards-compat property
+
+### What's Left
+1. **Database Migration**: Need to DROP the `league` column from database tables. This should be done after confirming all code paths work correctly:
+   ```sql
+   ALTER TABLE sdll_games DROP COLUMN league;
+   ALTER TABLE sdll_team_seasons DROP COLUMN league;
+   ALTER TABLE sdll_league_seasons DROP COLUMN league;
+   ALTER TABLE sdll_field_slots DROP COLUMN league;
+   ALTER TABLE sdll_field_allocations_specific DROP COLUMN league;
+   ALTER TABLE sdll_org_events DROP COLUMN league;
+   ```
+
+2. **Audit Tables**: The following tables still have `league` columns and should KEEP them for historical records:
+   - `sdll_game_change_log`
+   - `sdll_umpire_dayof_notification`
+   - `sdll_umpire_payment_event`
+
+---
+
+## Session: October 6, 2026 - OrgEvent Feature Completion
+
+### Overview
+Completed the OrgEvent (organization-wide events) feature allowing admins to create events like evaluations, signups, meetings, and ceremonies that display across all schedule views.
+
+### Features Implemented
+1. **OrgEvent Model** - Events with scope (org-wide, sport, league, team), types (evaluation, signup, meeting, ceremony, practice, other)
+2. **Navigation** - Org Events links in Schedule and Current Season dropdowns with default to current season
+3. **Team Schedule** - Events appear inline with games, purple border styling
+4. **Master Schedule** - Events show in desktop table, mobile cards, and compact views with purple gradient
+5. **Scheduler Calendar Views**:
+   - **Week View**: Events appear as cards with purple gradient
+   - **Day View**: Events appear in dedicated section above grid AND in field/time grid for conflict prevention
+
+### Commits
+- `7f7ee5c` - Fix OrgEvent model foreign key references
+- `67aa632` - Add Org Events navigation with current season default
+- `670be6b` - Add org events to master schedule
+- `b1fb72d` - Add org events to scheduler calendar views (week and day)
+- `baf0494` - Fix AttributeError for OrgEvent in day view fields loop
+- `079a67c` - Show org events in day view grid to prevent scheduling conflicts
+
+### Files Modified
+- `app/models/org_event.py` - OrgEvent model
+- `app/seasons/routes.py` - Org events CRUD routes and current season redirect
+- `app/templates/seasons/org_events.html` - Org events list/management
+- `app/templates/base.html` - Navigation links
+- `app/public/routes.py` - Team schedule integration
+- `app/templates/public/team_schedule.html` - Inline event display
+- `app/main/routes.py` - Master schedule integration
+- `app/templates/main/master_schedule.html` - Event display in all views
+- `app/games/routes.py` - Calendar views (week/day) integration
+- `app/templates/games/calendar.html` - Week view event cards
+- `app/templates/games/day_view.html` - Event section + grid placement
 
 ---
 
