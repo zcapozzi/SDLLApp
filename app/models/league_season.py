@@ -189,12 +189,30 @@ class LeagueSeason(db.Model):
 
     @classmethod
     def get_or_create(cls, year, is_spring, league):
-        """Get existing config or create a new one with defaults"""
+        """Get existing config or create a new one with defaults.
+
+        Args:
+            year: Season year
+            is_spring: Whether spring season
+            league: League name or ID
+        """
+        # Convert league name to ID if needed
+        from app.models.league import League
+        if isinstance(league, int):
+            league_id = league
+            league_obj = League.query.get(league_id)
+        else:
+            league_obj = League.get_by_name(league) if league else None
+            league_id = league_obj.ID if league_obj else None
+
+        if not league_id:
+            return None
+
         # First check for active config
         config = cls.query.filter_by(
             year=year,
             is_spring=is_spring,
-            league=league,
+            league_id=league_id,
             active=1
         ).first()
 
@@ -203,7 +221,7 @@ class LeagueSeason(db.Model):
             config = cls.query.filter_by(
                 year=year,
                 is_spring=is_spring,
-                league=league,
+                league_id=league_id,
                 active=0
             ).first()
 
@@ -212,16 +230,10 @@ class LeagueSeason(db.Model):
                 config.active = 1
                 db.session.commit()
             else:
-                # Look up league_id from league name
-                from app.models.league import League
-                league_obj = League.get_by_name(league) if league else None
-                league_id = league_obj.ID if league_obj else None
-
                 # Create new
                 config = cls(
                     year=year,
                     is_spring=is_spring,
-                    league=league,
                     league_id=league_id,
                     playoff_format='single_elimination',
                     playoff_teams=0  # 0 = all teams qualify
@@ -293,25 +305,21 @@ class LeagueSeason(db.Model):
                 league_obj = League.get_by_name(league_name)
                 league_id = league_obj.ID if league_obj else None
 
-            if league_name not in existing:
+            if league_name not in existing and league_id:
                 # Check for soft-deleted config to reactivate
                 soft_deleted = cls.query.filter_by(
                     year=year,
                     is_spring=is_spring,
-                    league=league_name,
+                    league_id=league_id,
                     active=0
                 ).first()
 
                 if soft_deleted:
                     soft_deleted.active = 1
-                    # Update league_id if not set
-                    if not soft_deleted.league_id and league_id:
-                        soft_deleted.league_id = league_id
                 else:
                     config = cls(
                         year=year,
                         is_spring=is_spring,
-                        league=league_name,
                         league_id=league_id,
                         playoff_format='single_elimination',
                         playoff_teams=0  # 0 = all teams qualify

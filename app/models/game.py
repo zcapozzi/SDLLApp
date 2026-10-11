@@ -330,7 +330,6 @@ class Game(db.Model):
         for _ in range(num_games):
             game = cls(
                 active=1,
-                league=league,
                 league_id=league_id,
                 year=year,
                 is_spring=is_spring,
@@ -518,7 +517,6 @@ class Game(db.Model):
                 active=1,
                 home_ID=home_id,
                 away_ID=away_id,
-                league=league,
                 league_id=league_id,
                 status='scheduled',
                 year=year,
@@ -588,7 +586,6 @@ class Game(db.Model):
                         active=1,
                         home_ID=high_seed.team_ID,
                         away_ID=low_seed.team_ID,
-                        league=league,
                         league_id=league_id,
                         status='scheduled',
                         year=year,
@@ -607,7 +604,6 @@ class Game(db.Model):
                     active=1,
                     home_ID=None,  # TBD - winner of previous game
                     away_ID=None,  # TBD - winner of previous game
-                    league=league,
                     league_id=league_id,
                     status='scheduled',
                     year=year,
@@ -632,7 +628,6 @@ class Game(db.Model):
                     active=1,
                     home_ID=high_seed.team_ID,
                     away_ID=low_seed.team_ID,
-                    league=league,
                     league_id=league_id,
                     status='scheduled',
                     year=year,
@@ -650,7 +645,6 @@ class Game(db.Model):
                     active=1,
                     home_ID=None,
                     away_ID=None,
-                    league=league,
                     league_id=league_id,
                     status='scheduled',
                     year=year,
@@ -669,7 +663,6 @@ class Game(db.Model):
                         active=1,
                         home_ID=seeds[i].team_ID,
                         away_ID=seeds[j].team_ID,
-                        league=league,
                         league_id=league_id,
                         status='scheduled',
                         year=year,
@@ -688,7 +681,6 @@ class Game(db.Model):
                     active=1,
                     home_ID=None,
                     away_ID=None,
-                    league=league,
                     league_id=league_id,
                     status='scheduled',
                     year=year,
@@ -705,27 +697,35 @@ class Game(db.Model):
     @classmethod
     def get_by_type(cls, year, is_spring, league, game_type):
         """Get games by type (regular, playoff, practice)"""
-        return cls.query.filter_by(
+        from app.models.league import League
+        league_id = league if isinstance(league, int) else (League.get_by_name(league).ID if League.get_by_name(league) else None)
+        query = cls.query.filter_by(
             year=year,
             is_spring=is_spring,
-            league=league,
             game_type=game_type,
             active=1
-        ).order_by(cls.game_date).all()
+        )
+        if league_id:
+            query = query.filter_by(league_id=league_id)
+        return query.order_by(cls.game_date).all()
 
     @classmethod
     def count_by_type(cls, year, is_spring, league):
         """Count games by type for a league"""
         from sqlalchemy import func
-        results = db.session.query(
+        from app.models.league import League
+        league_id = league if isinstance(league, int) else (League.get_by_name(league).ID if League.get_by_name(league) else None)
+        query = db.session.query(
             cls.game_type,
             func.count(cls.ID)
         ).filter_by(
             year=year,
             is_spring=is_spring,
-            league=league,
             active=1
-        ).group_by(cls.game_type).all()
+        )
+        if league_id:
+            query = query.filter_by(league_id=league_id)
+        results = query.group_by(cls.game_type).all()
         return {game_type: count for game_type, count in results}
 
     @classmethod
@@ -735,19 +735,24 @@ class Game(db.Model):
         Returns dict: {league_name: {'regular': N, 'playoff': M, ...}}
         """
         from sqlalchemy import func
+        from app.models.league import League
         results = db.session.query(
-            cls.league,
+            cls.league_id,
             cls.game_type,
             func.count(cls.ID)
         ).filter_by(
             year=year,
             is_spring=is_spring,
             active=1
-        ).group_by(cls.league, cls.game_type).all()
+        ).group_by(cls.league_id, cls.game_type).all()
+
+        # Build league_id -> name lookup
+        league_lookup = {lg.ID: lg.display_name for lg in League.get_all_active()}
 
         games_by_league = {}
-        for league, game_type, count in results:
-            if league not in games_by_league:
-                games_by_league[league] = {}
-            games_by_league[league][game_type] = count
+        for league_id, game_type, count in results:
+            league_name = league_lookup.get(league_id, f'Unknown ({league_id})')
+            if league_name not in games_by_league:
+                games_by_league[league_name] = {}
+            games_by_league[league_name][game_type] = count
         return games_by_league

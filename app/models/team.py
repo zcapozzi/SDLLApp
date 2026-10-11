@@ -408,7 +408,6 @@ class TeamSeason(db.Model):
                 new_team = TeamSeason(
                     active=1,
                     year=target_year,
-                    league=league,
                     league_id=league_id,
                     display_name=placeholder_name,
                     team_name=None,  # Reset - no chosen name yet
@@ -472,7 +471,7 @@ class TeamSeason(db.Model):
         existing = cls.query.filter_by(
             year=year,
             is_spring=is_spring,
-            league=league,
+            league_id=league_id,
             is_placeholder=1,
             active=1
         ).filter(cls.seed_number.isnot(None)).all()
@@ -484,7 +483,6 @@ class TeamSeason(db.Model):
                 placeholder = cls(
                     active=1,
                     year=year,
-                    league=league,
                     league_id=league_id,
                     display_name=f'Seed {seed}',
                     is_placeholder=1,
@@ -527,7 +525,6 @@ class TeamSeason(db.Model):
                         placeholder = cls(
                             active=1,
                             year=year,
-                            league=league,
                             league_id=league_id,
                             display_name=f'Winner Game {game_num}',
                             is_placeholder=1,
@@ -550,7 +547,6 @@ class TeamSeason(db.Model):
                 placeholder_w = cls(
                     active=1,
                     year=year,
-                    league=league,
                     league_id=league_id,
                     display_name=f'Winner Game {game_num}',
                     is_placeholder=1,
@@ -565,7 +561,6 @@ class TeamSeason(db.Model):
                     placeholder_l = cls(
                         active=1,
                         year=year,
-                        league=league,
                         league_id=league_id,
                         display_name=f'Loser Game {game_num}',
                         is_placeholder=1,
@@ -581,14 +576,20 @@ class TeamSeason(db.Model):
     @classmethod
     def get_playoff_placeholders(cls, year, is_spring, league):
         """Get all playoff placeholders for a league, ordered by seed then bracket position."""
+        # Convert league name to ID if needed
+        from app.models.league import League
+        league_id = league if isinstance(league, int) else (League.get_by_name(league).ID if League.get_by_name(league) else None)
+
         # MySQL doesn't support NULLS LAST, so use CASE to sort nulls last
-        return cls.query.filter_by(
+        query = cls.query.filter_by(
             year=year,
             is_spring=is_spring,
-            league=league,
             is_placeholder=1,
             active=1
-        ).order_by(
+        )
+        if league_id:
+            query = query.filter_by(league_id=league_id)
+        return query.order_by(
             db.case((cls.seed_number.is_(None), 1), else_=0),
             cls.seed_number.asc(),
             cls.bracket_position.asc()
@@ -597,13 +598,19 @@ class TeamSeason(db.Model):
     @classmethod
     def get_regular_teams(cls, year, is_spring, league):
         """Get all regular (non-placeholder) teams for a league."""
-        return cls.query.filter_by(
+        # Convert league name to ID if needed
+        from app.models.league import League
+        league_id = league if isinstance(league, int) else (League.get_by_name(league).ID if League.get_by_name(league) else None)
+
+        query = cls.query.filter_by(
             year=year,
             is_spring=is_spring,
-            league=league,
             is_placeholder=0,
             active=1
-        ).order_by(cls.display_name).all()
+        )
+        if league_id:
+            query = query.filter_by(league_id=league_id)
+        return query.order_by(cls.display_name).all()
 
     def resolve_to_team(self, actual_team_id):
         """Resolve this placeholder to an actual team."""
