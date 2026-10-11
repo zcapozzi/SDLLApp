@@ -13,7 +13,8 @@ class Game(db.Model):
     game_date = db.Column(db.DateTime)
     home_ID = db.Column(db.BigInteger, db.ForeignKey('sdll_team_seasons.team_ID'))
     away_ID = db.Column(db.BigInteger, db.ForeignKey('sdll_team_seasons.team_ID'))
-    league = db.Column(db.String(30))  # DEPRECATED: Use league_id instead
+    # league column removed - use league_id FK instead
+    # Backwards-compat property defined below
     league_id = db.Column(db.BigInteger, db.ForeignKey('sdll_leagues.ID'))
     field_id = db.Column(db.BigInteger, db.ForeignKey('sdll_fields.ID'))  # FK to fields table
     status = db.Column(db.String(20), default='scheduled')  # scheduled, completed, postponed, cancelled
@@ -173,6 +174,18 @@ class Game(db.Model):
         return self.league_rel
 
     @property
+    def league(self):
+        """Backwards-compatible property returning league display name.
+
+        The league column has been removed. This property provides
+        backwards compatibility for code that reads game.league.
+
+        Returns:
+            str or None: The league display name.
+        """
+        return self.league_rel.display_name if self.league_rel else None
+
+    @property
     def league_display_name(self):
         """Get the league display name appropriate for the season.
 
@@ -181,7 +194,7 @@ class Game(db.Model):
         """
         if self.league_rel:
             return self.league_rel.get_seasonal_name(self.is_spring)
-        return self.league or ''
+        return ''
 
     @property
     def umpire_count(self):

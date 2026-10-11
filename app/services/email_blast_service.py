@@ -20,6 +20,11 @@ def get_coaches_by_leagues(year, is_spring, leagues):
     Only includes coaches with linked User accounts (sdll_users).
     Uses the User's email from sdll_users, NOT the email stored in CoachSeason.
 
+    Args:
+        year: Season year
+        is_spring: Spring (1) or Fall (0)
+        leagues: List of league names or IDs
+
     Returns a list of dicts with coach info:
     [
         {
@@ -32,18 +37,37 @@ def get_coaches_by_leagues(year, is_spring, leagues):
         ...
     ]
     """
+    from app.models.league import League
+
     coaches = []
     seen_emails = set()
 
+    # Convert league names to IDs if needed
+    league_ids = []
+    if leagues:
+        for league_val in leagues:
+            try:
+                # Try as ID first
+                league_id = int(league_val)
+                league_ids.append(league_id)
+            except (ValueError, TypeError):
+                # Look up by name
+                league_obj = League.get_by_name(league_val)
+                if league_obj:
+                    league_ids.append(league_obj.ID)
+
     # Get teams for the specified leagues
     # Eager load coaches -> coach (CoachUser) -> user to get current email
-    teams = TeamSeason.query.filter(
+    query = TeamSeason.query.filter(
         TeamSeason.year == year,
         TeamSeason.is_spring == is_spring,
         TeamSeason.active == 1,
-        TeamSeason.is_placeholder == 0,
-        TeamSeason.league.in_(leagues) if leagues else True
-    ).options(
+        TeamSeason.is_placeholder == 0
+    )
+    if league_ids:
+        query = query.filter(TeamSeason.league_id.in_(league_ids))
+
+    teams = query.options(
         joinedload(TeamSeason.coaches).joinedload(CoachSeason.coach).joinedload(CoachUser.user)
     ).all()
 
@@ -81,6 +105,11 @@ def get_coaches_grouped_by_team(year, is_spring, leagues):
     Only includes coaches with linked User accounts (sdll_users).
     Uses the User's email from sdll_users, NOT the email stored in CoachSeason.
 
+    Args:
+        year: Season year
+        is_spring: Spring (1) or Fall (0)
+        leagues: List of league names or IDs
+
     Returns a dict:
     {
         'BB Majors Team 1': [
@@ -90,16 +119,35 @@ def get_coaches_grouped_by_team(year, is_spring, leagues):
         ...
     }
     """
+    from app.models.league import League
+
     teams_data = defaultdict(list)
 
+    # Convert league names to IDs if needed
+    league_ids = []
+    if leagues:
+        for league_val in leagues:
+            try:
+                # Try as ID first
+                league_id = int(league_val)
+                league_ids.append(league_id)
+            except (ValueError, TypeError):
+                # Look up by name
+                league_obj = League.get_by_name(league_val)
+                if league_obj:
+                    league_ids.append(league_obj.ID)
+
     # Eager load coaches -> coach (CoachUser) -> user to get current email
-    teams = TeamSeason.query.filter(
+    query = TeamSeason.query.filter(
         TeamSeason.year == year,
         TeamSeason.is_spring == is_spring,
         TeamSeason.active == 1,
-        TeamSeason.is_placeholder == 0,
-        TeamSeason.league.in_(leagues) if leagues else True
-    ).options(
+        TeamSeason.is_placeholder == 0
+    )
+    if league_ids:
+        query = query.filter(TeamSeason.league_id.in_(league_ids))
+
+    teams = query.options(
         joinedload(TeamSeason.coaches).joinedload(CoachSeason.coach).joinedload(CoachUser.user)
     ).all()
 

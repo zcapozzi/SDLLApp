@@ -386,22 +386,12 @@ def get_games_needing_reports(year, is_spring):
         active=1,
         postgame_enabled=True
     ).all()
-    # Use league_id if available, fall back to names for backwards compatibility
     enabled_league_ids = [ls.league_id for ls in enabled_leagues if ls.league_id]
-    enabled_league_names = [ls.league for ls in enabled_leagues if not ls.league_id]
 
-    if not enabled_league_ids and not enabled_league_names:
+    if not enabled_league_ids:
         return []
 
     # Get completed games (exclude scrimmages)
-    # Filter by league_id if available, fall back to league name
-    from sqlalchemy import or_
-    league_filter = []
-    if enabled_league_ids:
-        league_filter.append(Game.league_id.in_(enabled_league_ids))
-    if enabled_league_names:
-        league_filter.append(Game.league.in_(enabled_league_names))
-
     games = Game.query.options(
         joinedload(Game.home_team),
         joinedload(Game.away_team)
@@ -412,7 +402,7 @@ def get_games_needing_reports(year, is_spring):
         Game.game_date < now_local,
         Game.game_type.in_(['regular', 'playoff']),
         Game.is_scrimmage == 0,
-        or_(*league_filter) if league_filter else True,
+        Game.league_id.in_(enabled_league_ids),
         Game.home_ID.isnot(None),
         Game.away_ID.isnot(None)
     ).order_by(Game.game_date.desc()).all()
@@ -482,7 +472,7 @@ def get_games_needing_emails(minutes_after_start=105, max_hours_ago=18):
         league_season = LeagueSeason.query.filter_by(
             year=game.year,
             is_spring=game.is_spring,
-            league=game.league,
+            league_id=game.league_id,
             active=1
         ).first()
 

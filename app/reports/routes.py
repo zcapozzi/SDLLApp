@@ -239,14 +239,16 @@ def schedule_downloads():
             league_id = get_league_id_from_param(league_name)
 
             # Count games from saved (games and scrimmages, with dates)
-            saved_count = Game.query.filter(
+            query = Game.query.filter(
                 Game.year == year,
                 Game.is_spring == is_spring,
-                Game.league_id == league_id if league_id else Game.league == league_name,
                 Game.active == 1,
                 Game.game_type.in_(['regular', 'playoff']),
                 Game.game_date.isnot(None)
-            ).count()
+            )
+            if league_id:
+                query = query.filter(Game.league_id == league_id)
+            saved_count = query.count()
 
             # Count games from proposal (games and scrimmages, with dates)
             proposal_count = 0
@@ -308,14 +310,16 @@ def download_league_schedule(year, is_spring, league):
     events = []
 
     # Check for saved games first (only those with dates)
-    saved_games = Game.query.filter(
+    query = Game.query.filter(
         Game.year == year,
         Game.is_spring == is_spring,
-        Game.league_id == league_id if league_id else Game.league == league,
         Game.active == 1,
         Game.game_type.in_(['regular', 'playoff']),
         Game.game_date.isnot(None)
-    ).order_by(Game.game_date).all()
+    )
+    if league_id:
+        query = query.filter(Game.league_id == league_id)
+    saved_games = query.order_by(Game.game_date).all()
 
     if saved_games:
         # Use saved games
