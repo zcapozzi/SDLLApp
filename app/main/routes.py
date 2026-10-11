@@ -1494,6 +1494,50 @@ def preview_postgame_email(game_id):
                            previews=previews)
 
 
+@main_bp.route('/send-postgame-email/<int:game_id>/<int:team_id>', methods=['POST'])
+@login_required
+def send_postgame_email_manual(game_id, team_id):
+    """
+    Manually send the post-game email to a specific team's coaching staff.
+
+    This bypasses the league's postgame_enabled setting, allowing admins
+    to send emails on-demand for any game.
+    """
+    from app.models.game import Game
+    from app.models.team import TeamSeason
+    from app.services.post_game_service import send_postgame_email
+
+    # Check permission
+    if not current_user.has_role('admin', 'scheduler', 'DataManager'):
+        flash('You do not have permission to send emails.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    game = Game.query.get(game_id)
+    if not game:
+        flash('Game not found.', 'error')
+        return redirect(url_for('main.master_schedule'))
+
+    team = TeamSeason.query.get(team_id)
+    if not team:
+        flash('Team not found.', 'error')
+        return redirect(url_for('main.preview_postgame_email', game_id=game_id))
+
+    # Verify team is part of this game
+    if team_id not in (game.home_ID, game.away_ID):
+        flash('Team is not part of this game.', 'error')
+        return redirect(url_for('main.preview_postgame_email', game_id=game_id))
+
+    # Send the email (uses same function as automated cron)
+    success, message = send_postgame_email(game_id, team_id)
+
+    if success:
+        flash(f'Post-game email sent to {team.computed_display_name} coaching staff.', 'success')
+    else:
+        flash(f'Failed to send email: {message}', 'error')
+
+    return redirect(url_for('main.preview_postgame_email', game_id=game_id))
+
+
 # ============================================================================
 # Master Schedule (Board View)
 # ============================================================================

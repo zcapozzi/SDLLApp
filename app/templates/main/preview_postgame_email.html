@@ -90,6 +90,26 @@
                 </div>
             </details>
         </div>
+
+        {% if preview.to_email and preview.to_email != 'No head coach email' %}
+        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
+            <form method="POST" action="{{ url_for('main.send_postgame_email_manual', game_id=game.ID, team_id=preview.team.team_ID) }}"
+                  onsubmit="return confirmSendEmail('{{ preview.team_name }}', '{{ preview.to_email }}')">
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                    📧 Send Email to {{ preview.team_name }}
+                </button>
+            </form>
+            <p style="font-size: 12px; color: #666; margin-top: 8px; text-align: center;">
+                Will send to: {{ preview.to_email }}{% if preview.cc_emails %}, CC: {{ preview.cc_emails|join(', ') }}{% endif %}
+            </p>
+        </div>
+        {% else %}
+        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
+            <button type="button" class="btn btn-outline" style="width: 100%; opacity: 0.5; cursor: not-allowed;" disabled>
+                📧 Cannot Send - No Coach Email
+            </button>
+        </div>
+        {% endif %}
     </div>
     {% endfor %}
 </div>
@@ -104,4 +124,17 @@
 <div style="margin-top: 20px;">
     <a href="{{ url_for('main.master_schedule') }}" class="btn btn-outline">Back to Master Schedule</a>
 </div>
+
+<script>
+function confirmSendEmail(teamName, toEmail) {
+    return confirm(
+        'Send Post-Game Email?\n\n' +
+        'Team: ' + teamName + '\n' +
+        'To: ' + toEmail + '\n\n' +
+        'This will send the actual email to the coaching staff. ' +
+        'The email will be identical to the automated version.\n\n' +
+        'Continue?'
+    );
+}
+</script>
 {% endblock %}
