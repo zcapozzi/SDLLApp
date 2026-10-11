@@ -88,7 +88,7 @@ def index(year, is_spring):
 
         # Check teams
         teams = TeamSeason.query.filter_by(
-            year=year, is_spring=is_spring, league=config.league,
+            year=year, is_spring=is_spring, league_id=config.league_id,
             active=1, is_placeholder=0
         ).count()
         prereqs['has_teams'] = teams >= 2
@@ -107,7 +107,7 @@ def index(year, is_spring):
 
         # Check if game slots exist (Phase 1 complete)
         game_slots = Game.query.filter_by(
-            year=year, is_spring=is_spring, league=config.league,
+            year=year, is_spring=is_spring, league_id=config.league_id,
             active=1, game_type='regular'
         ).count()
         prereqs['has_game_slots'] = game_slots > 0
@@ -115,7 +115,7 @@ def index(year, is_spring):
 
         # Check how many are filled vs empty
         empty_slots = Game.query.filter_by(
-            year=year, is_spring=is_spring, league=config.league,
+            year=year, is_spring=is_spring, league_id=config.league_id,
             active=1, game_type='regular'
         ).filter(Game.home_ID.is_(None)).count()
         prereqs['empty_slot_count'] = empty_slots
@@ -177,9 +177,13 @@ def create_slots(year, is_spring):
         anchor = f'league-{league.replace(" ", "-")}'
         return redirect(url_for('scheduler.index', year=year, is_spring=is_spring) + f'#{anchor}')
 
-    # Check if schedule is locked
+    # Check if schedule is locked - convert league name to ID
+    from app.models.league import League
+    league_obj = League.get_by_name(league) if league else None
+    league_id = league_obj.ID if league_obj else None
+
     config = LeagueSeason.query.filter_by(
-        year=year, is_spring=is_spring, league=league, active=1
+        year=year, is_spring=is_spring, league_id=league_id, active=1
     ).first()
 
     if config and config.schedule_locked:
@@ -188,7 +192,7 @@ def create_slots(year, is_spring):
 
     # Get number of teams
     teams = TeamSeason.query.filter_by(
-        year=year, is_spring=is_spring, league=league, active=1, is_placeholder=0
+        year=year, is_spring=is_spring, league_id=league_id, active=1, is_placeholder=0
     ).all()
 
     if len(teams) < 2:
@@ -201,7 +205,7 @@ def create_slots(year, is_spring):
 
     # Check if slots already exist
     existing = Game.query.filter_by(
-        year=year, is_spring=is_spring, league=league, active=1, game_type='regular'
+        year=year, is_spring=is_spring, league_id=league_id, active=1, game_type='regular'
     ).count()
 
     if existing > 0:
@@ -241,7 +245,8 @@ def create_all_slots(year, is_spring):
     skipped_leagues = []
 
     for config in league_configs:
-        league = config.league
+        league = config.league  # Display name for messages
+        league_id = config.league_id
 
         # Skip locked leagues
         if config.schedule_locked:
@@ -250,7 +255,7 @@ def create_all_slots(year, is_spring):
 
         # Check if slots already exist
         existing = Game.query.filter_by(
-            year=year, is_spring=is_spring, league=league, active=1, game_type='regular'
+            year=year, is_spring=is_spring, league_id=league_id, active=1, game_type='regular'
         ).count()
         if existing > 0:
             skipped_leagues.append((league, f'{existing} slots exist'))
@@ -258,7 +263,7 @@ def create_all_slots(year, is_spring):
 
         # Get number of teams
         teams = TeamSeason.query.filter_by(
-            year=year, is_spring=is_spring, league=league, active=1, is_placeholder=0
+            year=year, is_spring=is_spring, league_id=league_id, active=1, is_placeholder=0
         ).all()
         if len(teams) < 2:
             skipped_leagues.append((league, 'needs 2+ teams'))
@@ -1148,9 +1153,14 @@ def clear_league(year, is_spring):
         flash('No league specified.', 'error')
         return redirect(url_for('scheduler.index', year=year, is_spring=is_spring))
 
+    # Convert league name to ID
+    from app.models.league import League
+    league_obj = League.get_by_name(league) if league else None
+    league_id = league_obj.ID if league_obj else None
+
     # Check if league schedule is locked
     config = LeagueSeason.query.filter_by(
-        year=year, is_spring=is_spring, league=league, active=1
+        year=year, is_spring=is_spring, league_id=league_id, active=1
     ).first()
 
     if config and config.schedule_locked:
@@ -1160,7 +1170,7 @@ def clear_league(year, is_spring):
     try:
         # Build query based on clear type
         query = Game.query.filter_by(
-            year=year, is_spring=is_spring, league=league, active=1
+            year=year, is_spring=is_spring, league_id=league_id, active=1
         )
 
         if clear_type == 'regular':
