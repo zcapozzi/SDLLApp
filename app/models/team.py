@@ -317,7 +317,7 @@ class TeamSeason(db.Model):
             league_season = LeagueSeason.query.filter_by(
                 year=self.year,
                 is_spring=self.is_spring,
-                league=self.league,
+                league_id=self.league_id,
                 active=1
             ).first()
 

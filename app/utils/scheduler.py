@@ -668,7 +668,7 @@ class ScheduleValidator:
         # Get teams for this league to access team-specific practice days
         from app.models.team import TeamSeason
         league_teams = TeamSeason.query.filter_by(
-            league=league, year=self.year, is_spring=self.is_spring, active=True
+            league_id=config.league_id, year=self.year, is_spring=self.is_spring, active=True
         ).all()
         team_objects = {t.team_ID: t for t in league_teams}
 
