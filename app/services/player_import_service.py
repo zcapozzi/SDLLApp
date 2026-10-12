@@ -319,6 +319,8 @@ class PlayerImportService:
 
         # Pre-load existing data using ONLY columns needed for lookup (much faster)
         # Use with_entities to avoid loading full ORM objects and encrypted data
+        import time
+        cache_t0 = time.time()
 
         # Players: only need id, hashes, player_code for lookups
         player_rows = db.session.query(
@@ -343,6 +345,10 @@ class PlayerImportService:
             org_season_id=self.org_season.ID
         ).all()
         self._season_cache = {pid for (pid,) in season_rows}  # Just a set of player_ids
+
+        cache_time = time.time() - cache_t0
+        print(f"[CACHE LOAD] {len(player_rows)} players, {len(user_rows)} users, "
+              f"{len(season_rows)} seasons in {cache_time:.2f}s")
 
         # Track new records as dicts for bulk insert
         self._new_players = []  # List of dicts for bulk insert
@@ -524,19 +530,26 @@ class PlayerImportService:
     def _bulk_insert_all(self):
         """Perform bulk inserts for all collected data."""
         from sqlalchemy import insert
+        import time
+        bulk_timings = {}
+        t0 = time.time()
 
         # Bulk insert users first (to get IDs for linking)
         if self._new_users:
+            t1 = time.time()
             db.session.execute(insert(User), self._new_users)
             db.session.flush()
+            bulk_timings['user_insert'] = time.time() - t1
 
             # Reload all new user IDs in ONE query
+            t1 = time.time()
             new_email_hashes = [u['email_hash'] for u in self._new_users]
             user_id_rows = db.session.query(User.ID, User.email_hash).filter(
                 User.email_hash.in_(new_email_hashes)
             ).all()
             for uid, email_hash in user_id_rows:
                 self._user_cache[email_hash] = uid
+            bulk_timings['user_id_query'] = time.time() - t1
 
         # Bulk insert players
         if self._new_players:
@@ -549,10 +562,13 @@ class PlayerImportService:
                 if season_data:
                     seasons_to_create.append((i, season_data))
 
+            t1 = time.time()
             db.session.execute(insert(Player), player_inserts)
             db.session.flush()
+            bulk_timings['player_insert'] = time.time() - t1
 
             # Get ALL inserted player IDs in ONE query
+            t1 = time.time()
             new_player_codes = [p['player_code'] for p in player_inserts]
             player_id_rows = db.session.query(Player.id, Player.player_code, Player.parent_email_hash).filter(
                 Player.player_code.in_(new_player_codes)
@@ -560,6 +576,7 @@ class PlayerImportService:
 
             # Build code -> (id, email_hash) mapping
             code_to_data = {pcode: (pid, email_hash) for pid, pcode, email_hash in player_id_rows}
+            bulk_timings['player_id_query'] = time.time() - t1
 
             # Build list of player-user links for batch update
             player_user_updates = []
@@ -575,10 +592,12 @@ class PlayerImportService:
 
             # Batch update player-user links
             if player_user_updates:
+                t1 = time.time()
                 db.session.execute(
                     db.text("UPDATE sdll_players SET parent_user_id = :uid WHERE id = :pid"),
                     player_user_updates
                 )
+                bulk_timings['player_user_link'] = time.time() - t1
 
             # Create season records for new players
             for i, season_data in seasons_to_create:
@@ -594,7 +613,12 @@ class PlayerImportService:
 
         # Bulk insert seasons
         if self._new_seasons:
+            t1 = time.time()
             db.session.execute(insert(PlayerSeason), self._new_seasons)
+            bulk_timings['season_insert'] = time.time() - t1
+
+        bulk_timings['total'] = time.time() - t0
+        print(f"[BULK INSERT TIMING] {bulk_timings}")
 
     def _flush_pending(self):
         """Flush pending records and create season records that need player IDs."""
