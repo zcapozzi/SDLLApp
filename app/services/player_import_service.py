@@ -780,9 +780,10 @@ class PlayerImportService:
         # Check cache of codes we've already seen/generated
         if base_code not in self._player_code_counts:
             # Check if any existing player has this code pattern
+            # Use _existing_player_codes set which contains actual player codes
             count = 0
-            for p in self._player_cache.values():
-                if p.player_code and p.player_code.startswith(base_code):
+            for pcode in self._existing_player_codes:
+                if pcode and pcode.startswith(base_code):
                     count += 1
             self._player_code_counts[base_code] = count
 
@@ -790,8 +791,13 @@ class PlayerImportService:
         self._player_code_counts[base_code] = existing_count + 1
 
         if existing_count == 0:
-            return base_code
-        return f"{base_code}{existing_count + 1}"
+            new_code = base_code
+        else:
+            new_code = f"{base_code}{existing_count + 1}"
+
+        # Add to set so subsequent generations don't collide
+        self._existing_player_codes.add(new_code)
+        return new_code
 
     def _import_registration_row(self, row: dict, create_parent_users: bool):
         """Import single registration row (legacy method - slow)."""
