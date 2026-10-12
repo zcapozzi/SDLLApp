@@ -587,6 +587,123 @@ def import_results():
 # Player Listing
 # =============================================================================
 
+def _build_seasons_summary(recent_seasons):
+    """Build summary of recent seasons with player counts and new player percentages.
+
+    Args:
+        recent_seasons: List of OrgSeason objects (most recent first)
+
+    Returns:
+        Dict with 'baseball' and 'softball' keys, each containing a list of season stats
+    """
+    from sqlalchemy import func
+
+    # Get all season IDs we're interested in
+    season_ids = [s.ID for s in recent_seasons]
+    if not season_ids:
+        return {'baseball': [], 'softball': []}
+
+    # Build a map of season_id -> season for quick lookup
+    season_map = {s.ID: s for s in recent_seasons}
+
+    # Query player counts per season per sport
+    # Join PlayerSeason with Player to get program (sport)
+    stats_query = db.session.query(
+        PlayerSeason.org_season_id,
+        Player.program,
+        func.count(PlayerSeason.id).label('total')
+    ).join(
+        Player, PlayerSeason.player_id == Player.id
+    ).filter(
+        PlayerSeason.org_season_id.in_(season_ids),
+        Player.program.in_(['baseball', 'softball'])
+    ).group_by(
+        PlayerSeason.org_season_id,
+        Player.program
+    ).all()
+
+    # Build lookup: (season_id, sport) -> count
+    count_lookup = {}
+    for row in stats_query:
+        count_lookup[(row.org_season_id, row.program)] = row.total
+
+    # For each season, we need to find "new" players
+    # A player is "new" if they have no prior PlayerSeason records
+    # We'll query this efficiently with a subquery
+
+    # Get the earliest season_id for each player (their first season)
+    first_season_subq = db.session.query(
+        PlayerSeason.player_id,
+        func.min(PlayerSeason.org_season_id).label('first_season_id')
+    ).group_by(PlayerSeason.player_id).subquery()
+
+    # Count new players per season per sport
+    # A player is "new" in a season if that season is their first season
+    new_query = db.session.query(
+        PlayerSeason.org_season_id,
+        Player.program,
+        func.count(PlayerSeason.id).label('new_count')
+    ).join(
+        Player, PlayerSeason.player_id == Player.id
+    ).join(
+        first_season_subq, PlayerSeason.player_id == first_season_subq.c.player_id
+    ).filter(
+        PlayerSeason.org_season_id.in_(season_ids),
+        PlayerSeason.org_season_id == first_season_subq.c.first_season_id,
+        Player.program.in_(['baseball', 'softball'])
+    ).group_by(
+        PlayerSeason.org_season_id,
+        Player.program
+    ).all()
+
+    # Build lookup: (season_id, sport) -> new_count
+    new_lookup = {}
+    for row in new_query:
+        new_lookup[(row.org_season_id, row.program)] = row.new_count
+
+    # Build the result grouped by sport
+    result = {'baseball': [], 'softball': []}
+
+    for season in recent_seasons:
+        for sport in ['baseball', 'softball']:
+            total = count_lookup.get((season.ID, sport), 0)
+            new_count = new_lookup.get((season.ID, sport), 0)
+
+            if total > 0:
+                new_pct = round((new_count / total) * 100)
+            else:
+                new_pct = 0
+
+            # Find prior year same season for trend comparison
+            prior_season = None
+            for s in recent_seasons:
+                if s.year == season.year - 1 and s.is_spring == season.is_spring:
+                    prior_season = s
+                    break
+
+            prior_total = 0
+            if prior_season:
+                prior_total = count_lookup.get((prior_season.ID, sport), 0)
+
+            # Calculate trend (percentage change from prior year same season)
+            trend = None
+            if prior_total > 0:
+                trend = round(((total - prior_total) / prior_total) * 100)
+
+            result[sport].append({
+                'season': season,
+                'season_desc': season.season_desc,
+                'total': total,
+                'new_count': new_count,
+                'returning_count': total - new_count,
+                'new_pct': new_pct,
+                'prior_total': prior_total,
+                'trend': trend
+            })
+
+    return result
+
+
 @players_bp.route('/')
 @login_required
 @role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
@@ -601,7 +718,146 @@ def index():
             org_season_id=current_season.ID
         ).count()
 
+    # Get recent seasons summary (last 4 seasons)
+    recent_seasons = OrgSeason.query.filter_by(org_id=1).order_by(
+        OrgSeason.year.desc(),
+        OrgSeason.is_spring.desc()
+    ).limit(4).all()
+
+    # Build seasons summary with player counts by sport
+    seasons_summary = _build_seasons_summary(recent_seasons)
+
     return render_template('players/index.html',
                            current_season=current_season,
                            player_count=player_count,
-                           season_record_count=season_record_count)
+                           season_record_count=season_record_count,
+                           seasons_summary=seasons_summary)
+
+
+@players_bp.route('/registration-trends')
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def registration_trends():
+    """Registration trends report showing historical player data."""
+    from sqlalchemy import func
+
+    # Get all seasons with player data, ordered by date
+    all_seasons = OrgSeason.query.filter_by(org_id=1).order_by(
+        OrgSeason.year.desc(),
+        OrgSeason.is_spring.desc()
+    ).all()
+
+    # Build comprehensive stats for all seasons
+    season_ids = [s.ID for s in all_seasons]
+
+    if not season_ids:
+        return render_template('players/registration_trends.html',
+                               seasons_data={'baseball': [], 'softball': []},
+                               summary_stats={})
+
+    # Query player counts per season per sport
+    stats_query = db.session.query(
+        PlayerSeason.org_season_id,
+        Player.program,
+        func.count(PlayerSeason.id).label('total')
+    ).join(
+        Player, PlayerSeason.player_id == Player.id
+    ).filter(
+        PlayerSeason.org_season_id.in_(season_ids),
+        Player.program.in_(['baseball', 'softball'])
+    ).group_by(
+        PlayerSeason.org_season_id,
+        Player.program
+    ).all()
+
+    count_lookup = {}
+    for row in stats_query:
+        count_lookup[(row.org_season_id, row.program)] = row.total
+
+    # Get earliest season for each player (for new player calculation)
+    first_season_subq = db.session.query(
+        PlayerSeason.player_id,
+        func.min(PlayerSeason.org_season_id).label('first_season_id')
+    ).group_by(PlayerSeason.player_id).subquery()
+
+    new_query = db.session.query(
+        PlayerSeason.org_season_id,
+        Player.program,
+        func.count(PlayerSeason.id).label('new_count')
+    ).join(
+        Player, PlayerSeason.player_id == Player.id
+    ).join(
+        first_season_subq, PlayerSeason.player_id == first_season_subq.c.player_id
+    ).filter(
+        PlayerSeason.org_season_id.in_(season_ids),
+        PlayerSeason.org_season_id == first_season_subq.c.first_season_id,
+        Player.program.in_(['baseball', 'softball'])
+    ).group_by(
+        PlayerSeason.org_season_id,
+        Player.program
+    ).all()
+
+    new_lookup = {}
+    for row in new_query:
+        new_lookup[(row.org_season_id, row.program)] = row.new_count
+
+    # Build season data with year-over-year comparisons
+    seasons_data = {'baseball': [], 'softball': []}
+    season_by_key = {}  # (year, is_spring) -> season
+
+    for season in all_seasons:
+        season_by_key[(season.year, season.is_spring)] = season
+
+    for season in all_seasons:
+        for sport in ['baseball', 'softball']:
+            total = count_lookup.get((season.ID, sport), 0)
+            new_count = new_lookup.get((season.ID, sport), 0)
+
+            # Skip seasons with no players for this sport
+            if total == 0:
+                continue
+
+            new_pct = round((new_count / total) * 100) if total > 0 else 0
+
+            # Find prior year same season
+            prior_key = (season.year - 1, season.is_spring)
+            prior_season = season_by_key.get(prior_key)
+            prior_total = 0
+            trend = None
+
+            if prior_season:
+                prior_total = count_lookup.get((prior_season.ID, sport), 0)
+                if prior_total > 0:
+                    trend = round(((total - prior_total) / prior_total) * 100)
+
+            seasons_data[sport].append({
+                'season_desc': season.season_desc,
+                'year': season.year,
+                'is_spring': season.is_spring,
+                'total': total,
+                'new_count': new_count,
+                'returning_count': total - new_count,
+                'new_pct': new_pct,
+                'prior_total': prior_total,
+                'trend': trend
+            })
+
+    # Calculate summary stats
+    summary_stats = {}
+    for sport in ['baseball', 'softball']:
+        data = seasons_data[sport]
+        if data:
+            totals = [d['total'] for d in data]
+            new_pcts = [d['new_pct'] for d in data if d['total'] > 0]
+
+            summary_stats[sport] = {
+                'avg_players': round(sum(totals) / len(totals)) if totals else 0,
+                'max_players': max(totals) if totals else 0,
+                'min_players': min(totals) if totals else 0,
+                'avg_new_pct': round(sum(new_pcts) / len(new_pcts)) if new_pcts else 0,
+                'seasons_count': len(data)
+            }
+
+    return render_template('players/registration_trends.html',
+                           seasons_data=seasons_data,
+                           summary_stats=summary_stats)

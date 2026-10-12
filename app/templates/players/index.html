@@ -21,6 +21,119 @@
     </div>
 </div>
 
+<!-- Recent Seasons Summary -->
+{% if seasons_summary and (seasons_summary.baseball or seasons_summary.softball) %}
+<div class="card" style="margin-bottom: 30px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0;">Recent Seasons</h2>
+        <a href="{{ url_for('players.registration_trends') }}" class="btn btn-outline" style="font-size: 13px;">
+            View Full Report
+        </a>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+        <!-- Baseball Summary -->
+        {% if seasons_summary.baseball %}
+        <div>
+            <h3 style="margin: 0 0 15px 0; color: rgb(34, 139, 34);">Baseball</h3>
+            <table style="width: 100%; font-size: 14px;">
+                <thead>
+                    <tr>
+                        <th style="text-align: left; padding: 8px 10px; border-bottom: 2px solid #ddd;">Season</th>
+                        <th style="text-align: center; padding: 8px 10px; border-bottom: 2px solid #ddd;">Players</th>
+                        <th style="text-align: center; padding: 8px 10px; border-bottom: 2px solid #ddd;">New %</th>
+                        <th style="text-align: center; padding: 8px 10px; border-bottom: 2px solid #ddd;">vs PY</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in seasons_summary.baseball %}
+                    <tr>
+                        <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">{{ s.season_desc }}</td>
+                        <td style="text-align: center; padding: 8px 10px; border-bottom: 1px solid #eee;">
+                            <strong>{{ s.total }}</strong>
+                        </td>
+                        <td style="text-align: center; padding: 8px 10px; border-bottom: 1px solid #eee;">
+                            {% if s.total > 0 %}
+                            <span style="color: #1565c0;">{{ s.new_pct }}%</span>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td style="text-align: center; padding: 8px 10px; border-bottom: 1px solid #eee;">
+                            {% if s.trend is not none %}
+                                {% if s.trend > 0 %}
+                                <span style="color: #2e7d32;">+{{ s.trend }}%</span>
+                                {% elif s.trend < 0 %}
+                                <span style="color: #c62828;">{{ s.trend }}%</span>
+                                {% else %}
+                                <span style="color: #666;">0%</span>
+                                {% endif %}
+                            {% else %}
+                            <span style="color: #aaa;">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- Softball Summary -->
+        {% if seasons_summary.softball %}
+        <div>
+            <h3 style="margin: 0 0 15px 0; color: rgb(255, 140, 0);">Softball</h3>
+            <table style="width: 100%; font-size: 14px;">
+                <thead>
+                    <tr>
+                        <th style="text-align: left; padding: 8px 10px; border-bottom: 2px solid #ddd;">Season</th>
+                        <th style="text-align: center; padding: 8px 10px; border-bottom: 2px solid #ddd;">Players</th>
+                        <th style="text-align: center; padding: 8px 10px; border-bottom: 2px solid #ddd;">New %</th>
+                        <th style="text-align: center; padding: 8px 10px; border-bottom: 2px solid #ddd;">vs PY</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in seasons_summary.softball %}
+                    <tr>
+                        <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">{{ s.season_desc }}</td>
+                        <td style="text-align: center; padding: 8px 10px; border-bottom: 1px solid #eee;">
+                            <strong>{{ s.total }}</strong>
+                        </td>
+                        <td style="text-align: center; padding: 8px 10px; border-bottom: 1px solid #eee;">
+                            {% if s.total > 0 %}
+                            <span style="color: #1565c0;">{{ s.new_pct }}%</span>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td style="text-align: center; padding: 8px 10px; border-bottom: 1px solid #eee;">
+                            {% if s.trend is not none %}
+                                {% if s.trend > 0 %}
+                                <span style="color: #2e7d32;">+{{ s.trend }}%</span>
+                                {% elif s.trend < 0 %}
+                                <span style="color: #c62828;">{{ s.trend }}%</span>
+                                {% else %}
+                                <span style="color: #666;">0%</span>
+                                {% endif %}
+                            {% else %}
+                            <span style="color: #aaa;">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+
+    <p style="margin: 15px 0 0 0; font-size: 12px; color: #888;">
+        <strong>New %</strong> = percentage of players in their first season with SDLL.
+        <strong>vs PY</strong> = change compared to same season last year.
+    </p>
+</div>
+{% endif %}
+
 <!-- Quick Actions -->
 <div class="card">
     <h2 style="margin-top: 0; margin-bottom: 20px;">Actions</h2>
