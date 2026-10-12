@@ -99,6 +99,38 @@
     </table>
 </div>
 
+<!-- Confirm Form - Placed prominently before preview table -->
+<div class="card" style="margin-bottom: 20px; background: #f0f7f0; border: 2px solid rgb(34, 139, 34);">
+    <form method="POST" action="{{ url_for('players.import_registration_confirm') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <p style="margin: 0; color: #333; font-size: 16px;">
+                    Ready to import <strong>{{ total_rows - total_errors }}</strong> players into
+                    <strong>{{ org_season.season_desc }}</strong>?
+                </p>
+                {% if total_errors > 0 %}
+                <p style="margin: 5px 0 0 0; color: #888; font-size: 13px;">
+                    {{ total_errors }} rows with errors will be skipped.
+                </p>
+                {% endif %}
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <a href="{{ url_for('players.import_column_mapping') }}" class="btn btn-outline" style="font-size: 13px;">
+                    Edit Mapping
+                </a>
+                <a href="{{ url_for('players.import_registration') }}" class="btn btn-outline" id="start-over-btn">
+                    Start Over
+                </a>
+                <button type="submit" class="btn btn-primary" id="confirm-btn">
+                    Confirm Import
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
 <!-- Errors -->
 {% if errors %}
 <div class="card" style="margin-bottom: 20px; border-left: 4px solid #c00;">
@@ -160,38 +192,6 @@
         ... and {{ total_rows - 100 }} more rows
     </p>
     {% endif %}
-</div>
-
-<!-- Confirm Form -->
-<div class="card" style="margin-top: 20px; background: #f9f9f9;">
-    <form method="POST" action="{{ url_for('players.import_registration_confirm') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <p style="margin: 0; color: #666;">
-                    Ready to import <strong>{{ total_rows - total_errors }}</strong> players into
-                    <strong>{{ org_season.season_desc }}</strong>?
-                </p>
-                {% if total_errors > 0 %}
-                <p style="margin: 5px 0 0 0; color: #888; font-size: 13px;">
-                    {{ total_errors }} rows with errors will be skipped.
-                </p>
-                {% endif %}
-            </div>
-            <div style="display: flex; gap: 10px;">
-                <a href="{{ url_for('players.import_column_mapping') }}" class="btn btn-outline" style="font-size: 13px;">
-                    Edit Mapping
-                </a>
-                <a href="{{ url_for('players.import_registration') }}" class="btn btn-outline" id="start-over-btn">
-                    Start Over
-                </a>
-                <button type="submit" class="btn btn-primary" id="confirm-btn">
-                    Confirm Import
-                </button>
-            </div>
-        </div>
-    </form>
 </div>
 
 <style>
