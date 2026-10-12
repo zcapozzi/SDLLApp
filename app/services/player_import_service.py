@@ -304,9 +304,10 @@ class PlayerImportService:
             key = (p.parent_email_hash, p.name_hash)
             self._player_cache[key] = p
 
-        # Build user lookup by email_hash
-        existing_users = User.query.filter(User.role.contains('parent')).all()
-        self._user_cache = {u.email_hash: u for u in existing_users}
+        # Build user lookup by email_hash - load ALL users (not just parents)
+        # because a user might exist with another role (admin, coach, etc.)
+        existing_users = User.query.all()
+        self._user_cache = {u.email_hash: u for u in existing_users if u.email_hash}
 
         # Build player season lookup by (player_id, org_season_id)
         existing_seasons = PlayerSeason.query.filter_by(
@@ -426,19 +427,15 @@ class PlayerImportService:
                 # Create new user directly (avoid User.create_user which commits each time)
                 from werkzeug.security import generate_password_hash
                 random_password = secrets.token_urlsafe(16)
-                try:
-                    parent_user = User(role='parent', org_ID=1)
-                    parent_user.email = parent_email
-                    parent_user.name = parent_name
-                    parent_user.phone = parent_phone
-                    parent_user.password_hash = generate_password_hash(random_password)
-                    db.session.add(parent_user)
-                    self.stats['parent_users_created'] += 1
-                    # Add to cache
-                    self._user_cache[email_hash] = parent_user
-                except Exception as e:
-                    self.stats['errors'].append(f"Error creating user for {parent_email}: {str(e)}")
-                    parent_user = None
+                parent_user = User(role='parent', org_ID=1)
+                parent_user.email = parent_email
+                parent_user.name = parent_name
+                parent_user.phone = parent_phone
+                parent_user.password_hash = generate_password_hash(random_password)
+                db.session.add(parent_user)
+                self.stats['parent_users_created'] += 1
+                # Add to cache immediately so duplicate emails in CSV don't create duplicates
+                self._user_cache[email_hash] = parent_user
 
             if parent_user and not player.parent_user_id:
                 # Need to flush to get IDs if new
