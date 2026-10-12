@@ -629,13 +629,39 @@ def _build_seasons_summary(recent_seasons):
 
     # For each season, we need to find "new" players
     # A player is "new" if they have no prior PlayerSeason records
-    # We'll query this efficiently with a subquery
+    # We need to use chronological order (year, is_spring) not org_season_id
+    # because IDs may not reflect actual chronological order
 
-    # Get the earliest season_id for each player (their first season)
+    # Create a chronological order value: year * 10 + (1 for spring, 2 for fall)
+    # This ensures Spring 2024 (20241) < Fall 2024 (20242) < Spring 2025 (20251)
+    season_order = OrgSeason.year * 10 + db.case(
+        (OrgSeason.is_spring == 1, 1),  # Spring = 1
+        else_=2  # Fall = 2
+    )
+
+    # Get the chronologically earliest season for each player
     first_season_subq = db.session.query(
         PlayerSeason.player_id,
-        func.min(PlayerSeason.org_season_id).label('first_season_id')
+        func.min(season_order).label('first_season_order')
+    ).join(
+        OrgSeason, PlayerSeason.org_season_id == OrgSeason.ID
     ).group_by(PlayerSeason.player_id).subquery()
+
+    # Now find the actual org_season_id that matches this first season order
+    # by joining back to get the season details
+    player_first_season = db.session.query(
+        PlayerSeason.player_id,
+        PlayerSeason.org_season_id.label('first_season_id')
+    ).join(
+        OrgSeason, PlayerSeason.org_season_id == OrgSeason.ID
+    ).join(
+        first_season_subq, PlayerSeason.player_id == first_season_subq.c.player_id
+    ).filter(
+        (OrgSeason.year * 10 + db.case(
+            (OrgSeason.is_spring == 1, 1),
+            else_=2
+        )) == first_season_subq.c.first_season_order
+    ).subquery()
 
     # Count new players per season per sport
     # A player is "new" in a season if that season is their first season
@@ -646,10 +672,10 @@ def _build_seasons_summary(recent_seasons):
     ).join(
         Player, PlayerSeason.player_id == Player.id
     ).join(
-        first_season_subq, PlayerSeason.player_id == first_season_subq.c.player_id
+        player_first_season, PlayerSeason.player_id == player_first_season.c.player_id
     ).filter(
         PlayerSeason.org_season_id.in_(season_ids),
-        PlayerSeason.org_season_id == first_season_subq.c.first_season_id,
+        PlayerSeason.org_season_id == player_first_season.c.first_season_id,
         Player.program.in_(['baseball', 'softball'])
     ).group_by(
         PlayerSeason.org_season_id,
@@ -786,11 +812,34 @@ def registration_trends():
     for row in stats_query:
         count_lookup[(row.org_season_id, row.program)] = row.total
 
-    # Get earliest season for each player (for new player calculation)
+    # Get chronologically earliest season for each player (for new player calculation)
+    # Use year * 10 + (1 for spring, 2 for fall) to ensure correct chronological order
+    season_order = OrgSeason.year * 10 + db.case(
+        (OrgSeason.is_spring == 1, 1),
+        else_=2
+    )
+
     first_season_subq = db.session.query(
         PlayerSeason.player_id,
-        func.min(PlayerSeason.org_season_id).label('first_season_id')
+        func.min(season_order).label('first_season_order')
+    ).join(
+        OrgSeason, PlayerSeason.org_season_id == OrgSeason.ID
     ).group_by(PlayerSeason.player_id).subquery()
+
+    # Map back to actual org_season_id
+    player_first_season = db.session.query(
+        PlayerSeason.player_id,
+        PlayerSeason.org_season_id.label('first_season_id')
+    ).join(
+        OrgSeason, PlayerSeason.org_season_id == OrgSeason.ID
+    ).join(
+        first_season_subq, PlayerSeason.player_id == first_season_subq.c.player_id
+    ).filter(
+        (OrgSeason.year * 10 + db.case(
+            (OrgSeason.is_spring == 1, 1),
+            else_=2
+        )) == first_season_subq.c.first_season_order
+    ).subquery()
 
     new_query = db.session.query(
         PlayerSeason.org_season_id,
@@ -799,10 +848,10 @@ def registration_trends():
     ).join(
         Player, PlayerSeason.player_id == Player.id
     ).join(
-        first_season_subq, PlayerSeason.player_id == first_season_subq.c.player_id
+        player_first_season, PlayerSeason.player_id == player_first_season.c.player_id
     ).filter(
         PlayerSeason.org_season_id.in_(season_ids),
-        PlayerSeason.org_season_id == first_season_subq.c.first_season_id,
+        PlayerSeason.org_season_id == player_first_season.c.first_season_id,
         Player.program.in_(['baseball', 'softball'])
     ).group_by(
         PlayerSeason.org_season_id,
