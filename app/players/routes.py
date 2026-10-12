@@ -718,14 +718,20 @@ def index():
             org_season_id=current_season.ID
         ).count()
 
-    # Get recent seasons summary (last 4 seasons)
-    recent_seasons = OrgSeason.query.filter_by(org_id=1).order_by(
+    # Get recent seasons with player data (last 4 seasons that have registrations)
+    # Sort by year desc, then is_spring asc (Fall before Spring for same year)
+    from sqlalchemy import func
+    seasons_with_players = db.session.query(OrgSeason).join(
+        PlayerSeason, PlayerSeason.org_season_id == OrgSeason.ID
+    ).filter(
+        OrgSeason.org_id == 1
+    ).group_by(OrgSeason.ID).order_by(
         OrgSeason.year.desc(),
-        OrgSeason.is_spring.desc()
+        OrgSeason.is_spring.asc()  # Fall (0) before Spring (1) within same year
     ).limit(4).all()
 
     # Build seasons summary with player counts by sport
-    seasons_summary = _build_seasons_summary(recent_seasons)
+    seasons_summary = _build_seasons_summary(seasons_with_players)
 
     return render_template('players/index.html',
                            current_season=current_season,
@@ -742,9 +748,15 @@ def registration_trends():
     from sqlalchemy import func
 
     # Get all seasons with player data, ordered by date
-    all_seasons = OrgSeason.query.filter_by(org_id=1).order_by(
+    # Sort: year desc, is_spring asc (Fall before Spring for same year)
+    # Only include seasons that have player registrations
+    all_seasons = db.session.query(OrgSeason).join(
+        PlayerSeason, PlayerSeason.org_season_id == OrgSeason.ID
+    ).filter(
+        OrgSeason.org_id == 1
+    ).group_by(OrgSeason.ID).order_by(
         OrgSeason.year.desc(),
-        OrgSeason.is_spring.desc()
+        OrgSeason.is_spring.asc()  # Fall (0) before Spring (1) within same year
     ).all()
 
     # Build comprehensive stats for all seasons
