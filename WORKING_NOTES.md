@@ -4,7 +4,63 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Completed player management system - created Player, PlayerSeason, PlayerEvaluation models with flexible evaluation metrics; built UI for managing metrics and importing registration CSVs; parent users created automatically with 'parent' role.
+Last session: Added age-specific score ranges for evaluation metrics - metrics can now have different min/max/increment values for different age groups (e.g., ages 4-6 use 1-3 scale, ages 10-12 use full 1-7 scale).
+
+---
+
+## Session: October 12, 2026 - Age-Specific Score Ranges for Evaluation Metrics
+
+### Overview
+Implemented the ability for evaluation metrics to have different score ranges based on player's league age. This allows simpler scoring scales for younger players (T-Ball/Coach Pitch) and full scales for older players.
+
+### Files Modified
+
+#### Model Changes (`app/models/player.py`)
+- **Added `EvaluationMetricAgeRange` model** - New table for age-specific overrides
+  - Fields: `metric_id`, `min_age`, `max_age`, `min_score`, `max_score`, `score_increment`
+  - Unique constraint on (metric_id, min_age, max_age) to prevent duplicates
+  - Cascade delete when parent metric is deleted
+  - `age_range_display` property for UI (e.g., "Ages 4-6")
+
+- **Updated `EvaluationMetric` model**
+  - Added `age_ranges` relationship (lazy='joined' for eager loading)
+  - Added `get_score_range(league_age)` method - returns appropriate range dict
+  - Added `validate_score(score, league_age)` method - validates score against range
+
+#### Routes Added (`app/players/routes.py`)
+- `POST /players/metrics/<metric_id>/age-ranges` - Add new age range
+- `POST /players/metrics/<metric_id>/age-ranges/<range_id>/delete` - Delete age range
+- Both routes include validation (age range 4-18, no overlaps, min < max)
+
+#### Template Updated (`app/templates/players/metrics_form.html`)
+- Added "Age-Specific Score Ranges" section when editing existing metric
+- Shows table of current age ranges with delete buttons
+- Form to add new age ranges (min age, max age, min score, max score, step)
+- Scroll-back anchor (#age-ranges) after add/delete
+
+#### Migration Script (`scripts/add_metric_age_ranges.sql`)
+- Creates `sdll_evaluation_metric_age_ranges` table
+- Includes foreign key, unique constraint, and index
+
+### Usage Flow
+1. Admin creates/edits a metric with default range (e.g., 1-7)
+2. In the "Age-Specific Score Ranges" section, admin adds ranges:
+   - Ages 4-6: scores 1-3 (step 1.0) for T-Ball
+   - Ages 7-9: scores 1-5 (step 0.5) for Minors
+   - Ages 10+: uses default 1-7 for Majors
+3. When recording evaluations, `get_score_range(player.league_age)` returns correct range
+4. `validate_score()` can enforce the appropriate range
+
+### Testing Verified
+- Model imports correctly
+- `get_score_range()` returns correct range for each age group
+- `validate_score()` rejects out-of-range scores
+- Age ranges persist correctly in database
+- UI displays and manages age ranges properly
+
+### Next Steps for Future
+- Update evaluation recording UI to use `get_score_range(league_age)` dynamically
+- Consider bulk setting age ranges across all metrics
 
 ---
 

@@ -8,7 +8,7 @@ from app.players import players_bp
 from app.extensions import db
 from app.models.player import (
     Player, PlayerSeason, PlayerEvaluation,
-    EvaluationMetric, PlayerEvaluationScore
+    EvaluationMetric, PlayerEvaluationScore, EvaluationMetricAgeRange
 )
 from app.models.org_season import OrgSeason
 from app.utils.auth import role_required
@@ -194,6 +194,89 @@ def metrics_reorder():
 
     db.session.commit()
     return jsonify({'success': True})
+
+
+# =============================================================================
+# Evaluation Metric Age Ranges
+# =============================================================================
+
+@players_bp.route('/metrics/<int:metric_id>/age-ranges', methods=['POST'])
+@login_required
+@role_required('admin')
+def metrics_add_age_range(metric_id):
+    """Add an age-specific score range for a metric."""
+    metric = EvaluationMetric.query.get_or_404(metric_id)
+
+    # Parse form data
+    try:
+        min_age = int(request.form.get('min_age', '').strip())
+        max_age = int(request.form.get('max_age', '').strip())
+        min_score = Decimal(request.form.get('min_score', '').strip())
+        max_score = Decimal(request.form.get('max_score', '').strip())
+        score_increment = Decimal(request.form.get('score_increment', '0.5').strip())
+    except (ValueError, InvalidOperation):
+        flash('Please provide valid numeric values for all fields.', 'error')
+        return redirect(url_for('players.metrics_edit', metric_id=metric_id))
+
+    # Validate ranges
+    if min_age > max_age:
+        flash('Minimum age cannot be greater than maximum age.', 'error')
+        return redirect(url_for('players.metrics_edit', metric_id=metric_id))
+
+    if min_age < 4 or max_age > 18:
+        flash('Age range must be between 4 and 18.', 'error')
+        return redirect(url_for('players.metrics_edit', metric_id=metric_id))
+
+    if min_score >= max_score:
+        flash('Minimum score must be less than maximum score.', 'error')
+        return redirect(url_for('players.metrics_edit', metric_id=metric_id))
+
+    if score_increment <= 0:
+        flash('Score increment must be greater than 0.', 'error')
+        return redirect(url_for('players.metrics_edit', metric_id=metric_id))
+
+    # Check for overlapping age ranges
+    for existing in metric.age_ranges:
+        # Check if ranges overlap
+        if not (max_age < existing.min_age or min_age > existing.max_age):
+            flash(f'Age range overlaps with existing range: {existing.age_range_display}', 'error')
+            return redirect(url_for('players.metrics_edit', metric_id=metric_id))
+
+    # Create new age range
+    age_range = EvaluationMetricAgeRange(
+        metric_id=metric_id,
+        min_age=min_age,
+        max_age=max_age,
+        min_score=min_score,
+        max_score=max_score,
+        score_increment=score_increment
+    )
+    db.session.add(age_range)
+    db.session.commit()
+
+    flash(f'Age range {min_age}-{max_age} added successfully.', 'success')
+    return redirect(url_for('players.metrics_edit', metric_id=metric_id) + '#age-ranges')
+
+
+@players_bp.route('/metrics/<int:metric_id>/age-ranges/<int:range_id>/delete', methods=['POST'])
+@login_required
+@role_required('admin')
+def metrics_delete_age_range(metric_id, range_id):
+    """Delete an age-specific score range."""
+    metric = EvaluationMetric.query.get_or_404(metric_id)
+    age_range = EvaluationMetricAgeRange.query.get_or_404(range_id)
+
+    # Verify the age range belongs to this metric
+    if age_range.metric_id != metric_id:
+        flash('Invalid age range.', 'error')
+        return redirect(url_for('players.metrics_edit', metric_id=metric_id))
+
+    age_display = age_range.age_range_display
+    db.session.delete(age_range)
+    db.session.commit()
+
+    flash(f'{age_display} range deleted.', 'success')
+    return redirect(url_for('players.metrics_edit', metric_id=metric_id) + '#age-ranges')
 
 
 # =============================================================================

@@ -135,6 +135,102 @@
     </form>
 </div>
 
+{% if metric %}
+<!-- Age-Specific Score Ranges Section -->
+<div class="card" style="max-width: 700px; margin-top: 30px;" id="age-ranges">
+    <h3 style="margin-top: 0;">Age-Specific Score Ranges</h3>
+    <p style="color: #666; margin-bottom: 20px;">
+        Override the default score range for specific age groups. Players whose league age doesn't
+        match any range below will use the default range ({{ metric.min_score }}-{{ metric.max_score }}).
+    </p>
+
+    {% if metric.age_ranges %}
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+        <thead>
+            <tr style="background: #f5f5f5;">
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Age Range</th>
+                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #ddd;">Min</th>
+                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #ddd;">Max</th>
+                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #ddd;">Step</th>
+                <th style="padding: 10px; text-align: right; border-bottom: 2px solid #ddd;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ar in metric.age_ranges %}
+            <tr>
+                <td style="padding: 10px; border-bottom: 1px solid #eee;">
+                    <strong>{{ ar.age_range_display }}</strong>
+                </td>
+                <td style="padding: 10px; text-align: center; border-bottom: 1px solid #eee;">{{ ar.min_score }}</td>
+                <td style="padding: 10px; text-align: center; border-bottom: 1px solid #eee;">{{ ar.max_score }}</td>
+                <td style="padding: 10px; text-align: center; border-bottom: 1px solid #eee;">{{ ar.score_increment }}</td>
+                <td style="padding: 10px; text-align: right; border-bottom: 1px solid #eee;">
+                    <form method="POST"
+                          action="{{ url_for('players.metrics_delete_age_range', metric_id=metric.id, range_id=ar.id) }}"
+                          style="display: inline;"
+                          onsubmit="return confirm('Delete this age range?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-small"
+                                style="background: #fff; color: #c00; border: 1px solid #c00; padding: 4px 10px; font-size: 12px;">
+                            Delete
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #888; font-style: italic; margin-bottom: 20px;">
+        No age-specific ranges defined. All players will use the default score range.
+    </p>
+    {% endif %}
+
+    <!-- Add New Age Range Form -->
+    <div style="background: #f9f9f9; padding: 15px; border-radius: 6px;">
+        <h4 style="margin-top: 0; margin-bottom: 15px;">Add Age Range</h4>
+        <form method="POST" action="{{ url_for('players.metrics_add_age_range', metric_id=metric.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
+                <div style="flex: 1; min-width: 80px;">
+                    <label for="min_age" style="display: block; font-size: 12px; margin-bottom: 4px;">Min Age</label>
+                    <input type="number" id="min_age" name="min_age" class="form-control"
+                           min="4" max="18" required placeholder="4" style="width: 100%;">
+                </div>
+                <div style="flex: 1; min-width: 80px;">
+                    <label for="max_age" style="display: block; font-size: 12px; margin-bottom: 4px;">Max Age</label>
+                    <input type="number" id="max_age" name="max_age" class="form-control"
+                           min="4" max="18" required placeholder="6" style="width: 100%;">
+                </div>
+                <div style="flex: 1; min-width: 80px;">
+                    <label for="ar_min_score" style="display: block; font-size: 12px; margin-bottom: 4px;">Min Score</label>
+                    <input type="number" id="ar_min_score" name="min_score" class="form-control"
+                           step="0.5" min="0" max="10" required placeholder="1" style="width: 100%;">
+                </div>
+                <div style="flex: 1; min-width: 80px;">
+                    <label for="ar_max_score" style="display: block; font-size: 12px; margin-bottom: 4px;">Max Score</label>
+                    <input type="number" id="ar_max_score" name="max_score" class="form-control"
+                           step="0.5" min="0" max="10" required placeholder="3" style="width: 100%;">
+                </div>
+                <div style="flex: 1; min-width: 80px;">
+                    <label for="ar_score_increment" style="display: block; font-size: 12px; margin-bottom: 4px;">Step</label>
+                    <input type="number" id="ar_score_increment" name="score_increment" class="form-control"
+                           step="0.1" min="0.1" max="1" value="0.5" style="width: 100%;">
+                </div>
+                <div>
+                    <button type="submit" class="btn btn-primary" style="white-space: nowrap;">
+                        Add Range
+                    </button>
+                </div>
+            </div>
+        </form>
+        <p style="font-size: 12px; color: #666; margin-top: 10px; margin-bottom: 0;">
+            Example: Ages 4-6 with scores 1-3, Ages 7-9 with scores 1-5, etc.
+        </p>
+    </div>
+</div>
+{% endif %}
+
 <style>
 .form-group {
     margin-bottom: 20px;

@@ -319,6 +319,48 @@ class PlayerSeason(db.Model):
         return record
 
 
+class EvaluationMetricAgeRange(db.Model):
+    """Age-specific score ranges for evaluation metrics.
+
+    Allows different score ranges (min/max/increment) for different age groups.
+    For example, younger players (ages 4-6) might use a 1-3 scale while
+    older players (ages 10-12) use the full 1-7 scale.
+    """
+    __tablename__ = 'sdll_evaluation_metric_age_ranges'
+
+    id = db.Column(db.Integer, primary_key=True)
+    metric_id = db.Column(db.Integer, db.ForeignKey('sdll_evaluation_metrics.id',
+                                                     ondelete='CASCADE'), nullable=False)
+
+    # Age range (inclusive)
+    min_age = db.Column(db.SmallInteger, nullable=False)  # e.g., 4
+    max_age = db.Column(db.SmallInteger, nullable=False)  # e.g., 6
+
+    # Score range for this age group
+    min_score = db.Column(db.Numeric(3, 1), nullable=False)
+    max_score = db.Column(db.Numeric(3, 1), nullable=False)
+    score_increment = db.Column(db.Numeric(2, 1), nullable=False, default=0.5)
+
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+    # Relationships
+    metric = db.relationship('EvaluationMetric', back_populates='age_ranges')
+
+    __table_args__ = (
+        db.UniqueConstraint('metric_id', 'min_age', 'max_age', name='uq_metric_age_range'),
+    )
+
+    def __repr__(self):
+        return f'<EvaluationMetricAgeRange metric={self.metric_id} ages={self.min_age}-{self.max_age}>'
+
+    @property
+    def age_range_display(self):
+        """Display string for the age range."""
+        if self.min_age == self.max_age:
+            return f'Age {self.min_age}'
+        return f'Ages {self.min_age}-{self.max_age}'
+
+
 class EvaluationMetric(db.Model):
     """
     Defines evaluation metrics (what skills are measured and how).
@@ -337,7 +379,7 @@ class EvaluationMetric(db.Model):
     category = db.Column(db.String(30))           # "batting", "fielding", "pitching", "running"
     program = db.Column(db.String(20), default='both')  # "baseball", "softball", "both"
 
-    # Scoring rules
+    # Scoring rules (default fallback when no age-specific range matches)
     min_score = db.Column(db.Numeric(3, 1), default=1.0)
     max_score = db.Column(db.Numeric(3, 1), default=7.0)
     score_increment = db.Column(db.Numeric(2, 1), default=0.5)
@@ -351,9 +393,54 @@ class EvaluationMetric(db.Model):
 
     # Relationships
     scores = db.relationship('PlayerEvaluationScore', back_populates='metric', lazy='dynamic')
+    age_ranges = db.relationship('EvaluationMetricAgeRange', back_populates='metric',
+                                 lazy='joined', cascade='all, delete-orphan',
+                                 order_by='EvaluationMetricAgeRange.min_age')
 
     def __repr__(self):
         return f'<EvaluationMetric {self.name}: {self.display_name}>'
+
+    def get_score_range(self, league_age=None):
+        """Get min/max/increment for a specific league age, or default if no override.
+
+        Args:
+            league_age: Player's league age. If None, returns default range.
+
+        Returns:
+            dict with 'min', 'max', 'increment' keys (float values)
+        """
+        if league_age is not None:
+            for ar in self.age_ranges:
+                if ar.min_age <= league_age <= ar.max_age:
+                    return {
+                        'min': float(ar.min_score),
+                        'max': float(ar.max_score),
+                        'increment': float(ar.score_increment)
+                    }
+        # Default fallback (use column defaults if not set)
+        return {
+            'min': float(self.min_score) if self.min_score is not None else 1.0,
+            'max': float(self.max_score) if self.max_score is not None else 7.0,
+            'increment': float(self.score_increment) if self.score_increment is not None else 0.5
+        }
+
+    def validate_score(self, score, league_age=None):
+        """Check if a score is valid for the given league age.
+
+        Args:
+            score: The score to validate
+            league_age: Player's league age
+
+        Returns:
+            tuple (is_valid, error_message)
+        """
+        range_info = self.get_score_range(league_age)
+        min_score = range_info['min']
+        max_score = range_info['max']
+
+        if score < min_score or score > max_score:
+            return False, f"Score must be between {min_score} and {max_score}"
+        return True, None
 
     @classmethod
     def get_active(cls, program=None):
