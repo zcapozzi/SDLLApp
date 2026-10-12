@@ -983,18 +983,39 @@ def team_roster(team_id):
 @login_required
 @role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
 def assign_player(player_season_id):
-    """Assign a player to a team."""
+    """Assign a player to a team. Supports both form POST and AJAX."""
     from app.services.roster_service import RosterService
 
-    team_id = request.form.get('team_id', type=int)
+    # Handle both form data and JSON
+    if request.is_json:
+        team_id = request.json.get('team_id')
+    else:
+        team_id = request.form.get('team_id', type=int)
+
     if not team_id:
+        if request.is_json:
+            return jsonify({'success': False, 'error': 'Please select a team.'}), 400
         flash('Please select a team.', 'error')
         return redirect(request.referrer or url_for('players.player_pool'))
 
     try:
         player_season = RosterService.assign_player(player_season_id, team_id)
+
+        if request.is_json:
+            # Return data needed to update the UI
+            return jsonify({
+                'success': True,
+                'player_season_id': player_season.id,
+                'team_id': player_season.team_id,
+                'team_display': f"{player_season.team.league_display_name} {player_season.team.scheduler_display_name}",
+                'team_url': url_for('players.team_roster', team_id=player_season.team_id),
+                'status': player_season.status
+            })
+
         flash(f'Player assigned to team successfully.', 'success')
     except ValueError as e:
+        if request.is_json:
+            return jsonify({'success': False, 'error': str(e)}), 400
         flash(str(e), 'error')
 
     # Redirect back with anchor to the player row
@@ -1006,13 +1027,23 @@ def assign_player(player_season_id):
 @login_required
 @role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
 def unassign_player(player_season_id):
-    """Remove a player from their team."""
+    """Remove a player from their team. Supports both form POST and AJAX."""
     from app.services.roster_service import RosterService
 
     try:
         player_season = RosterService.unassign_player(player_season_id)
+
+        if request.is_json:
+            return jsonify({
+                'success': True,
+                'player_season_id': player_season.id,
+                'status': player_season.status
+            })
+
         flash(f'Player removed from team.', 'success')
     except ValueError as e:
+        if request.is_json:
+            return jsonify({'success': False, 'error': str(e)}), 400
         flash(str(e), 'error')
 
     # Redirect back
