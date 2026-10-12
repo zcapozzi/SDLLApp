@@ -142,10 +142,10 @@
                 {% endif %}
             </div>
             <div style="display: flex; gap: 10px;">
-                <a href="{{ url_for('players.import_registration') }}" class="btn btn-outline">
+                <a href="{{ url_for('players.import_registration') }}" class="btn btn-outline" id="start-over-btn">
                     Start Over
                 </a>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn btn-primary" id="confirm-btn">
                     Confirm Import
                 </button>
             </div>
@@ -170,5 +170,37 @@
     background: #fff3e0;
     color: #e65100;
 }
+.spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+button:disabled, a.btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    pointer-events: none;
+}
 </style>
+<script>
+document.querySelector('form').addEventListener('submit', function(e) {
+    var btn = document.getElementById('confirm-btn');
+    var startOverBtn = document.getElementById('start-over-btn');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Importing...';
+
+    // Disable start over button too
+    startOverBtn.style.opacity = '0.5';
+    startOverBtn.style.pointerEvents = 'none';
+});
+</script>
 {% endblock %}
