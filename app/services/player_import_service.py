@@ -284,9 +284,12 @@ class PlayerImportService:
             dict with import statistics
         """
         from app.utils.encryption import hash_for_lookup
+        from werkzeug.security import generate_password_hash
 
         self.program = program
         self.column_mapping = column_mapping
+        self._hash_for_lookup = hash_for_lookup  # Cache function reference
+        self._generate_password_hash = generate_password_hash
         self.stats = {
             'players_created': 0,
             'players_updated': 0,
@@ -318,17 +321,71 @@ class PlayerImportService:
         # Get max player code suffix for generating new codes
         self._player_code_counts = {}
 
+        # Track new objects that need IDs - batch flush instead of per-row
+        self._pending_players = []
+        self._pending_users = []
+        self._pending_seasons = []
+
         with open(filepath, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
+            rows = list(reader)
 
-            for row_num, row in enumerate(reader, start=2):
+            # Find prior division column once (not per row)
+            self._prior_division_col = None
+            if rows:
+                for k in rows[0].keys():
+                    if 'if your child played' in k.lower():
+                        self._prior_division_col = k
+                        break
+
+            # Process in batches for better performance
+            batch_size = 100
+            for i, row in enumerate(rows):
+                row_num = i + 2
                 try:
                     self._import_registration_row_fast(row, create_parent_users)
                 except Exception as e:
                     self.stats['errors'].append(f"Row {row_num}: {str(e)}")
 
+                # Flush every batch_size rows to get IDs
+                if (i + 1) % batch_size == 0:
+                    self._flush_pending()
+
+        # Final flush for remaining records
+        self._flush_pending()
         db.session.commit()
         return self.stats
+
+    def _flush_pending(self):
+        """Flush pending records and create season records that need player IDs."""
+        if self._pending_players or self._pending_users:
+            db.session.flush()
+
+        # Link players to parent users now that we have IDs
+        for player in self._pending_players:
+            if not player.parent_user_id and player.parent_email_hash:
+                parent_user = self._user_cache.get(player.parent_email_hash)
+                if parent_user and parent_user.ID:
+                    player.parent_user_id = parent_user.ID
+
+        # Now create season records for pending players
+        for player, division_name, prior_league_id in self._pending_seasons:
+            season_key = (player.id, self.org_season.ID)
+            if season_key not in self._season_cache:
+                season_record = PlayerSeason(
+                    player_id=player.id,
+                    org_season_id=self.org_season.ID,
+                    registration_division=division_name,
+                    prior_league_id=prior_league_id,
+                    status='registered'
+                )
+                db.session.add(season_record)
+                self._season_cache[season_key] = season_record
+
+        # Clear pending lists
+        self._pending_players = []
+        self._pending_users = []
+        self._pending_seasons = []
 
     def _get_field(self, row: dict, field_name: str) -> str:
         """Get field value from row using column mapping if available."""
@@ -342,8 +399,6 @@ class PlayerImportService:
 
     def _import_registration_row_fast(self, row: dict, create_parent_users: bool):
         """Import single registration row using cached lookups (fast version)."""
-        from app.utils.encryption import hash_for_lookup
-
         # Extract fields using mapping
         parent_email = self._get_field(row, 'User Email')
         first_name = self._get_field(row, 'Player First Name')
@@ -372,14 +427,15 @@ class PlayerImportService:
 
         division_name = self._get_field(row, 'Division Name')
 
-        # Compute hashes for cache lookup
-        email_hash = hash_for_lookup(parent_email)
+        # Compute hashes for cache lookup (use cached function)
+        email_hash = self._hash_for_lookup(parent_email)
         name_normalized = f"{first_name}{last_name}".lower().replace(' ', '').replace('-', '')
-        name_hash = hash_for_lookup(name_normalized)
+        name_hash = self._hash_for_lookup(name_normalized)
         cache_key = (email_hash, name_hash)
 
         # Check cache for existing player (NO DB QUERY)
         player = self._player_cache.get(cache_key)
+        is_new_player = player is None
 
         if player:
             # Update any missing fields on existing player
@@ -413,6 +469,7 @@ class PlayerImportService:
             player.player_code = self._generate_player_code_fast(first_name, last_name, birth_date)
 
             db.session.add(player)
+            self._pending_players.append(player)
             # Add to cache so subsequent rows can find this player
             self._player_cache[cache_key] = player
 
@@ -425,54 +482,59 @@ class PlayerImportService:
                     parent_user.add_role('parent')
             else:
                 # Create new user directly (avoid User.create_user which commits each time)
-                from werkzeug.security import generate_password_hash
+                # Use pbkdf2 instead of scrypt for faster bulk imports
                 random_password = secrets.token_urlsafe(16)
                 parent_user = User(role='parent', org_ID=1)
                 parent_user.email = parent_email
                 parent_user.name = parent_name
                 parent_user.phone = parent_phone
-                parent_user.password_hash = generate_password_hash(random_password)
+                parent_user.password_hash = self._generate_password_hash(
+                    random_password, method='pbkdf2:sha256:1000'
+                )
                 db.session.add(parent_user)
+                self._pending_users.append(parent_user)
                 self.stats['parent_users_created'] += 1
                 # Add to cache immediately so duplicate emails in CSV don't create duplicates
                 self._user_cache[email_hash] = parent_user
 
+            # Link player to user - will be done after flush when IDs are available
             if parent_user and not player.parent_user_id:
-                # Need to flush to get IDs if new
-                if player.id is None or parent_user.ID is None:
-                    db.session.flush()
-                player.parent_user_id = parent_user.ID
+                if player.id is not None and parent_user.ID is not None:
+                    player.parent_user_id = parent_user.ID
+                # else: will be linked after batch flush
 
-        # Get prior league from "If your child played..." column
-        prior_division_col = [k for k in row.keys() if 'if your child played' in k.lower()]
-        prior_division = row.get(prior_division_col[0], '') if prior_division_col else ''
+        # Get prior league from pre-computed column name
+        prior_division = ''
+        if self._prior_division_col:
+            prior_division = row.get(self._prior_division_col, '')
         prior_league_id = self._normalize_league_name(prior_division)
 
-        # Create season record using cache
-        # Need player.id, so flush if needed
-        if player.id is None:
-            db.session.flush()
+        # Handle season record
+        if player.id is not None:
+            # Existing player - can create/update season record immediately
+            season_key = (player.id, self.org_season.ID)
+            season_record = self._season_cache.get(season_key)
 
-        season_key = (player.id, self.org_season.ID)
-        season_record = self._season_cache.get(season_key)
-
-        if season_record:
-            # Update existing
-            if division_name:
-                season_record.registration_division = division_name
-            if prior_league_id:
-                season_record.prior_league_id = prior_league_id
+            if season_record:
+                # Update existing
+                if division_name:
+                    season_record.registration_division = division_name
+                if prior_league_id:
+                    season_record.prior_league_id = prior_league_id
+            else:
+                # Create new
+                season_record = PlayerSeason(
+                    player_id=player.id,
+                    org_season_id=self.org_season.ID,
+                    registration_division=division_name,
+                    prior_league_id=prior_league_id,
+                    status='registered'
+                )
+                db.session.add(season_record)
+                self._season_cache[season_key] = season_record
         else:
-            # Create new
-            season_record = PlayerSeason(
-                player_id=player.id,
-                org_season_id=self.org_season.ID,
-                registration_division=division_name,
-                prior_league_id=prior_league_id,
-                status='registered'
-            )
-            db.session.add(season_record)
-            self._season_cache[season_key] = season_record
+            # New player - defer season record creation until after flush
+            self._pending_seasons.append((player, division_name, prior_league_id))
 
         self.stats['season_records_created'] += 1
 
