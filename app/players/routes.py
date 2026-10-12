@@ -373,6 +373,8 @@ def import_preview():
     import io
     from datetime import datetime
     from flask import session
+    from app.utils.encryption import hash_for_lookup
+    from app.models.user import User
 
     # Get session data
     csv_content = session.get('import_csv')
@@ -395,6 +397,16 @@ def import_preview():
     reader = csv.DictReader(stream)
     rows = list(reader)
 
+    # Pre-load existing players and users for fast lookup
+    existing_players = Player.query.all()
+    player_cache = {}
+    for p in existing_players:
+        key = (p.parent_email_hash, p.name_hash)
+        player_cache[key] = p
+
+    existing_users = User.query.all()
+    user_cache = {u.email_hash: u for u in existing_users if u.email_hash}
+
     # Helper to get field value using mapping
     def get_field(row, field_name):
         csv_col = column_mapping.get(field_name)
@@ -402,10 +414,18 @@ def import_preview():
             return row.get(csv_col, '').strip()
         return row.get(field_name, '').strip()
 
-    # Parse and validate rows for preview
+    # Parse and validate ALL rows for accurate counts
     preview_rows = []
     errors = []
-    for i, row in enumerate(rows[:100], start=2):  # Preview first 100
+
+    # Track unique emails for parent counts
+    emails_seen = set()
+    new_parents = 0
+    returning_parents = 0
+    new_players = 0
+    returning_players = 0
+
+    for i, row in enumerate(rows, start=2):
         email = get_field(row, 'User Email')
         first_name = get_field(row, 'Player First Name')
         last_name = get_field(row, 'Player Last Name')
@@ -430,19 +450,49 @@ def import_preview():
             errors.append(f'Row {i}: Invalid birth date "{birth_date_str}"')
             continue
 
-        # Check if player exists
-        existing = Player.find_by_email_and_name(email, first_name, last_name)
+        # Check if player exists using cache
+        email_hash = hash_for_lookup(email)
+        name_normalized = f"{first_name}{last_name}".lower().replace(' ', '').replace('-', '')
+        name_hash = hash_for_lookup(name_normalized)
+        player_key = (email_hash, name_hash)
 
-        preview_rows.append({
-            'row_num': i,
-            'email': email,
-            'first_name': first_name,
-            'last_name': last_name,
-            'birth_date': birth_date,
-            'division': division,
-            'exists': existing is not None,
-            'player_id': existing.id if existing else None
-        })
+        existing_player = player_cache.get(player_key)
+        player_exists = existing_player is not None
+
+        if player_exists:
+            returning_players += 1
+        else:
+            new_players += 1
+
+        # Check if parent user exists (only count each email once)
+        if email not in emails_seen:
+            emails_seen.add(email)
+            if email_hash in user_cache:
+                returning_parents += 1
+            else:
+                new_parents += 1
+
+        # Only include first 100 rows in preview table
+        if len(preview_rows) < 100:
+            preview_rows.append({
+                'row_num': i,
+                'email': email,
+                'first_name': first_name,
+                'last_name': last_name,
+                'birth_date': birth_date,
+                'division': division,
+                'exists': player_exists,
+                'player_id': existing_player.id if existing_player else None
+            })
+
+    # Build stats dict
+    import_stats = {
+        'new_players': new_players,
+        'returning_players': returning_players,
+        'new_parents': new_parents,
+        'returning_parents': returning_parents,
+        'unique_emails': len(emails_seen)
+    }
 
     return render_template('players/import_preview.html',
                            org_season=org_season,
@@ -452,7 +502,8 @@ def import_preview():
                            errors=errors[:20],
                            total_errors=len(errors),
                            columns=reader.fieldnames,
-                           create_users=create_users)
+                           create_users=create_users,
+                           import_stats=import_stats)
 
 
 @players_bp.route('/import/registration/confirm', methods=['POST'])

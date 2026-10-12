@@ -9,7 +9,7 @@
 </div>
 
 <!-- Summary -->
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px;">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin-bottom: 20px;">
     <div class="card" style="text-align: center; padding: 20px;">
         <div style="font-size: 28px; font-weight: bold; color: rgb(34, 139, 34);">{{ total_rows }}</div>
         <div style="color: #666; font-size: 13px;">Total Rows</div>
@@ -21,6 +21,44 @@
         <div style="color: #666; font-size: 13px;">Errors</div>
     </div>
 </div>
+
+<!-- Player & Parent Stats -->
+{% if import_stats %}
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+    <!-- Player Stats -->
+    <div class="card" style="padding: 20px;">
+        <h4 style="margin: 0 0 15px 0; color: #333;">Players</h4>
+        <div style="display: flex; gap: 20px;">
+            <div style="flex: 1; text-align: center; padding: 15px; background: #e8f5e9; border-radius: 6px;">
+                <div style="font-size: 24px; font-weight: bold; color: #2e7d32;">{{ import_stats.returning_players }}</div>
+                <div style="font-size: 12px; color: #2e7d32;">Returning</div>
+            </div>
+            <div style="flex: 1; text-align: center; padding: 15px; background: #e3f2fd; border-radius: 6px;">
+                <div style="font-size: 24px; font-weight: bold; color: #1565c0;">{{ import_stats.new_players }}</div>
+                <div style="font-size: 12px; color: #1565c0;">New</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Parent Stats -->
+    <div class="card" style="padding: 20px;">
+        <h4 style="margin: 0 0 15px 0; color: #333;">Parent Accounts</h4>
+        <div style="display: flex; gap: 20px;">
+            <div style="flex: 1; text-align: center; padding: 15px; background: #e8f5e9; border-radius: 6px;">
+                <div style="font-size: 24px; font-weight: bold; color: #2e7d32;">{{ import_stats.returning_parents }}</div>
+                <div style="font-size: 12px; color: #2e7d32;">Existing</div>
+            </div>
+            <div style="flex: 1; text-align: center; padding: 15px; background: #e3f2fd; border-radius: 6px;">
+                <div style="font-size: 24px; font-weight: bold; color: #1565c0;">{{ import_stats.new_parents }}</div>
+                <div style="font-size: 12px; color: #1565c0;">New</div>
+            </div>
+        </div>
+        <div style="margin-top: 10px; font-size: 12px; color: #666; text-align: center;">
+            {{ import_stats.unique_emails }} unique email addresses
+        </div>
+    </div>
+</div>
+{% endif %}
 
 {% if preview_rows|length < total_rows %}
 <div style="background: #fff3e0; border: 1px solid #ffcc02; border-radius: 6px; padding: 12px 15px; margin-bottom: 20px; font-size: 14px; color: #856404;">
