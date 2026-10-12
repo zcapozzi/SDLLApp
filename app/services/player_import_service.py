@@ -353,6 +353,10 @@ class PlayerImportService:
         # Track which new players need linking to users (by index)
         self._player_user_links = []  # (player_index, email_hash)
 
+        import time
+        timings = {}
+
+        t0 = time.time()
         with open(filepath, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
             rows = list(reader)
@@ -365,6 +369,9 @@ class PlayerImportService:
                         self._prior_division_col = k
                         break
 
+            t1 = time.time()
+            timings['read_csv'] = t1 - t0
+
             # Process all rows - collect data only, no DB operations
             for i, row in enumerate(rows):
                 row_num = i + 2
@@ -373,9 +380,23 @@ class PlayerImportService:
                 except Exception as e:
                     self.stats['errors'].append(f"Row {row_num}: {str(e)}")
 
+            t2 = time.time()
+            timings['collect_data'] = t2 - t1
+
         # Bulk insert all new records at once
         self._bulk_insert_all()
+        t3 = time.time()
+        timings['bulk_insert'] = t3 - t2
+
         db.session.commit()
+        t4 = time.time()
+        timings['commit'] = t4 - t3
+
+        # Log timings
+        timings['total'] = t4 - t0
+        print(f"[IMPORT TIMING] {timings}")
+        self.stats['_timings'] = timings
+
         return self.stats
 
     def _collect_row_data(self, row: dict, create_parent_users: bool):
