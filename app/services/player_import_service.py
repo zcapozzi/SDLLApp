@@ -283,6 +283,8 @@ class PlayerImportService:
         Returns:
             dict with import statistics
         """
+        from app.utils.encryption import hash_for_lookup
+
         self.program = program
         self.column_mapping = column_mapping
         self.stats = {
@@ -294,12 +296,33 @@ class PlayerImportService:
             'errors': []
         }
 
+        # Pre-load existing data to avoid N+1 queries
+        # Build lookup dictionaries keyed by (email_hash, name_hash)
+        existing_players = Player.query.all()
+        self._player_cache = {}
+        for p in existing_players:
+            key = (p.parent_email_hash, p.name_hash)
+            self._player_cache[key] = p
+
+        # Build user lookup by email_hash
+        existing_users = User.query.filter(User.role.contains('parent')).all()
+        self._user_cache = {u.email_hash: u for u in existing_users}
+
+        # Build player season lookup by (player_id, org_season_id)
+        existing_seasons = PlayerSeason.query.filter_by(
+            org_season_id=self.org_season.ID
+        ).all()
+        self._season_cache = {(ps.player_id, ps.org_season_id): ps for ps in existing_seasons}
+
+        # Get max player code suffix for generating new codes
+        self._player_code_counts = {}
+
         with open(filepath, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
 
             for row_num, row in enumerate(reader, start=2):
                 try:
-                    self._import_registration_row(row, create_parent_users)
+                    self._import_registration_row_fast(row, create_parent_users)
                 except Exception as e:
                     self.stats['errors'].append(f"Row {row_num}: {str(e)}")
 
@@ -316,8 +339,171 @@ class PlayerImportService:
         # Fallback to direct field name
         return row.get(field_name, '').strip()
 
+    def _import_registration_row_fast(self, row: dict, create_parent_users: bool):
+        """Import single registration row using cached lookups (fast version)."""
+        from app.utils.encryption import hash_for_lookup
+
+        # Extract fields using mapping
+        parent_email = self._get_field(row, 'User Email')
+        first_name = self._get_field(row, 'Player First Name')
+        last_name = self._get_field(row, 'Player Last Name')
+        birth_date_str = self._get_field(row, 'Player Birth Date')
+        gender_raw = self._get_field(row, 'Player Gender')
+
+        if not parent_email or not first_name or not last_name:
+            return  # Skip incomplete rows
+
+        birth_date = self._parse_date(birth_date_str)
+        if not birth_date:
+            self.stats['errors'].append(
+                f"Invalid birth date for {first_name} {last_name}: {birth_date_str}")
+            return
+
+        gender = 'M' if gender_raw.lower().startswith('m') else 'F' if gender_raw.lower().startswith('f') else None
+
+        # Parent info
+        parent_first = self._get_field(row, 'Account First Name')
+        parent_last = self._get_field(row, 'Account Last Name')
+        parent_phone = self._get_field(row, 'Cellphone')
+        if not parent_phone:
+            parent_phone = row.get('Telephone', '').strip()
+        parent_name = f"{parent_first} {parent_last}".strip() if parent_first else None
+
+        division_name = self._get_field(row, 'Division Name')
+
+        # Compute hashes for cache lookup
+        email_hash = hash_for_lookup(parent_email)
+        name_normalized = f"{first_name}{last_name}".lower().replace(' ', '').replace('-', '')
+        name_hash = hash_for_lookup(name_normalized)
+        cache_key = (email_hash, name_hash)
+
+        # Check cache for existing player (NO DB QUERY)
+        player = self._player_cache.get(cache_key)
+
+        if player:
+            # Update any missing fields on existing player
+            self.stats['players_updated'] += 1
+            if gender and not player.gender:
+                player.gender = gender
+            if self.program and not player.program:
+                player.program = self.program
+            if parent_first and not player.parent_first_name:
+                player.parent_first_name = parent_first
+            if parent_last and not player.parent_last_name:
+                player.parent_last_name = parent_last
+            if parent_phone and not player.parent_phone:
+                player.parent_phone = parent_phone
+        else:
+            # Create new player
+            self.stats['players_created'] += 1
+            player = Player(
+                birth_date=birth_date,
+                gender=gender,
+                program=self.program
+            )
+            player.first_name = first_name
+            player.last_name = last_name
+            player.parent_email = parent_email
+            player.parent_first_name = parent_first
+            player.parent_last_name = parent_last
+            player.parent_phone = parent_phone
+
+            # Generate player code without DB query
+            player.player_code = self._generate_player_code_fast(first_name, last_name, birth_date)
+
+            db.session.add(player)
+            # Add to cache so subsequent rows can find this player
+            self._player_cache[cache_key] = player
+
+        # Create parent user if requested (using cache)
+        if create_parent_users:
+            parent_user = self._user_cache.get(email_hash)
+            if parent_user:
+                # User exists, ensure has parent role
+                if not parent_user.has_role('parent'):
+                    parent_user.add_role('parent')
+            else:
+                # Create new user directly (avoid User.create_user which commits each time)
+                from werkzeug.security import generate_password_hash
+                random_password = secrets.token_urlsafe(16)
+                try:
+                    parent_user = User(role='parent', org_ID=1)
+                    parent_user.email = parent_email
+                    parent_user.name = parent_name
+                    parent_user.phone = parent_phone
+                    parent_user.password_hash = generate_password_hash(random_password)
+                    db.session.add(parent_user)
+                    self.stats['parent_users_created'] += 1
+                    # Add to cache
+                    self._user_cache[email_hash] = parent_user
+                except Exception as e:
+                    self.stats['errors'].append(f"Error creating user for {parent_email}: {str(e)}")
+                    parent_user = None
+
+            if parent_user and not player.parent_user_id:
+                # Need to flush to get IDs if new
+                if player.id is None or parent_user.ID is None:
+                    db.session.flush()
+                player.parent_user_id = parent_user.ID
+
+        # Get prior league from "If your child played..." column
+        prior_division_col = [k for k in row.keys() if 'if your child played' in k.lower()]
+        prior_division = row.get(prior_division_col[0], '') if prior_division_col else ''
+        prior_league_id = self._normalize_league_name(prior_division)
+
+        # Create season record using cache
+        # Need player.id, so flush if needed
+        if player.id is None:
+            db.session.flush()
+
+        season_key = (player.id, self.org_season.ID)
+        season_record = self._season_cache.get(season_key)
+
+        if season_record:
+            # Update existing
+            if division_name:
+                season_record.registration_division = division_name
+            if prior_league_id:
+                season_record.prior_league_id = prior_league_id
+        else:
+            # Create new
+            season_record = PlayerSeason(
+                player_id=player.id,
+                org_season_id=self.org_season.ID,
+                registration_division=division_name,
+                prior_league_id=prior_league_id,
+                status='registered'
+            )
+            db.session.add(season_record)
+            self._season_cache[season_key] = season_record
+
+        self.stats['season_records_created'] += 1
+
+    def _generate_player_code_fast(self, first_name: str, last_name: str, birth_date) -> str:
+        """Generate player code without DB query, using in-memory tracking."""
+        last_part = (last_name or 'xxxx')[:4].lower()
+        first_part = (first_name or 'xxx')[:3].lower()
+        date_part = birth_date.strftime('%m%y') if birth_date else '0000'
+        base_code = f"{last_part}{first_part}{date_part}"
+
+        # Check cache of codes we've already seen/generated
+        if base_code not in self._player_code_counts:
+            # Check if any existing player has this code pattern
+            count = 0
+            for p in self._player_cache.values():
+                if p.player_code and p.player_code.startswith(base_code):
+                    count += 1
+            self._player_code_counts[base_code] = count
+
+        existing_count = self._player_code_counts[base_code]
+        self._player_code_counts[base_code] = existing_count + 1
+
+        if existing_count == 0:
+            return base_code
+        return f"{base_code}{existing_count + 1}"
+
     def _import_registration_row(self, row: dict, create_parent_users: bool):
-        """Import single registration row."""
+        """Import single registration row (legacy method - slow)."""
         # Extract fields using mapping
         parent_email = self._get_field(row, 'User Email')
         first_name = self._get_field(row, 'Player First Name')
