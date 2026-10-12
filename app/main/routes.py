@@ -717,7 +717,7 @@ def dashboard():
         current_user.is_umpire() or
         current_user.can_manage_umpires() or
         current_user.can_manage_facilities() or
-        current_user.has_role('DataManager')
+        current_user.has_role('DataManager', 'BBPlayerAgent', 'SBPlayerAgent')
     )
 
     if not has_full_access:

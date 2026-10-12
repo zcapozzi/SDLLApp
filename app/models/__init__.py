@@ -67,3 +67,6 @@ from .role_task import RoleTaskTemplate, RoleTaskInstance
 
 # Organization events (evaluations, signups, ceremonies, etc.)
 from .org_event import OrgEvent
+
+# Player management (registration, evaluations, draft)
+from .player import Player, PlayerSeason, PlayerEvaluation, EvaluationMetric, PlayerEvaluationScore

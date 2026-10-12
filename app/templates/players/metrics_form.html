@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}{{ action }} Evaluation Metric{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>{{ action }} Evaluation Metric</h1>
+    <a href="{{ url_for('players.metrics_index') }}" class="btn btn-outline">Cancel</a>
+</div>
+
+<div class="card" style="max-width: 700px;">
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <!-- Name (only editable on create) -->
+        <div class="form-group">
+            <label for="name">Internal Name <span style="color: #c00;">*</span></label>
+            {% if metric %}
+                <input type="text" id="name" class="form-control"
+                       value="{{ metric.name }}" disabled
+                       style="background: #f5f5f5;">
+                <small style="color: #666;">Internal name cannot be changed after creation.</small>
+            {% else %}
+                <input type="text" id="name" name="name" class="form-control"
+                       placeholder="e.g., base_running_iq" required
+                       pattern="[a-z_]+" title="Lowercase letters and underscores only">
+                <small style="color: #666;">
+                    Lowercase letters and underscores only. This is used in code and cannot be changed later.
+                </small>
+            {% endif %}
+        </div>
+
+        <!-- Display Name -->
+        <div class="form-group">
+            <label for="display_name">Display Name <span style="color: #c00;">*</span></label>
+            <input type="text" id="display_name" name="display_name" class="form-control"
+                   value="{{ metric.display_name if metric else '' }}"
+                   placeholder="e.g., Base Running IQ" required>
+            <small style="color: #666;">The name shown in forms and reports.</small>
+        </div>
+
+        <!-- Description -->
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" class="form-control" rows="3"
+                      placeholder="How should evaluators measure this skill?">{{ metric.description if metric else '' }}</textarea>
+            <small style="color: #666;">
+                Provide guidance for evaluators on how to assess this skill.
+            </small>
+        </div>
+
+        <!-- Category and Program (side by side) -->
+        <div style="display: flex; gap: 20px;">
+            <div class="form-group" style="flex: 1;">
+                <label for="category">Category</label>
+                <select id="category" name="category" class="form-control">
+                    {% for cat in categories %}
+                    <option value="{{ cat }}"
+                            {{ 'selected' if metric and metric.category == cat else '' }}>
+                        {{ cat|title }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group" style="flex: 1;">
+                <label for="program">Program</label>
+                <select id="program" name="program" class="form-control">
+                    {% for value, label in programs %}
+                    <option value="{{ value }}"
+                            {{ 'selected' if metric and metric.program == value else '' }}>
+                        {{ label }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <small style="color: #666;">Which sport uses this metric?</small>
+            </div>
+        </div>
+
+        <!-- Score Range -->
+        <div style="display: flex; gap: 20px;">
+            <div class="form-group" style="flex: 1;">
+                <label for="min_score">Minimum Score</label>
+                <input type="number" id="min_score" name="min_score" class="form-control"
+                       value="{{ metric.min_score if metric else '1.0' }}"
+                       step="0.5" min="0" max="10">
+            </div>
+
+            <div class="form-group" style="flex: 1;">
+                <label for="max_score">Maximum Score</label>
+                <input type="number" id="max_score" name="max_score" class="form-control"
+                       value="{{ metric.max_score if metric else '7.0' }}"
+                       step="0.5" min="0" max="10">
+            </div>
+
+            <div class="form-group" style="flex: 1;">
+                <label for="score_increment">Step</label>
+                <input type="number" id="score_increment" name="score_increment" class="form-control"
+                       value="{{ metric.score_increment if metric else '0.5' }}"
+                       step="0.1" min="0.1" max="1">
+                <small style="color: #666;">0.5 = half points</small>
+            </div>
+        </div>
+
+        <!-- Sort Order -->
+        <div class="form-group">
+            <label for="sort_order">Sort Order</label>
+            <input type="number" id="sort_order" name="sort_order" class="form-control"
+                   value="{{ metric.sort_order if metric else '100' }}"
+                   style="width: 100px;">
+            <small style="color: #666;">Lower numbers appear first in forms.</small>
+        </div>
+
+        <hr style="margin: 30px 0;">
+
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                {% if metric %}
+                <form method="POST" action="{{ url_for('players.metrics_delete', metric_id=metric.id) }}"
+                      style="display: inline;"
+                      onsubmit="return confirm('Are you sure you want to delete this metric? This cannot be undone.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn" style="background: #c00; color: white;">
+                        Delete Metric
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <a href="{{ url_for('players.metrics_index') }}" class="btn btn-outline">Cancel</a>
+                <button type="submit" class="btn btn-primary">{{ action }} Metric</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<style>
+.form-group {
+    margin-bottom: 20px;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+.form-control {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+textarea.form-control {
+    resize: vertical;
+}
+small {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+}
+</style>
+{% endblock %}

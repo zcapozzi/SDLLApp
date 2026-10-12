@@ -127,6 +127,18 @@
 </div>
 {% endif %}
 
+<!-- Player Management -->
+{% if current_user.has_role('admin', 'BBPlayerAgent', 'SBPlayerAgent') %}
+<div class="card" style="margin-top: 20px;">
+    <h2 style="margin-bottom: 20px;">Player Management</h2>
+    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+        <a href="{{ url_for('players.index') }}" class="btn btn-primary">Players</a>
+        <a href="{{ url_for('players.import_index') }}" class="btn btn-secondary">Import Data</a>
+        <a href="{{ url_for('players.metrics_index') }}" class="btn btn-secondary">Evaluation Metrics</a>
+    </div>
+</div>
+{% endif %}
+
 <!-- Board Resources -->
 {% if current_user.has_role('admin', 'BoardExec', 'BB_VP', 'SB_VP', 'scheduler', 'umpire_coordinator', 'treasurer', 'BBPlayerAgent', 'SBPlayerAgent', 'coaching_coordinator', 'DataManager', 'facilities', 'fieldCaptain') %}
 <div class="card" style="margin-top: 20px;">

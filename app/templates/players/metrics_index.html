@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Evaluation Metrics{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Evaluation Metrics</h1>
+    <div style="display: flex; gap: 10px;">
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('players.metrics_new') }}" class="btn btn-primary">+ Add Metric</a>
+        {% endif %}
+    </div>
+</div>
+
+<p style="color: #666; margin-bottom: 20px;">
+    Define the skills that are evaluated during player tryouts. Metrics are grouped by category and
+    can be customized with different score ranges for each sport.
+</p>
+
+{% for category in ['batting', 'fielding', 'pitching', 'running', 'other'] %}
+{% if category in categories %}
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-top: 0; text-transform: capitalize; color: rgb(34, 139, 34);">
+        {{ category }}
+    </h3>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 30px;">Order</th>
+                <th>Metric</th>
+                <th>Description</th>
+                <th>Score Range</th>
+                <th>Program</th>
+                <th>Status</th>
+                {% if current_user.is_admin() %}
+                <th style="width: 150px;">Actions</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for metric in categories[category] %}
+            <tr id="metric-{{ metric.id }}" class="{{ 'inactive-row' if not metric.active else '' }}">
+                <td>
+                    <span class="text-muted">{{ metric.sort_order }}</span>
+                </td>
+                <td>
+                    <strong>{{ metric.display_name }}</strong>
+                    <br>
+                    <code style="font-size: 11px; color: #888;">{{ metric.name }}</code>
+                </td>
+                <td>
+                    <span class="text-small">{{ metric.description or '-' }}</span>
+                </td>
+                <td>
+                    <span class="text-small">
+                        {{ metric.min_score }} - {{ metric.max_score }}
+                        <span style="color: #888;">(step: {{ metric.score_increment }})</span>
+                    </span>
+                </td>
+                <td>
+                    {% if metric.program == 'both' %}
+                        <span class="badge" style="background: #666;">Both</span>
+                    {% elif metric.program == 'baseball' %}
+                        <span class="badge" style="background: rgb(34, 139, 34);">Baseball</span>
+                    {% else %}
+                        <span class="badge" style="background: #e67e22;">Softball</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if metric.active %}
+                        <span style="color: rgb(34, 139, 34);">Active</span>
+                    {% else %}
+                        <span style="color: #999;">Inactive</span>
+                    {% endif %}
+                </td>
+                {% if current_user.is_admin() %}
+                <td>
+                    <div style="display: flex; gap: 5px;">
+                        <a href="{{ url_for('players.metrics_edit', metric_id=metric.id) }}"
+                           class="btn btn-sm btn-outline">Edit</a>
+
+                        <form method="POST" action="{{ url_for('players.metrics_toggle', metric_id=metric.id) }}"
+                              style="display: inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm {{ 'btn-warning' if metric.active else 'btn-success' }}">
+                                {{ 'Deactivate' if metric.active else 'Activate' }}
+                            </button>
+                        </form>
+                    </div>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endfor %}
+
+{% if not metrics %}
+<div class="card">
+    <p style="text-align: center; color: #666; padding: 40px;">
+        No evaluation metrics defined yet.
+        {% if current_user.is_admin() %}
+        <br><br>
+        <a href="{{ url_for('players.metrics_new') }}" class="btn btn-primary">Create Your First Metric</a>
+        {% endif %}
+    </p>
+</div>
+{% endif %}
+
+<style>
+.inactive-row {
+    opacity: 0.5;
+}
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    color: white;
+    font-size: 11px;
+    text-transform: uppercase;
+}
+.text-small {
+    font-size: 13px;
+    color: #555;
+}
+.text-muted {
+    color: #999;
+}
+.btn-warning {
+    background: #e67e22;
+    color: white;
+}
+.btn-success {
+    background: rgb(34, 139, 34);
+    color: white;
+}
+</style>
+{% endblock %}

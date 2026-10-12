@@ -4,7 +4,77 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Completed league_id migration (Phases 7-8) - replaced league db.Column with backwards-compatible @property in 6 models, updated all SQL queries to use league_id, ready for database column drop.
+Last session: Completed player management system - created Player, PlayerSeason, PlayerEvaluation models with flexible evaluation metrics; built UI for managing metrics and importing registration CSVs; parent users created automatically with 'parent' role.
+
+---
+
+## Session: October 11, 2026 - Player Management System
+
+### Overview
+Built a complete player data management system including player records, season registrations, evaluations, and CSV import functionality.
+
+### Models Created (`app/models/player.py`)
+- **Player** - Core player record with encrypted PII (first_name, last_name, parent_email), birth_date, gender, program, parent_user_id link
+- **PlayerSeason** - Season-specific data (org_season_id, registration_division, prior_league_id, assigned_league_id, assigned_team_id, status)
+- **EvaluationMetric** - Flexible metric definitions (name, display_name, category, min/max scores, sort_order)
+- **PlayerEvaluationScore** - Junction table linking evaluations to metric scores
+- **PlayerEvaluation** - Evaluation sessions with eval_session, evaluator_id, overall_score
+
+### Key Design Decisions
+1. **Composite key for player deduplication**: parent_email + first_name + last_name (using hashed fields for lookup)
+2. **League age calculation**: Calculated property using season cutoff dates (Apr 30 for Spring, Aug 31 for Fall)
+3. **Flexible metrics**: Metrics defined in database table rather than hard-coded columns - allows adding new metrics without schema changes
+4. **Parent user creation**: Import process automatically creates User records with role='parent' and random passwords
+
+### Routes Created (`app/players/routes.py`)
+**Metrics Management:**
+- `GET /players/metrics` - List metrics grouped by category
+- `GET/POST /players/metrics/new` - Create new metric
+- `GET/POST /players/metrics/<id>/edit` - Edit metric
+- `POST /players/metrics/<id>/toggle` - Toggle active status
+- `POST /players/metrics/<id>/delete` - Delete (only if no scores)
+- `POST /players/metrics/reorder` - AJAX reorder
+
+**Import Workflow:**
+- `GET /players/import` - Import dashboard with stats
+- `GET/POST /players/import/registration` - Upload CSV, select season, preview
+- `POST /players/import/registration/confirm` - Process confirmed import
+- `GET /players/import/results` - Show errors/warnings
+
+**Dashboard:**
+- `GET /players/` - Player management dashboard
+
+### Templates Created (`app/templates/players/`)
+- `index.html` - Dashboard with stats and quick actions
+- `metrics_index.html` - Metrics list grouped by category
+- `metrics_form.html` - Create/edit metric form
+- `import_index.html` - Import options dashboard
+- `import_registration.html` - CSV upload form with season selection
+- `import_preview.html` - Preview parsed data before confirmation
+- `import_results.html` - Display import results with errors
+
+### Import Service (`app/services/player_import_service.py`)
+- Parses registration CSV (Sports Connect format)
+- Maps division names to league IDs
+- Creates/updates Player records
+- Creates PlayerSeason records
+- Optionally creates parent User accounts with 'parent' role
+- Handles evaluation CSV import (maps to existing players)
+
+### Database Tables Created
+```sql
+CREATE TABLE sdll_players (...)
+CREATE TABLE sdll_player_seasons (...)
+CREATE TABLE sdll_evaluation_metrics (...)
+CREATE TABLE sdll_player_evaluation_scores (...)
+CREATE TABLE sdll_player_evaluations (...)
+```
+
+### Dashboard Integration
+Added "Player Management" section to dashboard for users with roles: admin, BBPlayerAgent, SBPlayerAgent
+
+### Access Control
+All player routes require login + role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
 
 ---
 

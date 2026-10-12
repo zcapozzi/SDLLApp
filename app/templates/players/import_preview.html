@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Preview Import{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Preview Import</h1>
+    <a href="{{ url_for('players.import_registration') }}" class="btn btn-outline">Cancel</a>
+</div>
+
+<!-- Summary -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px;">
+    <div class="card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 28px; font-weight: bold; color: rgb(34, 139, 34);">{{ total_rows }}</div>
+        <div style="color: #666; font-size: 13px;">Total Rows</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 28px; font-weight: bold; color: {{ '#c00' if total_errors > 0 else '#666' }};">
+            {{ total_errors }}
+        </div>
+        <div style="color: #666; font-size: 13px;">Errors</div>
+    </div>
+</div>
+
+{% if preview_rows|length < total_rows %}
+<div style="background: #fff3e0; border: 1px solid #ffcc02; border-radius: 6px; padding: 12px 15px; margin-bottom: 20px; font-size: 14px; color: #856404;">
+    Showing preview of first {{ preview_rows|length }} rows. All {{ total_rows }} rows will be processed on import.
+</div>
+{% endif %}
+
+<!-- Import Settings -->
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-top: 0;">Import Settings</h3>
+    <table style="font-size: 14px;">
+        <tr>
+            <td style="padding: 5px 20px 5px 0; color: #666;">Target Season:</td>
+            <td><strong>{{ org_season.season_desc }}</strong></td>
+        </tr>
+        <tr>
+            <td style="padding: 5px 20px 5px 0; color: #666;">Sport:</td>
+            <td>
+                <strong style="color: {{ 'rgb(34, 139, 34)' if program == 'baseball' else 'rgb(255, 140, 0)' }};">
+                    {{ program|capitalize }}
+                </strong>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 5px 20px 5px 0; color: #666;">Create Parent Accounts:</td>
+            <td>
+                {% if create_users %}
+                    <span style="color: rgb(34, 139, 34);">Yes</span>
+                {% else %}
+                    <span style="color: #666;">No</span>
+                {% endif %}
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 5px 20px 5px 0; color: #666;">Columns Found:</td>
+            <td style="font-size: 12px; color: #666;">{{ columns|length }} columns</td>
+        </tr>
+    </table>
+</div>
+
+<!-- Errors -->
+{% if errors %}
+<div class="card" style="margin-bottom: 20px; border-left: 4px solid #c00;">
+    <h3 style="margin-top: 0; color: #c00;">
+        Validation Errors ({{ total_errors }} total{% if total_errors > 20 %}, showing first 20{% endif %})
+    </h3>
+    <ul style="margin: 0; padding-left: 20px; color: #666; font-size: 13px;">
+        {% for error in errors %}
+        <li>{{ error }}</li>
+        {% endfor %}
+    </ul>
+    <p style="margin-top: 15px; color: #888; font-size: 13px;">
+        Rows with errors will be skipped during import.
+    </p>
+</div>
+{% endif %}
+
+<!-- Preview Table -->
+<div class="card">
+    <h3 style="margin-top: 0;">
+        Preview (first {{ preview_rows|length }} of {{ total_rows }} rows)
+    </h3>
+    <div style="overflow-x: auto;">
+        <table style="font-size: 13px;">
+            <thead>
+                <tr>
+                    <th>Row</th>
+                    <th>Status</th>
+                    <th>Player Name</th>
+                    <th>Birth Date</th>
+                    <th>Parent Email</th>
+                    <th>Division</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in preview_rows %}
+                <tr>
+                    <td>{{ row.row_num }}</td>
+                    <td>
+                        {% if row.exists %}
+                            <span class="badge badge-update">Update</span>
+                        {% else %}
+                            <span class="badge badge-new">New</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <strong>{{ row.first_name }} {{ row.last_name }}</strong>
+                    </td>
+                    <td>{{ row.birth_date.strftime('%m/%d/%Y') }}</td>
+                    <td style="font-size: 12px; color: #666;">{{ row.email }}</td>
+                    <td style="font-size: 12px;">{{ row.division or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if total_rows > 100 %}
+    <p style="text-align: center; color: #888; margin-top: 15px; font-size: 13px;">
+        ... and {{ total_rows - 100 }} more rows
+    </p>
+    {% endif %}
+</div>
+
+<!-- Confirm Form -->
+<div class="card" style="margin-top: 20px; background: #f9f9f9;">
+    <form method="POST" action="{{ url_for('players.import_registration_confirm') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <p style="margin: 0; color: #666;">
+                    Ready to import <strong>{{ total_rows - total_errors }}</strong> players into
+                    <strong>{{ org_season.season_desc }}</strong>?
+                </p>
+                {% if total_errors > 0 %}
+                <p style="margin: 5px 0 0 0; color: #888; font-size: 13px;">
+                    {{ total_errors }} rows with errors will be skipped.
+                </p>
+                {% endif %}
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <a href="{{ url_for('players.import_registration') }}" class="btn btn-outline">
+                    Start Over
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    Confirm Import
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<style>
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+.badge-new {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+.badge-update {
+    background: #fff3e0;
+    color: #e65100;
+}
+</style>
+{% endblock %}
