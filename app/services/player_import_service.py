@@ -317,32 +317,41 @@ class PlayerImportService:
             'errors': []
         }
 
-        # Pre-load existing data to avoid N+1 queries
-        # Build lookup dictionaries keyed by (email_hash, name_hash)
-        existing_players = Player.query.all()
-        self._player_cache = {}
-        for p in existing_players:
-            key = (p.parent_email_hash, p.name_hash)
-            self._player_cache[key] = p
+        # Pre-load existing data using ONLY columns needed for lookup (much faster)
+        # Use with_entities to avoid loading full ORM objects and encrypted data
 
-        # Build user lookup by email_hash - load ALL users (not just parents)
-        # because a user might exist with another role (admin, coach, etc.)
-        existing_users = User.query.all()
-        self._user_cache = {u.email_hash: u for u in existing_users if u.email_hash}
+        # Players: only need id, hashes, player_code for lookups
+        player_rows = db.session.query(
+            Player.id, Player.parent_email_hash, Player.name_hash, Player.player_code
+        ).all()
+        self._player_cache = {}  # (email_hash, name_hash) -> player_id
+        self._player_id_cache = {}  # cache player_id for existing players
+        self._existing_player_codes = set()
+        for pid, email_hash, name_hash, pcode in player_rows:
+            key = (email_hash, name_hash)
+            self._player_cache[key] = pid  # Just store ID, not full object
+            self._player_id_cache[key] = pid
+            if pcode:
+                self._existing_player_codes.add(pcode)
 
-        # Build player season lookup by (player_id, org_season_id)
-        existing_seasons = PlayerSeason.query.filter_by(
+        # Users: only need ID and email_hash for lookups
+        user_rows = db.session.query(User.ID, User.email_hash).all()
+        self._user_cache = {email_hash: uid for uid, email_hash in user_rows if email_hash}
+
+        # Player seasons: only need player_id for existence check
+        season_rows = db.session.query(PlayerSeason.player_id).filter_by(
             org_season_id=self.org_season.ID
         ).all()
-        self._season_cache = {(ps.player_id, ps.org_season_id): ps for ps in existing_seasons}
+        self._season_cache = {pid for (pid,) in season_rows}  # Just a set of player_ids
 
-        # Get max player code suffix for generating new codes
+        # Track new records as dicts for bulk insert
+        self._new_players = []  # List of dicts for bulk insert
+        self._new_users = []
+        self._new_seasons = []
         self._player_code_counts = {}
 
-        # Track new objects that need IDs - batch flush instead of per-row
-        self._pending_players = []
-        self._pending_users = []
-        self._pending_seasons = []
+        # Track which new players need linking to users (by index)
+        self._player_user_links = []  # (player_index, email_hash)
 
         with open(filepath, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
@@ -356,23 +365,215 @@ class PlayerImportService:
                         self._prior_division_col = k
                         break
 
-            # Process in batches for better performance
-            batch_size = 100
+            # Process all rows - collect data only, no DB operations
             for i, row in enumerate(rows):
                 row_num = i + 2
                 try:
-                    self._import_registration_row_fast(row, create_parent_users)
+                    self._collect_row_data(row, create_parent_users)
                 except Exception as e:
                     self.stats['errors'].append(f"Row {row_num}: {str(e)}")
 
-                # Flush every batch_size rows to get IDs
-                if (i + 1) % batch_size == 0:
-                    self._flush_pending()
-
-        # Final flush for remaining records
-        self._flush_pending()
+        # Bulk insert all new records at once
+        self._bulk_insert_all()
         db.session.commit()
         return self.stats
+
+    def _collect_row_data(self, row: dict, create_parent_users: bool):
+        """Collect row data into insert lists (no DB operations)."""
+        # Extract fields using mapping
+        parent_email = self._get_field(row, 'User Email')
+        first_name = self._get_field(row, 'Player First Name')
+        last_name = self._get_field(row, 'Player Last Name')
+        birth_date_str = self._get_field(row, 'Player Birth Date')
+        gender_raw = self._get_field(row, 'Player Gender')
+
+        if not parent_email or not first_name or not last_name:
+            return
+
+        birth_date = self._parse_date(birth_date_str)
+        if not birth_date:
+            self.stats['errors'].append(
+                f"Invalid birth date for {first_name} {last_name}: {birth_date_str}")
+            return
+
+        gender = 'M' if gender_raw.lower().startswith('m') else 'F' if gender_raw.lower().startswith('f') else None
+
+        parent_first = self._get_field(row, 'Account First Name')
+        parent_last = self._get_field(row, 'Account Last Name')
+        parent_phone = self._get_field(row, 'Cellphone')
+        if not parent_phone:
+            parent_phone = row.get('Telephone', '').strip()
+        parent_name = f"{parent_first} {parent_last}".strip() if parent_first else None
+
+        division_name = self._get_field(row, 'Division Name')
+
+        # Compute hashes
+        email_hash = self._fast_hash(parent_email)
+        name_normalized = f"{first_name}{last_name}".lower().replace(' ', '').replace('-', '')
+        name_hash = self._fast_hash(name_normalized)
+        cache_key = (email_hash, name_hash)
+
+        # Check if player exists
+        existing_player_id = self._player_cache.get(cache_key)
+
+        if existing_player_id:
+            # Existing player - just need to maybe create season record
+            self.stats['players_updated'] += 1
+            player_id = existing_player_id
+        else:
+            # New player - add to bulk insert list
+            self.stats['players_created'] += 1
+            player_code = self._generate_player_code_fast(first_name, last_name, birth_date)
+
+            player_dict = {
+                'birth_date': birth_date,
+                'gender': gender,
+                'program': self.program,
+                'first_name': self._fast_encrypt(first_name),  # DB column name
+                'last_name': self._fast_encrypt(last_name),
+                'parent_email': self._fast_encrypt(parent_email),
+                'parent_email_hash': email_hash,
+                'name_hash': name_hash,
+                'parent_first_name': self._fast_encrypt(parent_first) if parent_first else None,
+                'parent_last_name': self._fast_encrypt(parent_last) if parent_last else None,
+                'parent_phone': self._fast_encrypt(parent_phone) if parent_phone else None,
+                'player_code': player_code,
+            }
+            player_index = len(self._new_players)
+            self._new_players.append(player_dict)
+
+            # Mark for user linking later
+            if create_parent_users:
+                self._player_user_links.append((player_index, email_hash))
+
+            # Add to cache so duplicate rows find this player
+            self._player_cache[cache_key] = f"NEW_{player_index}"  # Placeholder
+            player_id = f"NEW_{player_index}"
+
+        # Handle parent user
+        if create_parent_users:
+            existing_user_id = self._user_cache.get(email_hash)
+            # Check cache - already handles both existing and pending new users
+            if not existing_user_id:
+                # New user
+                random_password = secrets.token_urlsafe(16)
+                user_dict = {
+                    'role': 'parent',
+                    'org_ID': 1,
+                    'email': self._fast_encrypt(parent_email),  # DB column name
+                    'email_hash': email_hash,
+                    'name': self._fast_encrypt(parent_name) if parent_name else None,
+                    'phone': self._fast_encrypt(parent_phone) if parent_phone else None,
+                    'password_hash': self._generate_password_hash(
+                        random_password, method='pbkdf2:sha256:1000'
+                    ),
+                    'active': 1,
+                }
+                self._new_users.append(user_dict)
+                self.stats['parent_users_created'] += 1
+                self._user_cache[email_hash] = f"NEW"  # Placeholder
+
+        # Handle season record
+        prior_division = ''
+        if self._prior_division_col:
+            prior_division = row.get(self._prior_division_col, '')
+        prior_league_id = self._normalize_league_name(prior_division)
+
+        # For existing players, check if season exists
+        if isinstance(player_id, int):
+            if player_id not in self._season_cache:
+                self._new_seasons.append({
+                    'player_id': player_id,
+                    'org_season_id': self.org_season.ID,
+                    'registration_division': division_name,
+                    'prior_league_id': prior_league_id,
+                    'status': 'registered',
+                })
+                self._season_cache.add(player_id)
+        else:
+            # New player - store season data to create after player insert
+            player_index = int(player_id.split('_')[1])
+            self._new_players[player_index]['_season'] = {
+                'registration_division': division_name,
+                'prior_league_id': prior_league_id,
+            }
+
+        self.stats['season_records_created'] += 1
+
+    def _bulk_insert_all(self):
+        """Perform bulk inserts for all collected data."""
+        from sqlalchemy import insert
+
+        # Bulk insert users first (to get IDs for linking)
+        if self._new_users:
+            db.session.execute(insert(User), self._new_users)
+            db.session.flush()
+
+            # Reload all new user IDs in ONE query
+            new_email_hashes = [u['email_hash'] for u in self._new_users]
+            user_id_rows = db.session.query(User.ID, User.email_hash).filter(
+                User.email_hash.in_(new_email_hashes)
+            ).all()
+            for uid, email_hash in user_id_rows:
+                self._user_cache[email_hash] = uid
+
+        # Bulk insert players
+        if self._new_players:
+            # Extract season data before insert
+            seasons_to_create = []
+            player_inserts = []
+            for i, p in enumerate(self._new_players):
+                season_data = p.pop('_season', None)
+                player_inserts.append(p)
+                if season_data:
+                    seasons_to_create.append((i, season_data))
+
+            db.session.execute(insert(Player), player_inserts)
+            db.session.flush()
+
+            # Get ALL inserted player IDs in ONE query
+            new_player_codes = [p['player_code'] for p in player_inserts]
+            player_id_rows = db.session.query(Player.id, Player.player_code, Player.parent_email_hash).filter(
+                Player.player_code.in_(new_player_codes)
+            ).all()
+
+            # Build code -> (id, email_hash) mapping
+            code_to_data = {pcode: (pid, email_hash) for pid, pcode, email_hash in player_id_rows}
+
+            # Build list of player-user links for batch update
+            player_user_updates = []
+            for i, p in enumerate(player_inserts):
+                player_id, email_hash = code_to_data.get(p['player_code'], (None, None))
+                p['_inserted_id'] = player_id
+
+                # Collect user link updates
+                if player_id:
+                    user_id = self._user_cache.get(email_hash or p['parent_email_hash'])
+                    if user_id and isinstance(user_id, int):
+                        player_user_updates.append({'pid': player_id, 'uid': user_id})
+
+            # Batch update player-user links
+            if player_user_updates:
+                db.session.execute(
+                    db.text("UPDATE sdll_players SET parent_user_id = :uid WHERE id = :pid"),
+                    player_user_updates
+                )
+
+            # Create season records for new players
+            for i, season_data in seasons_to_create:
+                player_id = player_inserts[i].get('_inserted_id')
+                if player_id:
+                    self._new_seasons.append({
+                        'player_id': player_id,
+                        'org_season_id': self.org_season.ID,
+                        'registration_division': season_data['registration_division'],
+                        'prior_league_id': season_data['prior_league_id'],
+                        'status': 'registered',
+                    })
+
+        # Bulk insert seasons
+        if self._new_seasons:
+            db.session.execute(insert(PlayerSeason), self._new_seasons)
 
     def _flush_pending(self):
         """Flush pending records and create season records that need player IDs."""
