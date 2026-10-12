@@ -66,3 +66,22 @@ CREATE TABLE IF NOT EXISTS sdll_draft_order (
 
 -- Index for draft order
 CREATE INDEX idx_draft_order_session ON sdll_draft_order(session_id);
+
+-- Draft Protections table (coach's children, etc.)
+CREATE TABLE IF NOT EXISTS sdll_draft_protections (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id INT NOT NULL,
+    team_id BIGINT NOT NULL,
+    player_id INT NOT NULL,
+    round_number INT NOT NULL,
+    reason VARCHAR(100) DEFAULT "Coach's child",
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES sdll_draft_sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (team_id) REFERENCES sdll_team_seasons(team_ID),
+    FOREIGN KEY (player_id) REFERENCES sdll_players(id),
+    UNIQUE KEY uq_session_player_protection (session_id, player_id)
+);
+
+-- Indexes for protections
+CREATE INDEX idx_draft_protections_session ON sdll_draft_protections(session_id);
+CREATE INDEX idx_draft_protections_team ON sdll_draft_protections(team_id);

@@ -72,4 +72,4 @@ from .org_event import OrgEvent
 from .player import Player, PlayerSeason, PlayerEvaluation, EvaluationMetric, PlayerEvaluationScore
 
 # Draft system
-from .draft import DraftSession, DraftPick, DraftOrder
+from .draft import DraftSession, DraftPick, DraftOrder, DraftProtection

@@ -7,7 +7,7 @@ from app.draft import draft_bp
 from app.utils.auth import role_required
 from app.models.org_season import OrgSeason
 from app.models.league import League
-from app.models.draft import DraftSession, DraftPick, DraftOrder
+from app.models.draft import DraftSession, DraftPick, DraftOrder, DraftProtection
 from app.services.draft_service import DraftService
 from app.extensions import db
 
@@ -158,12 +158,18 @@ def setup(session_id):
     # Get pick count
     pick_count = session.picks.count()
 
+    # Get protections and available players for protection
+    protections = DraftService.get_protections(session_id)
+    available_players = DraftService.get_players_for_protection(session)
+
     return render_template('draft/setup.html',
                            session=session,
                            teams=teams,
                            existing_order=existing_order,
                            ordered_team_ids=ordered_team_ids,
-                           pick_count=pick_count)
+                           pick_count=pick_count,
+                           protections=protections,
+                           available_players=available_players)
 
 
 @draft_bp.route('/<int:session_id>/board')
@@ -182,18 +188,30 @@ def board(session_id):
     # Get current pick
     current_pick = DraftService.get_current_pick(session_id)
 
+    # Check if current pick has a protection
+    current_protection = None
+    if current_pick:
+        current_protection = DraftService.get_protection_for_pick(
+            session_id, current_pick.team_id, current_pick.round_number
+        )
+
     # Get all picks for results display
     all_picks = DraftService.get_draft_results(session_id)
 
     # Get draft order for reference
     draft_order = DraftService.get_draft_order(session_id)
 
+    # Get all protections for display
+    protections = DraftService.get_protections(session_id)
+
     return render_template('draft/board.html',
                            session=session,
                            available_players=available_players,
                            current_pick=current_pick,
+                           current_protection=current_protection,
                            all_picks=all_picks,
-                           draft_order=draft_order)
+                           draft_order=draft_order,
+                           protections=protections)
 
 
 @draft_bp.route('/<int:session_id>/pick', methods=['POST'])
@@ -298,3 +316,46 @@ def results(session_id):
                            all_picks=all_picks,
                            picks_by_round=picks_by_round,
                            draft_order=draft_order)
+
+
+# =============================================================================
+# Protected Picks (Coach's Children)
+# =============================================================================
+
+@draft_bp.route('/<int:session_id>/protection', methods=['POST'])
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def add_protection(session_id):
+    """Add a protected pick (coach's child)."""
+    team_id = request.form.get('team_id', type=int)
+    player_id = request.form.get('player_id', type=int)
+    round_number = request.form.get('round_number', type=int)
+    reason = request.form.get('reason', "Coach's child").strip()
+
+    if not all([team_id, player_id, round_number]):
+        flash('Please fill in all fields.', 'error')
+        return redirect(url_for('draft.setup', session_id=session_id))
+
+    try:
+        protection = DraftService.add_protection(
+            session_id=session_id,
+            team_id=team_id,
+            player_id=player_id,
+            round_number=round_number,
+            reason=reason or "Coach's child"
+        )
+        flash(f'Protected pick added: {protection.player_display_name} must be drafted by {protection.team_display_name} in round {round_number}.', 'success')
+    except ValueError as e:
+        flash(str(e), 'error')
+
+    return redirect(url_for('draft.setup', session_id=session_id))
+
+
+@draft_bp.route('/<int:session_id>/protection/<int:protection_id>/delete', methods=['POST'])
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def remove_protection(session_id, protection_id):
+    """Remove a protected pick."""
+    DraftService.remove_protection(protection_id)
+    flash('Protected pick removed.', 'success')
+    return redirect(url_for('draft.setup', session_id=session_id))

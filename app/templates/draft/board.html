@@ -3,6 +3,29 @@
 {% block title %}Draft Board - {{ session.name }}{% endblock %}
 
 {% block content %}
+<style>
+.protected-player {
+    background: rgba(255, 140, 0, 0.15) !important;
+    border-left: 4px solid rgb(255, 140, 0) !important;
+}
+.protected-banner {
+    background: rgb(255, 140, 0);
+    color: white;
+    padding: 15px 20px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
+.protection-badge {
+    display: inline-block;
+    background: rgb(255, 140, 0);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    margin-left: 5px;
+}
+</style>
+
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
     <div>
         <h1 style="margin: 0;">{{ session.name }}</h1>
@@ -43,6 +66,15 @@
     </div>
 </div>
 
+<!-- Protected Pick Banner -->
+{% if current_protection and current_pick %}
+<div class="protected-banner">
+    <strong>PROTECTED PICK:</strong> {{ current_pick.team.scheduler_display_name }} must draft
+    <strong>{{ current_protection.player.last_name }}, {{ current_protection.player.first_name }}</strong>
+    in this round ({{ current_protection.reason }}).
+</div>
+{% endif %}
+
 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
     <!-- Available Players -->
     <div class="card">
@@ -54,10 +86,16 @@
 
         <div id="player-list" style="max-height: 500px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;">
             {% for player in available_players if player.is_available %}
-            <div class="player-row" data-name="{{ player.name|lower }}"
+            {% set is_protected = current_protection and current_protection.player_id == player.player_id %}
+            <div class="player-row {% if is_protected %}protected-player{% endif %}"
+                 data-name="{{ player.name|lower }}"
+                 data-player-id="{{ player.player_id }}"
                  style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid #eee;">
                 <div>
                     <strong>{{ player.name }}</strong>
+                    {% if is_protected %}
+                    <span class="protection-badge">MUST DRAFT</span>
+                    {% endif %}
                     {% if player.age %}
                     <span style="color: #666; font-size: 13px;">(Age {{ player.age }})</span>
                     {% endif %}
@@ -68,9 +106,10 @@
                 {% if session.can_make_picks and current_pick %}
                 <form action="{{ url_for('draft.make_pick', session_id=session.id) }}" method="post" style="margin: 0;">
                     <input type="hidden" name="player_id" value="{{ player.player_id }}">
-                    <button type="submit" class="btn btn-sm btn-primary"
+                    <button type="submit" class="btn btn-sm {% if is_protected %}btn-secondary{% else %}btn-primary{% endif %}"
+                            style="{% if is_protected %}background: rgb(255, 140, 0);{% endif %}"
                             onclick="return confirm('Pick {{ player.name }} for {{ current_pick.team.scheduler_display_name }}?')">
-                        Draft
+                        {% if is_protected %}Draft (Required){% else %}Draft{% endif %}
                     </button>
                 </form>
                 {% endif %}
@@ -123,6 +162,44 @@
     </div>
 </div>
 
+<!-- Protected Picks Summary -->
+{% if protections %}
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">Protected Picks (Coach's Children)</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Player</th>
+                <th>Team</th>
+                <th>Round</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in protections %}
+            {% set already_picked = p.player_id in (all_picks|selectattr('is_made')|map(attribute='player_id')|list) %}
+            <tr style="{% if already_picked %}opacity: 0.5;{% endif %}">
+                <td><strong>{{ p.player_display_name }}</strong></td>
+                <td>{{ p.team_display_name }}</td>
+                <td>Round {{ p.round_number }}</td>
+                <td>
+                    {% if already_picked %}
+                    <span class="badge" style="background: rgb(34, 139, 34); color: white;">Drafted</span>
+                    {% elif session.current_round > p.round_number %}
+                    <span class="badge" style="background: #c33; color: white;">Missed</span>
+                    {% elif session.current_round == p.round_number %}
+                    <span class="badge" style="background: rgb(255, 140, 0); color: white;">This Round</span>
+                    {% else %}
+                    <span class="badge" style="background: #888; color: white;">Round {{ p.round_number }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 <script>
 function filterPlayers() {
     var search = document.getElementById('player-search').value.toLowerCase();
@@ -138,5 +215,13 @@ function filterPlayers() {
 
     document.getElementById('available-count').textContent = count;
 }
+
+// Scroll protected player into view
+document.addEventListener('DOMContentLoaded', function() {
+    var protectedRow = document.querySelector('.protected-player');
+    if (protectedRow) {
+        protectedRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+});
 </script>
 {% endblock %}

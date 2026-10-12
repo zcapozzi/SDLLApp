@@ -99,12 +99,105 @@
     </form>
 </div>
 
+<!-- Step 2.5: Protected Picks (Coach's Children) -->
+<div class="card" style="margin-bottom: 20px;">
+    <h2 style="margin-top: 0;">
+        Protected Picks (Coach's Children)
+        <span class="badge" style="background: #888; color: white; font-size: 12px;">Optional</span>
+    </h2>
+
+    <p style="color: #666; margin-bottom: 15px;">
+        If a coach's child must be drafted in a specific round, add them here.
+        The draft board will show these as required picks when that team's turn comes up in the designated round.
+    </p>
+
+    <!-- Existing Protections -->
+    {% if protections %}
+    <table style="margin-bottom: 20px;">
+        <thead>
+            <tr>
+                <th>Player</th>
+                <th>Team</th>
+                <th>Round</th>
+                <th>Reason</th>
+                <th style="width: 80px;">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in protections %}
+            <tr>
+                <td><strong>{{ p.player_display_name }}</strong></td>
+                <td>{{ p.team_display_name }}</td>
+                <td>Round {{ p.round_number }}</td>
+                <td style="color: #666;">{{ p.reason }}</td>
+                <td>
+                    <form action="{{ url_for('draft.remove_protection', session_id=session.id, protection_id=p.id) }}" method="post" style="display: inline;">
+                        <button type="submit" class="btn btn-sm" style="background: #c33; color: white;"
+                                onclick="return confirm('Remove this protected pick?')">Remove</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #888; font-style: italic; margin-bottom: 20px;">No protected picks configured.</p>
+    {% endif %}
+
+    <!-- Add New Protection -->
+    {% if existing_order %}
+    <div style="background: #f9f9f9; padding: 15px; border-radius: 4px;">
+        <h4 style="margin-top: 0;">Add Protected Pick</h4>
+        <form action="{{ url_for('draft.add_protection', session_id=session.id) }}" method="post">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 100px 1fr auto; gap: 10px; align-items: end;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Player</label>
+                    <select name="player_id" class="form-control" required>
+                        <option value="">Select player...</option>
+                        {% for player in available_players %}
+                        <option value="{{ player.player_id }}">{{ player.name }}{% if player.age %} (Age {{ player.age }}){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Team</label>
+                    <select name="team_id" class="form-control" required>
+                        <option value="">Select team...</option>
+                        {% for order in existing_order %}
+                        <option value="{{ order.team_id }}">{{ order.team.league_display_name }} {{ order.team.scheduler_display_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Round</label>
+                    <select name="round_number" class="form-control" required>
+                        {% for r in range(1, session.rounds + 1) %}
+                        <option value="{{ r }}" {% if r == 2 %}selected{% endif %}>{{ r }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Reason</label>
+                    <input type="text" name="reason" class="form-control" value="Coach's child" placeholder="Coach's child">
+                </div>
+                <button type="submit" class="btn btn-primary">Add</button>
+            </div>
+        </form>
+    </div>
+    {% else %}
+    <p style="color: #888;">Set draft order first to add protected picks.</p>
+    {% endif %}
+</div>
+
 <!-- Step 3: Start Draft -->
 <div class="card">
     <h2 style="margin-top: 0;">Step 3: Start Draft</h2>
 
     <p style="color: #666;">
         Once you start the draft, you can begin making picks on the draft board.
+        {% if protections %}
+        <br><strong>{{ protections|length }} protected pick(s)</strong> will be enforced during the draft.
+        {% endif %}
     </p>
 
     <form method="post" style="margin-top: 15px;">

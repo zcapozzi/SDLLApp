@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models.draft import DraftSession, DraftPick, DraftOrder
+from app.models.draft import DraftSession, DraftPick, DraftOrder, DraftProtection
 from app.models.player import Player, PlayerSeason
 from app.models.team import TeamSeason
 from app.models.league import League
@@ -345,3 +345,154 @@ class DraftService:
         ).options(
             joinedload(DraftPick.player)
         ).order_by(DraftPick.pick_number).all()
+
+    # =========================================================================
+    # Protected Picks (Coach's Children)
+    # =========================================================================
+
+    @staticmethod
+    def add_protection(
+        session_id: int,
+        team_id: int,
+        player_id: int,
+        round_number: int,
+        reason: str = "Coach's child"
+    ) -> DraftProtection:
+        """Add a protected pick for a player.
+
+        Args:
+            session_id: The DraftSession ID
+            team_id: The team that must draft this player
+            player_id: The player to be protected
+            round_number: The round this player must be drafted
+            reason: Reason for protection (default: "Coach's child")
+
+        Returns:
+            Created DraftProtection
+
+        Raises:
+            ValueError: If protection cannot be added
+        """
+        session = DraftSession.query.get(session_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+
+        if session.status not in (DraftSession.STATUS_PENDING, DraftSession.STATUS_PAUSED):
+            raise ValueError("Can only add protections before or during a paused draft")
+
+        if round_number < 1 or round_number > session.rounds:
+            raise ValueError(f"Round must be between 1 and {session.rounds}")
+
+        # Check if player already has a protection
+        existing = DraftProtection.query.filter_by(
+            session_id=session_id,
+            player_id=player_id
+        ).first()
+        if existing:
+            raise ValueError("Player already has a protected pick")
+
+        protection = DraftProtection(
+            session_id=session_id,
+            team_id=team_id,
+            player_id=player_id,
+            round_number=round_number,
+            reason=reason
+        )
+        db.session.add(protection)
+        db.session.commit()
+        return protection
+
+    @staticmethod
+    def remove_protection(protection_id: int) -> None:
+        """Remove a draft protection."""
+        protection = DraftProtection.query.get(protection_id)
+        if protection:
+            db.session.delete(protection)
+            db.session.commit()
+
+    @staticmethod
+    def get_protections(session_id: int) -> List[DraftProtection]:
+        """Get all protections for a draft session."""
+        return DraftProtection.query.filter_by(
+            session_id=session_id
+        ).options(
+            joinedload(DraftProtection.team),
+            joinedload(DraftProtection.player)
+        ).order_by(DraftProtection.round_number, DraftProtection.team_id).all()
+
+    @staticmethod
+    def get_protection_for_pick(session_id: int, team_id: int, round_number: int) -> Optional[DraftProtection]:
+        """Check if a team has a protected pick for a specific round.
+
+        Args:
+            session_id: The DraftSession ID
+            team_id: The team ID
+            round_number: The round number
+
+        Returns:
+            DraftProtection if one exists, None otherwise
+        """
+        return DraftProtection.query.filter_by(
+            session_id=session_id,
+            team_id=team_id,
+            round_number=round_number
+        ).options(
+            joinedload(DraftProtection.player)
+        ).first()
+
+    @staticmethod
+    def get_protections_by_team(session_id: int) -> Dict[int, List[DraftProtection]]:
+        """Get protections grouped by team.
+
+        Returns:
+            Dict mapping team_id to list of protections
+        """
+        protections = DraftService.get_protections(session_id)
+        result: Dict[int, List[DraftProtection]] = {}
+        for p in protections:
+            if p.team_id not in result:
+                result[p.team_id] = []
+            result[p.team_id].append(p)
+        return result
+
+    @staticmethod
+    def get_players_for_protection(session: DraftSession) -> List[DraftBoardPlayer]:
+        """Get players available for protection (not yet protected).
+
+        Args:
+            session: The DraftSession
+
+        Returns:
+            List of DraftBoardPlayer for display
+        """
+        # Get all players in the league for this season
+        player_seasons = PlayerSeason.query.filter_by(
+            org_season_id=session.org_season_id,
+            placed_league_id=session.league_id
+        ).options(
+            joinedload(PlayerSeason.player)
+        ).all()
+
+        # Get already protected player IDs
+        protected_ids = set(p.player_id for p in session.protections)
+
+        result = []
+        for ps in player_seasons:
+            if ps.player and ps.player.id not in protected_ids:
+                player = ps.player
+                age = None
+                if player.birth_date and session.org_season:
+                    age = player.league_age(session.org_season)
+
+                result.append(DraftBoardPlayer(
+                    player_id=player.id,
+                    player_season_id=ps.id,
+                    name=f"{player.last_name}, {player.first_name}",
+                    age=age,
+                    player_code=player.player_code or '',
+                    status=ps.status or 'registered',
+                    is_available=True
+                ))
+
+        result.sort(key=lambda p: p.name.lower())
+        return result

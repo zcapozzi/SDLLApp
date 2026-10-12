@@ -208,3 +208,48 @@ class DraftOrder(db.Model):
 
     def __repr__(self):
         return f'<DraftOrder #{self.position} Team {self.team_id}>'
+
+
+class DraftProtection(db.Model):
+    """Represents a protected draft pick (e.g., coach's child must be drafted in round N)."""
+    __tablename__ = 'sdll_draft_protections'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('sdll_draft_sessions.id', ondelete='CASCADE'),
+                          nullable=False)
+    team_id = db.Column(db.BigInteger, db.ForeignKey('sdll_team_seasons.team_ID'), nullable=False)
+    player_id = db.Column(db.Integer, db.ForeignKey('sdll_players.id'), nullable=False)
+    round_number = db.Column(db.Integer, nullable=False)  # Round this player must be drafted
+
+    # Reason for protection (display purposes)
+    reason = db.Column(db.String(100), default="Coach's child")
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    session = db.relationship('DraftSession', backref='protections')
+    team = db.relationship('TeamSeason', backref='draft_protections')
+    player = db.relationship('Player', backref='draft_protections')
+
+    # Unique constraint: one protection per player per session
+    __table_args__ = (
+        db.UniqueConstraint('session_id', 'player_id', name='uq_session_player_protection'),
+    )
+
+    def __repr__(self):
+        return f'<DraftProtection Player {self.player_id} -> Team {self.team_id} R{self.round_number}>'
+
+    @property
+    def player_display_name(self):
+        """Get player display name."""
+        if self.player:
+            return f"{self.player.last_name}, {self.player.first_name}"
+        return 'Unknown'
+
+    @property
+    def team_display_name(self):
+        """Get team display name."""
+        if self.team:
+            return self.team.scheduler_display_name
+        return 'Unknown'
