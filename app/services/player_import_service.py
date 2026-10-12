@@ -283,13 +283,31 @@ class PlayerImportService:
         Returns:
             dict with import statistics
         """
-        from app.utils.encryption import hash_for_lookup
+        from app.utils.encryption import hash_for_lookup, get_fernet
         from werkzeug.security import generate_password_hash
+        import hashlib
 
         self.program = program
         self.column_mapping = column_mapping
         self._hash_for_lookup = hash_for_lookup  # Cache function reference
         self._generate_password_hash = generate_password_hash
+
+        # Cache Fernet instance ONCE - avoid recreating for every field
+        self._fernet = get_fernet()
+
+        # Fast hash function (avoid function call overhead)
+        def fast_hash(value):
+            if value is None:
+                return None
+            return hashlib.sha256(value.lower().strip().encode()).hexdigest()
+        self._fast_hash = fast_hash
+
+        # Fast encrypt function using cached Fernet
+        def fast_encrypt(value):
+            if value is None:
+                return None
+            return self._fernet.encrypt(value.encode()).decode()
+        self._fast_encrypt = fast_encrypt
         self.stats = {
             'players_created': 0,
             'players_updated': 0,
@@ -427,10 +445,10 @@ class PlayerImportService:
 
         division_name = self._get_field(row, 'Division Name')
 
-        # Compute hashes for cache lookup (use cached function)
-        email_hash = self._hash_for_lookup(parent_email)
+        # Compute hashes for cache lookup (use fast inline hash)
+        email_hash = self._fast_hash(parent_email)
         name_normalized = f"{first_name}{last_name}".lower().replace(' ', '').replace('-', '')
-        name_hash = self._hash_for_lookup(name_normalized)
+        name_hash = self._fast_hash(name_normalized)
         cache_key = (email_hash, name_hash)
 
         # Check cache for existing player (NO DB QUERY)
@@ -438,32 +456,44 @@ class PlayerImportService:
         is_new_player = player is None
 
         if player:
-            # Update any missing fields on existing player
+            # Update any missing fields on existing player (use property setters for updates - rare)
             self.stats['players_updated'] += 1
             if gender and not player.gender:
                 player.gender = gender
             if self.program and not player.program:
                 player.program = self.program
-            if parent_first and not player.parent_first_name:
-                player.parent_first_name = parent_first
-            if parent_last and not player.parent_last_name:
-                player.parent_last_name = parent_last
-            if parent_phone and not player.parent_phone:
-                player.parent_phone = parent_phone
+            if parent_first and not player._parent_first_name:
+                player._parent_first_name = self._fast_encrypt(parent_first)
+            if parent_last and not player._parent_last_name:
+                player._parent_last_name = self._fast_encrypt(parent_last)
+            if parent_phone and not player._parent_phone:
+                player._parent_phone = self._fast_encrypt(parent_phone)
         else:
-            # Create new player
+            # Create new player - use direct column assignment to bypass property setters
             self.stats['players_created'] += 1
+
+            # Pre-compute all encrypted values and hashes
+            encrypted_first = self._fast_encrypt(first_name)
+            encrypted_last = self._fast_encrypt(last_name)
+            encrypted_email = self._fast_encrypt(parent_email)
+            encrypted_parent_first = self._fast_encrypt(parent_first) if parent_first else None
+            encrypted_parent_last = self._fast_encrypt(parent_last) if parent_last else None
+            encrypted_phone = self._fast_encrypt(parent_phone) if parent_phone else None
+
             player = Player(
                 birth_date=birth_date,
                 gender=gender,
                 program=self.program
             )
-            player.first_name = first_name
-            player.last_name = last_name
-            player.parent_email = parent_email
-            player.parent_first_name = parent_first
-            player.parent_last_name = parent_last
-            player.parent_phone = parent_phone
+            # Direct assignment to encrypted columns (bypasses property setters)
+            player._first_name = encrypted_first
+            player._last_name = encrypted_last
+            player._parent_email = encrypted_email
+            player.parent_email_hash = email_hash  # Already computed above
+            player.name_hash = name_hash  # Already computed above
+            player._parent_first_name = encrypted_parent_first
+            player._parent_last_name = encrypted_parent_last
+            player._parent_phone = encrypted_phone
 
             # Generate player code without DB query
             player.player_code = self._generate_player_code_fast(first_name, last_name, birth_date)
@@ -481,13 +511,14 @@ class PlayerImportService:
                 if not parent_user.has_role('parent'):
                     parent_user.add_role('parent')
             else:
-                # Create new user directly (avoid User.create_user which commits each time)
-                # Use pbkdf2 instead of scrypt for faster bulk imports
+                # Create new user with direct column assignment (bypass property setters)
                 random_password = secrets.token_urlsafe(16)
                 parent_user = User(role='parent', org_ID=1)
-                parent_user.email = parent_email
-                parent_user.name = parent_name
-                parent_user.phone = parent_phone
+                # Direct assignment to encrypted columns
+                parent_user._email = self._fast_encrypt(parent_email)
+                parent_user.email_hash = email_hash  # Already computed
+                parent_user._name = self._fast_encrypt(parent_name) if parent_name else None
+                parent_user._phone = self._fast_encrypt(parent_phone) if parent_phone else None
                 parent_user.password_hash = self._generate_password_hash(
                     random_password, method='pbkdf2:sha256:1000'
                 )
