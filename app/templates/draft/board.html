@@ -66,12 +66,12 @@
     </div>
 </div>
 
-<!-- Protected Pick Banner -->
+<!-- Protected Pick Reminder -->
 {% if current_protection and current_pick %}
 <div class="protected-banner">
-    <strong>PROTECTED PICK:</strong> {{ current_pick.team.scheduler_display_name }} must draft
+    <strong>REMINDER:</strong> {{ current_pick.team.scheduler_display_name }} has a protected pick for
     <strong>{{ current_protection.player.last_name }}, {{ current_protection.player.first_name }}</strong>
-    in this round ({{ current_protection.reason }}).
+    scheduled for this round ({{ current_protection.reason }}).
 </div>
 {% endif %}
 
@@ -94,7 +94,7 @@
                 <div>
                     <strong>{{ player.name }}</strong>
                     {% if is_protected %}
-                    <span class="protection-badge">MUST DRAFT</span>
+                    <span class="protection-badge">PROTECTED</span>
                     {% endif %}
                     {% if player.age %}
                     <span style="color: #666; font-size: 13px;">(Age {{ player.age }})</span>
@@ -109,7 +109,7 @@
                     <button type="submit" class="btn btn-sm {% if is_protected %}btn-secondary{% else %}btn-primary{% endif %}"
                             style="{% if is_protected %}background: rgb(255, 140, 0);{% endif %}"
                             onclick="return confirm('Pick {{ player.name }} for {{ current_pick.team.scheduler_display_name }}?')">
-                        {% if is_protected %}Draft (Required){% else %}Draft{% endif %}
+                        Draft
                     </button>
                 </form>
                 {% endif %}
