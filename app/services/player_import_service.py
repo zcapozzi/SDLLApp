@@ -429,14 +429,14 @@ class PlayerImportService:
                 'birth_date': birth_date,
                 'gender': gender,
                 'program': self.program,
-                'first_name': self._fast_encrypt(first_name),  # DB column name
-                'last_name': self._fast_encrypt(last_name),
-                'parent_email': self._fast_encrypt(parent_email),
+                '_first_name': self._fast_encrypt(first_name),  # Model attribute name
+                '_last_name': self._fast_encrypt(last_name),
+                '_parent_email': self._fast_encrypt(parent_email),
                 'parent_email_hash': email_hash,
                 'name_hash': name_hash,
-                'parent_first_name': self._fast_encrypt(parent_first) if parent_first else None,
-                'parent_last_name': self._fast_encrypt(parent_last) if parent_last else None,
-                'parent_phone': self._fast_encrypt(parent_phone) if parent_phone else None,
+                '_parent_first_name': self._fast_encrypt(parent_first) if parent_first else None,
+                '_parent_last_name': self._fast_encrypt(parent_last) if parent_last else None,
+                '_parent_phone': self._fast_encrypt(parent_phone) if parent_phone else None,
                 'player_code': player_code,
             }
             player_index = len(self._new_players)
@@ -460,10 +460,10 @@ class PlayerImportService:
                 user_dict = {
                     'role': 'parent',
                     'org_ID': 1,
-                    'email': self._fast_encrypt(parent_email),  # DB column name
+                    '_email': self._fast_encrypt(parent_email),  # Model attribute name
                     'email_hash': email_hash,
-                    'name': self._fast_encrypt(parent_name) if parent_name else None,
-                    'phone': self._fast_encrypt(parent_phone) if parent_phone else None,
+                    '_name': self._fast_encrypt(parent_name) if parent_name else None,
+                    '_phone': self._fast_encrypt(parent_phone) if parent_phone else None,
                     'password_hash': self._generate_password_hash(
                         random_password, method='pbkdf2:sha256:1000'
                     ),
