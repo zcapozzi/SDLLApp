@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Setup Draft - {{ session.name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <div>
+        <h1 style="margin: 0;">{{ session.name }}</h1>
+        <p style="color: #666; margin: 5px 0 0 0;">{{ session.league_display_name }} - {{ session.org_season.season_desc }}</p>
+    </div>
+    <a href="{{ url_for('draft.index', org_season_id=session.org_season_id) }}" class="btn btn-outline">Back to Dashboard</a>
+</div>
+
+<!-- Draft Info -->
+<div class="card" style="margin-bottom: 20px;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px;">
+        <div>
+            <div style="color: #666; font-size: 12px; text-transform: uppercase;">Draft Type</div>
+            <div style="font-size: 18px; font-weight: bold;">{{ 'Snake' if session.draft_order_type == 'snake' else 'Linear' }}</div>
+        </div>
+        <div>
+            <div style="color: #666; font-size: 12px; text-transform: uppercase;">Rounds</div>
+            <div style="font-size: 18px; font-weight: bold;">{{ session.rounds }}</div>
+        </div>
+        <div>
+            <div style="color: #666; font-size: 12px; text-transform: uppercase;">Teams</div>
+            <div style="font-size: 18px; font-weight: bold;">{{ teams|length }}</div>
+        </div>
+        <div>
+            <div style="color: #666; font-size: 12px; text-transform: uppercase;">Picks Generated</div>
+            <div style="font-size: 18px; font-weight: bold;">{{ pick_count }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Step 1: Set Draft Order -->
+<div class="card" style="margin-bottom: 20px;">
+    <h2 style="margin-top: 0;">
+        Step 1: Set Draft Order
+        {% if existing_order %}
+        <span class="badge" style="background: rgb(34, 139, 34); color: white; font-size: 12px;">Complete</span>
+        {% endif %}
+    </h2>
+
+    <form method="post">
+        <input type="hidden" name="action" value="save_order">
+
+        <p style="color: #666; margin-bottom: 15px;">
+            Drag teams to set the draft order, or use the checkboxes to select participating teams.
+        </p>
+
+        <div id="team-list" style="border: 1px solid #ddd; border-radius: 4px; max-height: 400px; overflow-y: auto;">
+            {% for order in existing_order %}
+            <label style="display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #eee; cursor: move;">
+                <span style="width: 30px; color: #888;">{{ loop.index }}.</span>
+                <input type="hidden" name="team_order" value="{{ order.team_id }}">
+                <strong>{{ order.team.league_display_name }} {{ order.team.scheduler_display_name }}</strong>
+            </label>
+            {% endfor %}
+
+            {% for team in teams if team.team_ID not in ordered_team_ids %}
+            <label style="display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #eee; background: #f9f9f9;">
+                <input type="checkbox" name="team_order" value="{{ team.team_ID }}" style="margin-right: 15px;">
+                <span style="color: #888;">{{ team.league_display_name }} {{ team.scheduler_display_name }}</span>
+            </label>
+            {% endfor %}
+        </div>
+
+        <div style="margin-top: 15px;">
+            <button type="submit" class="btn btn-primary">Save Order</button>
+        </div>
+    </form>
+</div>
+
+<!-- Step 2: Generate Picks -->
+<div class="card" style="margin-bottom: 20px;">
+    <h2 style="margin-top: 0;">
+        Step 2: Generate Picks
+        {% if pick_count > 0 %}
+        <span class="badge" style="background: rgb(34, 139, 34); color: white; font-size: 12px;">Complete</span>
+        {% endif %}
+    </h2>
+
+    <p style="color: #666;">
+        Generate the pick slots based on the draft order and number of rounds.
+        {% if existing_order %}
+        <br>This will create {{ existing_order|length * session.rounds }} picks ({{ existing_order|length }} teams x {{ session.rounds }} rounds).
+        {% endif %}
+    </p>
+
+    <form method="post" style="margin-top: 15px;">
+        <input type="hidden" name="action" value="generate_picks">
+        <button type="submit" class="btn btn-secondary" {% if not existing_order %}disabled{% endif %}>
+            {% if pick_count > 0 %}Regenerate Picks{% else %}Generate Picks{% endif %}
+        </button>
+        {% if not existing_order %}
+        <small style="color: #c33; margin-left: 10px;">Set draft order first</small>
+        {% endif %}
+    </form>
+</div>
+
+<!-- Step 3: Start Draft -->
+<div class="card">
+    <h2 style="margin-top: 0;">Step 3: Start Draft</h2>
+
+    <p style="color: #666;">
+        Once you start the draft, you can begin making picks on the draft board.
+    </p>
+
+    <form method="post" style="margin-top: 15px;">
+        <input type="hidden" name="action" value="start_draft">
+        <button type="submit" class="btn btn-primary" {% if pick_count == 0 %}disabled{% endif %}
+                onclick="return confirm('Start the draft? This cannot be undone.')">
+            Start Draft
+        </button>
+        {% if pick_count == 0 %}
+        <small style="color: #c33; margin-left: 10px;">Generate picks first</small>
+        {% endif %}
+    </form>
+</div>
+
+<script>
+// Simple sortable for draft order
+// In production, you might want to use a library like Sortable.js
+</script>
+{% endblock %}

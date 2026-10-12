@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Draft Results - {{ session.name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <div>
+        <h1 style="margin: 0;">Draft Results</h1>
+        <p style="color: #666; margin: 5px 0 0 0;">{{ session.name }} - {{ session.league_display_name }}</p>
+    </div>
+    <div style="display: flex; gap: 10px;">
+        {% if session.can_make_picks %}
+        <a href="{{ url_for('draft.board', session_id=session.id) }}" class="btn btn-primary">Back to Board</a>
+        {% endif %}
+        <a href="{{ url_for('draft.index', org_season_id=session.org_season_id) }}" class="btn btn-outline">Dashboard</a>
+    </div>
+</div>
+
+<!-- Summary Stats -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px;">
+    <div class="card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 28px; font-weight: bold; color: rgb(34, 139, 34);">{{ all_picks|selectattr('is_made')|list|length }}</div>
+        <div style="color: #666; font-size: 13px;">Players Drafted</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 28px; font-weight: bold; color: rgb(255, 140, 0);">{{ draft_order|length }}</div>
+        <div style="color: #666; font-size: 13px;">Teams</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 28px; font-weight: bold; color: #1565c0;">{{ session.rounds }}</div>
+        <div style="color: #666; font-size: 13px;">Rounds</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 28px; font-weight: bold;">
+            {% if session.is_completed %}
+            <span style="color: rgb(34, 139, 34);">Complete</span>
+            {% else %}
+            R{{ session.current_round }}
+            {% endif %}
+        </div>
+        <div style="color: #666; font-size: 13px;">Status</div>
+    </div>
+</div>
+
+<!-- Results by Round -->
+<div class="card">
+    <h2 style="margin-top: 0;">Draft Results by Round</h2>
+
+    {% for round_num, picks in picks_by_round.items()|sort %}
+    <div style="margin-bottom: 30px;">
+        <h3 style="color: rgb(34, 139, 34); border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 5px;">
+            Round {{ round_num }}
+        </h3>
+
+        <table style="margin-top: 10px;">
+            <thead>
+                <tr>
+                    <th style="width: 60px;">Pick #</th>
+                    <th>Team</th>
+                    <th>Player</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pick in picks %}
+                <tr>
+                    <td style="text-align: center;">{{ pick.pick_number }}</td>
+                    <td>{{ pick.team_display_name }}</td>
+                    <td>
+                        {% if pick.is_made %}
+                        <strong>{{ pick.player_display_name }}</strong>
+                        {% else %}
+                        <span style="color: #888;">---</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Team Rosters -->
+<div class="card" style="margin-top: 20px;">
+    <h2 style="margin-top: 0;">Team Rosters (Draft Results)</h2>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+        {% for order in draft_order %}
+        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px;">
+            <h4 style="margin-top: 0; color: rgb(34, 139, 34);">{{ order.team.scheduler_display_name }}</h4>
+            <ol style="margin: 0; padding-left: 20px;">
+                {% for pick in all_picks if pick.team_id == order.team_id and pick.is_made %}
+                <li style="margin: 5px 0;">{{ pick.player_display_name }}</li>
+                {% else %}
+                <li style="color: #888;">No picks</li>
+                {% endfor %}
+            </ol>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

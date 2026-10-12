@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Draft Dashboard - {{ org_season.season_desc }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Draft Dashboard</h1>
+    <div style="display: flex; gap: 10px; align-items: center;">
+        <select id="season-selector" class="form-control" style="width: auto;"
+                onchange="window.location.href='{{ url_for('draft.index') }}/' + this.value">
+            {% for s in seasons %}
+            <option value="{{ s.ID }}" {% if s.ID == org_season.ID %}selected{% endif %}>
+                {{ s.season_desc }}
+            </option>
+            {% endfor %}
+        </select>
+        <a href="{{ url_for('draft.create', org_season_id=org_season.ID) }}" class="btn btn-primary">New Draft</a>
+    </div>
+</div>
+
+<!-- Draft Sessions -->
+<div class="card">
+    <h2 style="margin-top: 0;">Draft Sessions</h2>
+
+    {% if sessions %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>League</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for session in sessions %}
+            <tr>
+                <td><strong>{{ session.name or 'Unnamed Draft' }}</strong></td>
+                <td>{{ session.league_display_name }}</td>
+                <td>
+                    {% if session.status == 'pending' %}
+                    <span class="badge" style="background: #888; color: white;">Pending</span>
+                    {% elif session.status == 'active' %}
+                    <span class="badge" style="background: rgb(34, 139, 34); color: white;">Active</span>
+                    {% elif session.status == 'paused' %}
+                    <span class="badge" style="background: rgb(255, 140, 0); color: white;">Paused</span>
+                    {% elif session.status == 'completed' %}
+                    <span class="badge" style="background: #1565c0; color: white;">Completed</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if session.total_picks > 0 %}
+                    Pick {{ session.current_pick_number }} / {{ session.total_picks }}
+                    <br><small style="color: #666;">Round {{ session.current_round }} of {{ session.rounds }}</small>
+                    {% else %}
+                    <span style="color: #888;">Not started</span>
+                    {% endif %}
+                </td>
+                <td>{{ session.created_at.strftime('%b %d, %Y') if session.created_at else '-' }}</td>
+                <td>
+                    {% if session.status == 'pending' %}
+                    <a href="{{ url_for('draft.setup', session_id=session.id) }}" class="btn btn-sm btn-primary">Setup</a>
+                    {% elif session.status in ('active', 'paused') %}
+                    <a href="{{ url_for('draft.board', session_id=session.id) }}" class="btn btn-sm btn-primary">Board</a>
+                    {% else %}
+                    <a href="{{ url_for('draft.results', session_id=session.id) }}" class="btn btn-sm btn-outline">Results</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: #666; padding: 40px;">
+        No draft sessions for this season.
+        <br><a href="{{ url_for('draft.create', org_season_id=org_season.ID) }}">Create your first draft</a>
+    </p>
+    {% endif %}
+</div>
+
+<!-- Quick Links -->
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">Related Tools</h3>
+    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+        <a href="{{ url_for('players.player_pool', org_season_id=org_season.ID) }}" class="btn btn-outline">
+            Player Pool
+        </a>
+        <a href="{{ url_for('players.roster_import', org_season_id=org_season.ID) }}" class="btn btn-outline">
+            Import Roster CSV
+        </a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Preview Roster Import - {{ org_season.season_desc }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Preview Roster Import</h1>
+    <a href="{{ url_for('players.roster_import', org_season_id=org_season.ID) }}" class="btn btn-outline">Start Over</a>
+</div>
+
+<!-- Stats Summary -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px;">
+    <div class="card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 28px; font-weight: bold; color: rgb(34, 139, 34);">{{ preview.matched_count }}</div>
+        <div style="color: #666; font-size: 13px;">Ready to Assign</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 28px; font-weight: bold; color: rgb(255, 140, 0);">{{ preview.already_assigned_count }}</div>
+        <div style="color: #666; font-size: 13px;">Already Assigned</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 28px; font-weight: bold; color: #c33;">{{ preview.error_count }}</div>
+        <div style="color: #666; font-size: 13px;">Errors</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 28px; font-weight: bold; color: #666;">{{ preview.total_rows }}</div>
+        <div style="color: #666; font-size: 13px;">Total Rows</div>
+    </div>
+</div>
+
+<!-- Confirm Form -->
+{% if preview.matched_count > 0 %}
+<div class="card" style="margin-bottom: 20px; background: rgba(34, 139, 34, 0.1); border: 1px solid rgb(34, 139, 34);">
+    <form action="{{ url_for('players.roster_import_confirm', org_season_id=org_season.ID) }}" method="post"
+          style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <strong>{{ preview.matched_count }} players</strong> will be assigned to teams.
+            {% if preview.error_count > 0 %}
+            <br><span style="color: #c33;">{{ preview.error_count }} rows will be skipped due to errors.</span>
+            {% endif %}
+        </div>
+        <button type="submit" class="btn btn-primary">Confirm Import</button>
+    </form>
+</div>
+{% else %}
+<div class="card" style="margin-bottom: 20px; background: rgba(200, 50, 50, 0.1); border: 1px solid #c33;">
+    <p style="margin: 0; color: #c33;">
+        <strong>No valid matches found.</strong> Please check your CSV and try again.
+    </p>
+</div>
+{% endif %}
+
+<!-- Results Table -->
+<div class="card">
+    <h2 style="margin-top: 0;">Import Preview</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Row</th>
+                <th>Player Code</th>
+                <th>Player</th>
+                <th>Coach Name (CSV)</th>
+                <th>Team Match</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in preview.rows %}
+            <tr>
+                <td>{{ row.row_num }}</td>
+                <td>
+                    <span style="font-family: monospace; font-size: 12px;">{{ row.player_code }}</span>
+                </td>
+                <td>
+                    {% if row.player_display_name %}
+                    {{ row.player_display_name }}
+                    {% else %}
+                    <span style="color: #c33;">Not found</span>
+                    {% endif %}
+                </td>
+                <td>{{ row.coach_name }}</td>
+                <td>
+                    {% if row.team_display_name %}
+                    {{ row.team_display_name }}
+                    {% else %}
+                    <span style="color: #c33;">Not found</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if row.match_status == 'matched' %}
+                    <span class="badge" style="background: rgb(34, 139, 34); color: white;">Ready</span>
+                    {% elif row.match_status == 'already_assigned' %}
+                    <span class="badge" style="background: rgb(255, 140, 0); color: white;">Already Assigned</span>
+                    {% elif row.match_status == 'player_not_found' %}
+                    <span class="badge" style="background: #c33; color: white;">Player Not Found</span>
+                    {% elif row.match_status == 'team_not_found' %}
+                    <span class="badge" style="background: #c33; color: white;">Team Not Found</span>
+                    {% else %}
+                    <span class="badge" style="background: #888; color: white;">{{ row.match_status }}</span>
+                    {% endif %}
+                    {% if row.error_message %}
+                    <br><small style="color: #c33;">{{ row.error_message }}</small>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

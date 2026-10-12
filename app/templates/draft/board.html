@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}Draft Board - {{ session.name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <div>
+        <h1 style="margin: 0;">{{ session.name }}</h1>
+        <p style="color: #666; margin: 5px 0 0 0;">{{ session.league_display_name }}</p>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center;">
+        {% if session.status == 'active' %}
+        <form action="{{ url_for('draft.pause', session_id=session.id) }}" method="post" style="margin: 0;">
+            <button type="submit" class="btn btn-secondary">Pause Draft</button>
+        </form>
+        {% elif session.status == 'paused' %}
+        <form action="{{ url_for('draft.resume', session_id=session.id) }}" method="post" style="margin: 0;">
+            <button type="submit" class="btn btn-primary">Resume Draft</button>
+        </form>
+        {% endif %}
+        <a href="{{ url_for('draft.results', session_id=session.id) }}" class="btn btn-outline">View Results</a>
+        <a href="{{ url_for('draft.index', org_season_id=session.org_season_id) }}" class="btn btn-outline">Dashboard</a>
+    </div>
+</div>
+
+<!-- Status Bar -->
+<div class="card" style="margin-bottom: 20px; background: {% if session.is_completed %}#1565c0{% elif session.is_active %}rgb(34, 139, 34){% else %}rgb(255, 140, 0){% endif %}; color: white;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            {% if session.is_completed %}
+            <strong style="font-size: 20px;">Draft Complete!</strong>
+            {% elif current_pick %}
+            <strong style="font-size: 20px;">On the Clock: {{ current_pick.team.scheduler_display_name }}</strong>
+            <br>Round {{ session.current_round }}, Pick {{ session.current_pick_number }}
+            {% else %}
+            <strong style="font-size: 20px;">Draft Paused</strong>
+            {% endif %}
+        </div>
+        <div style="text-align: right;">
+            <div style="font-size: 28px; font-weight: bold;">{{ session.total_picks }}</div>
+            <div style="font-size: 12px; opacity: 0.8;">picks made</div>
+        </div>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    <!-- Available Players -->
+    <div class="card">
+        <h2 style="margin-top: 0;">Available Players</h2>
+
+        <div style="margin-bottom: 15px;">
+            <input type="text" id="player-search" class="form-control" placeholder="Search players..." oninput="filterPlayers()">
+        </div>
+
+        <div id="player-list" style="max-height: 500px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;">
+            {% for player in available_players if player.is_available %}
+            <div class="player-row" data-name="{{ player.name|lower }}"
+                 style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid #eee;">
+                <div>
+                    <strong>{{ player.name }}</strong>
+                    {% if player.age %}
+                    <span style="color: #666; font-size: 13px;">(Age {{ player.age }})</span>
+                    {% endif %}
+                    {% if player.player_code %}
+                    <br><span style="font-family: monospace; font-size: 11px; color: #888;">{{ player.player_code }}</span>
+                    {% endif %}
+                </div>
+                {% if session.can_make_picks and current_pick %}
+                <form action="{{ url_for('draft.make_pick', session_id=session.id) }}" method="post" style="margin: 0;">
+                    <input type="hidden" name="player_id" value="{{ player.player_id }}">
+                    <button type="submit" class="btn btn-sm btn-primary"
+                            onclick="return confirm('Pick {{ player.name }} for {{ current_pick.team.scheduler_display_name }}?')">
+                        Draft
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+            {% else %}
+            <p style="text-align: center; color: #666; padding: 30px;">
+                No available players remaining.
+            </p>
+            {% endfor %}
+        </div>
+
+        <div style="margin-top: 10px; color: #666; font-size: 13px;">
+            <span id="available-count">{{ available_players|selectattr('is_available')|list|length }}</span> players available
+        </div>
+    </div>
+
+    <!-- Draft History -->
+    <div class="card">
+        <h2 style="margin-top: 0;">Draft History</h2>
+
+        <div id="pick-list" style="max-height: 500px; overflow-y: auto;">
+            {% for pick in all_picks|reverse if pick.is_made %}
+            <div style="display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee;">
+                <div style="width: 50px; text-align: center; color: #888; font-size: 13px;">
+                    R{{ pick.round_number }}<br>#{{ pick.pick_number }}
+                </div>
+                <div style="flex: 1;">
+                    <strong>{{ pick.player_display_name }}</strong>
+                    <br><span style="font-size: 13px; color: #666;">{{ pick.team_display_name }}</span>
+                </div>
+            </div>
+            {% else %}
+            <p style="text-align: center; color: #666; padding: 30px;">
+                No picks made yet.
+            </p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Draft Order Reference -->
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top: 0;">Draft Order</h3>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+        {% for order in draft_order %}
+        <span class="badge" style="{% if session.current_team_id == order.team_id %}background: rgb(34, 139, 34); color: white;{% else %}background: #eee; color: #333;{% endif %} padding: 8px 12px;">
+            {{ loop.index }}. {{ order.team.scheduler_display_name }}
+        </span>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+function filterPlayers() {
+    var search = document.getElementById('player-search').value.toLowerCase();
+    var rows = document.querySelectorAll('.player-row');
+    var count = 0;
+
+    rows.forEach(function(row) {
+        var name = row.dataset.name || '';
+        var show = !search || name.indexOf(search) !== -1;
+        row.style.display = show ? 'flex' : 'none';
+        if (show) count++;
+    });
+
+    document.getElementById('available-count').textContent = count;
+}
+</script>
+{% endblock %}

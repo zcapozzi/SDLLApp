@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}Team Roster - {{ team.league_display_name }} {{ team.scheduler_display_name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <div>
+        <h1 style="margin: 0;">{{ team.league_display_name }} {{ team.scheduler_display_name }}</h1>
+        {% if team.team_name and team.team_name != team.scheduler_display_name %}
+        <p style="color: #666; margin: 5px 0 0 0;">{{ team.team_name }}</p>
+        {% endif %}
+    </div>
+    <div style="display: flex; gap: 10px;">
+        {% if org_season %}
+        <a href="{{ url_for('players.player_pool', org_season_id=org_season.ID) }}" class="btn btn-outline">Back to Pool</a>
+        {% endif %}
+        <button type="button" class="btn btn-primary" onclick="openAddPlayerModal()">Add Player</button>
+    </div>
+</div>
+
+<!-- Team Info Card -->
+<div class="card" style="margin-bottom: 20px;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+        <div>
+            <div style="color: #666; font-size: 12px; text-transform: uppercase;">League/Division</div>
+            <div style="font-size: 18px; font-weight: bold; color: rgb(34, 139, 34);">{{ team.league_display_name }}</div>
+        </div>
+        <div>
+            <div style="color: #666; font-size: 12px; text-transform: uppercase;">Coach</div>
+            <div style="font-size: 18px; font-weight: bold;">{{ team.coach_name or 'TBD' }}</div>
+        </div>
+        <div>
+            <div style="color: #666; font-size: 12px; text-transform: uppercase;">Season</div>
+            <div style="font-size: 18px;">{{ team.full_season_name }}</div>
+        </div>
+        <div>
+            <div style="color: #666; font-size: 12px; text-transform: uppercase;">Roster Count</div>
+            <div style="font-size: 28px; font-weight: bold; color: rgb(255, 140, 0);">{{ roster|length }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Roster Table -->
+<div class="card">
+    <h2 style="margin-top: 0; margin-bottom: 20px;">Roster</h2>
+
+    {% if roster %}
+    <table>
+        <thead>
+            <tr>
+                <th>Player Name</th>
+                <th>Age</th>
+                <th>Player Code</th>
+                <th>Status</th>
+                <th style="width: 100px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ps in roster %}
+            <tr id="player-{{ ps.id }}">
+                <td>
+                    <strong>{{ ps.player.last_name }}, {{ ps.player.first_name }}</strong>
+                </td>
+                <td>
+                    {% if ps.player.birth_date and org_season %}
+                    {{ ps.player.league_age(org_season) }}
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td>
+                    {% if ps.player.player_code %}
+                    <span style="font-family: monospace; font-size: 12px; color: #666;">{{ ps.player.player_code }}</span>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="badge" style="background-color: rgb(34, 139, 34); color: white;">
+                        {{ ps.status or 'registered' }}
+                    </span>
+                </td>
+                <td>
+                    <form action="{{ url_for('players.unassign_player', player_season_id=ps.id) }}" method="post"
+                          onsubmit="return confirm('Remove {{ ps.player.first_name }} {{ ps.player.last_name }} from this team?');">
+                        <button type="submit" class="btn btn-sm" style="background: #c33; color: white;">Remove</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: #666; padding: 40px;">
+        No players on this roster yet.
+        Click "Add Player" to assign players to this team.
+    </p>
+    {% endif %}
+</div>
+
+<!-- Add Player Modal -->
+<div id="add-player-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="background: white; margin: 100px auto; max-width: 600px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+        <div style="padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0;">Add Player to Team</h3>
+            <button type="button" onclick="closeAddPlayerModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
+        </div>
+        <div style="padding: 20px;">
+            {% if available_players %}
+            <!-- Player Search -->
+            <div class="form-group">
+                <label>Search Available Players</label>
+                <input type="text" id="player-search" class="form-control" placeholder="Type to filter by name..." oninput="filterPlayers()">
+            </div>
+
+            <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                Showing players placed in {{ team.league_display_name }} who are not yet assigned to a team.
+            </p>
+
+            <!-- Player List -->
+            <div id="player-list" style="max-height: 350px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;">
+                {% for ps in available_players %}
+                <div class="player-option"
+                     data-name="{{ ps.player.last_name|lower }}, {{ ps.player.first_name|lower }}"
+                     style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid #eee;">
+                    <div>
+                        <strong>{{ ps.player.last_name }}, {{ ps.player.first_name }}</strong>
+                        {% if ps.player.birth_date and org_season %}
+                        <span style="color: #666; font-size: 13px;">(Age {{ ps.player.league_age(org_season) }})</span>
+                        {% endif %}
+                        {% if ps.player.player_code %}
+                        <br><span style="font-family: monospace; font-size: 11px; color: #888;">{{ ps.player.player_code }}</span>
+                        {% endif %}
+                    </div>
+                    <form action="{{ url_for('players.assign_player', player_season_id=ps.id) }}" method="post" style="margin: 0;">
+                        <input type="hidden" name="team_id" value="{{ team.team_ID }}">
+                        <button type="submit" class="btn btn-sm btn-primary">Add</button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p style="text-align: center; color: #666; padding: 30px;">
+                No available players in {{ team.league_display_name }}.
+                {% if org_season %}
+                <br><a href="{{ url_for('players.player_pool', org_season_id=org_season.ID) }}">View full player pool</a>
+                {% endif %}
+            </p>
+            {% endif %}
+
+            <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+                <button type="button" onclick="closeAddPlayerModal()" class="btn btn-outline">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function openAddPlayerModal() {
+    document.getElementById('player-search').value = '';
+    filterPlayers();
+    document.getElementById('add-player-modal').style.display = 'block';
+}
+
+function closeAddPlayerModal() {
+    document.getElementById('add-player-modal').style.display = 'none';
+}
+
+function filterPlayers() {
+    var search = document.getElementById('player-search').value.toLowerCase();
+    var playerOptions = document.querySelectorAll('.player-option');
+
+    playerOptions.forEach(function(opt) {
+        var name = opt.dataset.name || '';
+        var show = !search || name.indexOf(search) !== -1;
+        opt.style.display = show ? 'flex' : 'none';
+    });
+}
+
+// Close modal on escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeAddPlayerModal();
+});
+
+// Close modal on background click
+document.getElementById('add-player-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeAddPlayerModal();
+});
+</script>
+{% endblock %}

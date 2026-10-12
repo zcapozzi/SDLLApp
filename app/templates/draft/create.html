@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Create Draft - {{ org_season.season_desc }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Create New Draft</h1>
+    <a href="{{ url_for('draft.index', org_season_id=org_season.ID) }}" class="btn btn-outline">Back to Dashboard</a>
+</div>
+
+<div class="card" style="max-width: 600px;">
+    <form method="post">
+        <div class="form-group">
+            <label>Season</label>
+            <input type="text" class="form-control" value="{{ org_season.season_desc }}" disabled>
+        </div>
+
+        <div class="form-group">
+            <label>League <span style="color: #c33;">*</span></label>
+            <select name="league_id" class="form-control" required>
+                <option value="">-- Select League --</option>
+                {% for league in leagues %}
+                <option value="{{ league.ID }}">
+                    {{ league.get_seasonal_name(org_season.is_spring) }} ({{ league.sport_display }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Draft Name</label>
+            <input type="text" name="name" class="form-control" placeholder="Auto-generated if empty">
+            <small style="color: #888;">Leave empty for auto-generated name based on league</small>
+        </div>
+
+        <div class="form-group">
+            <label>Draft Order Type</label>
+            <select name="draft_order_type" class="form-control">
+                <option value="snake" selected>Snake (recommended)</option>
+                <option value="linear">Linear</option>
+            </select>
+            <small style="color: #888;">Snake: order reverses each round. Linear: same order every round.</small>
+        </div>
+
+        <div class="form-group">
+            <label>Number of Rounds</label>
+            <input type="number" name="rounds" class="form-control" value="12" min="1" max="30">
+        </div>
+
+        <div style="margin-top: 25px;">
+            <button type="submit" class="btn btn-primary">Create Draft</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

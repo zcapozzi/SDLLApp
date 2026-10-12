@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Map Columns - Roster Import{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Map CSV Columns</h1>
+    <a href="{{ url_for('players.roster_import', org_season_id=org_season.ID) }}" class="btn btn-outline">Start Over</a>
+</div>
+
+<div class="card" style="max-width: 700px;">
+    <p style="color: #666; margin-bottom: 20px;">
+        Some columns could not be automatically matched. Please select the correct CSV column for each field.
+    </p>
+
+    <form method="post">
+        <table style="width: 100%;">
+            <thead>
+                <tr>
+                    <th style="padding: 12px;">Expected Field</th>
+                    <th style="padding: 12px;">CSV Column</th>
+                    <th style="padding: 12px;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for col in expected_columns %}
+                <tr>
+                    <td style="padding: 12px;">
+                        <strong>{{ col.display_name }}</strong>
+                        {% if col.required %}
+                        <span style="color: #c33;">*</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 12px;">
+                        <select name="map_{{ col.name }}" class="form-control">
+                            <option value="">-- Select Column --</option>
+                            {% for header in csv_headers %}
+                            <option value="{{ header }}"
+                                    {% if column_mapping.get(col.name) == header %}selected{% endif %}>
+                                {{ header }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td style="padding: 12px;">
+                        {% if column_mapping.get(col.name) %}
+                        <span style="color: rgb(34, 139, 34);">Mapped</span>
+                        {% elif col.required %}
+                        <span style="color: #c33;">Required</span>
+                        {% else %}
+                        <span style="color: #888;">Optional</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div style="margin-top: 20px; display: flex; gap: 10px;">
+            <button type="submit" class="btn btn-primary">Continue to Preview</button>
+            <a href="{{ url_for('players.roster_import', org_season_id=org_season.ID) }}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<div class="card" style="max-width: 700px; margin-top: 20px;">
+    <h3 style="margin-top: 0;">CSV Headers Found</h3>
+    <p style="color: #666;">
+        {% for header in csv_headers %}
+        <span class="badge" style="background: #eee; color: #333; margin: 2px;">{{ header }}</span>
+        {% endfor %}
+    </p>
+</div>
+{% endblock %}

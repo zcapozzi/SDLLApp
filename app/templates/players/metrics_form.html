@@ -137,98 +137,274 @@
 
 {% if metric %}
 <!-- Age-Specific Score Ranges Section -->
-<div class="card" style="max-width: 700px; margin-top: 30px;" id="age-ranges">
+<div class="card" style="max-width: 900px; margin-top: 30px;" id="age-ranges">
     <h3 style="margin-top: 0;">Age-Specific Score Ranges</h3>
-    <p style="color: #666; margin-bottom: 20px;">
-        Override the default score range for specific age groups. Players whose league age doesn't
-        match any range below will use the default range ({{ metric.min_score }}-{{ metric.max_score }}).
+    <p style="color: #666; margin-bottom: 10px;">
+        Configure score ranges for each league age. Ages without custom ranges will use the
+        <strong>default range ({{ metric.min_score }}-{{ metric.max_score }}, step {{ metric.score_increment }})</strong>.
+    </p>
+    <p style="color: #888; font-size: 13px; margin-bottom: 20px;">
+        Tip: Younger players typically need a narrower range (e.g., 1-3) while older players
+        can use the full scale (e.g., 1-7).
     </p>
 
-    {% if metric.age_ranges %}
-    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-        <thead>
-            <tr style="background: #f5f5f5;">
-                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Age Range</th>
-                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #ddd;">Min</th>
-                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #ddd;">Max</th>
-                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #ddd;">Step</th>
-                <th style="padding: 10px; text-align: right; border-bottom: 2px solid #ddd;"></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for ar in metric.age_ranges %}
-            <tr>
-                <td style="padding: 10px; border-bottom: 1px solid #eee;">
-                    <strong>{{ ar.age_range_display }}</strong>
-                </td>
-                <td style="padding: 10px; text-align: center; border-bottom: 1px solid #eee;">{{ ar.min_score }}</td>
-                <td style="padding: 10px; text-align: center; border-bottom: 1px solid #eee;">{{ ar.max_score }}</td>
-                <td style="padding: 10px; text-align: center; border-bottom: 1px solid #eee;">{{ ar.score_increment }}</td>
-                <td style="padding: 10px; text-align: right; border-bottom: 1px solid #eee;">
-                    <form method="POST"
-                          action="{{ url_for('players.metrics_delete_age_range', metric_id=metric.id, range_id=ar.id) }}"
-                          style="display: inline;"
-                          onsubmit="return confirm('Delete this age range?');">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-small"
-                                style="background: #fff; color: #c00; border: 1px solid #c00; padding: 4px 10px; font-size: 12px;">
-                            Delete
+    <form method="POST" action="{{ url_for('players.metrics_save_age_ranges', metric_id=metric.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+            <thead>
+                <tr style="background: rgb(34, 139, 34); color: white;">
+                    <th style="padding: 10px; text-align: center; width: 60px;">Age</th>
+                    <th style="padding: 10px; text-align: center; width: 90px;">Min Score</th>
+                    <th style="padding: 10px; text-align: center; width: 90px;">Max Score</th>
+                    <th style="padding: 10px; text-align: center; width: 80px;">Step</th>
+                    <th style="padding: 10px; text-align: center;">Status</th>
+                    <th style="padding: 10px; text-align: center; width: 80px;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set age_range_map = {} %}
+                {% for ar in metric.age_ranges %}
+                    {% if ar.min_age == ar.max_age %}
+                        {% set _ = age_range_map.update({ar.min_age: ar}) %}
+                    {% endif %}
+                {% endfor %}
+
+                {% for age in range(4, 19) %}
+                {% set ar = age_range_map.get(age) %}
+                {% set has_custom = ar is not none %}
+                <tr id="age-{{ age }}" style="{% if has_custom %}background: rgba(34, 139, 34, 0.05);{% endif %}">
+                    <td style="padding: 8px; text-align: center; border-bottom: 1px solid #eee; font-weight: bold;">
+                        {{ age }}
+                    </td>
+                    <td style="padding: 8px; text-align: center; border-bottom: 1px solid #eee;">
+                        <input type="number" name="min_score_{{ age }}" class="form-control age-input"
+                               style="width: 70px; padding: 6px; text-align: center; {% if not has_custom %}color: #999; background: #f9f9f9;{% endif %}"
+                               step="0.5" min="0" max="10"
+                               value="{{ ar.min_score if has_custom else metric.min_score }}"
+                               data-default="{{ metric.min_score }}"
+                               onchange="markAgeModified({{ age }})">
+                    </td>
+                    <td style="padding: 8px; text-align: center; border-bottom: 1px solid #eee;">
+                        <input type="number" name="max_score_{{ age }}" class="form-control age-input"
+                               style="width: 70px; padding: 6px; text-align: center; {% if not has_custom %}color: #999; background: #f9f9f9;{% endif %}"
+                               step="0.5" min="0" max="10"
+                               value="{{ ar.max_score if has_custom else metric.max_score }}"
+                               data-default="{{ metric.max_score }}"
+                               onchange="markAgeModified({{ age }})">
+                    </td>
+                    <td style="padding: 8px; text-align: center; border-bottom: 1px solid #eee;">
+                        <input type="number" name="increment_{{ age }}" class="form-control age-input"
+                               style="width: 60px; padding: 6px; text-align: center; {% if not has_custom %}color: #999; background: #f9f9f9;{% endif %}"
+                               step="0.1" min="0.1" max="2"
+                               value="{{ ar.score_increment if has_custom else metric.score_increment }}"
+                               data-default="{{ metric.score_increment }}"
+                               onchange="markAgeModified({{ age }})">
+                    </td>
+                    <td style="padding: 8px; text-align: center; border-bottom: 1px solid #eee;">
+                        <span id="status-{{ age }}" class="{% if has_custom %}badge-custom{% else %}badge-default{% endif %}"
+                              style="display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px;
+                                     {% if has_custom %}background: rgb(34, 139, 34); color: white;{% else %}background: #eee; color: #666;{% endif %}">
+                            {% if has_custom %}Custom{% else %}Default{% endif %}
+                        </span>
+                    </td>
+                    <td style="padding: 8px; text-align: center; border-bottom: 1px solid #eee;">
+                        {% if has_custom %}
+                        <button type="button" onclick="resetToDefault({{ age }})" class="btn-reset"
+                                style="background: none; border: 1px solid #c33; color: #c33; padding: 4px 8px;
+                                       border-radius: 4px; font-size: 11px; cursor: pointer;">
+                            Reset
                         </button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <p style="color: #888; font-style: italic; margin-bottom: 20px;">
-        No age-specific ranges defined. All players will use the default score range.
-    </p>
-    {% endif %}
+                        <input type="hidden" name="use_default_{{ age }}" id="use_default_{{ age }}" value="0">
+                        {% else %}
+                        <span style="color: #999; font-size: 11px;">-</span>
+                        <input type="hidden" name="use_default_{{ age }}" id="use_default_{{ age }}" value="1">
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
 
-    <!-- Add New Age Range Form -->
-    <div style="background: #f9f9f9; padding: 15px; border-radius: 6px;">
-        <h4 style="margin-top: 0; margin-bottom: 15px;">Add Age Range</h4>
-        <form method="POST" action="{{ url_for('players.metrics_add_age_range', metric_id=metric.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
-                <div style="flex: 1; min-width: 80px;">
-                    <label for="min_age" style="display: block; font-size: 12px; margin-bottom: 4px;">Min Age</label>
-                    <input type="number" id="min_age" name="min_age" class="form-control"
-                           min="4" max="18" required placeholder="4" style="width: 100%;">
-                </div>
-                <div style="flex: 1; min-width: 80px;">
-                    <label for="max_age" style="display: block; font-size: 12px; margin-bottom: 4px;">Max Age</label>
-                    <input type="number" id="max_age" name="max_age" class="form-control"
-                           min="4" max="18" required placeholder="6" style="width: 100%;">
-                </div>
-                <div style="flex: 1; min-width: 80px;">
-                    <label for="ar_min_score" style="display: block; font-size: 12px; margin-bottom: 4px;">Min Score</label>
-                    <input type="number" id="ar_min_score" name="min_score" class="form-control"
-                           step="0.5" min="0" max="10" required placeholder="1" style="width: 100%;">
-                </div>
-                <div style="flex: 1; min-width: 80px;">
-                    <label for="ar_max_score" style="display: block; font-size: 12px; margin-bottom: 4px;">Max Score</label>
-                    <input type="number" id="ar_max_score" name="max_score" class="form-control"
-                           step="0.5" min="0" max="10" required placeholder="3" style="width: 100%;">
-                </div>
-                <div style="flex: 1; min-width: 80px;">
-                    <label for="ar_score_increment" style="display: block; font-size: 12px; margin-bottom: 4px;">Step</label>
-                    <input type="number" id="ar_score_increment" name="score_increment" class="form-control"
-                           step="0.1" min="0.1" max="1" value="0.5" style="width: 100%;">
-                </div>
-                <div>
-                    <button type="submit" class="btn btn-primary" style="white-space: nowrap;">
-                        Add Range
-                    </button>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #666; font-size: 13px;">
+                Modified ages will be saved; unmodified ages keep their current settings.
+            </span>
+            <button type="submit" class="btn btn-primary">Save All Age Ranges</button>
+        </div>
+    </form>
+</div>
+
+<!-- Evaluator Preview Section -->
+<div class="card" style="max-width: 900px; margin-top: 20px;" id="evaluator-preview">
+    <h3 style="margin-top: 0;">Evaluator Preview</h3>
+    <p style="color: #666; margin-bottom: 15px;">
+        This shows what evaluators will see when scoring this metric for a player of the selected age.
+    </p>
+
+    <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
+        <div style="flex: 0 0 auto;">
+            <label style="font-size: 13px; color: #666; display: block; margin-bottom: 5px;">Preview for Age:</label>
+            <select id="preview-age" class="form-control" style="width: 100px;" onchange="updatePreview()">
+                {% for age in range(4, 19) %}
+                <option value="{{ age }}" {% if age == 8 %}selected{% endif %}>{{ age }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="flex: 1; min-width: 300px; background: #f9f9f9; border-radius: 8px; padding: 20px;">
+            <div style="margin-bottom: 10px;">
+                <strong style="font-size: 16px;">{{ metric.display_name }}</strong>
+                {% if metric.description %}
+                <p style="color: #666; font-size: 13px; margin: 5px 0 0 0;">{{ metric.description }}</p>
+                {% endif %}
+            </div>
+
+            <div id="preview-container" style="margin-top: 15px;">
+                <label style="font-size: 13px; color: #666; display: block; margin-bottom: 8px;">
+                    Score: <span id="preview-range-label">(1.0 - 7.0)</span>
+                </label>
+
+                <!-- Radio button style (common for evals) -->
+                <div id="preview-scores" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    <!-- Populated by JavaScript -->
                 </div>
             </div>
-        </form>
-        <p style="font-size: 12px; color: #666; margin-top: 10px; margin-bottom: 0;">
-            Example: Ages 4-6 with scores 1-3, Ages 7-9 with scores 1-5, etc.
-        </p>
+
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ddd;">
+                <span style="font-size: 12px; color: #888;">
+                    Using: <strong id="preview-source">Default range</strong>
+                </span>
+            </div>
+        </div>
     </div>
 </div>
+
+<script>
+// Build age range data from server
+var ageRangeData = {
+    defaultMin: {{ metric.min_score }},
+    defaultMax: {{ metric.max_score }},
+    defaultStep: {{ metric.score_increment }},
+    custom: {
+        {% for ar in metric.age_ranges %}
+        {% if ar.min_age == ar.max_age %}
+        {{ ar.min_age }}: { min: {{ ar.min_score }}, max: {{ ar.max_score }}, step: {{ ar.score_increment }} },
+        {% endif %}
+        {% endfor %}
+    }
+};
+
+function markAgeModified(age) {
+    var row = document.getElementById('age-' + age);
+    var status = document.getElementById('status-' + age);
+    var useDefault = document.getElementById('use_default_' + age);
+
+    // Get current input values
+    var minInput = document.querySelector('input[name="min_score_' + age + '"]');
+    var maxInput = document.querySelector('input[name="max_score_' + age + '"]');
+    var stepInput = document.querySelector('input[name="increment_' + age + '"]');
+
+    // Check if values differ from default
+    var isCustom = (
+        parseFloat(minInput.value) != ageRangeData.defaultMin ||
+        parseFloat(maxInput.value) != ageRangeData.defaultMax ||
+        parseFloat(stepInput.value) != ageRangeData.defaultStep
+    );
+
+    // Update styling
+    row.style.background = isCustom ? 'rgba(34, 139, 34, 0.05)' : '';
+    minInput.style.color = isCustom ? '#333' : '#999';
+    minInput.style.background = isCustom ? '#fff' : '#f9f9f9';
+    maxInput.style.color = isCustom ? '#333' : '#999';
+    maxInput.style.background = isCustom ? '#fff' : '#f9f9f9';
+    stepInput.style.color = isCustom ? '#333' : '#999';
+    stepInput.style.background = isCustom ? '#fff' : '#f9f9f9';
+
+    // Update status badge
+    status.textContent = isCustom ? 'Custom' : 'Default';
+    status.style.background = isCustom ? 'rgb(34, 139, 34)' : '#eee';
+    status.style.color = isCustom ? 'white' : '#666';
+
+    // Update hidden field
+    useDefault.value = isCustom ? '0' : '1';
+
+    // Update preview if this age is selected
+    var previewAge = document.getElementById('preview-age').value;
+    if (parseInt(previewAge) === age) {
+        updatePreview();
+    }
+}
+
+function resetToDefault(age) {
+    var minInput = document.querySelector('input[name="min_score_' + age + '"]');
+    var maxInput = document.querySelector('input[name="max_score_' + age + '"]');
+    var stepInput = document.querySelector('input[name="increment_' + age + '"]');
+    var useDefault = document.getElementById('use_default_' + age);
+
+    // Reset to default values
+    minInput.value = ageRangeData.defaultMin;
+    maxInput.value = ageRangeData.defaultMax;
+    stepInput.value = ageRangeData.defaultStep;
+    useDefault.value = '1';
+
+    // Trigger update
+    markAgeModified(age);
+}
+
+function updatePreview() {
+    var age = parseInt(document.getElementById('preview-age').value);
+
+    // Get values from form inputs (reflects unsaved changes)
+    var minInput = document.querySelector('input[name="min_score_' + age + '"]');
+    var maxInput = document.querySelector('input[name="max_score_' + age + '"]');
+    var stepInput = document.querySelector('input[name="increment_' + age + '"]');
+
+    var min = parseFloat(minInput.value);
+    var max = parseFloat(maxInput.value);
+    var step = parseFloat(stepInput.value);
+
+    // Determine if using custom or default
+    var isCustom = (
+        min != ageRangeData.defaultMin ||
+        max != ageRangeData.defaultMax ||
+        step != ageRangeData.defaultStep
+    );
+
+    // Update range label
+    document.getElementById('preview-range-label').textContent =
+        '(' + min.toFixed(1) + ' - ' + max.toFixed(1) + ', step ' + step.toFixed(1) + ')';
+
+    // Update source indicator
+    document.getElementById('preview-source').textContent =
+        isCustom ? 'Custom range for age ' + age : 'Default range';
+
+    // Generate score buttons
+    var container = document.getElementById('preview-scores');
+    container.innerHTML = '';
+
+    for (var score = min; score <= max; score += step) {
+        var btn = document.createElement('label');
+        btn.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; ' +
+            'width: 45px; height: 45px; border: 2px solid #ddd; border-radius: 8px; ' +
+            'cursor: pointer; font-weight: bold; font-size: 14px; transition: all 0.2s;';
+        btn.innerHTML = '<input type="radio" name="preview_score" value="' + score.toFixed(1) + '" ' +
+            'style="display: none;" onchange="this.parentElement.style.borderColor=\'rgb(34,139,34)\'; ' +
+            'this.parentElement.style.background=\'rgba(34,139,34,0.1)\';">' +
+            score.toFixed(1);
+        btn.onmouseover = function() { this.style.borderColor = 'rgb(34, 139, 34)'; };
+        btn.onmouseout = function() {
+            if (!this.querySelector('input').checked) this.style.borderColor = '#ddd';
+        };
+        container.appendChild(btn);
+    }
+}
+
+// Initialize preview on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updatePreview();
+});
+</script>
 {% endif %}
 
 <style>

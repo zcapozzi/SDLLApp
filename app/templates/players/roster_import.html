@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Import Roster Assignments - {{ org_season.season_desc }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Import Roster Assignments</h1>
+    <a href="{{ url_for('players.player_pool', org_season_id=org_season.ID) }}" class="btn btn-outline">Back to Pool</a>
+</div>
+
+<div class="card" style="max-width: 700px;">
+    <h2 style="margin-top: 0;">Upload Roster CSV</h2>
+
+    <p style="color: #666; margin-bottom: 20px;">
+        Upload a CSV file with player codes and coach names to bulk-assign players to teams.
+    </p>
+
+    <form method="post" enctype="multipart/form-data">
+        <div class="form-group">
+            <label>Target Season</label>
+            <select name="season_id" class="form-control" disabled>
+                <option>{{ org_season.season_desc }}</option>
+            </select>
+            <small style="color: #888;">Change season from the Player Pool page.</small>
+        </div>
+
+        <div class="form-group">
+            <label>CSV File</label>
+            <input type="file" name="csv_file" class="form-control" accept=".csv" required>
+        </div>
+
+        <div class="form-group">
+            <label>Expected Columns</label>
+            <table style="font-size: 14px; margin-top: 10px;">
+                <thead>
+                    <tr>
+                        <th style="padding: 8px;">Column</th>
+                        <th style="padding: 8px;">Required</th>
+                        <th style="padding: 8px;">Also Matches</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for col in expected_columns %}
+                    <tr>
+                        <td style="padding: 8px;"><strong>{{ col.display_name }}</strong></td>
+                        <td style="padding: 8px;">
+                            {% if col.required %}
+                            <span style="color: #c33;">Required</span>
+                            {% else %}
+                            Optional
+                            {% endif %}
+                        </td>
+                        <td style="padding: 8px; color: #666; font-size: 12px;">
+                            {{ col.aliases|join(', ') }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <button type="submit" class="btn btn-primary">Upload and Preview</button>
+        </div>
+    </form>
+</div>
+
+<div class="card" style="max-width: 700px; margin-top: 20px;">
+    <h3 style="margin-top: 0;">How It Works</h3>
+    <ol style="color: #666; line-height: 1.8;">
+        <li><strong>Upload</strong> your CSV file with player codes and coach/team names</li>
+        <li><strong>Preview</strong> the matches - the system will show which players will be assigned to which teams</li>
+        <li><strong>Review</strong> any errors (missing players, unknown coaches)</li>
+        <li><strong>Confirm</strong> to execute the batch assignment</li>
+    </ol>
+
+    <h4>Player Matching</h4>
+    <p style="color: #666;">
+        Players are matched by their <strong>player code</strong> (e.g., "bennluk1810").
+        This is the unique identifier assigned during registration import.
+    </p>
+
+    <h4>Team Matching</h4>
+    <p style="color: #666;">
+        Teams are matched by <strong>coach name</strong>. The system will try to match:
+    </p>
+    <ul style="color: #666;">
+        <li>Full coach name (e.g., "John Smith")</li>
+        <li>Last name only (e.g., "Smith")</li>
+    </ul>
+</div>
+{% endblock %}

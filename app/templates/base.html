@@ -346,9 +346,15 @@
                 <a href="#" class="nav-link">Players ▾</a>
                 <div class="dropdown-menu">
                     <a href="{{ url_for('players.index') }}">Dashboard</a>
-                    <a href="{{ url_for('players.import_index') }}">Import Data</a>
                     <div class="dropdown-divider"></div>
+                    <div class="dropdown-header">Roster Management</div>
+                    <a href="{{ url_for('players.player_pool') }}"><strong>Player Pool</strong></a>
+                    <a href="{{ url_for('draft.index') }}">Draft Dashboard</a>
+                    <a href="{{ url_for('players.roster_import') }}">Import Roster CSV</a>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-header">Evaluations</div>
                     <a href="{{ url_for('players.metrics_index') }}">Evaluation Metrics</a>
+                    <a href="{{ url_for('players.import_index') }}">Import Player Data</a>
                 </div>
             </div>
             {% endif %}

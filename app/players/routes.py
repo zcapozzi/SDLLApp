@@ -203,80 +203,111 @@ def metrics_reorder():
 @players_bp.route('/metrics/<int:metric_id>/age-ranges', methods=['POST'])
 @login_required
 @role_required('admin')
-def metrics_add_age_range(metric_id):
-    """Add an age-specific score range for a metric."""
+def metrics_save_age_ranges(metric_id):
+    """Save all age-specific score ranges for a metric (bulk upsert)."""
     metric = EvaluationMetric.query.get_or_404(metric_id)
 
-    # Parse form data
-    try:
-        min_age = int(request.form.get('min_age', '').strip())
-        max_age = int(request.form.get('max_age', '').strip())
-        min_score = Decimal(request.form.get('min_score', '').strip())
-        max_score = Decimal(request.form.get('max_score', '').strip())
-        score_increment = Decimal(request.form.get('score_increment', '0.5').strip())
-    except (ValueError, InvalidOperation):
-        flash('Please provide valid numeric values for all fields.', 'error')
-        return redirect(url_for('players.metrics_edit', metric_id=metric_id))
+    # Build a lookup of existing ranges by age
+    existing_by_age = {ar.min_age: ar for ar in metric.age_ranges if ar.min_age == ar.max_age}
 
-    # Validate ranges
-    if min_age > max_age:
-        flash('Minimum age cannot be greater than maximum age.', 'error')
-        return redirect(url_for('players.metrics_edit', metric_id=metric_id))
+    updates = 0
+    inserts = 0
+    clears = 0
 
-    if min_age < 4 or max_age > 18:
-        flash('Age range must be between 4 and 18.', 'error')
-        return redirect(url_for('players.metrics_edit', metric_id=metric_id))
+    # Process each age from 4 to 18
+    for age in range(4, 19):
+        min_score_str = request.form.get(f'min_score_{age}', '').strip()
+        max_score_str = request.form.get(f'max_score_{age}', '').strip()
+        increment_str = request.form.get(f'increment_{age}', '').strip()
 
-    if min_score >= max_score:
-        flash('Minimum score must be less than maximum score.', 'error')
-        return redirect(url_for('players.metrics_edit', metric_id=metric_id))
+        # Check if user wants to clear this age (use default)
+        use_default = request.form.get(f'use_default_{age}') == '1'
 
-    if score_increment <= 0:
-        flash('Score increment must be greater than 0.', 'error')
-        return redirect(url_for('players.metrics_edit', metric_id=metric_id))
+        existing = existing_by_age.get(age)
 
-    # Check for overlapping age ranges
-    for existing in metric.age_ranges:
-        # Check if ranges overlap
-        if not (max_age < existing.min_age or min_age > existing.max_age):
-            flash(f'Age range overlaps with existing range: {existing.age_range_display}', 'error')
-            return redirect(url_for('players.metrics_edit', metric_id=metric_id))
+        if use_default or (not min_score_str and not max_score_str):
+            # User wants to use default - delete any existing custom range
+            if existing:
+                db.session.delete(existing)
+                clears += 1
+            continue
 
-    # Create new age range
-    age_range = EvaluationMetricAgeRange(
-        metric_id=metric_id,
-        min_age=min_age,
-        max_age=max_age,
-        min_score=min_score,
-        max_score=max_score,
-        score_increment=score_increment
-    )
-    db.session.add(age_range)
+        # Parse values
+        try:
+            min_score = Decimal(min_score_str) if min_score_str else None
+            max_score = Decimal(max_score_str) if max_score_str else None
+            increment = Decimal(increment_str) if increment_str else Decimal('0.5')
+        except (ValueError, InvalidOperation):
+            continue  # Skip invalid entries
+
+        # Validate
+        if min_score is None or max_score is None:
+            continue
+        if min_score >= max_score:
+            continue
+        if increment <= 0:
+            increment = Decimal('0.5')
+
+        if existing:
+            # Update existing range
+            existing.min_score = min_score
+            existing.max_score = max_score
+            existing.score_increment = increment
+            updates += 1
+        else:
+            # Insert new range
+            age_range = EvaluationMetricAgeRange(
+                metric_id=metric_id,
+                min_age=age,
+                max_age=age,  # Single age, not a range
+                min_score=min_score,
+                max_score=max_score,
+                score_increment=increment
+            )
+            db.session.add(age_range)
+            inserts += 1
+
     db.session.commit()
 
-    flash(f'Age range {min_age}-{max_age} added successfully.', 'success')
+    # Build flash message
+    changes = []
+    if inserts:
+        changes.append(f'{inserts} added')
+    if updates:
+        changes.append(f'{updates} updated')
+    if clears:
+        changes.append(f'{clears} reset to default')
+
+    if changes:
+        flash(f'Age ranges saved: {", ".join(changes)}.', 'success')
+    else:
+        flash('No changes made.', 'info')
+
     return redirect(url_for('players.metrics_edit', metric_id=metric_id) + '#age-ranges')
 
 
-@players_bp.route('/metrics/<int:metric_id>/age-ranges/<int:range_id>/delete', methods=['POST'])
+@players_bp.route('/metrics/<int:metric_id>/age-ranges/<int:age>/clear', methods=['POST'])
 @login_required
 @role_required('admin')
-def metrics_delete_age_range(metric_id, range_id):
-    """Delete an age-specific score range."""
+def metrics_clear_age_range(metric_id, age):
+    """Clear a specific age's custom range (revert to default)."""
     metric = EvaluationMetric.query.get_or_404(metric_id)
-    age_range = EvaluationMetricAgeRange.query.get_or_404(range_id)
 
-    # Verify the age range belongs to this metric
-    if age_range.metric_id != metric_id:
-        flash('Invalid age range.', 'error')
-        return redirect(url_for('players.metrics_edit', metric_id=metric_id))
+    # Find and delete the range for this specific age
+    deleted = EvaluationMetricAgeRange.query.filter_by(
+        metric_id=metric_id,
+        min_age=age,
+        max_age=age
+    ).delete()
 
-    age_display = age_range.age_range_display
-    db.session.delete(age_range)
     db.session.commit()
 
-    flash(f'{age_display} range deleted.', 'success')
-    return redirect(url_for('players.metrics_edit', metric_id=metric_id) + '#age-ranges')
+    if deleted:
+        flash(f'Age {age} reset to use default range.', 'success')
+    else:
+        flash(f'Age {age} was already using default range.', 'info')
+
+    return redirect(url_for('players.metrics_edit', metric_id=metric_id) + f'#age-{age}')
 
 
 # =============================================================================
@@ -848,6 +879,356 @@ def index():
                            season_record_count=season_record_count,
                            seasons_summary=seasons_summary)
 
+
+# =============================================================================
+# Player Pool and Roster Management
+# =============================================================================
+
+@players_bp.route('/pool')
+@players_bp.route('/pool/<int:org_season_id>')
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def player_pool(org_season_id=None):
+    """View player pool for a season with filters."""
+    from app.services.roster_service import RosterService
+    from app.models.league import League
+    from app.models.team import TeamSeason
+
+    # Default to current season if not provided
+    if org_season_id is None:
+        current_season = OrgSeason.get_current_season()
+        if current_season:
+            org_season_id = current_season.ID
+        else:
+            flash('No current season found.', 'error')
+            return redirect(url_for('players.index'))
+
+    org_season = OrgSeason.query.get_or_404(org_season_id)
+
+    # Get filter parameters from query string
+    league_id = request.args.get('league_id', type=int)
+    status = request.args.get('status')
+    sport = request.args.get('sport')
+
+    # Get players with filters
+    players = RosterService.get_player_pool(
+        org_season_id,
+        league_id=league_id,
+        status=status,
+        sport=sport
+    )
+
+    # Get pool statistics
+    stats = RosterService.get_pool_stats(org_season_id, sport=sport)
+
+    # Get available leagues and teams for filtering/assignment
+    leagues = RosterService.get_leagues_for_season(org_season_id, sport=sport)
+    teams = RosterService.get_available_teams(org_season_id)
+
+    # Get all seasons for season selector
+    seasons = OrgSeason.query.order_by(
+        OrgSeason.year.desc(),
+        OrgSeason.is_spring.desc()
+    ).limit(10).all()
+
+    return render_template('players/pool.html',
+                           org_season=org_season,
+                           players=players,
+                           stats=stats,
+                           leagues=leagues,
+                           teams=teams,
+                           seasons=seasons,
+                           current_league_id=league_id,
+                           current_status=status,
+                           current_sport=sport)
+
+
+@players_bp.route('/roster/<int:team_id>')
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def team_roster(team_id):
+    """View roster for a specific team."""
+    from app.services.roster_service import RosterService
+    from app.models.team import TeamSeason
+
+    team = RosterService.get_team_with_roster(team_id)
+    if not team:
+        flash('Team not found.', 'error')
+        return redirect(url_for('players.index'))
+
+    # Get org_season for this team's year/is_spring
+    org_season = OrgSeason.query.filter_by(
+        year=team.year,
+        is_spring=team.is_spring,
+        org_id=1
+    ).first()
+
+    # Get available players (unassigned in same league)
+    available_players = []
+    if org_season:
+        all_pool = RosterService.get_player_pool(org_season.ID, league_id=team.league_id)
+        available_players = [p for p in all_pool if not p.team_id]
+
+    # Get roster
+    roster = RosterService.get_team_roster(team_id)
+
+    return render_template('players/team_roster.html',
+                           team=team,
+                           org_season=org_season,
+                           roster=roster,
+                           available_players=available_players)
+
+
+@players_bp.route('/<int:player_season_id>/assign', methods=['POST'])
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def assign_player(player_season_id):
+    """Assign a player to a team."""
+    from app.services.roster_service import RosterService
+
+    team_id = request.form.get('team_id', type=int)
+    if not team_id:
+        flash('Please select a team.', 'error')
+        return redirect(request.referrer or url_for('players.player_pool'))
+
+    try:
+        player_season = RosterService.assign_player(player_season_id, team_id)
+        flash(f'Player assigned to team successfully.', 'success')
+    except ValueError as e:
+        flash(str(e), 'error')
+
+    # Redirect back with anchor to the player row
+    referrer = request.referrer or url_for('players.player_pool')
+    return redirect(referrer)
+
+
+@players_bp.route('/<int:player_season_id>/unassign', methods=['POST'])
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def unassign_player(player_season_id):
+    """Remove a player from their team."""
+    from app.services.roster_service import RosterService
+
+    try:
+        player_season = RosterService.unassign_player(player_season_id)
+        flash(f'Player removed from team.', 'success')
+    except ValueError as e:
+        flash(str(e), 'error')
+
+    # Redirect back
+    referrer = request.referrer or url_for('players.player_pool')
+    return redirect(referrer)
+
+
+# =============================================================================
+# Roster CSV Import
+# =============================================================================
+
+@players_bp.route('/pool/import', methods=['GET', 'POST'])
+@players_bp.route('/pool/<int:org_season_id>/import', methods=['GET', 'POST'])
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def roster_import(org_season_id=None):
+    """Upload roster CSV for batch assignments."""
+    from flask import session
+    from app.services.roster_service import RosterService, EXPECTED_ROSTER_COLUMNS
+
+    # Default to current season
+    if org_season_id is None:
+        current_season = OrgSeason.get_current_season()
+        if current_season:
+            org_season_id = current_season.ID
+        else:
+            flash('No current season found.', 'error')
+            return redirect(url_for('players.index'))
+
+    org_season = OrgSeason.query.get_or_404(org_season_id)
+
+    # Get available seasons
+    seasons = OrgSeason.query.order_by(
+        OrgSeason.year.desc(),
+        OrgSeason.is_spring.desc()
+    ).limit(10).all()
+
+    if request.method == 'POST':
+        # Check if file was uploaded
+        if 'csv_file' not in request.files:
+            flash('No file selected.', 'error')
+            return redirect(url_for('players.roster_import', org_season_id=org_season_id))
+
+        file = request.files['csv_file']
+        if file.filename == '':
+            flash('No file selected.', 'error')
+            return redirect(url_for('players.roster_import', org_season_id=org_season_id))
+
+        if not file.filename.endswith('.csv'):
+            flash('Please upload a CSV file.', 'error')
+            return redirect(url_for('players.roster_import', org_season_id=org_season_id))
+
+        # Read CSV content
+        import io
+        try:
+            csv_content = file.stream.read().decode('utf-8-sig')
+        except Exception as e:
+            flash(f'Error reading CSV: {str(e)}', 'error')
+            return redirect(url_for('players.roster_import', org_season_id=org_season_id))
+
+        # Auto-map columns
+        import csv
+        stream = io.StringIO(csv_content)
+        reader = csv.DictReader(stream)
+        csv_headers = reader.fieldnames or []
+
+        column_mapping = RosterService.auto_map_columns(csv_headers)
+
+        # Store in session
+        session['roster_import_csv'] = csv_content
+        session['roster_import_season_id'] = org_season_id
+        session['roster_import_column_mapping'] = column_mapping
+        session['roster_import_csv_headers'] = csv_headers
+
+        # Check if required columns are mapped
+        if not RosterService.all_required_columns_mapped(column_mapping):
+            flash('Some required columns could not be auto-mapped. Please map them manually.', 'warning')
+            return redirect(url_for('players.roster_import_mapping', org_season_id=org_season_id))
+
+        # Proceed to preview
+        return redirect(url_for('players.roster_import_preview', org_season_id=org_season_id))
+
+    return render_template('players/roster_import.html',
+                           org_season=org_season,
+                           seasons=seasons,
+                           expected_columns=EXPECTED_ROSTER_COLUMNS)
+
+
+@players_bp.route('/pool/<int:org_season_id>/import/mapping', methods=['GET', 'POST'])
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def roster_import_mapping(org_season_id):
+    """Column mapping UI for roster import."""
+    from flask import session
+    from app.services.roster_service import RosterService, EXPECTED_ROSTER_COLUMNS
+
+    org_season = OrgSeason.query.get_or_404(org_season_id)
+
+    csv_content = session.get('roster_import_csv')
+    csv_headers = session.get('roster_import_csv_headers', [])
+    column_mapping = session.get('roster_import_column_mapping', {})
+
+    if not csv_content:
+        flash('Import session expired. Please upload the file again.', 'error')
+        return redirect(url_for('players.roster_import', org_season_id=org_season_id))
+
+    if request.method == 'POST':
+        # Update column mapping from form
+        new_mapping = {}
+        for expected in EXPECTED_ROSTER_COLUMNS:
+            selected = request.form.get(f'map_{expected.name}', '').strip()
+            new_mapping[expected.name] = selected if selected else None
+
+        session['roster_import_column_mapping'] = new_mapping
+
+        # Validate required columns
+        if not RosterService.all_required_columns_mapped(new_mapping):
+            flash('Please map all required columns before continuing.', 'error')
+            return redirect(url_for('players.roster_import_mapping', org_season_id=org_season_id))
+
+        return redirect(url_for('players.roster_import_preview', org_season_id=org_season_id))
+
+    return render_template('players/roster_import_mapping.html',
+                           org_season=org_season,
+                           expected_columns=EXPECTED_ROSTER_COLUMNS,
+                           csv_headers=csv_headers,
+                           column_mapping=column_mapping)
+
+
+@players_bp.route('/pool/<int:org_season_id>/import/preview')
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def roster_import_preview(org_season_id):
+    """Preview roster import matches."""
+    from flask import session
+    from app.services.roster_service import RosterService
+
+    org_season = OrgSeason.query.get_or_404(org_season_id)
+
+    csv_content = session.get('roster_import_csv')
+    column_mapping = session.get('roster_import_column_mapping')
+
+    if not csv_content:
+        flash('Import session expired. Please upload the file again.', 'error')
+        return redirect(url_for('players.roster_import', org_season_id=org_season_id))
+
+    # Parse and preview
+    preview = RosterService.parse_roster_csv(csv_content, org_season_id, column_mapping)
+
+    # Store preview in session for confirm step
+    session['roster_import_preview'] = {
+        'rows': [
+            {
+                'row_num': r.row_num,
+                'player_code': r.player_code,
+                'coach_name': r.coach_name,
+                'player_season_id': r.player_season_id,
+                'team_id': r.team_id,
+                'match_status': r.match_status
+            }
+            for r in preview.rows
+        ],
+        'matched_count': preview.matched_count
+    }
+
+    return render_template('players/roster_import_preview.html',
+                           org_season=org_season,
+                           preview=preview)
+
+
+@players_bp.route('/pool/<int:org_season_id>/import/confirm', methods=['POST'])
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def roster_import_confirm(org_season_id):
+    """Execute the roster import."""
+    from flask import session
+    from app.services.roster_service import RosterService, RosterImportPreview, RosterImportRow
+
+    org_season = OrgSeason.query.get_or_404(org_season_id)
+
+    preview_data = session.pop('roster_import_preview', None)
+    session.pop('roster_import_csv', None)
+    session.pop('roster_import_column_mapping', None)
+    session.pop('roster_import_csv_headers', None)
+
+    if not preview_data:
+        flash('Import session expired. Please upload the file again.', 'error')
+        return redirect(url_for('players.roster_import', org_season_id=org_season_id))
+
+    # Rebuild preview object
+    preview = RosterImportPreview()
+    for row_data in preview_data['rows']:
+        preview.rows.append(RosterImportRow(
+            row_num=row_data['row_num'],
+            player_code=row_data['player_code'],
+            coach_name=row_data['coach_name'],
+            player_season_id=row_data['player_season_id'],
+            team_id=row_data['team_id'],
+            match_status=row_data['match_status']
+        ))
+
+    # Execute import
+    result = RosterService.execute_roster_import(preview)
+
+    if result['success_count'] > 0:
+        flash(f"Successfully assigned {result['success_count']} players to teams.", 'success')
+
+    if result['error_count'] > 0:
+        flash(f"{result['error_count']} errors occurred during import.", 'error')
+
+    return redirect(url_for('players.player_pool', org_season_id=org_season_id))
+
+
+# =============================================================================
+# Registration Trends
+# =============================================================================
 
 @players_bp.route('/registration-trends')
 @login_required
