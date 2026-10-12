@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block title %}Map CSV Columns{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>Map CSV Columns</h1>
+    <a href="{{ url_for('players.import_registration') }}" class="btn btn-outline">Cancel</a>
+</div>
+
+<!-- Info Box -->
+<div style="background: #e3f2fd; border: 1px solid #1565c0; border-radius: 6px; padding: 15px; margin-bottom: 20px;">
+    <p style="margin: 0; color: #1565c0;">
+        <strong>Some columns couldn't be automatically matched.</strong><br>
+        Please select the CSV column that corresponds to each required field below.
+    </p>
+</div>
+
+<!-- Import Settings Summary -->
+<div class="card" style="margin-bottom: 20px;">
+    <h3 style="margin-top: 0;">Import Settings</h3>
+    <table style="font-size: 14px;">
+        <tr>
+            <td style="padding: 5px 20px 5px 0; color: #666;">Target Season:</td>
+            <td><strong>{{ org_season.season_desc }}</strong></td>
+        </tr>
+        <tr>
+            <td style="padding: 5px 20px 5px 0; color: #666;">Sport:</td>
+            <td>
+                <strong style="color: {{ 'rgb(34, 139, 34)' if program == 'baseball' else 'rgb(255, 140, 0)' }};">
+                    {{ program|capitalize }}
+                </strong>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 5px 20px 5px 0; color: #666;">CSV Columns Found:</td>
+            <td style="font-size: 12px; color: #666;">{{ csv_headers|length }} columns</td>
+        </tr>
+    </table>
+</div>
+
+<!-- Column Mapping Form -->
+<div class="card">
+    <form method="POST" id="mapping-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <h3 style="margin-top: 0;">Column Mapping</h3>
+        <p style="color: #666; font-size: 14px; margin-bottom: 20px;">
+            Fields marked with <span style="color: #c00;">*</span> are required.
+        </p>
+
+        <table style="width: 100%; font-size: 14px;">
+            <thead>
+                <tr>
+                    <th style="text-align: left; padding: 10px 15px 10px 0; border-bottom: 2px solid #ddd;">Expected Field</th>
+                    <th style="text-align: left; padding: 10px 15px; border-bottom: 2px solid #ddd;">CSV Column</th>
+                    <th style="text-align: center; padding: 10px 0; border-bottom: 2px solid #ddd; width: 80px;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for expected in expected_columns %}
+                <tr id="row-{{ expected.name|replace(' ', '-') }}" data-required="{{ 'true' if expected.required else 'false' }}">
+                    <td style="padding: 12px 15px 12px 0; border-bottom: 1px solid #eee; vertical-align: middle;">
+                        <strong>{{ expected.display_name }}</strong>
+                        {% if expected.required %}
+                        <span style="color: #c00;">*</span>
+                        {% endif %}
+                        {% if expected.aliases %}
+                        <br>
+                        <small style="color: #888;">
+                            Aliases: {{ expected.aliases|join(', ') }}
+                        </small>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 12px 15px; border-bottom: 1px solid #eee; vertical-align: middle;">
+                        <select name="map_{{ expected.name }}"
+                                id="select-{{ expected.name|replace(' ', '-') }}"
+                                class="form-control column-select"
+                                data-field="{{ expected.name }}"
+                                style="width: 100%; max-width: 300px;">
+                            <option value="">-- Not mapped --</option>
+                            {% for header in csv_headers %}
+                            <option value="{{ header }}"
+                                    {{ 'selected' if column_mapping.get(expected.name) == header else '' }}>
+                                {{ header }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td style="padding: 12px 0; border-bottom: 1px solid #eee; text-align: center; vertical-align: middle;">
+                        <span class="status-indicator" id="status-{{ expected.name|replace(' ', '-') }}">
+                            {% if column_mapping.get(expected.name) %}
+                            <span class="status-mapped">Mapped</span>
+                            {% elif expected.required %}
+                            <span class="status-required">Required</span>
+                            {% else %}
+                            <span class="status-optional">Optional</span>
+                            {% endif %}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Validation Warning -->
+        <div id="validation-warning" style="display: none; background: #fff3e0; border: 1px solid #ffcc02; border-radius: 6px; padding: 12px 15px; margin-top: 20px; color: #856404;">
+            <strong>Required fields missing:</strong>
+            <span id="missing-fields"></span>
+        </div>
+
+        <!-- Submit -->
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee;">
+            <a href="{{ url_for('players.import_registration') }}" class="btn btn-outline" id="cancel-btn">
+                Start Over
+            </a>
+            <button type="submit" class="btn btn-primary" id="continue-btn" disabled>
+                Continue to Preview
+            </button>
+        </div>
+    </form>
+</div>
+
+<style>
+.form-control {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+.form-control:focus {
+    outline: none;
+    border-color: rgb(34, 139, 34);
+    box-shadow: 0 0 0 2px rgba(34, 139, 34, 0.1);
+}
+.status-mapped {
+    display: inline-block;
+    padding: 3px 8px;
+    background: #e8f5e9;
+    color: #2e7d32;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.status-required {
+    display: inline-block;
+    padding: 3px 8px;
+    background: #ffebee;
+    color: #c62828;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.status-optional {
+    display: inline-block;
+    padding: 3px 8px;
+    background: #f5f5f5;
+    color: #757575;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var selects = document.querySelectorAll('.column-select');
+    var continueBtn = document.getElementById('continue-btn');
+    var warningDiv = document.getElementById('validation-warning');
+    var missingSpan = document.getElementById('missing-fields');
+
+    function validateMapping() {
+        var missingRequired = [];
+        var rows = document.querySelectorAll('tbody tr');
+
+        rows.forEach(function(row) {
+            var isRequired = row.dataset.required === 'true';
+            var select = row.querySelector('select');
+            var statusSpan = row.querySelector('.status-indicator');
+            var fieldName = select.dataset.field;
+
+            if (select.value) {
+                statusSpan.innerHTML = '<span class="status-mapped">Mapped</span>';
+            } else if (isRequired) {
+                statusSpan.innerHTML = '<span class="status-required">Required</span>';
+                // Get display name from the row
+                var displayName = row.querySelector('strong').textContent.trim();
+                missingRequired.push(displayName);
+            } else {
+                statusSpan.innerHTML = '<span class="status-optional">Optional</span>';
+            }
+        });
+
+        if (missingRequired.length > 0) {
+            warningDiv.style.display = 'block';
+            missingSpan.textContent = missingRequired.join(', ');
+            continueBtn.disabled = true;
+        } else {
+            warningDiv.style.display = 'none';
+            continueBtn.disabled = false;
+        }
+    }
+
+    // Add change listeners to all selects
+    selects.forEach(function(select) {
+        select.addEventListener('change', validateMapping);
+    });
+
+    // Initial validation
+    validateMapping();
+
+    // Form submit handling
+    document.getElementById('mapping-form').addEventListener('submit', function(e) {
+        var btn = document.getElementById('continue-btn');
+        var cancelBtn = document.getElementById('cancel-btn');
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Processing...';
+        cancelBtn.style.opacity = '0.5';
+        cancelBtn.style.pointerEvents = 'none';
+    });
+});
+</script>
+{% endblock %}

@@ -235,6 +235,10 @@ def import_registration():
     import csv
     import io
     from datetime import datetime
+    from flask import session
+    from app.services.player_import_service import (
+        auto_map_columns, all_required_columns_mapped, EXPECTED_REGISTRATION_COLUMNS
+    )
 
     # Get available seasons
     seasons = OrgSeason.query.order_by(
@@ -287,79 +291,168 @@ def import_registration():
             flash('CSV file is empty.', 'error')
             return redirect(url_for('players.import_registration'))
 
-        # Validate columns
-        required_cols = ['User Email', 'Player First Name', 'Player Last Name', 'Player Birth Date']
-        missing_cols = [c for c in required_cols if c not in reader.fieldnames]
-        if missing_cols:
-            flash(f'Missing required columns: {", ".join(missing_cols)}', 'error')
-            return redirect(url_for('players.import_registration'))
+        # Auto-map columns using aliases
+        csv_headers = reader.fieldnames
+        column_mapping = auto_map_columns(csv_headers)
 
-        # Parse and validate rows for preview
-        preview_rows = []
-        errors = []
-        for i, row in enumerate(rows[:100], start=2):  # Preview first 100
-            email = row.get('User Email', '').strip()
-            first_name = row.get('Player First Name', '').strip()
-            last_name = row.get('Player Last Name', '').strip()
-            birth_date_str = row.get('Player Birth Date', '').strip()
-            division = row.get('Division Name', '').strip()
-
-            # Validate
-            if not email or not first_name or not last_name:
-                errors.append(f'Row {i}: Missing required field (email, first name, or last name)')
-                continue
-
-            # Parse birth date
-            birth_date = None
-            for fmt in ['%m/%d/%Y', '%Y-%m-%d', '%m-%d-%Y', '%m/%d/%y']:
-                try:
-                    birth_date = datetime.strptime(birth_date_str, fmt).date()
-                    break
-                except ValueError:
-                    continue
-
-            if not birth_date:
-                errors.append(f'Row {i}: Invalid birth date "{birth_date_str}"')
-                continue
-
-            # Check if player exists
-            existing = Player.find_by_email_and_name(email, first_name, last_name)
-
-            preview_rows.append({
-                'row_num': i,
-                'email': email,
-                'first_name': first_name,
-                'last_name': last_name,
-                'birth_date': birth_date,
-                'division': division,
-                'exists': existing is not None,
-                'player_id': existing.id if existing else None
-            })
-
-        # Store in session for confirmation
-        from flask import session
-        import json
-
-        # Store CSV content for processing
+        # Store CSV content and settings in session
         stream.seek(0)
         session['import_csv'] = stream.read()
+        session['import_csv_headers'] = csv_headers
         session['import_season_id'] = int(season_id)
         session['import_program'] = program
         session['import_create_users'] = request.form.get('create_users') == '1'
+        session['import_column_mapping'] = column_mapping
 
-        return render_template('players/import_preview.html',
-                               org_season=org_season,
-                               program=program,
-                               preview_rows=preview_rows,
-                               total_rows=len(rows),
-                               errors=errors[:20],  # Show first 20 errors
-                               total_errors=len(errors),
-                               columns=reader.fieldnames,
-                               create_users=session['import_create_users'])
+        # Check if all required columns are mapped
+        if not all_required_columns_mapped(column_mapping):
+            # Redirect to column mapping page
+            return redirect(url_for('players.import_column_mapping'))
+
+        # All required columns mapped - proceed to preview
+        return redirect(url_for('players.import_preview'))
 
     # GET - show upload form
     return render_template('players/import_registration.html',
                            seasons=seasons)
+
+
+@players_bp.route('/import/registration/mapping', methods=['GET', 'POST'])
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def import_column_mapping():
+    """Column mapping UI for CSV import."""
+    from flask import session
+    from app.services.player_import_service import (
+        EXPECTED_REGISTRATION_COLUMNS, all_required_columns_mapped
+    )
+
+    # Check session data exists
+    csv_content = session.get('import_csv')
+    csv_headers = session.get('import_csv_headers')
+    column_mapping = session.get('import_column_mapping', {})
+
+    if not csv_content or not csv_headers:
+        flash('Import session expired. Please upload the file again.', 'error')
+        return redirect(url_for('players.import_registration'))
+
+    if request.method == 'POST':
+        # Update column mapping from form
+        new_mapping = {}
+        for expected in EXPECTED_REGISTRATION_COLUMNS:
+            selected = request.form.get(f'map_{expected.name}', '').strip()
+            new_mapping[expected.name] = selected if selected else None
+
+        session['import_column_mapping'] = new_mapping
+
+        # Validate required columns
+        if not all_required_columns_mapped(new_mapping):
+            flash('Please map all required columns before continuing.', 'error')
+            return redirect(url_for('players.import_column_mapping'))
+
+        # Proceed to preview
+        return redirect(url_for('players.import_preview'))
+
+    # GET - show mapping form
+    org_season = OrgSeason.query.get(session.get('import_season_id'))
+
+    return render_template('players/import_column_mapping.html',
+                           expected_columns=EXPECTED_REGISTRATION_COLUMNS,
+                           csv_headers=csv_headers,
+                           column_mapping=column_mapping,
+                           org_season=org_season,
+                           program=session.get('import_program'))
+
+
+@players_bp.route('/import/registration/preview')
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def import_preview():
+    """Preview import after column mapping."""
+    import csv
+    import io
+    from datetime import datetime
+    from flask import session
+
+    # Get session data
+    csv_content = session.get('import_csv')
+    column_mapping = session.get('import_column_mapping', {})
+    season_id = session.get('import_season_id')
+    program = session.get('import_program')
+    create_users = session.get('import_create_users', False)
+
+    if not csv_content or not season_id:
+        flash('Import session expired. Please upload the file again.', 'error')
+        return redirect(url_for('players.import_registration'))
+
+    org_season = OrgSeason.query.get(season_id)
+    if not org_season:
+        flash('Invalid season.', 'error')
+        return redirect(url_for('players.import_registration'))
+
+    # Parse CSV
+    stream = io.StringIO(csv_content)
+    reader = csv.DictReader(stream)
+    rows = list(reader)
+
+    # Helper to get field value using mapping
+    def get_field(row, field_name):
+        csv_col = column_mapping.get(field_name)
+        if csv_col:
+            return row.get(csv_col, '').strip()
+        return row.get(field_name, '').strip()
+
+    # Parse and validate rows for preview
+    preview_rows = []
+    errors = []
+    for i, row in enumerate(rows[:100], start=2):  # Preview first 100
+        email = get_field(row, 'User Email')
+        first_name = get_field(row, 'Player First Name')
+        last_name = get_field(row, 'Player Last Name')
+        birth_date_str = get_field(row, 'Player Birth Date')
+        division = get_field(row, 'Division Name')
+
+        # Validate
+        if not email or not first_name or not last_name:
+            errors.append(f'Row {i}: Missing required field (email, first name, or last name)')
+            continue
+
+        # Parse birth date
+        birth_date = None
+        for fmt in ['%m/%d/%Y', '%Y-%m-%d', '%m-%d-%Y', '%m/%d/%y']:
+            try:
+                birth_date = datetime.strptime(birth_date_str, fmt).date()
+                break
+            except ValueError:
+                continue
+
+        if not birth_date:
+            errors.append(f'Row {i}: Invalid birth date "{birth_date_str}"')
+            continue
+
+        # Check if player exists
+        existing = Player.find_by_email_and_name(email, first_name, last_name)
+
+        preview_rows.append({
+            'row_num': i,
+            'email': email,
+            'first_name': first_name,
+            'last_name': last_name,
+            'birth_date': birth_date,
+            'division': division,
+            'exists': existing is not None,
+            'player_id': existing.id if existing else None
+        })
+
+    return render_template('players/import_preview.html',
+                           org_season=org_season,
+                           program=program,
+                           preview_rows=preview_rows,
+                           total_rows=len(rows),
+                           errors=errors[:20],
+                           total_errors=len(errors),
+                           columns=reader.fieldnames,
+                           create_users=create_users)
 
 
 @players_bp.route('/import/registration/confirm', methods=['POST'])
@@ -376,6 +469,9 @@ def import_registration_confirm():
     season_id = session.pop('import_season_id', None)
     program = session.pop('import_program', None)
     create_users = session.pop('import_create_users', False)
+    column_mapping = session.pop('import_column_mapping', None)
+    # Clean up other session keys
+    session.pop('import_csv_headers', None)
 
     if not csv_content or not season_id or not program:
         flash('Import session expired. Please upload the file again.', 'error')
@@ -402,7 +498,8 @@ def import_registration_confirm():
             stats = service.import_registration_csv(
                 temp_path,
                 program=program,
-                create_parent_users=create_users
+                create_parent_users=create_users,
+                column_mapping=column_mapping
             )
         finally:
             os.unlink(temp_path)

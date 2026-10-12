@@ -142,6 +142,9 @@
                 {% endif %}
             </div>
             <div style="display: flex; gap: 10px;">
+                <a href="{{ url_for('players.import_column_mapping') }}" class="btn btn-outline" style="font-size: 13px;">
+                    Edit Mapping
+                </a>
                 <a href="{{ url_for('players.import_registration') }}" class="btn btn-outline" id="start-over-btn">
                     Start Over
                 </a>

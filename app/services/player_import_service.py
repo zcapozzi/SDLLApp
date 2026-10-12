@@ -2,14 +2,130 @@
 
 import csv
 import secrets
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from typing import List, Dict, Optional
 
 from app.extensions import db
 from app.models.user import User
 from app.models.player import Player, PlayerSeason, PlayerEvaluation, EvaluationMetric
 from app.models.org_season import OrgSeason
 from app.models.league import League
+
+
+@dataclass
+class ExpectedColumn:
+    """Definition of an expected CSV column with aliases."""
+    name: str  # Internal field name
+    display_name: str  # Human-readable name
+    required: bool = True
+    aliases: tuple = ()  # Alternative names that match this column
+
+
+# Expected columns for registration CSV import
+EXPECTED_REGISTRATION_COLUMNS: List[ExpectedColumn] = [
+    ExpectedColumn(
+        name='User Email',
+        display_name='Parent/Account Email',
+        required=True,
+        aliases=('email', 'parent email', 'account email', 'guardian email', 'acct email')
+    ),
+    ExpectedColumn(
+        name='Player First Name',
+        display_name='Player First Name',
+        required=True,
+        aliases=('first name', 'firstname', 'first', 'player first', 'playerfirst')
+    ),
+    ExpectedColumn(
+        name='Player Last Name',
+        display_name='Player Last Name',
+        required=True,
+        aliases=('last name', 'lastname', 'last', 'surname', 'player last', 'playerlast')
+    ),
+    ExpectedColumn(
+        name='Player Birth Date',
+        display_name='Birth Date',
+        required=True,
+        aliases=('birth date', 'birthdate', 'dob', 'date of birth', 'birthday')
+    ),
+    ExpectedColumn(
+        name='Division Name',
+        display_name='Division/League',
+        required=False,
+        aliases=('division', 'league', 'level', 'program', 'team level')
+    ),
+    ExpectedColumn(
+        name='Player Gender',
+        display_name='Gender',
+        required=False,
+        aliases=('gender', 'sex', 'player sex')
+    ),
+    ExpectedColumn(
+        name='Account First Name',
+        display_name='Parent First Name',
+        required=False,
+        aliases=('parent first name', 'parent first', 'guardian first name', 'acct first')
+    ),
+    ExpectedColumn(
+        name='Account Last Name',
+        display_name='Parent Last Name',
+        required=False,
+        aliases=('parent last name', 'parent last', 'guardian last name', 'acct last')
+    ),
+    ExpectedColumn(
+        name='Cellphone',
+        display_name='Phone',
+        required=False,
+        aliases=('phone', 'telephone', 'cell', 'mobile', 'cell phone', 'mobile phone')
+    ),
+]
+
+
+def auto_map_columns(csv_headers: List[str]) -> Dict[str, Optional[str]]:
+    """Automatically map CSV headers to expected columns using case-insensitive matching and aliases.
+
+    Args:
+        csv_headers: List of column headers from the CSV file
+
+    Returns:
+        Dict mapping internal field names to CSV header names (or None if not matched)
+    """
+    mapping = {}
+    csv_headers_lower = {h.lower().strip(): h for h in csv_headers}
+
+    for expected in EXPECTED_REGISTRATION_COLUMNS:
+        # First try exact match (case-insensitive)
+        if expected.name.lower() in csv_headers_lower:
+            mapping[expected.name] = csv_headers_lower[expected.name.lower()]
+            continue
+
+        # Try aliases
+        matched = False
+        for alias in expected.aliases:
+            if alias.lower() in csv_headers_lower:
+                mapping[expected.name] = csv_headers_lower[alias.lower()]
+                matched = True
+                break
+
+        if not matched:
+            mapping[expected.name] = None
+
+    return mapping
+
+
+def get_unmapped_required_columns(column_mapping: Dict[str, Optional[str]]) -> List[ExpectedColumn]:
+    """Return list of required columns that are not mapped."""
+    unmapped = []
+    for expected in EXPECTED_REGISTRATION_COLUMNS:
+        if expected.required and not column_mapping.get(expected.name):
+            unmapped.append(expected)
+    return unmapped
+
+
+def all_required_columns_mapped(column_mapping: Dict[str, Optional[str]]) -> bool:
+    """Check if all required columns are mapped."""
+    return len(get_unmapped_required_columns(column_mapping)) == 0
 
 
 class PlayerImportService:
@@ -60,6 +176,7 @@ class PlayerImportService:
             org_season: Target OrgSeason for imports. If None, uses current season.
         """
         self.org_season = org_season or OrgSeason.get_current_season()
+        self.column_mapping = None  # Will be set by import methods if provided
         self.stats = {
             'players_created': 0,
             'players_updated': 0,
@@ -143,7 +260,8 @@ class PlayerImportService:
             return None
 
     def import_registration_csv(self, filepath: str, program: str,
-                                  create_parent_users: bool = True) -> dict:
+                                  create_parent_users: bool = True,
+                                  column_mapping: dict = None) -> dict:
         """Import player registration data from enrollment CSV.
 
         Expected columns:
@@ -159,11 +277,14 @@ class PlayerImportService:
             filepath: Path to enrollment CSV file
             program: Sport program ('baseball' or 'softball')
             create_parent_users: If True, creates User records for parents
+            column_mapping: Optional dict mapping internal names to CSV column names.
+                          If None, uses exact column names.
 
         Returns:
             dict with import statistics
         """
         self.program = program
+        self.column_mapping = column_mapping
         self.stats = {
             'players_created': 0,
             'players_updated': 0,
@@ -185,14 +306,24 @@ class PlayerImportService:
         db.session.commit()
         return self.stats
 
+    def _get_field(self, row: dict, field_name: str) -> str:
+        """Get field value from row using column mapping if available."""
+        if self.column_mapping and field_name in self.column_mapping:
+            csv_col = self.column_mapping.get(field_name)
+            if csv_col:
+                return row.get(csv_col, '').strip()
+            return ''
+        # Fallback to direct field name
+        return row.get(field_name, '').strip()
+
     def _import_registration_row(self, row: dict, create_parent_users: bool):
         """Import single registration row."""
-        # Extract fields
-        parent_email = row.get('User Email', '').strip()
-        first_name = row.get('Player First Name', '').strip()
-        last_name = row.get('Player Last Name', '').strip()
-        birth_date_str = row.get('Player Birth Date', '')
-        gender_raw = row.get('Player Gender', '').strip()
+        # Extract fields using mapping
+        parent_email = self._get_field(row, 'User Email')
+        first_name = self._get_field(row, 'Player First Name')
+        last_name = self._get_field(row, 'Player Last Name')
+        birth_date_str = self._get_field(row, 'Player Birth Date')
+        gender_raw = self._get_field(row, 'Player Gender')
 
         if not parent_email or not first_name or not last_name:
             return  # Skip incomplete rows
@@ -206,13 +337,17 @@ class PlayerImportService:
         gender = 'M' if gender_raw.lower().startswith('m') else 'F' if gender_raw.lower().startswith('f') else None
 
         # Parent info
-        parent_first = row.get('Account First Name', '').strip()
-        parent_last = row.get('Account Last Name', '').strip()
-        parent_phone = row.get('Cellphone', '').strip() or row.get('Telephone', '').strip()
+        parent_first = self._get_field(row, 'Account First Name')
+        parent_last = self._get_field(row, 'Account Last Name')
+        # Try Cellphone first, fallback handled by mapping for 'Cellphone' -> 'phone' etc.
+        parent_phone = self._get_field(row, 'Cellphone')
+        if not parent_phone:
+            # Also try direct 'Telephone' for backwards compatibility
+            parent_phone = row.get('Telephone', '').strip()
         parent_name = f"{parent_first} {parent_last}".strip() if parent_first else None
 
         # Use program specified by user during import
-        division_name = row.get('Division Name', '')
+        division_name = self._get_field(row, 'Division Name')
 
         # Get or create player
         existing = Player.find_by_email_and_name(parent_email, first_name, last_name)
