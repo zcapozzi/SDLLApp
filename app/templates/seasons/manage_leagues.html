@@ -32,6 +32,7 @@
             <tr>
                 <th>League</th>
                 <th style="width: 60px; text-align: center;">Active</th>
+                <th style="width: 100px; text-align: center;">Track Pitch Counts</th>
                 <th style="width: 60px; text-align: center;">Teams</th>
                 <th style="width: 80px; text-align: center;">Games/Team</th>
                 <th style="width: 120px; text-align: center;">Games Created</th>
@@ -67,6 +68,23 @@
                             {% if config.active %}On{% else %}Off{% endif %}
                         </button>
                     </form>
+                </td>
+                <td style="text-align: center;">
+                    {% if league_obj %}
+                    <form method="POST" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="toggle_pitching_stats">
+                        <input type="hidden" name="league_id" value="{{ config.ID }}">
+                        <input type="hidden" name="league_name" value="{{ config.league }}">
+                        <button type="submit" class="btn btn-sm {% if league_obj.track_pitching_stats %}btn-secondary{% else %}btn-outline{% endif %}"
+                                style="padding: 2px 8px; min-width: 50px;"
+                                title="{% if league_obj.track_pitching_stats %}Pitch count tracking enabled - click to disable{% else %}Pitch count tracking disabled - click to enable{% endif %}">
+                            {% if league_obj.track_pitching_stats %}On{% else %}Off{% endif %}
+                        </button>
+                    </form>
+                    {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
                 </td>
                 <td style="text-align: center;">{{ teams_by_league.get(config.league, 0) }}</td>
                 <td style="text-align: center;">{{ config.regular_season_games or 10 }}</td>

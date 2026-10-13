@@ -11,10 +11,36 @@ from app.models.coach import CoachSeason, CoachUser
 from app.models.league import League
 from app.models.league_season import LeagueSeason
 from app.models.post_game_report import PostGameReport
+from app.models.player import PlayerSeason
+from app.models.pitching_stats import PitchingStats
 from app.services import post_game_service
+from app.services.pitch_count_service import PitchCountService
 
 
 coach_bp = Blueprint('coach', __name__)
+
+
+def _parse_int(value):
+    """Parse integer from form value, returning None if invalid."""
+    if not value or not value.strip():
+        return None
+    try:
+        return int(value.strip())
+    except ValueError:
+        return None
+
+
+def _parse_innings(value):
+    """Parse innings pitched from form value (e.g., '2.1' = 2 and 1/3).
+
+    Returns None if invalid.
+    """
+    if not value or not value.strip():
+        return None
+    try:
+        return float(value.strip())
+    except ValueError:
+        return None
 
 
 @coach_bp.route('/postgame/<token>')
@@ -105,6 +131,24 @@ def postgame_form(game_id, team_id):
     is_kid_pitch = league and league.pitch_type == 'kid_pitch' if league else False
     is_baseball = league and league.is_baseball if league else True
 
+    # Check if pitching stats should be shown based on league setting
+    show_pitching = league and league.captures_pitching_data if league else False
+
+    # Get team roster for pitching stats if enabled
+    roster = []
+    existing_pitching_stats = {}
+    if show_pitching:
+        roster = PlayerSeason.query.filter_by(team_id=team_id).options(
+            joinedload(PlayerSeason.player)
+        ).all()
+        # Sort by player name
+        roster.sort(key=lambda ps: ps.player.full_name if ps.player else '')
+
+        # Get existing pitching stats for this report if it exists
+        if report:
+            for ps in PitchingStats.get_for_report(report.id):
+                existing_pitching_stats[ps.player_id] = ps
+
     # Check if SDLL provided an umpire for this game
     # SDLL didn't provide if: umpire_override is NULL, umpire_was_unassigned=1, or umpire_count_override=0
     sdll_provided_umpire = (
@@ -128,8 +172,8 @@ def postgame_form(game_id, team_id):
             opponent_score = request.form.get('opponent_score', '').strip()
             innings_batted = request.form.get('innings_batted', '').strip()
             innings_fielded = request.form.get('innings_fielded', '').strip()
-            umpire_name = request.form.get('umpire_name', '').strip()
             umpire_rating = request.form.get('umpire_rating', '').strip()
+            umpire_name = request.form.get('umpire_name', '').strip()
             umpire_comments = request.form.get('umpire_comments', '').strip()
 
             # Validate required fields
@@ -149,11 +193,8 @@ def postgame_form(game_id, team_id):
             if not innings_fielded:
                 errors.append('Innings fielded is required')
 
-            # Umpire feedback is only required if SDLL provided the umpire
+            # Umpire rating is only required if SDLL provided the umpire
             if sdll_provided_umpire:
-                if not umpire_name:
-                    errors.append('Umpire name is required')
-
                 if not umpire_rating:
                     errors.append('Umpire rating is required')
                 elif umpire_rating not in PostGameReport.RATINGS:
@@ -172,6 +213,9 @@ def postgame_form(game_id, team_id):
                                        report=report,
                                        is_kid_pitch=is_kid_pitch,
                                        is_baseball=is_baseball,
+                                       show_pitching=show_pitching,
+                                       roster=roster,
+                                       existing_pitching_stats=existing_pitching_stats,
                                        sdll_provided_umpire=sdll_provided_umpire,
                                        ratings=PostGameReport.RATINGS,
                                        rating_labels=PostGameReport.RATING_LABELS,
@@ -183,14 +227,31 @@ def postgame_form(game_id, team_id):
                 'opponent_score': int(opponent_score),
                 'innings_batted': int(innings_batted),
                 'innings_fielded': int(innings_fielded),
-                'umpire_name': umpire_name,
                 'umpire_rating': umpire_rating,
+                'umpire_name': umpire_name or None,
                 'umpire_comments': umpire_comments
             }
 
             success, report_obj, error = post_game_service.submit_report(game_id, team_id, current_user.ID, data)
 
             if success:
+                # Save pitching stats if enabled
+                if show_pitching and report_obj:
+                    pitch_data = []
+                    for ps in roster:
+                        player_id = ps.player_id
+                        pitch_count_str = request.form.get(f'pitch_count_{player_id}', '').strip()
+                        if pitch_count_str and pitch_count_str.isdigit() and int(pitch_count_str) > 0:
+                            pitch_data.append({
+                                'player_id': player_id,
+                                'pitch_count': int(pitch_count_str),
+                                'innings_pitched': _parse_innings(request.form.get(f'innings_{player_id}', '')),
+                                'walks': _parse_int(request.form.get(f'walks_{player_id}', '')),
+                                'batters_faced': _parse_int(request.form.get(f'batters_faced_{player_id}', '')),
+                            })
+                    if pitch_data:
+                        PitchCountService.save_pitching_stats(report_obj.id, pitch_data)
+
                 flash('Post-game report submitted successfully.', 'success')
                 return redirect(url_for('coach.postgame_success', game_id=game_id, team_id=team_id))
             else:
@@ -202,6 +263,9 @@ def postgame_form(game_id, team_id):
                                        report=report,
                                        is_kid_pitch=is_kid_pitch,
                                        is_baseball=is_baseball,
+                                       show_pitching=show_pitching,
+                                       roster=roster,
+                                       existing_pitching_stats=existing_pitching_stats,
                                        sdll_provided_umpire=sdll_provided_umpire,
                                        ratings=PostGameReport.RATINGS,
                                        rating_labels=PostGameReport.RATING_LABELS,
@@ -215,6 +279,9 @@ def postgame_form(game_id, team_id):
                            report=report,
                            is_kid_pitch=is_kid_pitch,
                            is_baseball=is_baseball,
+                           show_pitching=show_pitching,
+                           roster=roster,
+                           existing_pitching_stats=existing_pitching_stats,
                            sdll_provided_umpire=sdll_provided_umpire,
                            ratings=PostGameReport.RATINGS,
                            rating_labels=PostGameReport.RATING_LABELS,
@@ -453,3 +520,60 @@ def my_games():
                            pending_games=pending_games,
                            submitted_games=submitted_games,
                            teams=teams)
+
+
+@coach_bp.route('/pitch-counts')
+@login_required
+def pitch_counts():
+    """Show pitch count summary for coach's team."""
+    from app.models.org_season import OrgSeason
+
+    # Get current season
+    current_season = OrgSeason.get_current_season()
+    if not current_season:
+        flash('No active season found.', 'info')
+        return redirect(url_for('main.dashboard'))
+
+    year = current_season.year
+    is_spring = current_season.is_spring
+
+    # Find teams this user coaches
+    coach_user = CoachUser.get_by_user(current_user.ID)
+    if not coach_user:
+        flash('You are not registered as a coach.', 'info')
+        return redirect(url_for('main.dashboard'))
+
+    # Get coach's team assignments
+    assignments = CoachSeason.query.filter_by(coach_id=coach_user.id).all()
+    team_ids = [a.team_id for a in assignments]
+
+    if not team_ids:
+        flash('You are not assigned to any teams.', 'info')
+        return redirect(url_for('main.dashboard'))
+
+    # Get teams with leagues that have pitching tracking enabled
+    teams = TeamSeason.query.filter(TeamSeason.team_ID.in_(team_ids)).all()
+
+    # Filter to teams in leagues with pitching stats enabled
+    teams_with_pitching = []
+    for team in teams:
+        league = League.get_by_name(team.league)
+        if league and league.captures_pitching_data:
+            pitching_summary = PitchCountService.get_team_pitching_summary(
+                team.team_ID, year, is_spring
+            )
+            teams_with_pitching.append({
+                'team': team,
+                'league': league,
+                'pitching_summary': pitching_summary
+            })
+
+    if not teams_with_pitching:
+        flash('None of your teams have pitch count tracking enabled.', 'info')
+        return redirect(url_for('coach.my_games'))
+
+    return render_template('coach/pitch_counts.html',
+                           teams_with_pitching=teams_with_pitching,
+                           year=year,
+                           is_spring=is_spring,
+                           season_name=f'{"Spring" if is_spring else "Fall"} {year}')

@@ -41,6 +41,9 @@ class League(db.Model):
     # League documentation
     rules_doc_url = db.Column(db.String(500))  # URL to league-specific rules document
 
+    # Pitch count tracking (for post-game reports)
+    track_pitching_stats = db.Column(db.SmallInteger, default=0)  # 1=enabled, 0=disabled
+
     # Umpire payment rate overrides (NULL = use org defaults)
     umpire_rate_plate_override = db.Column(db.Numeric(6, 2))  # Override plate rate for this league
     umpire_rate_base_override = db.Column(db.Numeric(6, 2))   # Override base rate for this league
@@ -74,6 +77,11 @@ class League(db.Model):
     def is_softball(self):
         """Check if this is a softball league."""
         return self.sport == self.SPORT_SOFTBALL
+
+    @property
+    def captures_pitching_data(self) -> bool:
+        """Whether this league captures pitching stats on post-game forms."""
+        return self.track_pitching_stats == 1
 
     @property
     def sport_display(self):

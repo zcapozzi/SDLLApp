@@ -59,6 +59,7 @@ from .access_request import AccessRequest
 
 # Post-game reporting
 from .post_game_report import PostGameReport
+from .pitching_stats import PitchingStats
 
 # Institutional knowledge system
 from .email_routing_config import EmailRoutingConfig

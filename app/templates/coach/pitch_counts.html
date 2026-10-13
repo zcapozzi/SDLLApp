@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+
+{% block title %}Pitch Count Summary{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 900px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h1 style="color: rgb(34, 139, 34);">Pitch Count Summary</h1>
+        <a href="{{ url_for('coach.my_games') }}" class="btn btn-outline">My Games</a>
+    </div>
+
+    <p class="text-muted" style="margin-bottom: 25px;">
+        Season totals for {{ season_name }}. Track pitch counts for Little League compliance.
+    </p>
+
+    {% for item in teams_with_pitching %}
+    {% set team = item.team %}
+    {% set league = item.league %}
+    {% set summary = item.pitching_summary %}
+
+    <div class="card" style="margin-bottom: 25px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h2 style="margin: 0; font-size: 20px;">
+                {{ team.computed_display_name }}
+                <span style="font-size: 14px; color: #888; font-weight: normal;">{{ league.display_name }}</span>
+            </h2>
+        </div>
+
+        {% if summary %}
+        <table>
+            <thead>
+                <tr style="background: #f5f5f5;">
+                    <th style="text-align: left;">Player</th>
+                    <th style="text-align: center; width: 80px;">Games</th>
+                    <th style="text-align: center; width: 100px;">Total Pitches</th>
+                    <th style="text-align: center; width: 80px;">Avg/Game</th>
+                    <th style="text-align: center; width: 70px;">IP</th>
+                    <th style="text-align: center; width: 50px;">BB</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for player in summary %}
+                {% if player.appearances > 0 %}
+                <tr>
+                    <td style="padding: 10px 8px;">
+                        <strong>{{ player.player_name }}</strong>
+                    </td>
+                    <td style="text-align: center;">{{ player.appearances }}</td>
+                    <td style="text-align: center;">
+                        <strong style="color: {% if player.total_pitches >= 300 %}#c0392b{% elif player.total_pitches >= 200 %}rgb(255, 140, 0){% else %}rgb(34, 139, 34){% endif %};">
+                            {{ player.total_pitches }}
+                        </strong>
+                    </td>
+                    <td style="text-align: center;">{{ player.avg_pitches_per_game }}</td>
+                    <td style="text-align: center;">{{ player.total_innings }}</td>
+                    <td style="text-align: center;">{{ player.total_walks }}</td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% set total_pitches = summary|map(attribute='total_pitches')|sum %}
+        {% set total_appearances = summary|map(attribute='appearances')|sum %}
+        <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee; font-size: 14px; color: #666;">
+            <strong>Team Totals:</strong>
+            {{ total_pitches }} pitches across {{ total_appearances }} pitcher appearances
+        </div>
+        {% else %}
+        <p class="text-muted" style="text-align: center; padding: 20px;">
+            No pitching data recorded yet. Submit post-game reports to track pitch counts.
+        </p>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="card" style="background: rgba(255, 140, 0, 0.1); border-left: 4px solid rgb(255, 140, 0);">
+        <h3 style="margin-top: 0; font-size: 16px;">Little League Pitch Count Rules</h3>
+        <table style="font-size: 13px; margin-bottom: 15px;">
+            <thead>
+                <tr>
+                    <th style="width: 80px;">Age</th>
+                    <th style="width: 100px;">Max/Day</th>
+                    <th>Rest Requirements</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>7-8</td>
+                    <td>50</td>
+                    <td>1-20: none | 21-35: 1 day | 36-50: 2 days</td>
+                </tr>
+                <tr>
+                    <td>9-10</td>
+                    <td>75</td>
+                    <td>1-20: none | 21-35: 1 day | 36-50: 2 days | 51-65: 3 days | 66-75: 4 days</td>
+                </tr>
+                <tr>
+                    <td>11-12</td>
+                    <td>85</td>
+                    <td>1-20: none | 21-35: 1 day | 36-50: 2 days | 51-65: 3 days | 66-85: 4 days</td>
+                </tr>
+            </tbody>
+        </table>
+        <p style="margin: 0; font-size: 12px; color: #666;">
+            Source: Little League International Pitch Smart Guidelines.
+            For official rules, consult <a href="https://www.littleleague.org/playing-rules/pitch-count/" target="_blank">littleleague.org</a>.
+        </p>
+    </div>
+</div>
+{% endblock %}

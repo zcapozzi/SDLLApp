@@ -294,7 +294,9 @@ class LeagueSeason(db.Model):
         """
         from app.models.league import League
 
-        existing = {c.league for c in cls.get_by_season(year, is_spring)}
+        # Use league_id for duplicate detection (not name) to avoid duplicates
+        # when teams use spring vs fall names for the same league
+        existing_ids = {c.league_id for c in cls.get_by_season(year, is_spring)}
 
         for league in leagues:
             league_name = league if isinstance(league, str) else league.display_name
@@ -305,7 +307,7 @@ class LeagueSeason(db.Model):
                 league_obj = League.get_by_name(league_name)
                 league_id = league_obj.ID if league_obj else None
 
-            if league_name not in existing and league_id:
+            if league_id and league_id not in existing_ids:
                 # Check for soft-deleted config to reactivate
                 soft_deleted = cls.query.filter_by(
                     year=year,
@@ -325,6 +327,9 @@ class LeagueSeason(db.Model):
                         playoff_teams=0  # 0 = all teams qualify
                     )
                     db.session.add(config)
+
+                # Mark as processed to prevent duplicates from spring/fall name variants
+                existing_ids.add(league_id)
 
         db.session.commit()
 

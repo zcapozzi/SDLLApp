@@ -141,8 +141,8 @@ def submit_report(game_id, team_id, user_id, data):
             - opponent_score: int
             - innings_batted: int
             - innings_fielded: int
-            - umpire_name: str
             - umpire_rating: str (excellent/good/ok/poor)
+            - umpire_name: str (optional - auto-populated from assignments if not provided)
             - umpire_comments: str (optional)
 
     Returns:
@@ -173,9 +173,19 @@ def submit_report(game_id, team_id, user_id, data):
         report.opponent_score = data.get('opponent_score')
         report.innings_batted = data.get('innings_batted')
         report.innings_fielded = data.get('innings_fielded')
-        report.umpire_name = data.get('umpire_name')
         report.umpire_rating = data.get('umpire_rating')
         report.umpire_comments = data.get('umpire_comments')
+
+        # Use form-provided umpire name if available, otherwise look up from assignments
+        if data.get('umpire_name'):
+            report.umpire_name = data.get('umpire_name')
+        else:
+            # Auto-populate from game assignments
+            from app.models.game import Game
+            game = Game.query.get(game_id)
+            if game and game.umpire_assignments:
+                umpire_names = [a.umpire.display_name for a in game.umpire_assignments if a.umpire]
+                report.umpire_name = ', '.join(umpire_names) if umpire_names else None
 
         report.status = PostGameReport.STATUS_SUBMITTED
         report.submitted_by_user_id = user_id

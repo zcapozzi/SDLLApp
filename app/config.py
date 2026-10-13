@@ -89,7 +89,7 @@ def _get_local_database_uri():
         print(f"WARNING: .env MYSQL_HOST points to Railway ({host}). Using localhost instead.", file=sys.stderr)
         host = 'localhost'
 
-    uri = f"mysql+pymysql://{user}:{password}@{host}/{database}"
+    uri = f"mysql+pymysql://{user}:{password}@{host}/{database}?charset=utf8mb4"
     print(f"[DEV CONFIG] Database: {user}@{host}/{database}", file=sys.stderr)
     return uri
 
@@ -118,7 +118,7 @@ class TestingConfig(Config):
     MYSQL_DB = 'sdll_test'  # Always use test database, never production
 
     SQLALCHEMY_DATABASE_URI = (
-        f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}/{MYSQL_DB}"
+        f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}/{MYSQL_DB}?charset=utf8mb4"
     )
 
     # Disable rate limiting in tests
@@ -138,6 +138,11 @@ def _get_production_database_url():
         # Convert mysql:// to mysql+pymysql://
         if url.startswith('mysql://'):
             url = url.replace('mysql://', 'mysql+pymysql://', 1)
+        # Add charset if not present
+        if '?' not in url:
+            url += '?charset=utf8mb4'
+        elif 'charset=' not in url:
+            url += '&charset=utf8mb4'
         return url
 
     # Fallback to individual env vars
@@ -147,7 +152,7 @@ def _get_production_database_url():
     database = os.environ.get('MYSQL_DB', 'sdll')
     port = os.environ.get('MYSQL_PORT', '3306')
 
-    return f"mysql+pymysql://{user}:{password}@{host}:{port}/{database}"
+    return f"mysql+pymysql://{user}:{password}@{host}:{port}/{database}?charset=utf8mb4"
 
 
 class ProductionConfig(Config):

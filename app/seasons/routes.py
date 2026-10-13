@@ -930,6 +930,18 @@ def manage_leagues(year, is_spring):
                 logger.info(f'{config.league} {status} for {season_name}')
                 flash(f'{config.league} {status} for this season', 'success')
 
+        elif action == 'toggle_pitching_stats':
+            # Toggle pitch count tracking for a league
+            league_id = int(request.form.get('league_id'))
+            # Get the League object (not LeagueSeason)
+            league = League.get_by_name(request.form.get('league_name', ''))
+            if league:
+                league.track_pitching_stats = 0 if league.track_pitching_stats else 1
+                db.session.commit()
+                status = 'enabled' if league.track_pitching_stats else 'disabled'
+                logger.info(f'Pitch count tracking {status} for {league.display_name}')
+                flash(f'Pitch count tracking {status} for {league.display_name}', 'success')
+
         # Redirect with anchor to scroll back to the league row
         redirect_url = url_for('seasons.manage_leagues', year=year, is_spring=is_spring)
         if 'league_id' in request.form:
