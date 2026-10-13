@@ -74,3 +74,6 @@ from .player import Player, PlayerSeason, PlayerEvaluation, EvaluationMetric, Pl
 
 # Draft system
 from .draft import DraftSession, DraftPick, DraftOrder, DraftProtection
+
+# GC Screenshot parsing
+from .gc_screenshot_session import GCScreenshotSession

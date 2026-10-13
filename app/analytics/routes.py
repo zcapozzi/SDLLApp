@@ -2,13 +2,15 @@
 
 import os
 from datetime import datetime, timedelta
-from flask import render_template, request
+from flask import render_template, request, abort
 from flask_login import login_required
 from sqlalchemy import func, desc, and_, or_
+from sqlalchemy.orm import joinedload
 
 from . import analytics_bp
 from app.extensions import db
 from app.models.analytics import PageView, CalendarSubscription
+from app.models.gc_screenshot_session import GCScreenshotSession
 from app.models.user import User
 from app.utils.auth import product_admin_required
 from app.utils.encryption import hash_for_lookup
@@ -555,4 +557,86 @@ def dashboard():
         route_filter=route_filter,
         available_routes=available_routes,
         show_all_teams=show_all_teams
+    )
+
+
+# =============================================================================
+# GC Screenshot Audit Routes
+# =============================================================================
+
+@analytics_bp.route('/gc-screenshots')
+@login_required
+@product_admin_required
+def gc_screenshot_audit():
+    """List recent screenshot sessions with edit rate stats."""
+    days = request.args.get('days', 30, type=int)
+    if days not in [7, 30, 90]:
+        days = 30
+
+    status_filter = request.args.get('status', '').strip() or None
+
+    # Get stats
+    stats = GCScreenshotSession.get_audit_stats(days)
+
+    # Get recent sessions
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    query = GCScreenshotSession.query.filter(
+        GCScreenshotSession.created_at >= cutoff
+    ).options(
+        joinedload(GCScreenshotSession.game),
+        joinedload(GCScreenshotSession.team),
+        joinedload(GCScreenshotSession.user)
+    )
+
+    if status_filter:
+        query = query.filter(GCScreenshotSession.status == status_filter)
+
+    sessions = query.order_by(GCScreenshotSession.created_at.desc()).limit(100).all()
+
+    # Group sessions by session_uuid for display
+    session_groups = {}
+    for s in sessions:
+        if s.session_uuid not in session_groups:
+            session_groups[s.session_uuid] = []
+        session_groups[s.session_uuid].append(s)
+
+    return render_template(
+        'analytics/gc_screenshot_audit.html',
+        stats=stats,
+        sessions=sessions,
+        session_groups=session_groups,
+        days=days,
+        status_filter=status_filter
+    )
+
+
+@analytics_bp.route('/gc-screenshots/<int:session_id>')
+@login_required
+@product_admin_required
+def gc_screenshot_detail(session_id):
+    """View session details: image, prompt, response, comparison."""
+    session = GCScreenshotSession.query.options(
+        joinedload(GCScreenshotSession.game),
+        joinedload(GCScreenshotSession.team),
+        joinedload(GCScreenshotSession.user)
+    ).get(session_id)
+
+    if not session:
+        abort(404)
+
+    # Get all attempts for this session
+    all_attempts = GCScreenshotSession.get_by_session_uuid(session.session_uuid)
+
+    # Parse JSON data for display
+    parsed_data = session.get_parsed_data()
+    final_data = session.get_final_data()
+    edit_diff = session.get_edit_diff()
+
+    return render_template(
+        'analytics/gc_screenshot_detail.html',
+        session=session,
+        all_attempts=all_attempts,
+        parsed_data=parsed_data,
+        final_data=final_data,
+        edit_diff=edit_diff
     )

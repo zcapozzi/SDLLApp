@@ -1,6 +1,6 @@
 """Coach routes - post-game reports and coach-specific features."""
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
+from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
 
@@ -13,8 +13,10 @@ from app.models.league_season import LeagueSeason
 from app.models.post_game_report import PostGameReport
 from app.models.player import PlayerSeason
 from app.models.pitching_stats import PitchingStats
+from app.models.gc_screenshot_session import GCScreenshotSession
 from app.services import post_game_service
 from app.services.pitch_count_service import PitchCountService
+from app.services.gc_screenshot_service import GCScreenshotService
 
 
 coach_bp = Blueprint('coach', __name__)
@@ -136,6 +138,7 @@ def postgame_form(game_id, team_id):
 
     # Get team roster for pitching stats if enabled
     roster = []
+    roster_json = []  # JSON-serializable version for JavaScript
     existing_pitching_stats = {}
     if show_pitching:
         roster = PlayerSeason.query.filter_by(team_id=team_id).options(
@@ -143,6 +146,9 @@ def postgame_form(game_id, team_id):
         ).all()
         # Sort by player name
         roster.sort(key=lambda ps: ps.player.full_name if ps.player else '')
+
+        # Build JSON-serializable roster for screenshot tab JavaScript
+        roster_json = GCScreenshotService.get_roster_for_prompt(team_id)
 
         # Get existing pitching stats for this report if it exists
         if report:
@@ -215,6 +221,7 @@ def postgame_form(game_id, team_id):
                                        is_baseball=is_baseball,
                                        show_pitching=show_pitching,
                                        roster=roster,
+                                       roster_json=roster_json,
                                        existing_pitching_stats=existing_pitching_stats,
                                        sdll_provided_umpire=sdll_provided_umpire,
                                        ratings=PostGameReport.RATINGS,
@@ -265,6 +272,7 @@ def postgame_form(game_id, team_id):
                                        is_baseball=is_baseball,
                                        show_pitching=show_pitching,
                                        roster=roster,
+                                       roster_json=roster_json,
                                        existing_pitching_stats=existing_pitching_stats,
                                        sdll_provided_umpire=sdll_provided_umpire,
                                        ratings=PostGameReport.RATINGS,
@@ -281,6 +289,7 @@ def postgame_form(game_id, team_id):
                            is_baseball=is_baseball,
                            show_pitching=show_pitching,
                            roster=roster,
+                           roster_json=roster_json,
                            existing_pitching_stats=existing_pitching_stats,
                            sdll_provided_umpire=sdll_provided_umpire,
                            ratings=PostGameReport.RATINGS,
@@ -577,3 +586,282 @@ def pitch_counts():
                            year=year,
                            is_spring=is_spring,
                            season_name=f'{"Spring" if is_spring else "Fall"} {year}')
+
+
+# =============================================================================
+# GameChanger Screenshot Routes (BETA)
+# =============================================================================
+
+@coach_bp.route('/postgame/<int:game_id>/<int:team_id>/screenshot', methods=['POST'])
+@login_required
+def postgame_screenshot_upload(game_id, team_id):
+    """Upload and parse GameChanger screenshot.
+
+    Returns JSON:
+    - success: {session_id, session_uuid, data: {our_score, opponent_score, pitchers}, warnings}
+    - error: {error, session_uuid, attempt, can_retry}
+    """
+    # Check authorization
+    can_submit, role, error = post_game_service.can_user_submit(current_user.ID, game_id, team_id)
+    if not can_submit:
+        return jsonify({'error': f'Access denied: {error}'}), 403
+
+    # Check if API is configured
+    if not GCScreenshotService.is_configured():
+        return jsonify({'error': 'Screenshot parsing is not available. Please use manual entry.'}), 503
+
+    # Get file from request
+    if 'screenshot' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+
+    file = request.files['screenshot']
+    if not file or file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+
+    # Read file data
+    file_data = file.read()
+    content_type = file.content_type or 'image/png'
+    filename = file.filename
+
+    # Validate image
+    is_valid, validation_error = GCScreenshotService.validate_image(file_data, content_type, filename)
+    if not is_valid:
+        return jsonify({'error': validation_error}), 400
+
+    # Check for retry (existing session_uuid)
+    session_uuid = request.form.get('session_uuid')
+
+    # Check attempt limit
+    if session_uuid:
+        existing_attempts = GCScreenshotSession.query.filter_by(session_uuid=session_uuid).count()
+        if existing_attempts >= 2:
+            return jsonify({
+                'error': 'Maximum attempts reached. Please use manual entry.',
+                'can_retry': False
+            }), 400
+
+    # Create session
+    session = GCScreenshotService.create_session(
+        game_id=game_id,
+        team_id=team_id,
+        user_id=current_user.ID,
+        session_uuid=session_uuid
+    )
+
+    # Store image
+    GCScreenshotService.store_image(session, file_data, filename, content_type)
+
+    # Get context for parsing
+    team = TeamSeason.query.get(team_id)
+    game = Game.query.options(
+        joinedload(Game.home_team),
+        joinedload(Game.away_team)
+    ).get(game_id)
+
+    if not team or not game:
+        return jsonify({'error': 'Game or team not found'}), 404
+
+    team_name = team.computed_display_name
+    opponent_id = game.away_ID if team_id == game.home_ID else game.home_ID
+    opponent = TeamSeason.query.get(opponent_id)
+    opponent_name = opponent.computed_display_name if opponent else 'Unknown'
+
+    # Get roster
+    roster = GCScreenshotService.get_roster_for_prompt(team_id)
+
+    # Parse screenshot
+    parsed_data, parse_error = GCScreenshotService.parse_screenshot(
+        session, team_name, opponent_name, roster
+    )
+
+    if parse_error:
+        can_retry = session.attempt_number < 2
+        return jsonify({
+            'error': parse_error,
+            'session_uuid': session.session_uuid,
+            'attempt': session.attempt_number,
+            'can_retry': can_retry
+        }), 422
+
+    # Convert parsed data to response format
+    pitchers_response = []
+    for p in parsed_data.pitchers:
+        pitchers_response.append({
+            'name': p.name,
+            'player_code': p.player_code,
+            'pitches_thrown': p.pitches_thrown,
+            'innings_pitched': p.innings_pitched,
+            'strikes_thrown': p.strikes_thrown,
+            'batters_faced': p.batters_faced,
+            'runs_allowed': p.runs_allowed,
+            'strikeouts': p.strikeouts,
+            'walks': p.walks
+        })
+
+    return jsonify({
+        'session_id': session.id,
+        'session_uuid': session.session_uuid,
+        'data': {
+            'our_score': parsed_data.our_score,
+            'opponent_score': parsed_data.opponent_score,
+            'pitchers': pitchers_response
+        },
+        'confidence': parsed_data.confidence,
+        'warnings': parsed_data.warnings,
+        'roster': roster  # Include roster for player matching in UI
+    })
+
+
+@coach_bp.route('/postgame/<int:game_id>/<int:team_id>/screenshot/submit', methods=['POST'])
+@login_required
+def postgame_screenshot_submit(game_id, team_id):
+    """Submit post-game report from parsed screenshot data.
+
+    Compares to parsed_json to detect edits (was_edited flag).
+    Creates PostGameReport + PitchingStats records.
+    """
+    # Check authorization
+    can_submit, role, error = post_game_service.can_user_submit(current_user.ID, game_id, team_id)
+    if not can_submit:
+        return jsonify({'error': f'Access denied: {error}'}), 403
+
+    # Get session ID
+    session_id = request.form.get('session_id', type=int)
+    if not session_id:
+        return jsonify({'error': 'Missing session_id'}), 400
+
+    session = GCScreenshotSession.query.get(session_id)
+    if not session:
+        return jsonify({'error': 'Session not found'}), 404
+
+    # Verify session belongs to this game/team/user
+    if session.game_id != game_id or session.team_id != team_id:
+        return jsonify({'error': 'Session mismatch'}), 403
+
+    # Check if league supports pitching tracking
+    league = League.get_by_name(Game.query.get(game_id).league)
+    show_pitching = league and league.captures_pitching_data if league else False
+
+    # Extract form data
+    our_score = request.form.get('our_score', type=int)
+    opponent_score = request.form.get('opponent_score', type=int)
+    innings_batted = request.form.get('innings_batted', type=int)
+    innings_fielded = request.form.get('innings_fielded', type=int)
+    umpire_rating = request.form.get('umpire_rating', '').strip()
+    umpire_name = request.form.get('umpire_name', '').strip()
+    umpire_comments = request.form.get('umpire_comments', '').strip()
+
+    # Validate required fields
+    errors = []
+    if our_score is None:
+        errors.append('Your team score is required')
+    if opponent_score is None:
+        errors.append('Opponent score is required')
+    if not innings_batted:
+        errors.append('Innings batted is required')
+    if not innings_fielded:
+        errors.append('Innings fielded is required')
+
+    if errors:
+        return jsonify({'error': '; '.join(errors)}), 400
+
+    # Build final data for diff computation
+    final_pitchers = []
+    roster = PlayerSeason.query.filter_by(team_id=team_id).options(
+        joinedload(PlayerSeason.player)
+    ).all()
+
+    # Build player_code -> player lookup
+    player_by_code = {}
+    for ps in roster:
+        if ps.player and ps.player.player_code:
+            player_by_code[ps.player.player_code] = ps.player
+
+    pitch_data = []
+
+    # Process pitch data sent by player_code (from screenshot form)
+    for key in request.form.keys():
+        if key.startswith('pitch_code_'):
+            player_code = key.replace('pitch_code_', '')
+            player = player_by_code.get(player_code)
+            if player:
+                pitch_count_str = request.form.get(key, '').strip()
+                if pitch_count_str and pitch_count_str.isdigit() and int(pitch_count_str) > 0:
+                    pitch_count = int(pitch_count_str)
+                    innings = _parse_innings(request.form.get(f'innings_code_{player_code}', ''))
+                    strikeouts = _parse_int(request.form.get(f'strikeouts_code_{player_code}', ''))
+                    walks = _parse_int(request.form.get(f'walks_code_{player_code}', ''))
+
+                    pitch_data.append({
+                        'player_id': player.id,
+                        'pitch_count': pitch_count,
+                        'innings_pitched': innings,
+                        'strikeouts': strikeouts,
+                        'walks': walks,
+                    })
+
+                    # For diff computation
+                    final_pitchers.append({
+                        'player_code': player_code,
+                        'name': player.full_name,
+                        'pitches_thrown': pitch_count,
+                        'innings_pitched': innings,
+                        'strikeouts': strikeouts,
+                        'walks': walks
+                    })
+
+    # Build final JSON for audit
+    final_json = {
+        'our_score': our_score,
+        'opponent_score': opponent_score,
+        'pitchers': final_pitchers
+    }
+
+    # Record submission with diff
+    GCScreenshotService.record_submission(session, final_json)
+
+    # Submit the actual post-game report
+    data = {
+        'our_score': our_score,
+        'opponent_score': opponent_score,
+        'innings_batted': innings_batted,
+        'innings_fielded': innings_fielded,
+        'umpire_rating': umpire_rating if umpire_rating else None,
+        'umpire_name': umpire_name or None,
+        'umpire_comments': umpire_comments
+    }
+
+    success, report_obj, submit_error = post_game_service.submit_report(game_id, team_id, current_user.ID, data)
+
+    if not success:
+        return jsonify({'error': f'Failed to submit report: {submit_error}'}), 500
+
+    # Save pitching stats if enabled and data provided
+    if show_pitching and report_obj and pitch_data:
+        PitchCountService.save_pitching_stats(report_obj.id, pitch_data)
+
+    return jsonify({
+        'success': True,
+        'redirect': url_for('coach.postgame_success', game_id=game_id, team_id=team_id)
+    })
+
+
+@coach_bp.route('/postgame/<int:game_id>/<int:team_id>/screenshot/abandon', methods=['POST'])
+@login_required
+def postgame_screenshot_abandon(game_id, team_id):
+    """Mark screenshot session as abandoned (user switched to manual entry)."""
+    session_uuid = request.form.get('session_uuid')
+    if session_uuid:
+        session = GCScreenshotSession.query.filter_by(
+            session_uuid=session_uuid,
+            game_id=game_id,
+            team_id=team_id
+        ).order_by(GCScreenshotSession.attempt_number.desc()).first()
+
+        if session and session.status not in [
+            GCScreenshotSession.STATUS_SUBMITTED,
+            GCScreenshotSession.STATUS_ABANDONED
+        ]:
+            GCScreenshotService.mark_abandoned(session)
+
+    return jsonify({'success': True})

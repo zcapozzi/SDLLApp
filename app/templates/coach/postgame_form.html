@@ -23,7 +23,101 @@
         width: 100%;
     }
 }
+
+/* Tab styles */
+.postgame-tabs {
+    display: flex;
+    border-bottom: 2px solid #ddd;
+    margin-bottom: 20px;
+}
+.postgame-tab {
+    padding: 12px 20px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 15px;
+    color: #666;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+}
+.postgame-tab:hover {
+    color: rgb(34, 139, 34);
+}
+.postgame-tab.active {
+    color: rgb(34, 139, 34);
+    border-bottom-color: rgb(34, 139, 34);
+    font-weight: 600;
+}
+.postgame-tab-content {
+    display: none;
+}
+.postgame-tab-content.active {
+    display: block;
+}
+.beta-badge {
+    background: rgb(255, 140, 0);
+    color: white;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+
+/* Screenshot upload styles */
+.screenshot-upload-zone {
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-bottom: 20px;
+}
+.screenshot-upload-zone:hover, .screenshot-upload-zone.dragover {
+    border-color: rgb(34, 139, 34);
+    background: rgba(34, 139, 34, 0.05);
+}
+.screenshot-upload-zone.has-file {
+    border-style: solid;
+    border-color: rgb(34, 139, 34);
+}
+.screenshot-preview {
+    max-width: 300px;
+    max-height: 200px;
+    margin: 10px auto;
+    display: none;
+}
+.screenshot-preview.visible {
+    display: block;
+}
+.screenshot-spinner {
+    display: none;
+    margin: 20px auto;
+}
+.screenshot-spinner.visible {
+    display: block;
+}
+.screenshot-error {
+    background: #fee;
+    border: 1px solid #c33;
+    border-radius: 4px;
+    padding: 15px;
+    margin-top: 15px;
+    display: none;
+}
+.screenshot-error.visible {
+    display: block;
+}
+.screenshot-results {
+    display: none;
+}
+.screenshot-results.visible {
+    display: block;
+}
 </style>
+
 <div class="container" style="max-width: 700px; padding: 0 15px;">
     <h1 style="color: rgb(34, 139, 34); margin-bottom: 10px;">Post-Game Report</h1>
 
@@ -74,165 +168,921 @@
     </script>
     {% endif %}
 
-    <!-- Post-Game Form -->
+    <!-- Tab Navigation -->
     <div class="card">
-        <form method="POST" action="{{ url_for('coach.postgame_form', game_id=game.ID, team_id=team.team_ID) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-            <!-- Score Section -->
-            <h3 style="margin-top: 0; border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Final Score</h3>
-
-            <div class="postgame-two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-                <div class="form-group">
-                    <label for="our_score">{{ team.computed_display_name }} (Your Team)</label>
-                    <input type="number" id="our_score" name="our_score" class="form-control"
-                           min="0" max="99" required
-                           value="{{ form_data.get('our_score', report.our_score if report else '') }}">
-                </div>
-                <div class="form-group">
-                    <label for="opponent_score">{{ opponent.computed_display_name if opponent else 'Opponent' }}</label>
-                    <input type="number" id="opponent_score" name="opponent_score" class="form-control"
-                           min="0" max="99" required
-                           value="{{ form_data.get('opponent_score', report.opponent_score if report else '') }}">
-                </div>
-            </div>
-
-            <!-- Innings Section -->
-            <h3 style="border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Innings Played</h3>
-
-            <div class="postgame-two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-                <div class="form-group">
-                    <label for="innings_batted">Innings Batted</label>
-                    <select id="innings_batted" name="innings_batted" class="form-control" required>
-                        <option value="">Select...</option>
-                        {% for i in range(1, 8) %}
-                        <option value="{{ i }}" {% if (form_data.get('innings_batted')|string == i|string) or (report and report.innings_batted == i) %}selected{% endif %}>{{ i }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="innings_fielded">Innings in Field</label>
-                    <select id="innings_fielded" name="innings_fielded" class="form-control" required>
-                        <option value="">Select...</option>
-                        {% for i in range(1, 8) %}
-                        <option value="{{ i }}" {% if (form_data.get('innings_fielded')|string == i|string) or (report and report.innings_fielded == i) %}selected{% endif %}>{{ i }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-
-            <!-- Umpire Section -->
-            <h3 style="border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Umpire Evaluation</h3>
-
-            {% if not sdll_provided_umpire %}
-            <div style="background: rgba(100, 100, 100, 0.1); padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #666;">
-                <strong>Note:</strong> SDLL did not provide the umpire for this game, but if you would like to share feedback, we may pass it along.
-            </div>
+        <div class="postgame-tabs">
+            <button type="button" class="postgame-tab active" onclick="switchTab('manual')">
+                Manual Entry
+            </button>
+            {% if show_pitching %}
+            <button type="button" class="postgame-tab" onclick="switchTab('screenshot')">
+                Via GC Screenshot <span class="beta-badge">BETA</span>
+            </button>
             {% endif %}
+        </div>
 
-            <div class="form-group">
-                <label for="umpire_rating">Rating{% if sdll_provided_umpire %} <span style="color: #c33;">*</span>{% else %} (optional){% endif %}</label>
-                <select id="umpire_rating" name="umpire_rating" class="form-control"{% if sdll_provided_umpire %} required{% endif %}>
-                    <option value="">Select a rating...</option>
-                    {% for rating in ratings %}
-                    <option value="{{ rating }}" {% if (form_data.get('umpire_rating') == rating) or (report and report.umpire_rating == rating) %}selected{% endif %}>{{ rating_labels[rating] }}</option>
-                    {% endfor %}
-                </select>
+        <!-- Manual Entry Tab -->
+        <div id="tab-manual" class="postgame-tab-content active">
+            <form method="POST" action="{{ url_for('coach.postgame_form', game_id=game.ID, team_id=team.team_ID) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <!-- Score Section -->
+                <h3 style="margin-top: 0; border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Final Score</h3>
+
+                <div class="postgame-two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                    <div class="form-group">
+                        <label for="our_score">{{ team.computed_display_name }} (Your Team)</label>
+                        <input type="number" id="our_score" name="our_score" class="form-control"
+                               min="0" max="99" required
+                               value="{{ form_data.get('our_score', report.our_score if report else '') }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="opponent_score">{{ opponent.computed_display_name if opponent else 'Opponent' }}</label>
+                        <input type="number" id="opponent_score" name="opponent_score" class="form-control"
+                               min="0" max="99" required
+                               value="{{ form_data.get('opponent_score', report.opponent_score if report else '') }}">
+                    </div>
+                </div>
+
+                <!-- Innings Section -->
+                <h3 style="border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Innings Played</h3>
+
+                <div class="postgame-two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                    <div class="form-group">
+                        <label for="innings_batted">Innings Batted</label>
+                        <select id="innings_batted" name="innings_batted" class="form-control" required>
+                            <option value="">Select...</option>
+                            {% for i in range(1, 8) %}
+                            <option value="{{ i }}" {% if (form_data.get('innings_batted')|string == i|string) or (report and report.innings_batted == i) %}selected{% endif %}>{{ i }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="innings_fielded">Innings in Field</label>
+                        <select id="innings_fielded" name="innings_fielded" class="form-control" required>
+                            <option value="">Select...</option>
+                            {% for i in range(1, 8) %}
+                            <option value="{{ i }}" {% if (form_data.get('innings_fielded')|string == i|string) or (report and report.innings_fielded == i) %}selected{% endif %}>{{ i }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Umpire Section -->
+                <h3 style="border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Umpire Evaluation</h3>
+
+                {% if not sdll_provided_umpire %}
+                <div style="background: rgba(100, 100, 100, 0.1); padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #666;">
+                    <strong>Note:</strong> SDLL did not provide the umpire for this game, but if you would like to share feedback, we may pass it along.
+                </div>
+                {% endif %}
+
+                <div class="form-group">
+                    <label for="umpire_rating">Rating{% if sdll_provided_umpire %} <span style="color: #c33;">*</span>{% else %} (optional){% endif %}</label>
+                    <select id="umpire_rating" name="umpire_rating" class="form-control"{% if sdll_provided_umpire %} required{% endif %}>
+                        <option value="">Select a rating...</option>
+                        {% for rating in ratings %}
+                        <option value="{{ rating }}" {% if (form_data.get('umpire_rating') == rating) or (report and report.umpire_rating == rating) %}selected{% endif %}>{{ rating_labels[rating] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="umpire_name">Umpire Name (optional)</label>
+                    <input type="text" id="umpire_name" name="umpire_name" class="form-control"
+                           placeholder="If you know the umpire's name"
+                           value="{{ form_data.get('umpire_name', report.umpire_name if report else '') }}">
+                </div>
+
+                <div class="form-group">
+                    <label for="umpire_comments">Comments (optional)</label>
+                    <textarea id="umpire_comments" name="umpire_comments" class="form-control"
+                              rows="3" placeholder="Any additional feedback about the umpire's performance...">{{ form_data.get('umpire_comments', report.umpire_comments if report else '') }}</textarea>
+                </div>
+
+                {% if show_pitching and roster %}
+                <!-- Pitching Statistics Section -->
+                <h3 style="border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Pitching Statistics</h3>
+
+                <style>
+                    /* Hide optional pitch columns on mobile */
+                    @media (max-width: 500px) {
+                        .pitch-optional { display: none !important; }
+                    }
+                </style>
+
+                <div style="background: rgba(255, 140, 0, 0.1); padding: 12px; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid rgb(255, 140, 0);">
+                    <strong>Required for Little League Compliance:</strong> Enter pitch counts for all players who pitched.
+                    Leave rows blank for non-pitchers.
+                </div>
+
+                <table style="font-size: 14px; margin-bottom: 20px; width: 100%;">
+                    <thead>
+                        <tr style="background: #f5f5f5;">
+                            <th style="text-align: left; padding: 8px;">Player</th>
+                            <th style="width: 70px; text-align: center; padding: 8px;">Pitches*</th>
+                            <th class="pitch-optional" style="width: 55px; text-align: center; padding: 8px;">IP</th>
+                            <th class="pitch-optional" style="width: 50px; text-align: center; padding: 8px;">BB</th>
+                            <th class="pitch-optional" style="width: 50px; text-align: center; padding: 8px;">BF</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ps in roster %}
+                        {% set player = ps.player %}
+                        {% set existing = existing_pitching_stats.get(player.id) %}
+                        <tr>
+                            <td style="padding: 6px 8px;">{{ player.full_name if player else 'Unknown' }}</td>
+                            <td style="padding: 4px;">
+                                <input type="number" name="pitch_count_{{ player.id }}"
+                                       style="width: 60px; text-align: center; padding: 4px;"
+                                       min="0" max="150" placeholder=""
+                                       value="{{ form_data.get('pitch_count_' ~ player.id, existing.pitch_count if existing else '') }}">
+                            </td>
+                            <td class="pitch-optional" style="padding: 4px;">
+                                <input type="text" name="innings_{{ player.id }}"
+                                       style="width: 45px; text-align: center; padding: 4px;"
+                                       placeholder="0.0"
+                                       value="{{ form_data.get('innings_' ~ player.id, existing.innings_pitched if existing else '') }}">
+                            </td>
+                            <td class="pitch-optional" style="padding: 4px;">
+                                <input type="number" name="walks_{{ player.id }}"
+                                       style="width: 40px; text-align: center; padding: 4px;"
+                                       min="0" placeholder=""
+                                       value="{{ form_data.get('walks_' ~ player.id, existing.walks if existing else '') }}">
+                            </td>
+                            <td class="pitch-optional" style="padding: 4px;">
+                                <input type="number" name="batters_faced_{{ player.id }}"
+                                       style="width: 40px; text-align: center; padding: 4px;"
+                                       min="0" placeholder=""
+                                       value="{{ form_data.get('batters_faced_' ~ player.id, existing.batters_faced if existing else '') }}">
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <p style="font-size: 12px; color: #666; margin-top: 0;">
+                    *Pitch count required for players who pitched.<span class="pitch-optional"> IP = Innings Pitched, BB = Walks, BF = Batters Faced.</span>
+                </p>
+                {% elif show_pitching and not roster %}
+                <div style="background: rgba(255, 140, 0, 0.1); padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid rgb(255, 140, 0);">
+                    <strong>Pitch Count Tracking:</strong> No roster found for this team. Players must be assigned to
+                    teams (via draft or manual assignment) before pitching statistics can be recorded.
+                </div>
+                {% endif %}
+
+                <!-- Actions -->
+                <div class="postgame-actions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+                    <button type="submit" name="action" value="not_played" class="btn btn-outline" style="border-color: #888; color: #888;">
+                        Game Was Not Played
+                    </button>
+                    <button type="submit" name="action" value="submit" class="btn btn-primary" style="padding: 12px 30px;">
+                        Submit Report
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Screenshot Tab -->
+        {% if show_pitching %}
+        <div id="tab-screenshot" class="postgame-tab-content">
+            <!-- Instructions -->
+            <div style="background: rgba(255, 140, 0, 0.1); padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid rgb(255, 140, 0);">
+                <strong>How to use:</strong>
+                <ol style="margin: 10px 0 0 0; padding-left: 20px;">
+                    <li>Open GameChanger app after the game</li>
+                    <li>Go to Box Score or Game Summary</li>
+                    <li>Take a screenshot showing the final score and pitching stats</li>
+                    <li>Upload the screenshot below</li>
+                </ol>
             </div>
 
-            <div class="form-group">
-                <label for="umpire_name">Umpire Name (optional)</label>
-                <input type="text" id="umpire_name" name="umpire_name" class="form-control"
-                       placeholder="If you know the umpire's name"
-                       value="{{ form_data.get('umpire_name', report.umpire_name if report else '') }}">
+            <!-- Upload Zone -->
+            <div id="screenshot-upload-zone" class="screenshot-upload-zone" onclick="document.getElementById('screenshot-file').click();">
+                <input type="file" id="screenshot-file" accept="image/png,image/jpeg,image/webp" style="display: none;">
+                <div id="upload-instructions">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #888; margin-bottom: 10px;">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <p style="margin: 0; color: #666;">Click to upload or drag and drop</p>
+                    <p style="margin: 5px 0 0; color: #999; font-size: 12px;">PNG, JPEG, or WebP (max 10MB)</p>
+                </div>
+                <img id="screenshot-preview" class="screenshot-preview" alt="Screenshot preview">
             </div>
 
-            <div class="form-group">
-                <label for="umpire_comments">Comments (optional)</label>
-                <textarea id="umpire_comments" name="umpire_comments" class="form-control"
-                          rows="3" placeholder="Any additional feedback about the umpire's performance...">{{ form_data.get('umpire_comments', report.umpire_comments if report else '') }}</textarea>
+            <!-- Spinner -->
+            <div id="screenshot-spinner" class="screenshot-spinner">
+                <div style="text-align: center;">
+                    <div style="display: inline-block; width: 40px; height: 40px; border: 3px solid #f3f3f3; border-top: 3px solid rgb(34, 139, 34); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    <p style="margin-top: 10px; color: #666;">Analyzing screenshot...</p>
+                </div>
             </div>
-
-            {% if show_pitching and roster %}
-            <!-- Pitching Statistics Section -->
-            <h3 style="border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Pitching Statistics</h3>
-
             <style>
-                /* Hide optional pitch columns on mobile */
-                @media (max-width: 500px) {
-                    .pitch-optional { display: none !important; }
-                }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
             </style>
 
-            <div style="background: rgba(255, 140, 0, 0.1); padding: 12px; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid rgb(255, 140, 0);">
-                <strong>Required for Little League Compliance:</strong> Enter pitch counts for all players who pitched.
-                Leave rows blank for non-pitchers.
+            <!-- Error Display -->
+            <div id="screenshot-error" class="screenshot-error">
+                <strong style="color: #c33;">Error:</strong>
+                <span id="screenshot-error-msg"></span>
+                <div id="screenshot-retry-options" style="margin-top: 15px;">
+                    <button type="button" class="btn btn-outline" style="margin-right: 10px;" onclick="retryScreenshot()">
+                        Try Again
+                    </button>
+                    <button type="button" class="btn btn-outline" onclick="switchTab('manual')">
+                        Use Manual Entry
+                    </button>
+                </div>
             </div>
 
-            <table style="font-size: 14px; margin-bottom: 20px; width: 100%;">
-                <thead>
-                    <tr style="background: #f5f5f5;">
-                        <th style="text-align: left; padding: 8px;">Player</th>
-                        <th style="width: 70px; text-align: center; padding: 8px;">Pitches*</th>
-                        <th class="pitch-optional" style="width: 55px; text-align: center; padding: 8px;">IP</th>
-                        <th class="pitch-optional" style="width: 50px; text-align: center; padding: 8px;">BB</th>
-                        <th class="pitch-optional" style="width: 50px; text-align: center; padding: 8px;">BF</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for ps in roster %}
-                    {% set player = ps.player %}
-                    {% set existing = existing_pitching_stats.get(player.id) %}
-                    <tr>
-                        <td style="padding: 6px 8px;">{{ player.full_name if player else 'Unknown' }}</td>
-                        <td style="padding: 4px;">
-                            <input type="number" name="pitch_count_{{ player.id }}"
-                                   style="width: 60px; text-align: center; padding: 4px;"
-                                   min="0" max="150" placeholder=""
-                                   value="{{ form_data.get('pitch_count_' ~ player.id, existing.pitch_count if existing else '') }}">
-                        </td>
-                        <td class="pitch-optional" style="padding: 4px;">
-                            <input type="text" name="innings_{{ player.id }}"
-                                   style="width: 45px; text-align: center; padding: 4px;"
-                                   placeholder="0.0"
-                                   value="{{ form_data.get('innings_' ~ player.id, existing.innings_pitched if existing else '') }}">
-                        </td>
-                        <td class="pitch-optional" style="padding: 4px;">
-                            <input type="number" name="walks_{{ player.id }}"
-                                   style="width: 40px; text-align: center; padding: 4px;"
-                                   min="0" placeholder=""
-                                   value="{{ form_data.get('walks_' ~ player.id, existing.walks if existing else '') }}">
-                        </td>
-                        <td class="pitch-optional" style="padding: 4px;">
-                            <input type="number" name="batters_faced_{{ player.id }}"
-                                   style="width: 40px; text-align: center; padding: 4px;"
-                                   min="0" placeholder=""
-                                   value="{{ form_data.get('batters_faced_' ~ player.id, existing.batters_faced if existing else '') }}">
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            <p style="font-size: 12px; color: #666; margin-top: 0;">
-                *Pitch count required for players who pitched.<span class="pitch-optional"> IP = Innings Pitched, BB = Walks, BF = Batters Faced.</span>
-            </p>
-            {% elif show_pitching and not roster %}
-            <div style="background: rgba(255, 140, 0, 0.1); padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid rgb(255, 140, 0);">
-                <strong>Pitch Count Tracking:</strong> No roster found for this team. Players must be assigned to
-                teams (via draft or manual assignment) before pitching statistics can be recorded.
-            </div>
-            {% endif %}
+            <!-- Parsed Results Form -->
+            <div id="screenshot-results" class="screenshot-results">
+                <form id="screenshot-submit-form">
+                    <input type="hidden" id="gc-session-id" name="session_id" value="">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-            <!-- Actions -->
-            <div class="postgame-actions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
-                <button type="submit" name="action" value="not_played" class="btn btn-outline" style="border-color: #888; color: #888;">
-                    Game Was Not Played
-                </button>
-                <button type="submit" name="action" value="submit" class="btn btn-primary" style="padding: 12px 30px;">
-                    Submit Report
-                </button>
+                    <!-- Warnings (only shown if there are issues) -->
+                    <div id="warnings-section" style="display: none; background: #fff3cd; padding: 12px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
+                        <strong>Please Review:</strong>
+                        <ul id="warnings-list" style="margin: 5px 0 0 0; padding-left: 20px;"></ul>
+                    </div>
+
+                    <!-- Score Section (Editable) -->
+                    <h3 style="margin-top: 0; border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Final Score</h3>
+                    <div class="postgame-two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                        <div class="form-group">
+                            <label for="gc_our_score">{{ team.computed_display_name }} (Your Team)</label>
+                            <input type="number" id="gc_our_score" name="our_score" class="form-control"
+                                   min="0" max="99" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="gc_opponent_score">{{ opponent.computed_display_name if opponent else 'Opponent' }}</label>
+                            <input type="number" id="gc_opponent_score" name="opponent_score" class="form-control"
+                                   min="0" max="99" required>
+                        </div>
+                    </div>
+
+                    <!-- Pitching Statistics (Pre-filled from screenshot) -->
+                    <h3 style="border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Pitching Statistics</h3>
+                    <p style="font-size: 14px; color: #666; margin-bottom: 15px;">
+                        Review and adjust the extracted pitching data. Match players to roster if needed.
+                    </p>
+
+                    <table id="gc-pitching-table" style="font-size: 14px; margin-bottom: 10px; width: 100%;">
+                        <thead>
+                            <tr style="background: #f5f5f5;">
+                                <th style="text-align: left; padding: 8px;">Player</th>
+                                <th style="width: 60px; text-align: center; padding: 8px;">Pitches</th>
+                                <th style="width: 50px; text-align: center; padding: 8px;">IP</th>
+                                <th class="pitch-optional" style="width: 40px; text-align: center; padding: 8px;">K</th>
+                                <th class="pitch-optional" style="width: 40px; text-align: center; padding: 8px;">BB</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gc-pitching-tbody">
+                            <!-- Populated by JavaScript -->
+                        </tbody>
+                    </table>
+
+                    <!-- Add Pitcher Button -->
+                    <button type="button" id="add-pitcher-btn" onclick="addPitcherRow()" class="btn btn-outline" style="margin-bottom: 20px; font-size: 13px;">
+                        + Add Pitcher
+                    </button>
+
+                    <!-- Innings Section (auto-calculated from pitching) -->
+                    <h3 style="border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Innings Played</h3>
+                    <p style="font-size: 14px; color: #666; margin-bottom: 15px;">
+                        Innings in field is calculated from pitcher IP. You may adjust if needed (e.g., incomplete final inning).
+                    </p>
+                    <div class="postgame-two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                        <div class="form-group">
+                            <label for="gc_innings_batted">Innings Batted</label>
+                            <select id="gc_innings_batted" name="innings_batted" class="form-control" required>
+                                <option value="">Select...</option>
+                                {% for i in range(1, 8) %}
+                                <option value="{{ i }}">{{ i }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="gc_innings_fielded">Innings in Field <span id="innings-calc-indicator" style="font-size: 11px; color: #888;"></span></label>
+                            <select id="gc_innings_fielded" name="innings_fielded" class="form-control" required>
+                                <option value="">Select...</option>
+                                {% for i in range(1, 8) %}
+                                <option value="{{ i }}">{{ i }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Certification Section -->
+                    <div id="certification-section" style="background: rgba(34, 139, 34, 0.1); padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid rgb(34, 139, 34);">
+                        <h4 style="margin: 0 0 15px 0; color: rgb(34, 139, 34);">Game Statistics Confirmation</h4>
+                        <p style="font-size: 14px; margin-bottom: 15px;">
+                            This data was extracted automatically from your screenshot. Please verify all values are correct before continuing.
+                        </p>
+                        <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="gc_certification" required style="margin-top: 3px; width: 18px; height: 18px;" onchange="updateCertificationState()">
+                            <span style="font-size: 14px;">
+                                <strong>I certify</strong> that I have reviewed the game score, innings played, and pitching statistics above, and confirm they are accurate to the best of my knowledge.
+                                <span style="color: #666; font-size: 12px; display: block; margin-top: 5px;">
+                                    (This feature is in BETA - your verification helps ensure data quality)
+                                </span>
+                            </span>
+                        </label>
+                        <div id="continue-to-umpire-btn" style="margin-top: 20px; text-align: center; display: none;">
+                            <button type="button" class="btn btn-primary" onclick="openUmpireSection()" style="padding: 12px 30px;">
+                                Continue to Umpire Evaluation &rarr;
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Umpire Section (hidden until certified) -->
+                    <div id="umpire-section" style="display: none; margin-bottom: 20px; background: #fafafa; padding: 20px; border-radius: 8px; border: 1px solid #ddd;">
+                        <h3 style="margin: 0 0 15px 0; border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">
+                            Umpire Evaluation
+                            {% if sdll_provided_umpire %}<span style="color: #c33; font-size: 12px; margin-left: 10px;">Required</span>{% else %}<span style="color: #666; font-size: 12px; margin-left: 10px;">Optional</span>{% endif %}
+                        </h3>
+
+                        {% if not sdll_provided_umpire %}
+                        <div style="background: rgba(100, 100, 100, 0.1); padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #666;">
+                            <strong>Note:</strong> SDLL did not provide the umpire for this game.
+                        </div>
+                        {% endif %}
+
+                        <div class="form-group">
+                            <label for="gc_umpire_rating">Rating{% if sdll_provided_umpire %} <span style="color: #c33;">*</span>{% endif %}</label>
+                            <select id="gc_umpire_rating" name="umpire_rating" class="form-control" onchange="updateSubmitState()"{% if sdll_provided_umpire %} required{% endif %}>
+                                <option value="">Select a rating...</option>
+                                {% for rating in ratings %}
+                                <option value="{{ rating }}">{{ rating_labels[rating] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="gc_umpire_name">Umpire Name (optional)</label>
+                            <input type="text" id="gc_umpire_name" name="umpire_name" class="form-control"
+                                   placeholder="If you know the umpire's name">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="gc_umpire_comments">Comments (optional)</label>
+                            <textarea id="gc_umpire_comments" name="umpire_comments" class="form-control"
+                                      rows="2" placeholder="Any feedback..."></textarea>
+                        </div>
+
+                        <!-- Actions (inside umpire section) -->
+                        <div class="postgame-actions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
+                            <button type="button" class="btn btn-outline" style="border-color: #888; color: #888;" onclick="resetScreenshot()">
+                                Start Over
+                            </button>
+                            <button type="submit" id="gc-submit-btn" class="btn btn-primary" style="padding: 12px 30px;" disabled>
+                                Submit Report
+                            </button>
+                        </div>
+                        <p id="submit-hint" style="text-align: right; font-size: 12px; color: #888; margin-top: 10px; display: none;">
+                            Please select an umpire rating to submit.
+                        </p>
+                    </div>
+                </form>
             </div>
-        </form>
+
+            <!-- Hidden data -->
+            <script>
+            var gcRoster = {{ roster_json | tojson | safe }};
+            var gameId = {{ game.ID }};
+            var teamId = {{ team.team_ID }};
+            var csrfToken = '{{ csrf_token() }}';
+            var gcSessionUuid = null;
+            </script>
+        </div>
+        {% endif %}
     </div>
 </div>
+
+{% if show_pitching %}
+<script>
+// Tab switching
+function switchTab(tabName) {
+    // Hide all tabs
+    document.querySelectorAll('.postgame-tab-content').forEach(function(tab) {
+        tab.classList.remove('active');
+    });
+    document.querySelectorAll('.postgame-tab').forEach(function(btn) {
+        btn.classList.remove('active');
+    });
+
+    // Show selected tab
+    document.getElementById('tab-' + tabName).classList.add('active');
+    event.target.classList.add('active');
+
+    // If switching to manual from screenshot, mark session as abandoned
+    if (tabName === 'manual' && gcSessionUuid) {
+        fetch('/coach/postgame/' + gameId + '/' + teamId + '/screenshot/abandon', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'session_uuid=' + gcSessionUuid + '&csrf_token=' + csrfToken
+        });
+    }
+}
+
+// Screenshot upload handling
+var uploadZone = document.getElementById('screenshot-upload-zone');
+var fileInput = document.getElementById('screenshot-file');
+var preview = document.getElementById('screenshot-preview');
+var spinner = document.getElementById('screenshot-spinner');
+var errorBox = document.getElementById('screenshot-error');
+var errorMsg = document.getElementById('screenshot-error-msg');
+var resultsBox = document.getElementById('screenshot-results');
+
+// Drag and drop
+uploadZone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    uploadZone.classList.add('dragover');
+});
+
+uploadZone.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+});
+
+uploadZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) {
+        fileInput.files = e.dataTransfer.files;
+        handleFileSelect();
+    }
+});
+
+fileInput.addEventListener('change', handleFileSelect);
+
+function handleFileSelect() {
+    var file = fileInput.files[0];
+    if (!file) return;
+
+    // Show preview
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        preview.src = e.target.result;
+        preview.classList.add('visible');
+        uploadZone.classList.add('has-file');
+        document.getElementById('upload-instructions').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+
+    // Upload and parse
+    uploadScreenshot(file);
+}
+
+function uploadScreenshot(file) {
+    // Show spinner, hide error and results
+    spinner.classList.add('visible');
+    errorBox.classList.remove('visible');
+    resultsBox.classList.remove('visible');
+
+    var formData = new FormData();
+    formData.append('screenshot', file);
+    formData.append('csrf_token', csrfToken);
+    if (gcSessionUuid) {
+        formData.append('session_uuid', gcSessionUuid);
+    }
+
+    fetch('/coach/postgame/' + gameId + '/' + teamId + '/screenshot', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        return response.json().then(function(data) {
+            data._status = response.status;
+            return data;
+        });
+    })
+    .then(function(data) {
+        spinner.classList.remove('visible');
+
+        if (data.error) {
+            // Store session UUID for retry
+            if (data.session_uuid) {
+                gcSessionUuid = data.session_uuid;
+            }
+
+            errorMsg.textContent = data.error;
+            errorBox.classList.add('visible');
+
+            // Show/hide retry options based on can_retry
+            var retryOptions = document.getElementById('screenshot-retry-options');
+            if (data.can_retry === false) {
+                retryOptions.innerHTML = '<button type="button" class="btn btn-primary" onclick="switchTab(\'manual\')">Use Manual Entry</button>';
+            }
+        } else {
+            // Success - populate form
+            gcSessionUuid = data.session_uuid;
+            document.getElementById('gc-session-id').value = data.session_id;
+
+            // Populate scores
+            document.getElementById('gc_our_score').value = data.data.our_score || '';
+            document.getElementById('gc_opponent_score').value = data.data.opponent_score || '';
+
+            // Show warnings if any
+            var warningsSection = document.getElementById('warnings-section');
+            var warningsList = document.getElementById('warnings-list');
+            if (data.warnings && data.warnings.length > 0) {
+                warningsList.innerHTML = '';
+                data.warnings.forEach(function(w) {
+                    var li = document.createElement('li');
+                    li.textContent = w;
+                    warningsList.appendChild(li);
+                });
+                warningsSection.style.display = 'block';
+            } else {
+                warningsSection.style.display = 'none';
+            }
+
+            // Populate pitching table (includes strikeouts and walks now)
+            populatePitchingTable(data.data.pitchers, data.roster);
+
+            // Reset certification and umpire sections for fresh review
+            document.getElementById('gc_certification').checked = false;
+            document.getElementById('continue-to-umpire-btn').style.display = 'none';
+            document.getElementById('umpire-section').style.display = 'none';
+            document.getElementById('gc-submit-btn').disabled = true;
+
+            resultsBox.classList.add('visible');
+        }
+    })
+    .catch(function(err) {
+        spinner.classList.remove('visible');
+        errorMsg.textContent = 'Network error. Please try again.';
+        errorBox.classList.add('visible');
+    });
+}
+
+var gcPitcherRowCount = 0;
+
+function populatePitchingTable(pitchers, roster) {
+    var tbody = document.getElementById('gc-pitching-tbody');
+    tbody.innerHTML = '';
+    gcPitcherRowCount = 0;
+
+    // Build roster lookup by player_code
+    var rosterByCode = {};
+    (roster || gcRoster || []).forEach(function(p) {
+        if (p.player_code) {
+            rosterByCode[p.player_code] = p;
+        }
+    });
+
+    // Get all roster player IDs for the dropdown
+    var allRoster = roster || gcRoster || [];
+
+    // Add rows for each pitcher from screenshot
+    (pitchers || []).forEach(function(p, idx) {
+        // Find matching roster player
+        var matchedPlayer = null;
+        if (p.player_code && rosterByCode[p.player_code]) {
+            matchedPlayer = rosterByCode[p.player_code];
+        }
+
+        addPitcherRowWithData(allRoster, matchedPlayer, p);
+    });
+
+    // If no pitchers found, show a message row
+    if (!pitchers || pitchers.length === 0) {
+        var row = document.createElement('tr');
+        row.id = 'no-pitchers-msg';
+        var td = document.createElement('td');
+        td.colSpan = 5;
+        td.style.padding = '20px';
+        td.style.textAlign = 'center';
+        td.style.color = '#666';
+        td.textContent = 'No pitching data found in screenshot. Use "Add Pitcher" below to add pitchers.';
+        row.appendChild(td);
+        tbody.appendChild(row);
+    }
+
+    // Calculate innings fielded from pitcher IP
+    calculateInningsFielded();
+}
+
+function getSelectedPlayerCodes() {
+    // Get all player codes currently selected in pitcher rows
+    var selected = [];
+    document.querySelectorAll('.pitcher-select').forEach(function(sel) {
+        if (sel.value && !sel.value.startsWith('_unmatched_')) {
+            selected.push(sel.value);
+        }
+    });
+    return selected;
+}
+
+function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
+    var tbody = document.getElementById('gc-pitching-tbody');
+
+    // Remove "no pitchers" message if present
+    var noMsg = document.getElementById('no-pitchers-msg');
+    if (noMsg) noMsg.remove();
+
+    // Get already-selected player codes to exclude (if requested)
+    var excludeCodes = excludeSelected ? getSelectedPlayerCodes() : [];
+
+    var idx = gcPitcherRowCount++;
+    var row = document.createElement('tr');
+    row.className = 'pitcher-row';
+
+    // Player dropdown
+    var tdPlayer = document.createElement('td');
+    tdPlayer.style.padding = '6px 8px';
+
+    var select = document.createElement('select');
+    select.name = 'pitcher_player_' + idx;
+    select.className = 'form-control pitcher-select';
+    select.style.width = '100%';
+
+    var optNone = document.createElement('option');
+    optNone.value = '';
+    optNone.textContent = '-- Select Player --';
+    select.appendChild(optNone);
+
+    (roster || gcRoster || []).forEach(function(rp) {
+        // Skip players already selected (unless this is the matched player for this row)
+        var isMatchedPlayer = matchedPlayer && matchedPlayer.player_code === rp.player_code;
+        if (!isMatchedPlayer && excludeCodes.indexOf(rp.player_code) !== -1) {
+            return; // Skip this player
+        }
+
+        var opt = document.createElement('option');
+        opt.value = rp.player_code;
+        opt.textContent = rp.name;
+        if (isMatchedPlayer) {
+            opt.selected = true;
+        }
+        select.appendChild(opt);
+    });
+
+    // If no match but has name from screenshot
+    if (!matchedPlayer && data && data.name) {
+        var optUnmatched = document.createElement('option');
+        optUnmatched.value = '_unmatched_' + idx;
+        optUnmatched.textContent = data.name + ' (not matched)';
+        optUnmatched.selected = true;
+        select.appendChild(optUnmatched);
+    }
+
+    tdPlayer.appendChild(select);
+    row.appendChild(tdPlayer);
+
+    // Pitches
+    var tdPitches = document.createElement('td');
+    tdPitches.style.padding = '4px';
+    var inputPitches = document.createElement('input');
+    inputPitches.type = 'number';
+    inputPitches.name = 'pitcher_pitches_' + idx;
+    inputPitches.value = (data && data.pitches_thrown) || '';
+    inputPitches.style.cssText = 'width: 50px; text-align: center; padding: 4px;';
+    inputPitches.min = '0';
+    inputPitches.max = '150';
+    tdPitches.appendChild(inputPitches);
+    row.appendChild(tdPitches);
+
+    // IP
+    var tdIP = document.createElement('td');
+    tdIP.style.padding = '4px';
+    var inputIP = document.createElement('input');
+    inputIP.type = 'text';
+    inputIP.name = 'pitcher_ip_' + idx;
+    inputIP.className = 'pitcher-ip';
+    inputIP.value = (data && data.innings_pitched) || '';
+    inputIP.style.cssText = 'width: 40px; text-align: center; padding: 4px;';
+    inputIP.placeholder = '0.0';
+    inputIP.addEventListener('change', calculateInningsFielded);
+    inputIP.addEventListener('input', calculateInningsFielded);
+    tdIP.appendChild(inputIP);
+    row.appendChild(tdIP);
+
+    // K (strikeouts)
+    var tdK = document.createElement('td');
+    tdK.className = 'pitch-optional';
+    tdK.style.padding = '4px';
+    var inputK = document.createElement('input');
+    inputK.type = 'number';
+    inputK.name = 'pitcher_k_' + idx;
+    inputK.value = (data && data.strikeouts) || '';
+    inputK.style.cssText = 'width: 35px; text-align: center; padding: 4px;';
+    inputK.min = '0';
+    tdK.appendChild(inputK);
+    row.appendChild(tdK);
+
+    // BB (walks)
+    var tdBB = document.createElement('td');
+    tdBB.className = 'pitch-optional';
+    tdBB.style.padding = '4px';
+    var inputBB = document.createElement('input');
+    inputBB.type = 'number';
+    inputBB.name = 'pitcher_bb_' + idx;
+    inputBB.value = (data && data.walks) || '';
+    inputBB.style.cssText = 'width: 35px; text-align: center; padding: 4px;';
+    inputBB.min = '0';
+    tdBB.appendChild(inputBB);
+    row.appendChild(tdBB);
+
+    tbody.appendChild(row);
+}
+
+function addPitcherRow() {
+    // Exclude players already in the table
+    addPitcherRowWithData(gcRoster, null, null, true);
+}
+
+function calculateInningsFielded() {
+    // Sum all pitcher IP values
+    var ipInputs = document.querySelectorAll('.pitcher-ip');
+    var totalIP = 0;
+
+    ipInputs.forEach(function(input) {
+        var val = parseFloat(input.value);
+        if (!isNaN(val)) {
+            // IP format: 2.1 means 2 and 1/3 innings, 2.2 means 2 and 2/3
+            var whole = Math.floor(val);
+            var partial = Math.round((val - whole) * 10);
+            // Convert partial (0, 1, 2) to thirds
+            totalIP += whole + (partial / 3);
+        }
+    });
+
+    // Round up to whole innings
+    var wholeInnings = Math.ceil(totalIP);
+
+    if (wholeInnings > 0 && wholeInnings <= 7) {
+        var select = document.getElementById('gc_innings_fielded');
+        select.value = wholeInnings;
+        document.getElementById('innings-calc-indicator').textContent = '(auto-calculated)';
+    } else if (wholeInnings === 0) {
+        document.getElementById('innings-calc-indicator').textContent = '';
+    }
+}
+
+// Certification and submission flow
+var umpireRequired = {{ 'true' if sdll_provided_umpire else 'false' }};
+
+function updateCertificationState() {
+    var certified = document.getElementById('gc_certification').checked;
+    var continueBtn = document.getElementById('continue-to-umpire-btn');
+
+    if (certified) {
+        continueBtn.style.display = 'block';
+    } else {
+        continueBtn.style.display = 'none';
+    }
+}
+
+function openUmpireSection() {
+    // Hide the certification continue button
+    document.getElementById('continue-to-umpire-btn').style.display = 'none';
+
+    // Show umpire section
+    var umpireSection = document.getElementById('umpire-section');
+    umpireSection.style.display = 'block';
+
+    // Scroll to umpire section
+    umpireSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // Update submit button state
+    updateSubmitState();
+}
+
+function updateSubmitState() {
+    var submitBtn = document.getElementById('gc-submit-btn');
+    var submitHint = document.getElementById('submit-hint');
+    var certified = document.getElementById('gc_certification').checked;
+    var umpireRating = document.getElementById('gc_umpire_rating').value;
+
+    // Check if ready to submit
+    var canSubmit = certified && (!umpireRequired || umpireRating);
+
+    submitBtn.disabled = !canSubmit;
+
+    // Show hint if umpire rating is required but not selected
+    if (umpireRequired && !umpireRating) {
+        submitHint.style.display = 'block';
+    } else {
+        submitHint.style.display = 'none';
+    }
+}
+
+function retryScreenshot() {
+    // Clear preview and let user upload again
+    preview.classList.remove('visible');
+    uploadZone.classList.remove('has-file');
+    document.getElementById('upload-instructions').style.display = 'block';
+    fileInput.value = '';
+    errorBox.classList.remove('visible');
+}
+
+function resetScreenshot() {
+    // Full reset
+    gcSessionUuid = null;
+    preview.classList.remove('visible');
+    uploadZone.classList.remove('has-file');
+    document.getElementById('upload-instructions').style.display = 'block';
+    fileInput.value = '';
+    errorBox.classList.remove('visible');
+    resultsBox.classList.remove('visible');
+    document.getElementById('gc-session-id').value = '';
+
+    // Reset certification and umpire sections
+    document.getElementById('gc_certification').checked = false;
+    document.getElementById('continue-to-umpire-btn').style.display = 'none';
+    document.getElementById('umpire-section').style.display = 'none';
+    document.getElementById('gc_umpire_rating').value = '';
+    document.getElementById('gc_umpire_name').value = '';
+    document.getElementById('gc_umpire_comments').value = '';
+    document.getElementById('gc-submit-btn').disabled = true;
+}
+
+// Handle screenshot form submission
+document.getElementById('screenshot-submit-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    var form = e.target;
+    var formData = new FormData();
+
+    // Add basic fields
+    formData.append('csrf_token', csrfToken);
+    formData.append('session_id', document.getElementById('gc-session-id').value);
+    formData.append('our_score', document.getElementById('gc_our_score').value);
+    formData.append('opponent_score', document.getElementById('gc_opponent_score').value);
+    formData.append('innings_batted', document.getElementById('gc_innings_batted').value);
+    formData.append('innings_fielded', document.getElementById('gc_innings_fielded').value);
+    formData.append('umpire_rating', document.getElementById('gc_umpire_rating').value);
+    formData.append('umpire_name', document.getElementById('gc_umpire_name').value);
+    formData.append('umpire_comments', document.getElementById('gc_umpire_comments').value);
+
+    // Build pitcher data - map to player IDs
+    var rosterByCode = {};
+    gcRoster.forEach(function(p) {
+        if (p.player_code) {
+            rosterByCode[p.player_code] = p;
+        }
+    });
+
+    // Find all pitcher rows
+    var tbody = document.getElementById('gc-pitching-tbody');
+    var rows = tbody.querySelectorAll('tr.pitcher-row');
+    rows.forEach(function(row) {
+        var select = row.querySelector('select');
+        var pitchInput = row.querySelector('input[name^="pitcher_pitches_"]');
+        var ipInput = row.querySelector('input[name^="pitcher_ip_"]');
+        var kInput = row.querySelector('input[name^="pitcher_k_"]');
+        var bbInput = row.querySelector('input[name^="pitcher_bb_"]');
+
+        if (select && pitchInput && select.value && pitchInput.value) {
+            var playerCode = select.value;
+            // Skip unmatched entries
+            if (playerCode.startsWith('_unmatched_')) return;
+
+            // Find the player in roster
+            var player = rosterByCode[playerCode];
+            if (player) {
+                formData.append('pitch_code_' + playerCode, pitchInput.value);
+                if (ipInput && ipInput.value) {
+                    formData.append('innings_code_' + playerCode, ipInput.value);
+                }
+                if (kInput && kInput.value) {
+                    formData.append('strikeouts_code_' + playerCode, kInput.value);
+                }
+                if (bbInput && bbInput.value) {
+                    formData.append('walks_code_' + playerCode, bbInput.value);
+                }
+            }
+        }
+    });
+
+    // Submit
+    fetch('/coach/postgame/' + gameId + '/' + teamId + '/screenshot/submit', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.error) {
+            alert('Error: ' + data.error);
+        } else if (data.redirect) {
+            window.location.href = data.redirect;
+        }
+    })
+    .catch(function(err) {
+        alert('Network error. Please try again.');
+    });
+});
+</script>
+{% endif %}
 {% endblock %}
