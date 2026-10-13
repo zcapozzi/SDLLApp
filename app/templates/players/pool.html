@@ -324,16 +324,17 @@ function applyFilters() {
 
     document.getElementById('visible-count').textContent = visibleCount;
 
-    // Track if search has visible unassigned results (for quick-assign)
-    var hasUnassignedVisible = false;
+    // Track if search has exactly one visible unassigned result (for quick-assign)
+    var unassignedVisibleCount = 0;
     if (search) {
         rows.forEach(function(row) {
             if (row.style.display !== 'none' && row.dataset.assigned === 'no') {
-                hasUnassignedVisible = true;
+                unassignedVisibleCount++;
             }
         });
     }
-    searchHasResults = hasUnassignedVisible;
+    // Only enable quick-assign when exactly one unassigned player is visible
+    searchHasResults = (unassignedVisibleCount === 1);
     updateQuickAssignBar();
 
     // Update URL without reload
