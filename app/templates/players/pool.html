@@ -173,6 +173,13 @@
             Showing <span id="visible-count">{{ players|length }}</span> of {{ players|length }} players
         </div>
     </div>
+
+    <!-- Quick Assign (hidden until last team exists and search is active) -->
+    <div id="quick-assign-bar" style="display: none; margin-top: 12px; padding: 10px 12px; background: rgba(34, 139, 34, 0.08); border-radius: 6px; align-items: center; gap: 10px;">
+        <span style="font-size: 13px; color: #666;">Quick assign to:</span>
+        <button type="button" id="quick-assign-btn" class="btn btn-secondary" style="padding: 6px 14px; font-size: 13px;"></button>
+        <span style="font-size: 12px; color: #888; margin-left: auto;">(or press Enter)</span>
+    </div>
 </div>
 
 <!-- Player Table -->
@@ -276,6 +283,10 @@ var allTeams = [
 var activeDropdown = null;
 var highlightedIndex = -1;
 
+// Track last assigned team for quick-assign workflow
+var lastAssignedTeam = null;  // { id: number, display: string }
+var searchHasResults = false;
+
 function changeSeason(seasonId) {
     window.location.href = '{{ url_for("players.player_pool") }}/' + seasonId;
 }
@@ -312,6 +323,18 @@ function applyFilters() {
     });
 
     document.getElementById('visible-count').textContent = visibleCount;
+
+    // Track if search has visible unassigned results (for quick-assign)
+    var hasUnassignedVisible = false;
+    if (search) {
+        rows.forEach(function(row) {
+            if (row.style.display !== 'none' && row.dataset.assigned === 'no') {
+                hasUnassignedVisible = true;
+            }
+        });
+    }
+    searchHasResults = hasUnassignedVisible;
+    updateQuickAssignBar();
 
     // Update URL without reload
     var url = new URL(window.location.href);
@@ -393,6 +416,15 @@ function assignPlayer(playerId, teamId, container) {
     input.value = 'Assigning...';
     input.disabled = true;
 
+    // Find team display name for remembering
+    var teamDisplay = '';
+    for (var i = 0; i < allTeams.length; i++) {
+        if (allTeams[i].id === teamId) {
+            teamDisplay = allTeams[i].display;
+            break;
+        }
+    }
+
     fetch('/players/' + playerId + '/assign', {
         method: 'POST',
         headers: {
@@ -425,6 +457,17 @@ function assignPlayer(playerId, teamId, container) {
             updateStats(1);
 
             hideAllDropdowns();
+
+            // Remember this team for quick-assign
+            lastAssignedTeam = { id: teamId, display: teamDisplay };
+
+            // Clear player search and refocus for next player
+            var playerSearch = document.getElementById('player-search');
+            playerSearch.value = '';
+            playerSearch.focus();
+
+            // Re-apply filters to show all players again, then update quick-assign bar
+            applyFilters();
         } else {
             alert('Error: ' + data.error);
             container.classList.remove('assigning');
@@ -495,6 +538,42 @@ function updateStats(delta) {
     document.getElementById('stat-unassigned').textContent = unassigned;
 }
 
+// Show/hide quick-assign bar based on state
+function updateQuickAssignBar() {
+    var bar = document.getElementById('quick-assign-bar');
+    var btn = document.getElementById('quick-assign-btn');
+
+    // Show only when: we have a last team AND there's an active search with unassigned results
+    if (lastAssignedTeam && searchHasResults) {
+        btn.textContent = lastAssignedTeam.display;
+        bar.style.display = 'flex';
+    } else {
+        bar.style.display = 'none';
+    }
+}
+
+// Quick-assign: assign first visible unassigned player to last team
+function quickAssignFirstVisible() {
+    if (!lastAssignedTeam) return;
+
+    var rows = document.querySelectorAll('#player-table tbody tr');
+    for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        if (row.style.display !== 'none' && row.dataset.assigned === 'no') {
+            // Found first visible unassigned player
+            var playerId = parseInt(row.dataset.playerId);
+            var container = row.querySelector('.team-autocomplete');
+            if (container) {
+                assignPlayer(playerId, lastAssignedTeam.id, container);
+            }
+            return;
+        }
+    }
+}
+
+// Quick-assign button click handler
+document.getElementById('quick-assign-btn').addEventListener('click', quickAssignFirstVisible);
+
 // Close dropdown when clicking outside
 document.addEventListener('click', function(e) {
     if (!e.target.closest('.team-autocomplete')) {
@@ -504,6 +583,15 @@ document.addEventListener('click', function(e) {
 
 // Keyboard navigation
 document.addEventListener('keydown', function(e) {
+    // Quick-assign with Enter when in player search and quick-assign is available
+    if (e.key === 'Enter' && document.activeElement === document.getElementById('player-search')) {
+        if (lastAssignedTeam && searchHasResults) {
+            e.preventDefault();
+            quickAssignFirstVisible();
+            return;
+        }
+    }
+
     if (!activeDropdown) return;
 
     var options = activeDropdown.querySelectorAll('.team-option');
