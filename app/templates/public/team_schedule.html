@@ -1693,6 +1693,11 @@
             // Check HTTP status first
             if (!response.ok) {
                 return response.json().then(function(data) {
+                    // If authentication is required, show login modal
+                    if (response.status === 401 && data.auth_required) {
+                        showLoginModal();
+                        throw new Error('__AUTH_REQUIRED__');
+                    }
                     throw new Error(data.error || 'Server error');
                 });
             }
@@ -1782,6 +1787,10 @@
             }
         })
         .catch(function(err) {
+            // Don't show alert for auth redirects - modal is already shown
+            if (err.message === '__AUTH_REQUIRED__') {
+                return;
+            }
             console.error('Error saving game start:', err);
             alert(err.message || 'Failed to save. Please try again.');
         });

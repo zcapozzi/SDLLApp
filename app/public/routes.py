@@ -1125,7 +1125,23 @@ def record_game_start():
     This is a public API for recording when games actually start.
     Only available for non-practice games on the day of the game.
     Pass allowStartTimeRecord=1 in request body to bypass date check for testing.
+
+    REQUIRES AUTHENTICATION - users must be logged in to record start times.
     """
+    # Require authentication
+    try:
+        if not current_user.is_authenticated:
+            return jsonify({
+                'error': 'Please log in to record game start times',
+                'auth_required': True
+            }), 401
+    except Exception:
+        # current_user not available - not authenticated
+        return jsonify({
+            'error': 'Please log in to record game start times',
+            'auth_required': True
+        }), 401
+
     try:
         data = request.get_json() or {}
         game_id = data.get('game_id')
@@ -1157,14 +1173,9 @@ def record_game_start():
             if game_date != date.today():
                 return jsonify({'error': 'Can only record start time on day of game'}), 400
 
-        # Get user/session info
+        # Get user/session info - authentication is required (checked at top of route)
         session_id = _get_or_create_session_id()
-        user_id = None
-        try:
-            if current_user.is_authenticated:
-                user_id = current_user.ID
-        except Exception:
-            pass
+        user_id = current_user.ID
 
         # Record the start time
         record, error_msg = GameStartRecord.record_start(
