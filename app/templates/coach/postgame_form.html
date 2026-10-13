@@ -493,6 +493,7 @@
                                 </span>
                             </span>
                         </label>
+                        <p id="certification-validation-msg" style="display: none; color: #c33; margin-top: 15px; font-size: 14px; font-weight: 500;"></p>
                         <div id="continue-to-umpire-btn" style="margin-top: 20px; text-align: center; display: none;">
                             <button type="button" class="btn btn-primary" onclick="openUmpireSection()" style="padding: 12px 30px;">
                                 Continue to Umpire Evaluation &rarr;
@@ -931,14 +932,50 @@ function calculateInningsFielded() {
 // Certification and submission flow
 var umpireRequired = {{ 'true' if sdll_provided_umpire else 'false' }};
 
+function validateStatsComplete() {
+    // Check scores
+    var ourScore = document.getElementById('gc_our_score').value;
+    var oppScore = document.getElementById('gc_opponent_score').value;
+    if (!ourScore || !oppScore) {
+        return { valid: false, message: 'Please enter both team scores.' };
+    }
+
+    // Check innings
+    var inningsBatted = document.getElementById('gc_innings_batted').value;
+    var inningsFielded = document.getElementById('gc_innings_fielded').value;
+    if (!inningsBatted) {
+        return { valid: false, message: 'Please select innings batted.' };
+    }
+    if (!inningsFielded) {
+        return { valid: false, message: 'Please select innings in field.' };
+    }
+
+    return { valid: true, message: '' };
+}
+
 function updateCertificationState() {
     var certified = document.getElementById('gc_certification').checked;
     var continueBtn = document.getElementById('continue-to-umpire-btn');
+    var validationMsg = document.getElementById('certification-validation-msg');
 
     if (certified) {
-        continueBtn.style.display = 'block';
+        // Validate all required stats are entered
+        var validation = validateStatsComplete();
+        if (validation.valid) {
+            continueBtn.style.display = 'block';
+            if (validationMsg) validationMsg.style.display = 'none';
+        } else {
+            continueBtn.style.display = 'none';
+            if (validationMsg) {
+                validationMsg.textContent = validation.message;
+                validationMsg.style.display = 'block';
+            }
+            // Uncheck the certification since data is incomplete
+            document.getElementById('gc_certification').checked = false;
+        }
     } else {
         continueBtn.style.display = 'none';
+        if (validationMsg) validationMsg.style.display = 'none';
     }
 }
 
