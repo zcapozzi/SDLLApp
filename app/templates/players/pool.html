@@ -343,7 +343,7 @@
     <div class="help-content">
         <h4>Player Pool Actions</h4>
         <ul>
-            <li><strong>Assign players to teams</strong> - Type a team name in the "Team Assignment" column to assign an unassigned player to a team. The dropdown will suggest teams, with the player's placed league shown first.</li>
+            <li><strong>Assign players to teams</strong> - Type a team name in the "Team Assignment" column to assign an unassigned player to a team. The dropdown will suggest teams, with the player's placed division shown first.</li>
             <li><strong>Withdraw from pool</strong> - Use the menu (&#8942;) on any player row to mark them as withdrawn. This removes them from the active pool (e.g., if they've decided not to play this season). Withdrawn players can be reinstated later.</li>
             <li><strong>Request a call-up</strong> - Use the menu (&#8942;) to open an email draft addressed to a player's parent. You can edit the message before sending to ask if they're available to sub up for a game in a higher division.</li>
         </ul>
@@ -369,10 +369,10 @@
             </select>
         </div>
 
-        <!-- League Filter -->
+        <!-- Division Filter -->
         <div>
             <select id="league-filter" class="form-control" onchange="applyFilters()">
-                <option value="">All Leagues</option>
+                <option value="">All Divisions</option>
                 {% for league in leagues %}
                 <option value="{{ league.ID }}" {% if current_league_id == league.ID %}selected{% endif %}>
                     {{ league.get_seasonal_name(org_season.is_spring) }}
@@ -431,7 +431,7 @@
                 <th>Player Name</th>
                 <th>Age</th>
                 <th>Sport</th>
-                <th>League Placement</th>
+                <th>Division Placement</th>
                 <th>Status</th>
                 <th style="min-width: 220px;">Team Assignment</th>
                 <th style="width: 80px;">Actions</th>
@@ -528,7 +528,7 @@
                             {% if ps.player.program == 'baseball' %}Baseball{% elif ps.player.program == 'softball' %}Softball{% else %}-{% endif %}
                         </div>
                         <div class="expand-detail">
-                            <span class="expand-label">League:</span>
+                            <span class="expand-label">Division:</span>
                             {% if ps.effective_league %}{{ ps.effective_league.get_seasonal_name(org_season.is_spring) }}{% else %}Not placed{% endif %}
                         </div>
                         <div class="expand-detail">
