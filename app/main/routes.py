@@ -1538,6 +1538,126 @@ def send_postgame_email_manual(game_id, team_id):
     return redirect(url_for('main.preview_postgame_email', game_id=game_id))
 
 
+@main_bp.route('/schedule-postgame-email/<int:game_id>/<int:team_id>', methods=['POST'])
+@login_required
+def schedule_postgame_email(game_id, team_id):
+    """
+    Schedule a post-game email to be sent at a later time.
+    """
+    from datetime import datetime
+    from pytz import timezone
+    from app.models.game import Game
+    from app.models.team import TeamSeason
+    from app.models.coach import CoachSeason
+    from app.models.scheduled_email import ScheduledEmail
+    from app.services.post_game_service import generate_postgame_email
+
+    # Check permission
+    if not current_user.has_role('admin', 'scheduler', 'DataManager'):
+        flash('You do not have permission to schedule emails.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    game = Game.query.get(game_id)
+    if not game:
+        flash('Game not found.', 'error')
+        return redirect(url_for('main.master_schedule'))
+
+    team = TeamSeason.query.get(team_id)
+    if not team:
+        flash('Team not found.', 'error')
+        return redirect(url_for('main.preview_postgame_email', game_id=game_id))
+
+    # Verify team is part of this game
+    if team_id not in (game.home_ID, game.away_ID):
+        flash('Team is not part of this game.', 'error')
+        return redirect(url_for('main.preview_postgame_email', game_id=game_id))
+
+    # Parse schedule date/time
+    schedule_date = request.form.get('schedule_date', '').strip()
+    schedule_time = request.form.get('schedule_time', '').strip()
+
+    if not schedule_date or not schedule_time:
+        flash('Please provide both date and time for scheduling.', 'error')
+        return redirect(url_for('main.preview_postgame_email', game_id=game_id))
+
+    try:
+        # Parse as Eastern time and convert to UTC
+        eastern = timezone('US/Eastern')
+        local_dt = datetime.strptime(f'{schedule_date} {schedule_time}', '%Y-%m-%d %H:%M')
+        local_dt = eastern.localize(local_dt)
+        utc_dt = local_dt.astimezone(timezone('UTC')).replace(tzinfo=None)
+    except ValueError:
+        flash('Invalid date or time format.', 'error')
+        return redirect(url_for('main.preview_postgame_email', game_id=game_id))
+
+    # Get coaches
+    coaches = CoachSeason.get_for_team(team_id)
+    head_coach = next((c for c in coaches if c.is_head_coach), coaches[0] if coaches else None)
+    assistant_coaches = [c for c in coaches if not c.is_head_coach] if coaches else []
+
+    # Get coach first name for greeting
+    coach_first_name = head_coach.name.split()[0] if head_coach and head_coach.name else 'Coach'
+
+    # Generate email content
+    email_content = generate_postgame_email(game_id, team_id, coach_first_name)
+
+    if not email_content:
+        flash('Failed to generate email content.', 'error')
+        return redirect(url_for('main.preview_postgame_email', game_id=game_id))
+
+    # Get recipient emails
+    def get_coach_email(coach):
+        if coach and coach.coach and coach.coach.user:
+            return coach.coach.user.email
+        return None
+
+    to_email = get_coach_email(head_coach)
+    cc_emails = [get_coach_email(c) for c in assistant_coaches]
+    cc_emails = [e for e in cc_emails if e]
+
+    if not to_email:
+        flash('No head coach email found. Cannot schedule.', 'error')
+        return redirect(url_for('main.preview_postgame_email', game_id=game_id))
+
+    # Build recipient list
+    recipients = [{'email': to_email, 'name': head_coach.name if head_coach else 'Coach'}]
+    for i, email in enumerate(cc_emails):
+        name = assistant_coaches[i].name if i < len(assistant_coaches) else 'Assistant Coach'
+        recipients.append({'email': email, 'name': name})
+
+    # Get opponent name for subject
+    opponent_id = game.away_ID if team_id == game.home_ID else game.home_ID
+    opponent = TeamSeason.query.get(opponent_id) if opponent_id else None
+    opponent_name = opponent.computed_display_name if opponent else 'TBD'
+
+    subject = f"Post-Game Report: {team.computed_display_name} vs {opponent_name} - {game.game_date.strftime('%b %d, %Y')}"
+
+    # Create scheduled email record
+    scheduled_email = ScheduledEmail(
+        created_by=current_user.ID,
+        email_type='postgame',
+        year=game.year,
+        is_spring=game.is_spring,
+        subject=subject,
+        body_html=email_content['html_body'],
+        body_text=email_content['text_body'],
+        reply_to='noreply@southdurhamlittleleague.org',
+        send_mode='individual',
+        scheduled_for=utc_dt,
+        recipient_count=len(recipients)
+    )
+    scheduled_email.recipients = recipients
+
+    db.session.add(scheduled_email)
+    db.session.commit()
+
+    # Format for display
+    display_time = local_dt.strftime('%B %d at %I:%M %p ET').replace(' 0', ' ')
+    flash(f'Post-game email scheduled for {team.computed_display_name} on {display_time}.', 'success')
+
+    return redirect(url_for('main.preview_postgame_email', game_id=game_id))
+
+
 # ============================================================================
 # Master Schedule (Board View)
 # ============================================================================

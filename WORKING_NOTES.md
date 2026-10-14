@@ -87,6 +87,32 @@ Implemented client-side timer and warning system for slow API responses:
 - "The image analysis service is responding slowly. This sometimes happens during high traffic periods."
 - "You can wait a bit longer, or switch to manual entry."
 
+### Post-Game Email Scheduling (Added)
+
+Added ability to schedule post-game emails for later rather than sending immediately.
+
+#### User Experience
+1. On the post-game email preview page, each team now has:
+   - "Send Email Now" button (existing functionality)
+   - "Or schedule for later..." expandable section with date/time picker
+2. Default schedule time is game date at 8:00 PM
+3. Uses existing `ScheduledEmail` infrastructure (cron processes pending emails)
+
+#### Files Modified
+- `app/templates/main/preview_postgame_email.html`:
+  - Added schedule form with date/time inputs
+  - Added `confirmScheduleEmail()` JavaScript function
+- `app/main/routes.py`:
+  - Added `schedule_postgame_email()` route
+  - Creates `ScheduledEmail` record with `email_type='postgame'`
+  - Converts Eastern time to UTC for storage
+
+#### Technical Details
+- Times entered as Eastern, stored as UTC
+- Uses existing `ScheduledEmail` model with `scheduled_for` field
+- Cron job processes via `email_blast_service.process_scheduled_emails()`
+- Send mode is `individual` (each recipient gets their own email)
+
 ---
 
 ## Session: October 13, 2026 - GameChanger Screenshot Parsing

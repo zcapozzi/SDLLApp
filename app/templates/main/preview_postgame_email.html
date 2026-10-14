@@ -93,13 +93,48 @@
 
         {% if preview.to_email and preview.to_email != 'No head coach email' %}
         <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
+            <!-- Send Now Button -->
             <form method="POST" action="{{ url_for('main.send_postgame_email_manual', game_id=game.ID, team_id=preview.team.team_ID) }}"
                   onsubmit="return confirmSendEmail('{{ preview.team_name }}', '{{ preview.to_email }}')">
                 <button type="submit" class="btn btn-primary" style="width: 100%;">
-                    📧 Send Email to {{ preview.team_name }}
+                    Send Email Now
                 </button>
             </form>
-            <p style="font-size: 12px; color: #666; margin-top: 8px; text-align: center;">
+
+            <!-- Schedule Option -->
+            <div style="margin-top: 15px;">
+                <details id="schedule-details-{{ preview.team.team_ID }}">
+                    <summary style="cursor: pointer; color: var(--primary); font-weight: 500; text-align: center;">
+                        Or schedule for later...
+                    </summary>
+                    <form method="POST" action="{{ url_for('main.schedule_postgame_email', game_id=game.ID, team_id=preview.team.team_ID) }}"
+                          style="margin-top: 15px; background: #f9f9f9; padding: 15px; border-radius: 8px;"
+                          onsubmit="return confirmScheduleEmail('{{ preview.team_name }}', this)">
+                        <div style="display: flex; gap: 10px; align-items: end; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 150px;">
+                                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Date</label>
+                                <input type="date" name="schedule_date" required class="form-control"
+                                       value="{{ game.game_date.strftime('%Y-%m-%d') }}"
+                                       min="{{ game.game_date.strftime('%Y-%m-%d') }}">
+                            </div>
+                            <div style="flex: 1; min-width: 120px;">
+                                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Time</label>
+                                <input type="time" name="schedule_time" required class="form-control" value="20:00">
+                            </div>
+                            <div>
+                                <button type="submit" class="btn btn-outline" style="border-color: rgb(34, 139, 34); color: rgb(34, 139, 34);">
+                                    Schedule
+                                </button>
+                            </div>
+                        </div>
+                        <p style="font-size: 11px; color: #888; margin: 10px 0 0 0;">
+                            Email will be sent automatically at the scheduled time (Eastern Time).
+                        </p>
+                    </form>
+                </details>
+            </div>
+
+            <p style="font-size: 12px; color: #666; margin-top: 12px; text-align: center;">
                 Will send to: {{ preview.to_email }}{% if preview.cc_emails %}, CC: {{ preview.cc_emails|join(', ') }}{% endif %}
             </p>
         </div>
@@ -128,11 +163,28 @@
 <script>
 function confirmSendEmail(teamName, toEmail) {
     return confirm(
-        'Send Post-Game Email?\n\n' +
+        'Send Post-Game Email Now?\n\n' +
         'Team: ' + teamName + '\n' +
         'To: ' + toEmail + '\n\n' +
-        'This will send the actual email to the coaching staff. ' +
-        'The email will be identical to the automated version.\n\n' +
+        'This will send the email immediately.\n\n' +
+        'Continue?'
+    );
+}
+
+function confirmScheduleEmail(teamName, form) {
+    var date = form.schedule_date.value;
+    var time = form.schedule_time.value;
+
+    // Format for display
+    var dateObj = new Date(date + 'T' + time);
+    var options = { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+    var formatted = dateObj.toLocaleDateString('en-US', options);
+
+    return confirm(
+        'Schedule Post-Game Email?\n\n' +
+        'Team: ' + teamName + '\n' +
+        'Send at: ' + formatted + ' ET\n\n' +
+        'The email will be sent automatically at this time.\n\n' +
         'Continue?'
     );
 }
