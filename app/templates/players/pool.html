@@ -658,16 +658,11 @@ function requestCallUp(playerId, firstName, parentEmail) {
     }
 
     var subject = firstName + ' Subbing Up?';
-    var body = '<p>Hey!</p>' +
-        '<p>Would ' + firstName + ' be available to sub up in A this Saturday at 1pm? ' +
-        'It is for Coach Reeves team. Please let me know as soon as you can.</p>' +
-        '<p>Thanks for your help!</p>';
 
-    // Navigate to email tool with pre-filled values
+    // Navigate to email tool with pre-filled recipient and subject
     var url = '{{ url_for("scheduler.email_coaches") }}' +
         '?to=' + encodeURIComponent(parentEmail) +
-        '&subject=' + encodeURIComponent(subject) +
-        '&body=' + encodeURIComponent(body);
+        '&subject=' + encodeURIComponent(subject);
 
     window.location.href = url;
 }
