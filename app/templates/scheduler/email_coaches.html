@@ -368,7 +368,7 @@
                 ['clean']
             ]
         },
-        placeholder: 'Hi Coaches,\n\nYour message here...'
+        placeholder: {% if direct_mode %}'Your message here...'{% else %}'Hi Coaches,\n\nYour message here...'{% endif %}
     });
 
     // Pre-fill body if provided
