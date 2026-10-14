@@ -168,10 +168,10 @@ def managed_umpires(year=None, is_spring=None):
         if game.get('is_cancelled'):
             continue
 
-        # Skip if local game is cancelled or rainout
+        # Skip if local game is cancelled, rainout, or postponed
         assignr_id = str(game.get('id', ''))
         local_game = local_games.get(assignr_id)
-        if local_game and local_game.status in ('cancelled', 'rainout'):
+        if local_game and local_game.status in ('cancelled', 'rainout', 'postponed'):
             continue
 
         # Only include completed games (game date has passed)
