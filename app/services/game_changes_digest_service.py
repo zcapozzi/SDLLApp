@@ -219,7 +219,11 @@ def format_digest_html(changes_data, hours):
         'body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }',
         '.game-card { background: #f9f9f9; border-left: 4px solid #228B22; padding: 12px; margin: 10px 0; }',
         '.game-card.reversed { border-left-color: #888; background: #f0f0f0; }',
+        '.game-card.practice { border-left-color: #1565c0; background: #f0f7ff; }',
         '.game-title { font-weight: bold; color: #228B22; margin-bottom: 8px; }',
+        '.game-card.practice .game-title { color: #1565c0; }',
+        '.practice-badge { display: inline-block; background: #1565c0; color: white; font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle; }',
+        '.practice-note { color: #1565c0; font-size: 12px; font-style: italic; margin-top: 4px; }',
         '.game-card.reversed .game-title { color: #666; }',
         '.change-item { margin: 4px 0; padding-left: 10px; }',
         '.old-value { color: #c33; text-decoration: line-through; }',
@@ -269,14 +273,25 @@ def format_digest_html(changes_data, hours):
                 change_types = item['change_types']
                 changed_by = item['changed_by']
 
+                # Check if this is a practice
+                is_practice = game.game_type == 'practice' or (game.away_ID is None and game.home_ID is not None)
+
                 # Game title
                 game_date = game.game_date.strftime('%a, %b %d at %I:%M %p').replace(' 0', ' ') if game.game_date else 'TBD'
                 home = game.home_team.computed_display_name if game.home_team else 'TBD'
                 away = game.away_team.computed_display_name if game.away_team else 'TBD'
 
-                html_parts.append('<div class="game-card">')
-                html_parts.append(f'<div class="game-title">{home} vs {away}</div>')
-                html_parts.append(f'<div>{game_date} at {game.field_name or "TBD"}</div>')
+                card_class = 'game-card practice' if is_practice else 'game-card'
+                html_parts.append(f'<div class="{card_class}">')
+
+                if is_practice:
+                    # Practice: show just the team name with a practice badge
+                    html_parts.append(f'<div class="game-title">{home}<span class="practice-badge">PRACTICE</span></div>')
+                    html_parts.append(f'<div>{game_date} at {game.field_name or "TBD"}</div>')
+                    html_parts.append('<div class="practice-note">No umpire action needed for practices</div>')
+                else:
+                    html_parts.append(f'<div class="game-title">{home} vs {away}</div>')
+                    html_parts.append(f'<div>{game_date} at {game.field_name or "TBD"}</div>')
 
                 # Show change types
                 types_str = ', '.join(type_labels.get(t, t) for t in change_types)
@@ -316,13 +331,19 @@ def format_digest_html(changes_data, hours):
                 changes = item['changes']
                 changed_by = item['changed_by']
 
+                # Check if this is a practice
+                is_practice = game.game_type == 'practice' or (game.away_ID is None and game.home_ID is not None)
+
                 # Game title
                 game_date = game.game_date.strftime('%a, %b %d at %I:%M %p').replace(' 0', ' ') if game.game_date else 'TBD'
                 home = game.home_team.computed_display_name if game.home_team else 'TBD'
                 away = game.away_team.computed_display_name if game.away_team else 'TBD'
 
                 html_parts.append('<div class="game-card reversed">')
-                html_parts.append(f'<div class="game-title">{home} vs {away}</div>')
+                if is_practice:
+                    html_parts.append(f'<div class="game-title">{home}<span class="practice-badge">PRACTICE</span></div>')
+                else:
+                    html_parts.append(f'<div class="game-title">{home} vs {away}</div>')
                 html_parts.append(f'<div>{game_date} at {game.field_name or "TBD"}</div>')
                 html_parts.append(f'<div class="reversed-note">{len(changes)} change(s) made and reverted</div>')
                 html_parts.append(f'<div class="meta">Changed by: {", ".join(changed_by)}</div>')
@@ -398,12 +419,20 @@ def format_digest_text(changes_data, hours):
                 change_types = item['change_types']
                 changed_by = item['changed_by']
 
+                # Check if this is a practice
+                is_practice = game.game_type == 'practice' or (game.away_ID is None and game.home_ID is not None)
+
                 game_date = game.game_date.strftime('%a, %b %d at %I:%M %p') if game.game_date else 'TBD'
                 home = game.home_team.computed_display_name if game.home_team else 'TBD'
                 away = game.away_team.computed_display_name if game.away_team else 'TBD'
 
-                lines.append(f"\n  {home} vs {away}")
-                lines.append(f"  {game_date} at {game.field_name or 'TBD'}")
+                if is_practice:
+                    lines.append(f"\n  {home} [PRACTICE]")
+                    lines.append(f"  {game_date} at {game.field_name or 'TBD'}")
+                    lines.append("  (No umpire action needed for practices)")
+                else:
+                    lines.append(f"\n  {home} vs {away}")
+                    lines.append(f"  {game_date} at {game.field_name or 'TBD'}")
                 lines.append(f"  Action: {', '.join(change_types)}")
 
                 if net_changes:
@@ -443,11 +472,17 @@ def format_digest_text(changes_data, hours):
                 changes = item['changes']
                 changed_by = item['changed_by']
 
+                # Check if this is a practice
+                is_practice = game.game_type == 'practice' or (game.away_ID is None and game.home_ID is not None)
+
                 game_date = game.game_date.strftime('%a, %b %d at %I:%M %p') if game.game_date else 'TBD'
                 home = game.home_team.computed_display_name if game.home_team else 'TBD'
                 away = game.away_team.computed_display_name if game.away_team else 'TBD'
 
-                lines.append(f"\n  {home} vs {away}")
+                if is_practice:
+                    lines.append(f"\n  {home} [PRACTICE]")
+                else:
+                    lines.append(f"\n  {home} vs {away}")
                 lines.append(f"  {game_date} at {game.field_name or 'TBD'}")
                 lines.append(f"  ({len(changes)} change(s) made and reverted)")
                 lines.append(f"  Changed by: {', '.join(changed_by)}")
