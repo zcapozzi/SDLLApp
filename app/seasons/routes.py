@@ -1906,7 +1906,6 @@ def add_org_event(year, is_spring):
         event_type=request.form.get('event_type', OrgEvent.EVENT_TYPE_OTHER),
         scope=scope,
         sport=sport,
-        league=league,
         league_id=league_id,
         team_id=team_id,
         year=year,

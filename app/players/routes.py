@@ -12,6 +12,7 @@ from app.models.player import (
 )
 from app.models.org_season import OrgSeason
 from app.utils.auth import role_required
+from app.utils.tracking import log_authenticated_view
 
 
 # =============================================================================
@@ -904,6 +905,9 @@ def player_pool(org_season_id=None):
             return redirect(url_for('players.index'))
 
     org_season = OrgSeason.query.get_or_404(org_season_id)
+
+    # Log the view
+    log_authenticated_view('player_pool', str(org_season_id))
 
     # Get filter parameters from query string (used for initial dropdown state only)
     # All filtering is done client-side to allow switching without page reload
