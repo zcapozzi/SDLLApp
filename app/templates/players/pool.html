@@ -179,6 +179,61 @@
     display: none;
 }
 
+/* Collapsible help section */
+.help-section {
+    margin-bottom: 20px;
+}
+.help-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: none;
+    border: none;
+    color: rgb(34, 139, 34);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0;
+}
+.help-toggle:hover {
+    text-decoration: underline;
+}
+.help-toggle .toggle-icon {
+    transition: transform 0.2s;
+}
+.help-toggle.expanded .toggle-icon {
+    transform: rotate(90deg);
+}
+.help-content {
+    display: none;
+    margin-top: 12px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    font-size: 14px;
+}
+.help-content.show {
+    display: block;
+}
+.help-content h4 {
+    margin: 0 0 12px 0;
+    font-size: 15px;
+    color: #333;
+}
+.help-content ul {
+    margin: 0;
+    padding-left: 20px;
+}
+.help-content li {
+    margin-bottom: 10px;
+    line-height: 1.5;
+}
+.help-content li:last-child {
+    margin-bottom: 0;
+}
+.help-content strong {
+    color: rgb(34, 139, 34);
+}
+
 @media (max-width: 768px) {
     .desktop-buttons {
         display: none;
@@ -277,6 +332,22 @@
         </div>
     </div>
     {% endif %}
+</div>
+
+<!-- Help Section (collapsed by default) -->
+<div class="help-section">
+    <button type="button" class="help-toggle" onclick="toggleHelp(this)">
+        <span class="toggle-icon">&#9654;</span>
+        What can I do on this page?
+    </button>
+    <div class="help-content">
+        <h4>Player Pool Actions</h4>
+        <ul>
+            <li><strong>Assign players to teams</strong> - Type a team name in the "Team Assignment" column to assign an unassigned player to a team. The dropdown will suggest teams, with the player's placed league shown first.</li>
+            <li><strong>Withdraw from pool</strong> - Use the menu (&#8942;) on any player row to mark them as withdrawn. This removes them from the active pool (e.g., if they've decided not to play this season). Withdrawn players can be reinstated later.</li>
+            <li><strong>Request a call-up</strong> - Use the menu (&#8942;) to generate an email to a player's parent asking if they're available to sub up for a game in a higher division.</li>
+        </ul>
+    </div>
 </div>
 
 <!-- Filters -->
@@ -517,6 +588,14 @@ var searchHasResults = false;
 
 function changeSeason(seasonId) {
     window.location.href = '{{ url_for("players.player_pool") }}/' + seasonId;
+}
+
+// Toggle help section
+function toggleHelp(btn) {
+    var content = btn.nextElementSibling;
+    var isExpanded = content.classList.contains('show');
+    content.classList.toggle('show', !isExpanded);
+    btn.classList.toggle('expanded', !isExpanded);
 }
 
 // Sync mobile and desktop search inputs
