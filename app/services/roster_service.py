@@ -94,20 +94,26 @@ class PoolStats:
 class RosterService:
     """Service for managing player-team roster assignments."""
 
+    # Valid player statuses
+    ACTIVE_STATUSES = ['registered', 'evaluated', 'placed', 'drafted']
+    INACTIVE_STATUSES = ['withdrawn']
+
     @staticmethod
     def get_player_pool(
         org_season_id: int,
         league_id: Optional[int] = None,
         status: Optional[str] = None,
-        sport: Optional[str] = None
+        sport: Optional[str] = None,
+        include_withdrawn: bool = False
     ) -> List[PlayerSeason]:
         """Get players in the pool for a season with eager loading.
 
         Args:
             org_season_id: The OrgSeason ID to get players for
             league_id: Optional filter by placed_league_id
-            status: Optional filter by status
+            status: Optional filter by status (use 'withdrawn' to see only withdrawn)
             sport: Optional filter by program ('baseball' or 'softball')
+            include_withdrawn: If True, include withdrawn players (default False)
 
         Returns:
             List of PlayerSeason objects with player and team relationships loaded
@@ -119,6 +125,9 @@ class RosterService:
             query = query.filter_by(placed_league_id=league_id)
         if status:
             query = query.filter_by(status=status)
+        elif not include_withdrawn:
+            # Exclude withdrawn players by default unless explicitly requested
+            query = query.filter(PlayerSeason.status != 'withdrawn')
 
         # Eager load relationships
         query = query.options(
@@ -268,6 +277,56 @@ class RosterService:
                 player_season.status = 'placed'
             else:
                 player_season.status = 'evaluated'
+        db.session.commit()
+
+        return player_season
+
+    @staticmethod
+    def withdraw_player(player_season_id: int) -> PlayerSeason:
+        """Mark a player as withdrawn from the season.
+
+        Args:
+            player_season_id: The PlayerSeason ID
+
+        Returns:
+            Updated PlayerSeason object
+
+        Raises:
+            ValueError: If player not found
+        """
+        player_season = PlayerSeason.query.get(player_season_id)
+        if not player_season:
+            raise ValueError(f"PlayerSeason {player_season_id} not found")
+
+        # Remove from team if assigned
+        player_season.team_id = None
+        player_season.status = 'withdrawn'
+        db.session.commit()
+
+        return player_season
+
+    @staticmethod
+    def reinstate_player(player_season_id: int) -> PlayerSeason:
+        """Reinstate a withdrawn player back to active status.
+
+        Args:
+            player_season_id: The PlayerSeason ID
+
+        Returns:
+            Updated PlayerSeason object
+
+        Raises:
+            ValueError: If player not found
+        """
+        player_season = PlayerSeason.query.get(player_season_id)
+        if not player_season:
+            raise ValueError(f"PlayerSeason {player_season_id} not found")
+
+        # Set appropriate status based on what data they have
+        if player_season.placed_league_id:
+            player_season.status = 'placed'
+        else:
+            player_season.status = 'registered'
         db.session.commit()
 
         return player_season
