@@ -8,6 +8,7 @@ from app.models.league import League
 from app.models.league_season import LeagueSeason
 from app.extensions import db
 from app.utils.logging import SDLLLogger
+from app.utils.tracking import log_authenticated_view
 
 seasons_bp = Blueprint('seasons', __name__)
 logger = SDLLLogger('seasons')
@@ -1063,6 +1064,8 @@ def schedule_settings(year, is_spring):
         flash('You do not have permission to manage schedule settings.', 'error')
         return redirect(url_for('seasons.view', year=year, is_spring=is_spring))
 
+    log_authenticated_view('schedule_settings', f'{year}/{is_spring}')
+
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
 
     # Ensure leagues are synced from teams
@@ -1193,6 +1196,8 @@ def blackout_dates(year, is_spring):
     if not current_user.can_edit_schedule():
         flash('You do not have permission to manage blackout dates.', 'error')
         return redirect(url_for('seasons.view', year=year, is_spring=is_spring))
+
+    log_authenticated_view('blackout_dates', f'{year}/{is_spring}')
 
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
     from app.models.season_blackout import SeasonBlackout
@@ -1665,6 +1670,8 @@ def release_schedule(year, is_spring):
         flash('Only administrators can release the schedule.', 'error')
         return redirect(url_for('seasons.view', year=year, is_spring=is_spring))
 
+    log_authenticated_view('release_schedule', f'{year}/{is_spring}')
+
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
 
     if request.method == 'POST':
@@ -1773,6 +1780,8 @@ def org_events(year, is_spring):
     if not current_user.can_edit_schedule():
         flash('Access denied.', 'error')
         return redirect(url_for('main.dashboard'))
+
+    log_authenticated_view('org_events', f'{year}/{is_spring}')
 
     from app.models.org_event import OrgEvent
     from app.models.org_season import OrgSeason

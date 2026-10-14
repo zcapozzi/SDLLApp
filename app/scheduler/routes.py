@@ -19,6 +19,7 @@ from app.models.organization import Organization
 from app.extensions import db
 from app.utils.scheduler import ScheduleGenerator, ScheduleValidator
 from app.utils.logging import SDLLLogger
+from app.utils.tracking import log_authenticated_view
 
 scheduler_bp = Blueprint('scheduler', __name__)
 logger = SDLLLogger('scheduler')
@@ -53,6 +54,8 @@ def index(year, is_spring):
     if not current_user.can_edit_schedule():
         flash('You do not have permission to use the scheduler.', 'error')
         return redirect(url_for('seasons.view', year=year, is_spring=is_spring))
+
+    log_authenticated_view('scheduler_index', f'{year}/{is_spring}')
 
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
 
@@ -394,6 +397,8 @@ def review(year, is_spring):
     if not current_user.can_edit_schedule():
         flash('You do not have permission to review schedules.', 'error')
         return redirect(url_for('seasons.view', year=year, is_spring=is_spring))
+
+    log_authenticated_view('scheduler_review', f'{year}/{is_spring}')
 
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
 
@@ -1267,6 +1272,8 @@ def picker():
         flash('You do not have permission to use the scheduler.', 'error')
         return redirect(url_for('main.dashboard'))
 
+    log_authenticated_view('scheduler_picker')
+
     # Get all seasons with LeagueSeason configs
     from sqlalchemy import distinct
     seasons = db.session.query(
@@ -1301,6 +1308,8 @@ def email_coaches():
     if not can_email_coaches():
         flash('You do not have permission to email coaches.', 'error')
         return redirect(url_for('main.dashboard'))
+
+    log_authenticated_view('email_coaches')
 
     from app.models.scheduled_email import ScheduledEmail
     from app.services.email_blast_service import (

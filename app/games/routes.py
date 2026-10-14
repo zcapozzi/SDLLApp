@@ -12,6 +12,7 @@ from app.models.partner_payment import PartnerCredit
 from app.extensions import db
 from app.utils.logging import SDLLLogger
 from app.utils.league_helpers import get_league_id_from_request, get_leagues_for_dropdown
+from app.utils.tracking import log_authenticated_view
 
 games_bp = Blueprint('games', __name__)
 logger = SDLLLogger('games')
@@ -636,6 +637,8 @@ def manage(year, is_spring):
         flash('You do not have permission to edit games.', 'error')
         return redirect(url_for('games.index', year=year, is_spring=is_spring))
 
+    log_authenticated_view('games_manage', f'{year}/{is_spring}')
+
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
     anchor = None
 
@@ -1030,6 +1033,8 @@ def calendar_today(year, is_spring):
 @login_required
 def calendar(year, is_spring):
     """Calendar view of games for a season (week view)"""
+    log_authenticated_view('games_calendar', f'{year}/{is_spring}')
+
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
 
     # Get week parameter (ISO week number) or default to current/opening week
@@ -1264,6 +1269,8 @@ def day_view(year, is_spring, target_date):
     - Rows: Time slots (5:30, 6:00, 6:30, 7:00, 7:30, 8:00)
     - Cells: Games/practices at that field/time
     """
+    log_authenticated_view('games_day_view', f'{year}/{is_spring}/{target_date}')
+
     from datetime import datetime as dt
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
 
@@ -1589,6 +1596,8 @@ def rainout(year, is_spring):
     if not current_user.can_edit_schedule():
         flash('You do not have permission to manage rainouts.', 'error')
         return redirect(url_for('games.index', year=year, is_spring=is_spring))
+
+    log_authenticated_view('games_rainout', f'{year}/{is_spring}')
 
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
 
@@ -1922,6 +1931,8 @@ def league_practice(year, is_spring):
     if not current_user.can_edit_schedule():
         flash('You do not have permission to create league practices.', 'error')
         return redirect(url_for('games.index', year=year, is_spring=is_spring))
+
+    log_authenticated_view('games_league_practice', f'{year}/{is_spring}')
 
     season_name = f'{"Spring" if is_spring else "Fall"} {year}'
 
