@@ -105,11 +105,64 @@
         .mb-2 { margin-bottom: 20px; }
 
         /* Mobile */
+        .hamburger {
+            display: none;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px 10px;
+        }
         @media (max-width: 768px) {
-            .navbar { flex-direction: column; gap: 10px; }
-            .navbar-nav { margin-left: 0; flex-wrap: wrap; justify-content: center; }
-            .dropdown-menu { position: static; box-shadow: none; }
-            .nav-item:hover .dropdown-menu { display: block; }
+            .navbar {
+                flex-wrap: wrap;
+                padding: 10px 15px;
+            }
+            .navbar-brand {
+                flex: 1;
+            }
+            .hamburger {
+                display: block;
+            }
+            .navbar-nav {
+                display: none;
+                width: 100%;
+                flex-direction: column;
+                gap: 0;
+                margin-top: 10px;
+                background: rgba(0,0,0,0.1);
+                border-radius: 4px;
+                padding: 5px 0;
+            }
+            .navbar-nav.show {
+                display: flex;
+            }
+            .nav-item {
+                width: 100%;
+            }
+            .nav-link {
+                padding: 12px 15px;
+                border-radius: 0;
+            }
+            .dropdown-menu {
+                position: static;
+                box-shadow: none;
+                background: rgba(255,255,255,0.95);
+                border-radius: 0;
+                margin: 0;
+                padding: 0;
+            }
+            .dropdown-menu a {
+                padding: 10px 30px;
+            }
+            /* Hide dropdowns by default on mobile, show on click via JS */
+            .nav-item .dropdown-menu {
+                display: none;
+            }
+            .nav-item.open .dropdown-menu {
+                display: block;
+            }
         }
     </style>
     {% block extra_css %}{% endblock %}
@@ -148,17 +201,20 @@
     </style>
     {% endif %}
     {% if current_user.is_authenticated %}
+    {# Determine if user is Player Agent only (not also a scheduler/admin/umpire coordinator) #}
+    {% set is_player_agent_only = current_user.has_role('BBPlayerAgent', 'SBPlayerAgent') and not current_user.can_edit_schedule() and not current_user.can_manage_umpires() and not current_user.is_umpire() %}
     <nav class="navbar">
         <a href="{{ url_for('main.dashboard') }}" class="navbar-brand">SDLL</a>
-        <div class="navbar-nav">
-            {% if current_user.can_edit_schedule() or current_user.is_umpire() or current_user.can_manage_umpires() or current_user.can_view_master_schedule() %}
+        <button class="hamburger" onclick="toggleMobileNav()" aria-label="Toggle menu">☰</button>
+        <div class="navbar-nav" id="main-nav">
+            {% if (current_user.can_edit_schedule() or current_user.is_umpire() or current_user.can_manage_umpires() or current_user.can_view_master_schedule()) and not is_player_agent_only %}
             <div class="nav-item">
                 <a href="{{ url_for('main.dashboard') }}" class="nav-link">Dashboard</a>
             </div>
 
             {% if current_user.can_edit_schedule() and current_season_year %}
             <div class="nav-item">
-                <a href="#" class="nav-link">Current Season ▾</a>
+                <a href="#" class="nav-link" onclick="toggleDropdown(this, event)">Current Season ▾</a>
                 <div class="dropdown-menu">
                     <div style="padding: 8px 20px; color: #666; font-size: 12px; border-bottom: 1px solid #eee;">
                         {{ current_season_name }}
@@ -189,7 +245,7 @@
             {% endif %}
 
             <div class="nav-item">
-                <a href="#" class="nav-link">Schedule ▾</a>
+                <a href="#" class="nav-link" onclick="toggleDropdown(this, event)">Schedule ▾</a>
                 <div class="dropdown-menu">
                     <a href="{{ url_for('main.master_schedule') }}">Upcoming Games</a>
                     {% if current_user.can_edit_schedule() and current_season_year %}
@@ -240,7 +296,7 @@
             </div>
 
             <div class="nav-item">
-                <a href="#" class="nav-link">Seasons ▾</a>
+                <a href="#" class="nav-link" onclick="toggleDropdown(this, event)">Seasons ▾</a>
                 <div class="dropdown-menu">
                     <a href="{{ url_for('seasons.index') }}">All Seasons</a>
                     {% if current_user.can_edit_schedule() %}
@@ -252,7 +308,7 @@
             </div>
 
             <div class="nav-item">
-                <a href="#" class="nav-link">Fields ▾</a>
+                <a href="#" class="nav-link" onclick="toggleDropdown(this, event)">Fields ▾</a>
                 <div class="dropdown-menu">
                     <a href="{{ url_for('fields.index') }}">All Fields</a>
                     <a href="{{ url_for('fields.allocations') }}">Allocations</a>
@@ -267,7 +323,7 @@
             </div>
 
             <div class="nav-item">
-                <a href="#" class="nav-link">Leagues ▾</a>
+                <a href="#" class="nav-link" onclick="toggleDropdown(this, event)">Leagues ▾</a>
                 <div class="dropdown-menu">
                     <a href="{{ url_for('leagues.index') }}">All Leagues</a>
                     {% if current_user.can_edit_schedule() %}
@@ -284,7 +340,7 @@
 
             {% if current_user.is_umpire() or current_user.can_manage_umpires() %}
             <div class="nav-item">
-                <a href="#" class="nav-link">Umpires ▾</a>
+                <a href="#" class="nav-link" onclick="toggleDropdown(this, event)">Umpires ▾</a>
                 <div class="dropdown-menu">
                     {% if current_user.is_umpire() %}
                     <a href="{{ url_for('umpire_portal.dashboard') }}"><strong>My Dashboard</strong></a>
@@ -329,7 +385,7 @@
 
             {% if current_user.has_role('admin', 'facilities', 'fieldCaptain') %}
             <div class="nav-item">
-                <a href="#" class="nav-link">Facilities ▾</a>
+                <a href="#" class="nav-link" onclick="toggleDropdown(this, event)">Facilities ▾</a>
                 <div class="dropdown-menu">
                     <a href="{{ url_for('facilities.index') }}">Dashboard</a>
                     <a href="{{ url_for('facilities.field_schedules') }}">Field Schedules</a>
@@ -343,7 +399,7 @@
 
             {% if current_user.has_role('admin', 'BBPlayerAgent', 'SBPlayerAgent') %}
             <div class="nav-item">
-                <a href="#" class="nav-link">Players ▾</a>
+                <a href="#" class="nav-link" onclick="toggleDropdown(this, event)">Players ▾</a>
                 <div class="dropdown-menu">
                     <a href="{{ url_for('players.index') }}">Dashboard</a>
                     <div class="dropdown-divider"></div>
@@ -367,7 +423,7 @@
 
             {% if current_user.is_admin() or current_user.can_edit_schedule() %}
             <div class="nav-item">
-                <a href="#" class="nav-link">Admin ▾</a>
+                <a href="#" class="nav-link" onclick="toggleDropdown(this, event)">Admin ▾</a>
                 <div class="dropdown-menu">
                     <a href="{{ url_for('reports.index') }}">Reports</a>
                     <a href="{{ url_for('notifications.queue') }}">Notification Queue</a>
@@ -389,7 +445,7 @@
                 <a href="{{ url_for('main.dashboard') }}" class="nav-link">Dashboard</a>
             </div>
             <div class="nav-item">
-                <a href="#" class="nav-link">Umpires ▾</a>
+                <a href="#" class="nav-link" onclick="toggleDropdown(this, event)">Umpires ▾</a>
                 <div class="dropdown-menu">
                     <a href="{{ url_for('umpires.delegation_report') }}">Umpire Partners</a>
                     <a href="{{ url_for('umpires.invoice_tieout') }}">Invoice Tie-Outs</a>
@@ -398,11 +454,62 @@
             </div>
             {% endif %}
 
+            {% if is_player_agent_only %}
+            {# Player Agent-only nav: just Dashboard + Players + Master Schedule #}
+            <div class="nav-item">
+                <a href="{{ url_for('main.dashboard') }}" class="nav-link">Dashboard</a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link" onclick="toggleDropdown(this, event)">Players ▾</a>
+                <div class="dropdown-menu">
+                    <a href="{{ url_for('players.index') }}">Dashboard</a>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-header">Roster Management</div>
+                    <a href="{{ url_for('players.player_pool') }}"><strong>Player Pool</strong></a>
+                    <a href="{{ url_for('draft.index') }}">Draft Dashboard</a>
+                    <a href="{{ url_for('players.roster_import') }}">Import Roster CSV</a>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-header">Evaluations</div>
+                    <a href="{{ url_for('players.metrics_index') }}">Evaluation Metrics</a>
+                    <a href="{{ url_for('players.import_index') }}">Import Player Data</a>
+                    <div class="dropdown-divider"></div>
+                    <a href="{{ url_for('scheduler.email_coaches') }}">Email Coaches</a>
+                </div>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('main.master_schedule') }}" class="nav-link">Master Schedule</a>
+            </div>
+            {% endif %}
+
             <div class="nav-item">
                 <a href="{{ url_for('auth.logout') }}" class="nav-link">Logout</a>
             </div>
         </div>
     </nav>
+    <script>
+    function toggleMobileNav() {
+        var nav = document.getElementById('main-nav');
+        nav.classList.toggle('show');
+    }
+    function toggleDropdown(link, event) {
+        // Only toggle on mobile
+        if (window.innerWidth <= 768) {
+            event.preventDefault();
+            var navItem = link.parentElement;
+            navItem.classList.toggle('open');
+        }
+    }
+    // Close nav when clicking outside on mobile
+    document.addEventListener('click', function(e) {
+        if (window.innerWidth <= 768) {
+            var nav = document.getElementById('main-nav');
+            var navbar = document.querySelector('.navbar');
+            if (nav && nav.classList.contains('show') && !navbar.contains(e.target)) {
+                nav.classList.remove('show');
+            }
+        }
+    });
+    </script>
     {% endif %}
 
     <div class="container">
