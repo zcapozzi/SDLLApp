@@ -306,6 +306,19 @@ class PlayerSeason(db.Model):
             return self.placed_league
         return None
 
+    @property
+    def effective_status(self):
+        """Get the effective status: drafted if has team_id, otherwise stored status.
+
+        This ensures players with a team assignment are always shown as 'drafted'
+        even if their stored status is out of sync.
+        """
+        if self.status == 'withdrawn':
+            return 'withdrawn'
+        if self.team_id:
+            return 'drafted'
+        return self.status or 'registered'
+
     def __repr__(self):
         return f'<PlayerSeason player={self.player_id} season={self.org_season_id}>'
 

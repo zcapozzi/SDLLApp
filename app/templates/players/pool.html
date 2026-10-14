@@ -446,7 +446,7 @@
                 data-name="{{ ps.player.last_name|lower }}, {{ ps.player.first_name|lower }}"
                 data-sport="{{ ps.player.program or '' }}"
                 data-league="{{ ps.effective_league_id or '' }}"
-                data-status="{{ ps.status or 'registered' }}"
+                data-status="{{ ps.effective_status }}"
                 data-assigned="{{ 'yes' if ps.team_id else 'no' }}"
                 onclick="toggleMobileExpand(this, event)">
                 <td>
@@ -479,12 +479,12 @@
                     {% endif %}
                 </td>
                 <td>
-                    <span class="badge status-badge" style="background-color: {% if ps.status == 'drafted' %}rgb(34, 139, 34){% elif ps.status == 'placed' %}rgb(255, 140, 0){% elif ps.status == 'evaluated' %}#1565c0{% elif ps.status == 'withdrawn' %}#999{% else %}#888{% endif %}; color: white;">
-                        {{ ps.status or 'registered' }}
+                    <span class="badge status-badge" style="background-color: {% if ps.effective_status == 'drafted' %}rgb(34, 139, 34){% elif ps.effective_status == 'placed' %}rgb(255, 140, 0){% elif ps.effective_status == 'evaluated' %}#1565c0{% elif ps.effective_status == 'withdrawn' %}#999{% else %}#888{% endif %}; color: white;">
+                        {{ ps.effective_status }}
                     </span>
                 </td>
                 <td class="team-cell">
-                    {% if ps.status == 'withdrawn' %}
+                    {% if ps.effective_status == 'withdrawn' %}
                     <span style="color: #999; font-style: italic;">-</span>
                     {% elif ps.team %}
                     <div class="assigned-team">
@@ -501,7 +501,7 @@
                     {% endif %}
                 </td>
                 <td>
-                    {% if ps.status == 'withdrawn' %}
+                    {% if ps.effective_status == 'withdrawn' %}
                     <button type="button" class="btn btn-outline" style="padding: 4px 8px; font-size: 11px;" onclick="reinstatePlayer({{ ps.id }})" title="Reinstate player">Reinstate</button>
                     {% else %}
                     <div class="action-menu">
@@ -533,18 +533,18 @@
                         </div>
                         <div class="expand-detail">
                             <span class="expand-label">Status:</span>
-                            <span class="badge status-badge" style="background-color: {% if ps.status == 'drafted' %}rgb(34, 139, 34){% elif ps.status == 'placed' %}rgb(255, 140, 0){% elif ps.status == 'evaluated' %}#1565c0{% elif ps.status == 'withdrawn' %}#999{% else %}#888{% endif %}; color: white; font-size: 11px; padding: 2px 6px;">
-                                {{ ps.status or 'registered' }}
+                            <span class="badge status-badge" style="background-color: {% if ps.effective_status == 'drafted' %}rgb(34, 139, 34){% elif ps.effective_status == 'placed' %}rgb(255, 140, 0){% elif ps.effective_status == 'evaluated' %}#1565c0{% elif ps.effective_status == 'withdrawn' %}#999{% else %}#888{% endif %}; color: white; font-size: 11px; padding: 2px 6px;">
+                                {{ ps.effective_status }}
                             </span>
                         </div>
                         <div class="expand-detail">
                             <span class="expand-label">Team:</span>
-                            {% if ps.status == 'withdrawn' %}<span style="color: #999;">-</span>
+                            {% if ps.effective_status == 'withdrawn' %}<span style="color: #999;">-</span>
                             {% elif ps.team %}{{ ps.team.league_display_name }} {{ ps.team.scheduler_display_name }}
                             {% else %}<span style="color: #999;">Unassigned</span>{% endif %}
                         </div>
                         <div class="expand-detail" style="margin-top: 8px;">
-                            {% if ps.status == 'withdrawn' %}
+                            {% if ps.effective_status == 'withdrawn' %}
                             <button type="button" class="btn btn-outline" style="padding: 4px 8px; font-size: 11px;" onclick="reinstatePlayer({{ ps.id }})">Reinstate</button>
                             {% else %}
                             <button type="button" class="btn btn-outline" style="padding: 4px 8px; font-size: 11px; margin-right: 8px;" onclick="requestCallUp({{ ps.id }}, '{{ ps.player.first_name }}', '{{ ps.player.parent_email|default('', true) }}')">Request Call-Up</button>
