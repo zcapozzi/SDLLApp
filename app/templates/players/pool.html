@@ -152,11 +152,12 @@
         <!-- Status Filter -->
         <div>
             <select id="status-filter" class="form-control" onchange="applyFilters()">
-                <option value="">All Statuses</option>
+                <option value="">All Active</option>
                 <option value="registered" {% if current_status == 'registered' %}selected{% endif %}>Registered</option>
                 <option value="evaluated" {% if current_status == 'evaluated' %}selected{% endif %}>Evaluated</option>
                 <option value="placed" {% if current_status == 'placed' %}selected{% endif %}>Placed</option>
                 <option value="drafted" {% if current_status == 'drafted' %}selected{% endif %}>Drafted</option>
+                <option value="withdrawn" {% if current_status == 'withdrawn' %}selected{% endif %}>Withdrawn</option>
             </select>
         </div>
 
@@ -194,6 +195,7 @@
                 <th>League Placement</th>
                 <th>Status</th>
                 <th style="min-width: 220px;">Team Assignment</th>
+                <th style="width: 80px;">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -235,12 +237,14 @@
                     {% endif %}
                 </td>
                 <td>
-                    <span class="badge status-badge" style="background-color: {% if ps.status == 'drafted' %}rgb(34, 139, 34){% elif ps.status == 'placed' %}rgb(255, 140, 0){% elif ps.status == 'evaluated' %}#1565c0{% else %}#888{% endif %}; color: white;">
+                    <span class="badge status-badge" style="background-color: {% if ps.status == 'drafted' %}rgb(34, 139, 34){% elif ps.status == 'placed' %}rgb(255, 140, 0){% elif ps.status == 'evaluated' %}#1565c0{% elif ps.status == 'withdrawn' %}#999{% else %}#888{% endif %}; color: white;">
                         {{ ps.status or 'registered' }}
                     </span>
                 </td>
                 <td class="team-cell">
-                    {% if ps.team %}
+                    {% if ps.status == 'withdrawn' %}
+                    <span style="color: #999; font-style: italic;">-</span>
+                    {% elif ps.team %}
                     <div class="assigned-team">
                         <a href="{{ url_for('players.team_roster', team_id=ps.team.team_ID) }}" class="team-link">
                             {{ ps.team.league_display_name }} {{ ps.team.scheduler_display_name }}
@@ -252,6 +256,13 @@
                         <input type="text" placeholder="Type team name..." onfocus="showTeamDropdown(this)" oninput="filterTeamDropdown(this)">
                         <div class="team-dropdown"></div>
                     </div>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if ps.status == 'withdrawn' %}
+                    <button type="button" class="btn btn-outline" style="padding: 4px 8px; font-size: 11px;" onclick="reinstatePlayer({{ ps.id }})" title="Reinstate player">Reinstate</button>
+                    {% else %}
+                    <button type="button" class="remove-btn" onclick="withdrawPlayer({{ ps.id }})" title="Mark as withdrawn">Withdraw</button>
                     {% endif %}
                 </td>
             </tr>
@@ -311,7 +322,8 @@ function applyFilters() {
         var matchSearch = !search || name.indexOf(search) !== -1;
         var matchSport = !sport || rowSport === sport;
         var matchLeague = !league || rowLeague === league;
-        var matchStatus = !status || rowStatus === status;
+        // Status filter: when empty, hide withdrawn players; otherwise show selected status
+        var matchStatus = status ? (rowStatus === status) : (rowStatus !== 'withdrawn');
         var matchAssignment = !assignment ||
             (assignment === 'unassigned' && rowAssigned === 'no') ||
             (assignment === 'assigned' && rowAssigned === 'yes');
@@ -537,6 +549,71 @@ function updateStats(delta) {
     var unassigned = parseInt(document.getElementById('stat-unassigned').textContent) - delta;
     document.getElementById('stat-assigned').textContent = assigned;
     document.getElementById('stat-unassigned').textContent = unassigned;
+}
+
+// Withdraw player via AJAX
+function withdrawPlayer(playerId) {
+    if (!confirm('Mark this player as withdrawn? They will be removed from their team (if assigned) and hidden from the default pool view.')) return;
+
+    var row = document.getElementById('player-' + playerId);
+
+    fetch('/players/' + playerId + '/withdraw', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({})
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.success) {
+            // Remove row from view (withdrawn players hidden by default)
+            row.style.display = 'none';
+
+            // Update stats
+            var total = parseInt(document.getElementById('stat-total').textContent) - 1;
+            document.getElementById('stat-total').textContent = total;
+            if (row.dataset.assigned === 'no') {
+                var unassigned = parseInt(document.getElementById('stat-unassigned').textContent) - 1;
+                document.getElementById('stat-unassigned').textContent = unassigned;
+            } else {
+                var assigned = parseInt(document.getElementById('stat-assigned').textContent) - 1;
+                document.getElementById('stat-assigned').textContent = assigned;
+            }
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(function(err) {
+        alert('Error withdrawing player: ' + err);
+    });
+}
+
+// Reinstate player via AJAX
+function reinstatePlayer(playerId) {
+    var row = document.getElementById('player-' + playerId);
+
+    fetch('/players/' + playerId + '/reinstate', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({})
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.success) {
+            // Reload page to get updated data
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(function(err) {
+        alert('Error reinstating player: ' + err);
+    });
 }
 
 // Show/hide quick-assign bar based on state

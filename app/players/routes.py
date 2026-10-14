@@ -905,24 +905,28 @@ def player_pool(org_season_id=None):
 
     org_season = OrgSeason.query.get_or_404(org_season_id)
 
-    # Get filter parameters from query string
+    # Get filter parameters from query string (used for initial dropdown state only)
+    # All filtering is done client-side to allow switching without page reload
     league_id = request.args.get('league_id', type=int)
     status = request.args.get('status')
-    sport = request.args.get('sport')
+    sport = request.args.get('sport')  # Only used to set initial dropdown value
 
-    # Get players with filters
+    # Get ALL players - client-side filtering handles sport/league/status display
+    # Include withdrawn players only when explicitly filtering for them
+    include_withdrawn = (status == 'withdrawn')
     players = RosterService.get_player_pool(
         org_season_id,
-        league_id=league_id,
-        status=status,
-        sport=sport
+        league_id=None,  # Don't filter server-side
+        status=None,     # Don't filter server-side
+        sport=None,      # Don't filter server-side
+        include_withdrawn=True  # Load all, let client filter
     )
 
-    # Get pool statistics
-    stats = RosterService.get_pool_stats(org_season_id, sport=sport)
+    # Get pool statistics for all players
+    stats = RosterService.get_pool_stats(org_season_id, sport=None)
 
-    # Get available leagues and teams for filtering/assignment
-    leagues = RosterService.get_leagues_for_season(org_season_id, sport=sport)
+    # Get all leagues and teams (not filtered by sport)
+    leagues = RosterService.get_leagues_for_season(org_season_id, sport=None)
     teams = RosterService.get_available_teams(org_season_id)
 
     # Get all seasons for season selector
@@ -1047,6 +1051,64 @@ def unassign_player(player_season_id):
         flash(str(e), 'error')
 
     # Redirect back
+    referrer = request.referrer or url_for('players.player_pool')
+    return redirect(referrer)
+
+
+@players_bp.route('/<int:player_season_id>/withdraw', methods=['POST'])
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def withdraw_player(player_season_id):
+    """Mark a player as withdrawn from the season."""
+    from app.services.roster_service import RosterService
+
+    try:
+        player_season = RosterService.withdraw_player(player_season_id)
+        player = player_season.player
+
+        if request.is_json:
+            return jsonify({
+                'success': True,
+                'player_season_id': player_season.id,
+                'status': player_season.status
+            })
+
+        name = f"{player.first_name} {player.last_name}" if player else "Player"
+        flash(f'{name} marked as withdrawn.', 'success')
+    except ValueError as e:
+        if request.is_json:
+            return jsonify({'success': False, 'error': str(e)}), 400
+        flash(str(e), 'error')
+
+    referrer = request.referrer or url_for('players.player_pool')
+    return redirect(referrer)
+
+
+@players_bp.route('/<int:player_season_id>/reinstate', methods=['POST'])
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def reinstate_player(player_season_id):
+    """Reinstate a withdrawn player back to active status."""
+    from app.services.roster_service import RosterService
+
+    try:
+        player_season = RosterService.reinstate_player(player_season_id)
+        player = player_season.player
+
+        if request.is_json:
+            return jsonify({
+                'success': True,
+                'player_season_id': player_season.id,
+                'status': player_season.status
+            })
+
+        name = f"{player.first_name} {player.last_name}" if player else "Player"
+        flash(f'{name} reinstated.', 'success')
+    except ValueError as e:
+        if request.is_json:
+            return jsonify({'success': False, 'error': str(e)}), 400
+        flash(str(e), 'error')
+
     referrer = request.referrer or url_for('players.player_pool')
     return redirect(referrer)
 
