@@ -204,7 +204,7 @@
                 data-player-id="{{ ps.id }}"
                 data-name="{{ ps.player.last_name|lower }}, {{ ps.player.first_name|lower }}"
                 data-sport="{{ ps.player.program or '' }}"
-                data-league="{{ ps.placed_league_id or '' }}"
+                data-league="{{ ps.effective_league_id or '' }}"
                 data-status="{{ ps.status or 'registered' }}"
                 data-assigned="{{ 'yes' if ps.team_id else 'no' }}">
                 <td>
@@ -230,8 +230,8 @@
                     {% endif %}
                 </td>
                 <td>
-                    {% if ps.placed_league %}
-                    {{ ps.placed_league.get_seasonal_name(org_season.is_spring) }}
+                    {% if ps.effective_league %}
+                    {{ ps.effective_league.get_seasonal_name(org_season.is_spring) }}
                     {% else %}
                     <span style="color: #999;">Not placed</span>
                     {% endif %}
@@ -252,7 +252,7 @@
                         <button type="button" class="remove-btn" onclick="unassignPlayer({{ ps.id }})" title="Remove from team">&times; remove</button>
                     </div>
                     {% else %}
-                    <div class="team-autocomplete" data-player-id="{{ ps.id }}" data-placed-league="{{ ps.placed_league_id or '' }}">
+                    <div class="team-autocomplete" data-player-id="{{ ps.id }}" data-placed-league="{{ ps.effective_league_id or '' }}">
                         <input type="text" placeholder="Type team name..." onfocus="showTeamDropdown(this)" oninput="filterTeamDropdown(this)">
                         <div class="team-dropdown"></div>
                     </div>

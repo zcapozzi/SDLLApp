@@ -288,6 +288,24 @@ class PlayerSeason(db.Model):
         """Calculate league age for this season."""
         return self.player.league_age(self.org_season) if self.player and self.org_season else None
 
+    @property
+    def effective_league_id(self):
+        """Get the effective league ID: placed_league_id, or team's league if on a team."""
+        if self.placed_league_id:
+            return self.placed_league_id
+        if self.team_id and self.team:
+            return self.team.league_id
+        return None
+
+    @property
+    def effective_league(self):
+        """Get the effective league: placed_league, or team's league if on a team."""
+        if self.placed_league_id:
+            return self.placed_league
+        if self.team_id and self.team:
+            return self.team.league_rel
+        return None
+
     def __repr__(self):
         return f'<PlayerSeason player={self.player_id} season={self.org_season_id}>'
 
