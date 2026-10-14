@@ -285,7 +285,7 @@
         <div class="form-group">
             <label>Subject</label>
             <input type="text" name="subject" class="form-control" required
-                   placeholder="Enter email subject">
+                   placeholder="Enter email subject" value="{{ prefill_subject or '' }}">
         </div>
 
         <div class="form-group">
@@ -354,6 +354,11 @@
         },
         placeholder: 'Hi Coaches,\n\nYour message here...'
     });
+
+    // Pre-fill body if provided
+    {% if prefill_body %}
+    quill.root.innerHTML = {{ prefill_body|tojson }};
+    {% endif %}
 
     // Copy content to hidden input on form submit
     document.getElementById('email-form').addEventListener('submit', function() {

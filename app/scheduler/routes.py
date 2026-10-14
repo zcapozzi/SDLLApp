@@ -1418,8 +1418,10 @@ def email_coaches():
 
         return redirect(url_for('scheduler.email_coaches_history'))
 
-    # Check for pre-filled recipients (e.g., from master schedule "Email Coaches" action)
+    # Check for pre-filled values (e.g., from master schedule "Email Coaches" action or player pool)
     prefill_recipients = request.args.get('to', '')
+    prefill_subject = request.args.get('subject', '')
+    prefill_body = request.args.get('body', '')
 
     return render_template(
         'scheduler/email_coaches.html',
@@ -1428,7 +1430,9 @@ def email_coaches():
         season_name=season_name,
         leagues=leagues,
         user_email=current_user.email or 'scheduler@sdll.org',
-        prefill_recipients=prefill_recipients
+        prefill_recipients=prefill_recipients,
+        prefill_subject=prefill_subject,
+        prefill_body=prefill_body
     )
 
 

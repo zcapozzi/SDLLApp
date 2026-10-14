@@ -657,18 +657,20 @@ function requestCallUp(playerId, firstName, parentEmail) {
         return;
     }
 
-    var subject = encodeURIComponent(firstName + ' Subbing Up?');
-    var body = encodeURIComponent(
-        'Hey! Would ' + firstName + ' be available to sub up in A this Saturday at 1pm? ' +
+    var subject = firstName + ' Subbing Up?';
+    var body = '<p>Hey! Would ' + firstName + ' be available to sub up in A this Saturday at 1pm? ' +
         'It is for Coach Reeves team. Please let me know as soon as you can. ' +
-        'Thanks for your help! -Rebekah\n\n' +
-        '--\n' +
-        'Thank you,\n\n' +
-        'SDLL Player Agent\n' +
-        'Rebekah Farris'
-    );
+        'Thanks for your help! -Rebekah</p>' +
+        '<p>--<br>Thank you,</p>' +
+        '<p>SDLL Player Agent<br>Rebekah Farris</p>';
 
-    window.location.href = 'mailto:' + parentEmail + '?subject=' + subject + '&body=' + body;
+    // Navigate to email tool with pre-filled values
+    var url = '{{ url_for("scheduler.email_coaches") }}' +
+        '?to=' + encodeURIComponent(parentEmail) +
+        '&subject=' + encodeURIComponent(subject) +
+        '&body=' + encodeURIComponent(body);
+
+    window.location.href = url;
 }
 
 // Withdraw player via AJAX
