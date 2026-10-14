@@ -10,6 +10,7 @@ import os
 import json
 import uuid
 import base64
+import time
 import requests
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
@@ -49,9 +50,49 @@ class GCScreenshotService:
 
     ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
     MODEL = "claude-haiku-5-5"
-    TIMEOUT = 30
+    DEFAULT_TIMEOUT = 30  # Default timeout in seconds
     MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
     ALLOWED_CONTENT_TYPES = ['image/png', 'image/jpeg', 'image/webp']
+
+    @classmethod
+    def get_dynamic_timeout(cls) -> int:
+        """Get dynamic timeout based on historical response times.
+
+        Uses mean + 3 standard deviations from successful calls.
+        Falls back to DEFAULT_TIMEOUT if insufficient data.
+
+        Returns:
+            Timeout in seconds (rounded up)
+        """
+        threshold_ms = GCScreenshotSession.get_timeout_threshold_ms(
+            default_ms=cls.DEFAULT_TIMEOUT * 1000
+        )
+        # Convert to seconds, add a small buffer, round up
+        return max(cls.DEFAULT_TIMEOUT, int(threshold_ms / 1000) + 1)
+
+    @classmethod
+    def get_response_time_info(cls) -> dict:
+        """Get response time statistics for monitoring/display.
+
+        Returns:
+            Dict with stats or None if insufficient data
+        """
+        stats = GCScreenshotSession.get_response_time_stats()
+        if stats is None:
+            return {
+                'has_data': False,
+                'message': 'Insufficient data for response time statistics'
+            }
+
+        return {
+            'has_data': True,
+            'mean_seconds': round(stats['mean_ms'] / 1000, 1),
+            'std_dev_seconds': round(stats['std_dev_ms'] / 1000, 1),
+            'timeout_threshold_seconds': round(stats['timeout_threshold_ms'] / 1000, 1),
+            'sample_count': stats['sample_count'],
+            'min_seconds': round(stats['min_ms'] / 1000, 1),
+            'max_seconds': round(stats['max_ms'] / 1000, 1)
+        }
 
     @classmethod
     def is_configured(cls) -> bool:
@@ -323,15 +364,28 @@ RESPOND WITH VALID JSON ONLY (no markdown, no explanation):
         print(f"[GC Screenshot] Image size: {len(session.image_data)} base64 chars")
 
         try:
+            # Time the API call for performance tracking
+            start_time = time.time()
+
+            # Use dynamic timeout based on historical response times
+            timeout = cls.get_dynamic_timeout()
+            print(f"[GC Screenshot] Using timeout: {timeout}s")
+
             response = requests.post(
                 cls.ANTHROPIC_API_URL,
                 headers=headers,
                 json=payload,
-                timeout=cls.TIMEOUT
+                timeout=timeout
             )
+
+            # Calculate and store response time
+            response_time_ms = int((time.time() - start_time) * 1000)
+            session.llm_response_time_ms = response_time_ms
+            db.session.commit()
 
             # Log response details for debugging
             print(f"[GC Screenshot] Response status: {response.status_code}")
+            print(f"[GC Screenshot] Response time: {response_time_ms}ms")
             print(f"[GC Screenshot] Response headers: {dict(response.headers)}")
 
             if response.status_code != 200:

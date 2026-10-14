@@ -57,6 +57,9 @@ class GCScreenshotSession(db.Model):
     status = db.Column(db.String(20), default=STATUS_PENDING, index=True)
     error_message = db.Column(db.Text)
 
+    # Performance tracking
+    llm_response_time_ms = db.Column(db.Integer)  # API response time in milliseconds
+
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     parsed_at = db.Column(db.DateTime)
@@ -174,3 +177,65 @@ class GCScreenshotSession(db.Model):
             'errors': errors,
             'error_rate': round(errors / total * 100, 1) if total > 0 else 0
         }
+
+    @classmethod
+    def get_response_time_stats(cls, days=30, min_samples=5):
+        """Get response time statistics for timeout threshold calculation.
+
+        Args:
+            days: Number of days to look back
+            min_samples: Minimum samples required for valid stats
+
+        Returns:
+            Dict with mean_ms, std_dev_ms, sample_count, timeout_threshold_ms (3 std devs)
+            Returns None if insufficient samples
+        """
+        from datetime import timedelta
+        from sqlalchemy import func
+
+        cutoff = datetime.utcnow() - timedelta(days=days)
+
+        # Get successful responses with response times
+        query = cls.query.filter(
+            cls.created_at >= cutoff,
+            cls.llm_response_time_ms.isnot(None),
+            cls.status.in_([cls.STATUS_PARSED, cls.STATUS_SUBMITTED])
+        )
+
+        # Get all response times
+        response_times = [r.llm_response_time_ms for r in query.all()]
+
+        if len(response_times) < min_samples:
+            return None
+
+        # Calculate statistics
+        import statistics
+        mean_ms = statistics.mean(response_times)
+        std_dev_ms = statistics.stdev(response_times) if len(response_times) > 1 else 0
+
+        # 3 standard deviations threshold
+        timeout_threshold_ms = mean_ms + (3 * std_dev_ms)
+
+        return {
+            'mean_ms': round(mean_ms, 1),
+            'std_dev_ms': round(std_dev_ms, 1),
+            'sample_count': len(response_times),
+            'timeout_threshold_ms': round(timeout_threshold_ms, 0),
+            'min_ms': min(response_times),
+            'max_ms': max(response_times)
+        }
+
+    @classmethod
+    def get_timeout_threshold_ms(cls, default_ms=30000):
+        """Get the timeout threshold in milliseconds (mean + 3 std devs).
+
+        Args:
+            default_ms: Default timeout if insufficient data (30 seconds)
+
+        Returns:
+            Timeout threshold in milliseconds
+        """
+        stats = cls.get_response_time_stats()
+        if stats is None:
+            return default_ms
+        return int(stats['timeout_threshold_ms'])

@@ -4,7 +4,337 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Added age-specific score ranges for evaluation metrics - metrics can now have different min/max/increment values for different age groups (e.g., ages 4-6 use 1-3 scale, ages 10-12 use full 1-7 scale).
+Last session: Added LLM response time tracking to GameChanger screenshot parsing. This enables statistical timeout detection (3 standard deviations from mean) to automatically switch to manual mode when the service is slow/unavailable.
+
+---
+
+## Session: October 14, 2026 - LLM Response Time Tracking
+
+### Overview
+Added response time tracking for the Claude API calls in the GameChanger screenshot parsing feature. This enables intelligent timeout detection based on historical performance data.
+
+### Key Features
+1. **Response Time Storage**: Each API call duration is recorded in `llm_response_time_ms` column
+2. **Statistical Analysis**: Calculate mean and standard deviation of successful response times
+3. **Dynamic Timeout**: Uses mean + 3σ as timeout threshold (falls back to 30s default if <5 samples)
+4. **Audit Dashboard**: Shows response time stats and per-session times
+
+### Files Modified
+
+#### Model (`app/models/gc_screenshot_session.py`)
+- Added `llm_response_time_ms` column (Integer, milliseconds)
+- Added `get_response_time_stats()` - returns mean, std dev, threshold, min/max
+- Added `get_timeout_threshold_ms()` - returns the 3σ timeout threshold
+
+#### Service (`app/services/gc_screenshot_service.py`)
+- Added `import time` for timing
+- Changed `TIMEOUT` to `DEFAULT_TIMEOUT` (30 seconds)
+- Added `get_dynamic_timeout()` - returns timeout based on historical data
+- Added `get_response_time_info()` - returns stats for display
+- Updated `parse_screenshot()` to time the API call and store duration
+
+#### Routes (`app/analytics/routes.py`)
+- Added import for `GCScreenshotService`
+- Added `response_time_info` to audit dashboard context
+
+#### Template (`app/templates/analytics/gc_screenshot_audit.html`)
+- Added summary cards: Avg Response time, Timeout Threshold
+- Added "Time" column to sessions table showing per-request response times
+
+### Migration Required
+Run on production:
+```sql
+-- scripts/migrations/add_gc_screenshot_response_time.sql
+ALTER TABLE sdll_gc_screenshot_sessions
+ADD COLUMN llm_response_time_ms INT DEFAULT NULL;
+
+ALTER TABLE sdll_gc_screenshot_sessions
+ADD INDEX idx_response_time (llm_response_time_ms);
+```
+
+### How It Works
+1. First 5 requests use default 30s timeout (insufficient data)
+2. After 5+ successful requests, timeout = mean + 3σ
+3. If a request exceeds this threshold, it's considered abnormally slow
+4. Future: Frontend can use this to detect service unavailability and auto-switch to manual mode
+
+### Next Steps
+- [x] Run migration on production
+- [x] Add frontend timeout detection (show "service unavailable" if waiting > threshold)
+
+### Frontend Timeout Detection (Added)
+
+Implemented client-side timer and warning system for slow API responses:
+
+#### User Experience
+1. After 5 seconds: Shows elapsed time counter ("7 seconds...")
+2. After threshold exceeded (3σ from mean, default 30s): Shows yellow warning box
+3. Warning offers two options:
+   - "Keep Waiting" - dismisses warning, continues waiting
+   - "Switch to Manual Entry" - abandons screenshot, switches to manual tab
+
+#### Files Modified
+- `app/coach/routes.py` - Pass `response_time_info` to template
+- `app/templates/coach/postgame_form.html`:
+  - Added `gcTimeoutThreshold` JavaScript variable from backend stats
+  - Added `screenshot-slow-warning` div with warning message and buttons
+  - Added timer functions: `startUploadTimer()`, `stopUploadTimer()`
+  - Added `continueWaiting()` and `switchToManualFromSlow()` handlers
+  - Updated `uploadScreenshot()` to start/stop timer and handle slow responses
+
+#### Messaging
+- "Taking longer than expected"
+- "The image analysis service is responding slowly. This sometimes happens during high traffic periods."
+- "You can wait a bit longer, or switch to manual entry."
+
+---
+
+## Session: October 13, 2026 - GameChanger Screenshot Parsing
+
+### Debugging Session (Later)
+
+#### Issue: 404 API Error
+Initial upload attempts returned "404 Client Error: Not Found for url: https://api.anthropic.com/v1/messages"
+
+#### Debugging Steps
+1. Added explicit API key validation check
+2. Added comprehensive debug logging to `gc_screenshot_service.py`:
+   - Prints model, URL, API key prefix before request
+   - Prints response status and headers after request
+   - Explicit exception type logging for HTTPError, RequestException, etc.
+3. Created `scripts/test_anthropic_api.py` test script for isolated API testing
+4. Test script confirmed API works correctly:
+   - Model `claude-haiku-5-5` is valid
+   - API key from `.env` is correct
+   - Endpoint returns status 200 with valid response
+
+#### Current State
+- Basic API connectivity confirmed working
+- Detailed debug output added to service for next screenshot upload attempt
+- Console will show exactly what's being sent and received
+- If issue persists on next attempt, check console output for:
+  - `[GC Screenshot] Response status: XXX`
+  - `[GC Screenshot] Error response body: ...`
+
+### Overview
+Added ability for coaches to upload GameChanger box score screenshots to automatically populate post-game report data (scores, pitcher statistics) using Claude's vision API. This reduces manual data entry while maintaining data accuracy through user confirmation.
+
+### Key Design Decisions
+1. **Two-tab UI**: Manual Entry (default) vs GC Screenshot (BETA)
+2. **Claude API**: Using claude-haiku-5-5 for cost efficiency
+3. **Image storage**: Base64 in MEDIUMTEXT column (simple, Railway-compatible)
+4. **Error handling**: 2 attempts max, then fallback to manual entry
+5. **Audit trail**: Product admin view for QC and debugging
+
+### Files Created
+
+#### Model (`app/models/gc_screenshot_session.py`)
+- **GCScreenshotSession model** - Tracks screenshot parsing sessions
+  - Fields: session_uuid, attempt_number, game_id, team_id, user_id
+  - Image storage: image_data (base64), image_filename, image_content_type
+  - LLM interaction: prompt_sent, llm_response, parsed_json
+  - Outcome tracking: final_submitted_json, was_edited, edit_diff, submission_successful
+  - Status: pending -> parsing -> parsed|error -> submitted|abandoned
+  - Helper methods: get_for_game_team(), get_latest_for_game_team(), get_by_session_uuid(), get_recent(), get_audit_stats()
+
+#### Service (`app/services/gc_screenshot_service.py`)
+- **GCScreenshotService** - Claude API integration for image parsing
+  - `is_configured()` - Check if ANTHROPIC_API_KEY is set
+  - `create_session()` - Create audit session for tracking
+  - `validate_image()` - Validate file type and size (10MB max)
+  - `store_image()` - Store base64 image in session
+  - `get_roster_for_prompt()` - Get team roster for matching
+  - `build_prompt()` - Build structured prompt for Claude
+  - `parse_screenshot()` - Send to Claude API and parse response
+  - `compute_edit_diff()` - Compare parsed vs submitted data field-by-field
+  - `record_submission()` - Record final data with edit diff
+  - `mark_abandoned()` - Mark session when user switches to manual
+- Returns ParsedGameData and ParsedPitcher dataclasses
+
+#### Migration (`scripts/create_gc_screenshot_table.sql`)
+- Creates `sdll_gc_screenshot_sessions` table with:
+  - Session grouping (session_uuid, attempt_number)
+  - Context (game_id, team_id, user_id)
+  - Image storage (MEDIUMTEXT for base64)
+  - LLM interaction tracking
+  - Outcome tracking with JSON diff
+  - Proper foreign keys and indexes
+
+#### Templates
+- `app/templates/analytics/gc_screenshot_audit.html` - List view for product admins
+  - Summary stats: total sessions, submitted, edit rate, error rate
+  - Session table with status badges and edit indicators
+  - Filter by status and time period
+- `app/templates/analytics/gc_screenshot_detail.html` - Detail view
+  - Session metadata
+  - Screenshot image preview
+  - Edit comparison with color-coded diffs
+  - Raw JSON data display
+
+### Files Modified
+
+#### Routes (`app/coach/routes.py`)
+- Added `postgame_screenshot_upload()` - POST endpoint for upload and parsing
+- Added `postgame_screenshot_submit()` - POST endpoint for final submission
+- Added `postgame_screenshot_abandon()` - POST endpoint when switching to manual
+- Imports GCScreenshotSession model and GCScreenshotService
+
+#### Routes (`app/analytics/routes.py`)
+- Added `gc_screenshot_audit()` - List recent sessions with stats
+- Added `gc_screenshot_detail()` - View session details with diff comparison
+- Imports GCScreenshotSession model
+
+#### Models (`app/models/__init__.py`)
+- Added import for GCScreenshotSession
+
+#### Template (`app/templates/coach/postgame_form.html`)
+- Added two-tab interface: Manual Entry vs GC Screenshot (BETA)
+- Screenshot tab includes:
+  - Instructions for taking GameChanger screenshot
+  - Drag-and-drop upload zone with preview
+  - Spinner during analysis
+  - Error display with retry options
+  - Editable results form with confidence indicator
+  - Player roster dropdown for matching
+  - Collapsible umpire section
+- JavaScript for tab switching, file upload, API calls, form population
+
+### API Flow
+1. Coach uploads screenshot via drag-and-drop
+2. POST to `/coach/postgame/<game_id>/<team_id>/screenshot`
+3. Service creates session, stores base64 image
+4. Calls Claude API with image and roster context
+5. Returns parsed scores and pitching data
+6. Coach reviews/edits in pre-filled form
+7. POST to `/coach/postgame/<game_id>/<team_id>/screenshot/submit`
+8. Service computes edit_diff, records submission
+9. Creates PostGameReport and PitchingStats records
+
+### Edit Diff Structure
+```json
+{
+  "has_changes": true,
+  "summary": {
+    "fields_changed": 3,
+    "pitchers_modified": 1,
+    "pitchers_added": 0,
+    "pitchers_removed": 0
+  },
+  "game_changes": [
+    {"field": "our_score", "parsed": 7, "final": 9, "type": "modified"}
+  ],
+  "pitcher_changes": [
+    {"player_code": "...", "status": "modified", "fields": [...]}
+  ]
+}
+```
+
+### Configuration Required
+- Set `ANTHROPIC_API_KEY` in environment
+- Already configured in Railway production
+
+### Access Control
+- **Coaches**: Can use screenshot upload on their team's post-game forms
+- **Product Admin** (PRODUCT_ADMIN_EMAILS): Can view audit dashboard at /analytics/gc-screenshots
+
+### Next Steps
+- [ ] Run migration on production: `scripts/create_gc_screenshot_table.sql`
+- [ ] Test with real GameChanger screenshots
+- [ ] Monitor edit rate to tune prompt
+- [ ] Consider adding field-level accuracy metrics
+
+---
+
+## Session: October 13, 2026 - Pitch Count Tracking Implementation
+
+### Overview
+Added pitch count tracking to post-game reports for kid-pitch baseball leagues (AA and above). This is critical for player safety - Little League has strict pitch count limits and required rest days.
+
+### Files Created
+
+#### Model (`app/models/pitching_stats.py`)
+- **PitchingStats model** - Captures pitching statistics per player per game
+  - Fields: pitch_count (required), strikes, innings_pitched, batters_faced, hits_allowed, walks, strikeouts, runs_allowed, earned_runs, notes
+  - Foreign keys to `sdll_post_game_reports` and `sdll_players`
+  - Unique constraint on (report_id, player_id)
+  - Helper methods: `get_for_report()`, `get_for_player()`, `get_recent_for_player()`, `get_or_create()`
+  - Properties: `innings_pitched_display`, `stat_line`
+
+#### Service (`app/services/pitch_count_service.py`)
+- **PitchCountService** - Handles pitch count tracking and Little League compliance
+  - `save_pitching_stats(report_id, pitch_data)` - Save stats for multiple pitchers
+  - `get_pitching_stats_for_report(report_id)` - Get all stats for a report
+  - `get_player_pitch_history(player_id, days)` - Get recent history
+  - `get_required_rest_days(age, pitch_count)` - Calculate rest days per LL rules
+  - `get_pitch_count_limit(age)` - Get max pitches allowed per age
+  - `check_pitcher_eligibility(player_id, game_date)` - Check if player can pitch
+  - `get_team_pitching_summary(team_id, year, is_spring)` - Season totals by player
+- Includes complete Little League pitch count limits and rest day rules for ages 7-16
+
+#### Migration (`scripts/create_pitching_stats_table.sql`)
+- Adds `track_pitching_stats` column to `sdll_leagues` table
+- Creates `sdll_pitching_stats` table with proper foreign keys and indexes
+- Auto-enables pitching tracking for kid-pitch baseball leagues
+
+#### Template (`app/templates/coach/pitch_counts.html`)
+- Team pitching summary page showing season totals per player
+- Displays: appearances, total pitches, avg pitches/game, IP, K, BB
+- Includes Little League pitch count rules reference
+
+### Files Modified
+
+#### Model (`app/models/league.py`)
+- Added `track_pitching_stats` column (SmallInteger, default 0)
+- Added `captures_pitching_data` property
+
+#### Model Registry (`app/models/__init__.py`)
+- Added import for `PitchingStats`
+
+#### Routes (`app/coach/routes.py`)
+- Added `_parse_int()` and `_parse_innings()` helper functions
+- Updated `postgame_form()` route:
+  - Gets roster when pitching enabled
+  - Passes `show_pitching`, `roster`, `existing_pitching_stats` to template
+  - Saves pitching stats on form submission
+- Added `pitch_counts()` route for team summary page
+
+#### Routes (`app/seasons/routes.py`)
+- Added `toggle_pitching_stats` action handler in `manage_leagues()`
+
+#### Template (`app/templates/coach/postgame_form.html`)
+- Replaced placeholder with actual pitching stats entry table
+- Shows player roster with columns: Pitches, IP, K, BB, H, R, ER
+- Pre-fills existing data when editing
+
+#### Template (`app/templates/seasons/manage_leagues.html`)
+- Added "Pitching" column to league configuration table
+- Toggle button to enable/disable pitch count tracking per league
+
+### Design Decisions
+1. **Toggleable per league** - `track_pitching_stats` field controls form visibility
+2. **Default enabled for kid-pitch baseball** - Migration auto-enables for these leagues
+3. **Softball can opt-in** - Admins can enable for performance tracking
+4. **No validation on limits** - Record data only, coaches responsible for compliance
+5. **Full stat line** - pitch_count, strikes, IP, K, BB, H, R, ER, BF
+6. **Little League rules built-in** - Service includes official pitch count limits and rest day requirements
+
+### Access Control
+- Coach: Enter/view own team's pitch counts via post-game form and summary page
+- Admin: Toggle pitching tracking on/off per league via Manage Leagues
+
+### Usage Flow
+1. Admin enables pitching tracking for a league (Manage Leagues > Pitching toggle)
+2. Coach submits post-game report for a game in that league
+3. Post-game form shows pitching stats section with team roster
+4. Coach enters pitch counts and stats for players who pitched
+5. Data saved to `sdll_pitching_stats` table
+6. Coach can view team summary at `/coach/pitch-counts`
+
+### Next Steps for Future
+- Add player eligibility display on post-game form (show rest requirements)
+- Admin view of all pitching data across teams
+- Export functionality for league-wide reports
+- Email alerts when player approaches pitch count limits
 
 ---
 

@@ -12,6 +12,7 @@ from app.extensions import db
 from app.models.analytics import PageView, CalendarSubscription
 from app.models.gc_screenshot_session import GCScreenshotSession
 from app.models.user import User
+from app.services.gc_screenshot_service import GCScreenshotService
 from app.utils.auth import product_admin_required
 from app.utils.encryption import hash_for_lookup
 
@@ -578,6 +579,9 @@ def gc_screenshot_audit():
     # Get stats
     stats = GCScreenshotSession.get_audit_stats(days)
 
+    # Get response time stats
+    response_time_info = GCScreenshotService.get_response_time_info()
+
     # Get recent sessions
     cutoff = datetime.utcnow() - timedelta(days=days)
     query = GCScreenshotSession.query.filter(
@@ -603,6 +607,7 @@ def gc_screenshot_audit():
     return render_template(
         'analytics/gc_screenshot_audit.html',
         stats=stats,
+        response_time_info=response_time_info,
         sessions=sessions,
         session_groups=session_groups,
         days=days,

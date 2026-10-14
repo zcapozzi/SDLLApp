@@ -163,6 +163,18 @@
             <div class="summary-value {% if stats.error_rate > 20 %}error{% endif %}">{{ stats.error_rate }}%</div>
             <div class="summary-subtext">{{ stats.errors }} errors</div>
         </div>
+        {% if response_time_info.has_data %}
+        <div class="summary-card">
+            <h3>Avg Response</h3>
+            <div class="summary-value">{{ response_time_info.mean_seconds }}s</div>
+            <div class="summary-subtext">&plusmn; {{ response_time_info.std_dev_seconds }}s (n={{ response_time_info.sample_count }})</div>
+        </div>
+        <div class="summary-card">
+            <h3>Timeout Threshold</h3>
+            <div class="summary-value">{{ response_time_info.timeout_threshold_seconds }}s</div>
+            <div class="summary-subtext">3&sigma; from mean</div>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Filter -->
@@ -190,6 +202,7 @@
                 <th>Game</th>
                 <th>User</th>
                 <th>Status</th>
+                <th>Time</th>
                 <th>Attempts</th>
                 <th>Edits</th>
                 <th></th>
@@ -221,6 +234,13 @@
                 </td>
                 <td>
                     <span class="status-badge status-{{ session.status }}">{{ session.status }}</span>
+                </td>
+                <td>
+                    {% if session.llm_response_time_ms %}
+                        {{ (session.llm_response_time_ms / 1000)|round(1) }}s
+                    {% else %}
+                        <span style="color: #888;">-</span>
+                    {% endif %}
                 </td>
                 <td>
                     {{ session.attempt_number }}
@@ -255,7 +275,7 @@
             {% endfor %}
             {% if not sessions %}
             <tr>
-                <td colspan="7" style="text-align: center; padding: 40px; color: #888;">
+                <td colspan="8" style="text-align: center; padding: 40px; color: #888;">
                     No screenshot sessions found for this period.
                 </td>
             </tr>

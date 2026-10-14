@@ -280,6 +280,9 @@ def postgame_form(game_id, team_id):
                                        form_data=request.form)
 
     # GET request - show form
+    # Get response time info for screenshot timeout detection
+    response_time_info = GCScreenshotService.get_response_time_info()
+
     return render_template('coach/postgame_form.html',
                            game=game,
                            team=team,
@@ -294,6 +297,7 @@ def postgame_form(game_id, team_id):
                            sdll_provided_umpire=sdll_provided_umpire,
                            ratings=PostGameReport.RATINGS,
                            rating_labels=PostGameReport.RATING_LABELS,
+                           response_time_info=response_time_info,
                            form_data={})
 
 
