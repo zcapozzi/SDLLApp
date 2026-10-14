@@ -131,11 +131,105 @@
 .action-menu-item.danger:hover {
     background: #fee;
 }
+
+/* Mobile responsive styles */
+.mobile-link {
+    display: none;
+}
+.desktop-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+.mobile-expand-col {
+    display: none;
+}
+.expand-row {
+    display: none;
+}
+.expand-row td {
+    padding: 0;
+    border-bottom: 1px solid #e0e0e0;
+}
+.expand-content {
+    background: #f8f9fa;
+    padding: 12px 15px;
+}
+.expand-detail {
+    padding: 4px 0;
+    font-size: 13px;
+}
+.expand-label {
+    color: #666;
+    font-weight: 500;
+}
+.player-row .mobile-expand-col {
+    text-align: center;
+    color: #ccc;
+    font-size: 12px;
+    width: 30px;
+    cursor: pointer;
+}
+.player-row.expanded .mobile-expand-col {
+    transform: rotate(180deg);
+}
+
+@media (max-width: 768px) {
+    .desktop-buttons {
+        display: none;
+    }
+    .mobile-link {
+        display: block;
+        font-size: 14px;
+        color: rgb(34, 139, 34);
+        margin-top: 5px;
+    }
+    .mobile-link a {
+        color: rgb(34, 139, 34);
+    }
+    /* Hide columns on mobile except Name, Age, and expand */
+    #player-table th:nth-child(3),
+    #player-table td:nth-child(3),
+    #player-table th:nth-child(4),
+    #player-table td:nth-child(4),
+    #player-table th:nth-child(5),
+    #player-table td:nth-child(5),
+    #player-table th:nth-child(6),
+    #player-table td:nth-child(6),
+    #player-table th:nth-child(7),
+    #player-table td:nth-child(7) {
+        display: none;
+    }
+    .mobile-expand-col {
+        display: table-cell !important;
+    }
+    #player-table th.mobile-expand-header {
+        display: table-cell !important;
+        width: 30px;
+    }
+    .player-row {
+        cursor: pointer;
+    }
+    .expand-row.show {
+        display: table-row;
+    }
+    /* Compact filters on mobile */
+    .filter-wrap {
+        flex-direction: column;
+        gap: 10px;
+    }
+    .filter-wrap > div {
+        min-width: 100%;
+    }
+}
 </style>
 
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-    <h1>Player Pool</h1>
-    <div style="display: flex; gap: 10px; align-items: center;">
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px;">
+    <div>
+        <h1 style="margin-bottom: 0;">Player Pool</h1>
+        <div class="mobile-link"><a href="{{ url_for('players.index') }}">Back to Players</a></div>
+    </div>
+    <div class="desktop-buttons">
         <select id="season-selector" class="form-control" style="width: auto;" onchange="changeSeason(this.value)">
             {% for s in seasons %}
             <option value="{{ s.ID }}" {% if s.ID == org_season.ID %}selected{% endif %}>
@@ -175,7 +269,7 @@
 
 <!-- Filters -->
 <div class="card" style="margin-bottom: 20px;">
-    <div style="display: flex; flex-wrap: wrap; gap: 15px; align-items: center;">
+    <div class="filter-wrap" style="display: flex; flex-wrap: wrap; gap: 15px; align-items: center;">
         <!-- Search -->
         <div style="flex: 1; min-width: 200px;">
             <input type="text" id="player-search" class="form-control"
@@ -251,17 +345,20 @@
                 <th>Status</th>
                 <th style="min-width: 220px;">Team Assignment</th>
                 <th style="width: 80px;">Actions</th>
+                <th class="mobile-expand-header" style="display: none; width: 30px;"></th>
             </tr>
         </thead>
         <tbody>
             {% for ps in players %}
             <tr id="player-{{ ps.id }}"
+                class="player-row"
                 data-player-id="{{ ps.id }}"
                 data-name="{{ ps.player.last_name|lower }}, {{ ps.player.first_name|lower }}"
                 data-sport="{{ ps.player.program or '' }}"
                 data-league="{{ ps.effective_league_id or '' }}"
                 data-status="{{ ps.status or 'registered' }}"
-                data-assigned="{{ 'yes' if ps.team_id else 'no' }}">
+                data-assigned="{{ 'yes' if ps.team_id else 'no' }}"
+                onclick="toggleMobileExpand(this, event)">
                 <td>
                     <strong>{{ ps.player.last_name }}, {{ ps.player.first_name }}</strong>
                     {% if ps.player.player_code %}
@@ -330,6 +427,42 @@
                     </div>
                     {% endif %}
                 </td>
+                <td class="mobile-expand-col">▼</td>
+            </tr>
+            <!-- Mobile expand row -->
+            <tr class="expand-row" data-parent="{{ ps.id }}">
+                <td colspan="8">
+                    <div class="expand-content">
+                        <div class="expand-detail">
+                            <span class="expand-label">Sport:</span>
+                            {% if ps.player.program == 'baseball' %}Baseball{% elif ps.player.program == 'softball' %}Softball{% else %}-{% endif %}
+                        </div>
+                        <div class="expand-detail">
+                            <span class="expand-label">League:</span>
+                            {% if ps.effective_league %}{{ ps.effective_league.get_seasonal_name(org_season.is_spring) }}{% else %}Not placed{% endif %}
+                        </div>
+                        <div class="expand-detail">
+                            <span class="expand-label">Status:</span>
+                            <span class="badge status-badge" style="background-color: {% if ps.status == 'drafted' %}rgb(34, 139, 34){% elif ps.status == 'placed' %}rgb(255, 140, 0){% elif ps.status == 'evaluated' %}#1565c0{% elif ps.status == 'withdrawn' %}#999{% else %}#888{% endif %}; color: white; font-size: 11px; padding: 2px 6px;">
+                                {{ ps.status or 'registered' }}
+                            </span>
+                        </div>
+                        <div class="expand-detail">
+                            <span class="expand-label">Team:</span>
+                            {% if ps.status == 'withdrawn' %}<span style="color: #999;">-</span>
+                            {% elif ps.team %}{{ ps.team.league_display_name }} {{ ps.team.scheduler_display_name }}
+                            {% else %}<span style="color: #999;">Unassigned</span>{% endif %}
+                        </div>
+                        <div class="expand-detail" style="margin-top: 8px;">
+                            {% if ps.status == 'withdrawn' %}
+                            <button type="button" class="btn btn-outline" style="padding: 4px 8px; font-size: 11px;" onclick="reinstatePlayer({{ ps.id }})">Reinstate</button>
+                            {% else %}
+                            <button type="button" class="btn btn-outline" style="padding: 4px 8px; font-size: 11px; margin-right: 8px;" onclick="requestCallUp({{ ps.id }}, '{{ ps.player.first_name }}', '{{ ps.player.parent_email|default('', true) }}')">Request Call-Up</button>
+                            <button type="button" class="btn btn-outline" style="padding: 4px 8px; font-size: 11px; color: #c33; border-color: #c33;" onclick="withdrawPlayer({{ ps.id }})">Withdraw</button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
@@ -367,6 +500,22 @@ function changeSeason(seasonId) {
     window.location.href = '{{ url_for("players.player_pool") }}/' + seasonId;
 }
 
+// Mobile expand/collapse
+function toggleMobileExpand(row, event) {
+    // Only handle on mobile (when expand column is visible)
+    if (window.innerWidth > 768) return;
+
+    // Don't toggle if clicking on interactive elements
+    if (event.target.closest('button, a, input, .action-menu, .team-autocomplete')) return;
+
+    var expandRow = row.nextElementSibling;
+    if (expandRow && expandRow.classList.contains('expand-row')) {
+        var isExpanded = expandRow.classList.contains('show');
+        expandRow.classList.toggle('show', !isExpanded);
+        row.classList.toggle('expanded', !isExpanded);
+    }
+}
+
 function applyFilters() {
     var search = document.getElementById('player-search').value.toLowerCase();
     var sport = document.getElementById('sport-filter').value;
@@ -374,7 +523,7 @@ function applyFilters() {
     var status = document.getElementById('status-filter').value;
     var assignment = document.getElementById('assignment-filter').value;
 
-    var rows = document.querySelectorAll('#player-table tbody tr');
+    var rows = document.querySelectorAll('#player-table tbody tr.player-row');
     var visibleCount = 0;
 
     rows.forEach(function(row) {
@@ -396,6 +545,15 @@ function applyFilters() {
         var show = matchSearch && matchSport && matchLeague && matchStatus && matchAssignment;
         row.style.display = show ? '' : 'none';
 
+        // Also hide/collapse the expand row when filtering
+        var expandRow = row.nextElementSibling;
+        if (expandRow && expandRow.classList.contains('expand-row')) {
+            if (!show) {
+                expandRow.classList.remove('show');
+                row.classList.remove('expanded');
+            }
+        }
+
         if (show) visibleCount++;
     });
 
@@ -404,7 +562,7 @@ function applyFilters() {
     // Track if search has exactly one visible unassigned result (for quick-assign)
     var unassignedVisibleCount = 0;
     if (search) {
-        rows.forEach(function(row) {
+        document.querySelectorAll('#player-table tbody tr.player-row').forEach(function(row) {
             if (row.style.display !== 'none' && row.dataset.assigned === 'no') {
                 unassignedVisibleCount++;
             }
