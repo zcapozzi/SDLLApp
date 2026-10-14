@@ -110,14 +110,22 @@ class GameChangeService:
         Returns:
             Dictionary of current values
         """
+        # Resolve team IDs to display names for readable change logs
+        home_team_name = None
+        away_team_name = None
+        if game.home_ID and game.home_team:
+            home_team_name = game.home_team.computed_display_name
+        if game.away_ID and game.away_team:
+            away_team_name = game.away_team.computed_display_name
+
         return {
             'date': game.game_date.strftime('%Y-%m-%d') if game.game_date else None,
             'time': game.game_date.strftime('%H:%M') if game.game_date else None,
             'field': game.field_name,  # Use field_name property (resolves field_id to name)
             'field_id': game.field_id,
             'status': game.status,
-            'home_team': game.home_ID,
-            'away_team': game.away_ID,
+            'home_team': home_team_name,
+            'away_team': away_team_name,
             'game_type': game.game_type,
             'is_scrimmage': game.is_scrimmage,
             'no_time_limit': game.no_time_limit,
@@ -138,14 +146,22 @@ class GameChangeService:
         Returns:
             GameChange object if there were changes, None otherwise
         """
+        # Resolve team IDs to display names for readable change logs
+        home_team_name = None
+        away_team_name = None
+        if game.home_ID and game.home_team:
+            home_team_name = game.home_team.computed_display_name
+        if game.away_ID and game.away_team:
+            away_team_name = game.away_team.computed_display_name
+
         new_values = {
             'date': game.game_date.strftime('%Y-%m-%d') if game.game_date else None,
             'time': game.game_date.strftime('%H:%M') if game.game_date else None,
             'field': game.field_name,  # Use field_name property (resolves field_id to name)
             'field_id': game.field_id,
             'status': game.status,
-            'home_team': game.home_ID,
-            'away_team': game.away_ID,
+            'home_team': home_team_name,
+            'away_team': away_team_name,
             'game_type': game.game_type,
             'is_scrimmage': game.is_scrimmage,
             'no_time_limit': game.no_time_limit,
