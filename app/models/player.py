@@ -290,20 +290,20 @@ class PlayerSeason(db.Model):
 
     @property
     def effective_league_id(self):
-        """Get the effective league ID: placed_league_id, or team's league if on a team."""
-        if self.placed_league_id:
-            return self.placed_league_id
+        """Get the effective league ID: team's league if assigned, otherwise placed_league_id."""
         if self.team_id and self.team:
             return self.team.league_id
+        if self.placed_league_id:
+            return self.placed_league_id
         return None
 
     @property
     def effective_league(self):
-        """Get the effective league: placed_league, or team's league if on a team."""
-        if self.placed_league_id:
-            return self.placed_league
+        """Get the effective league: team's league if assigned, otherwise placed_league."""
         if self.team_id and self.team:
             return self.team.league_rel
+        if self.placed_league_id:
+            return self.placed_league
         return None
 
     def __repr__(self):
