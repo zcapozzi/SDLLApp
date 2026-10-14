@@ -76,6 +76,61 @@
     opacity: 0.6;
     pointer-events: none;
 }
+/* Three-dot action menu */
+.action-menu {
+    position: relative;
+    display: inline-block;
+}
+.action-menu-btn {
+    background: none;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    color: #666;
+}
+.action-menu-btn:hover {
+    background: #f5f5f5;
+    border-color: #ccc;
+}
+.action-menu-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    min-width: 180px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 200;
+}
+.action-menu-dropdown.show {
+    display: block;
+}
+.action-menu-item {
+    display: block;
+    width: 100%;
+    padding: 10px 14px;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    color: #333;
+    text-decoration: none;
+}
+.action-menu-item:hover {
+    background: #f5f5f5;
+}
+.action-menu-item.danger {
+    color: #c33;
+}
+.action-menu-item.danger:hover {
+    background: #fee;
+}
 </style>
 
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
@@ -262,7 +317,17 @@
                     {% if ps.status == 'withdrawn' %}
                     <button type="button" class="btn btn-outline" style="padding: 4px 8px; font-size: 11px;" onclick="reinstatePlayer({{ ps.id }})" title="Reinstate player">Reinstate</button>
                     {% else %}
-                    <button type="button" class="remove-btn" onclick="withdrawPlayer({{ ps.id }})" title="Mark as withdrawn">Withdraw</button>
+                    <div class="action-menu">
+                        <button type="button" class="action-menu-btn" onclick="toggleActionMenu(this)" title="Actions">&#8942;</button>
+                        <div class="action-menu-dropdown">
+                            <a href="#" class="action-menu-item" onclick="requestCallUp({{ ps.id }}, '{{ ps.player.first_name }}', '{{ ps.player.parent_email|default('', true) }}'); return false;">
+                                Request Call-Up
+                            </a>
+                            <button type="button" class="action-menu-item danger" onclick="withdrawPlayer({{ ps.id }})">
+                                Withdraw from Pool
+                            </button>
+                        </div>
+                    </div>
                     {% endif %}
                 </td>
             </tr>
@@ -551,8 +616,68 @@ function updateStats(delta) {
     document.getElementById('stat-unassigned').textContent = unassigned;
 }
 
+// Toggle action menu dropdown
+var activeActionMenu = null;
+function toggleActionMenu(btn) {
+    var dropdown = btn.nextElementSibling;
+    var isOpen = dropdown.classList.contains('show');
+
+    // Close any open menu
+    if (activeActionMenu && activeActionMenu !== dropdown) {
+        activeActionMenu.classList.remove('show');
+    }
+
+    if (isOpen) {
+        dropdown.classList.remove('show');
+        activeActionMenu = null;
+    } else {
+        dropdown.classList.add('show');
+        activeActionMenu = dropdown;
+    }
+}
+
+// Close action menu when clicking outside
+document.addEventListener('click', function(e) {
+    if (activeActionMenu && !e.target.closest('.action-menu')) {
+        activeActionMenu.classList.remove('show');
+        activeActionMenu = null;
+    }
+});
+
+// Request call-up email
+function requestCallUp(playerId, firstName, parentEmail) {
+    // Close the menu
+    if (activeActionMenu) {
+        activeActionMenu.classList.remove('show');
+        activeActionMenu = null;
+    }
+
+    if (!parentEmail) {
+        alert('No parent email on file for this player.');
+        return;
+    }
+
+    var subject = encodeURIComponent(firstName + ' Subbing Up?');
+    var body = encodeURIComponent(
+        'Hey! Would ' + firstName + ' be available to sub up in A this Saturday at 1pm? ' +
+        'It is for Coach Reeves team. Please let me know as soon as you can. ' +
+        'Thanks for your help! -Rebekah\n\n' +
+        '--\n' +
+        'Thank you,\n\n' +
+        'SDLL Player Agent\n' +
+        'Rebekah Farris'
+    );
+
+    window.location.href = 'mailto:' + parentEmail + '?subject=' + subject + '&body=' + body;
+}
+
 // Withdraw player via AJAX
 function withdrawPlayer(playerId) {
+    // Close the menu first
+    if (activeActionMenu) {
+        activeActionMenu.classList.remove('show');
+        activeActionMenu = null;
+    }
     if (!confirm('Mark this player as withdrawn? They will be removed from their team (if assigned) and hidden from the default pool view.')) return;
 
     var row = document.getElementById('player-' + playerId);
