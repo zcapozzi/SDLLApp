@@ -401,7 +401,7 @@ def get_games_needing_reports(year, is_spring):
     if not enabled_league_ids:
         return []
 
-    # Get completed games (exclude scrimmages)
+    # Get completed games (exclude scrimmages and cancelled/rainout/postponed)
     games = Game.query.options(
         joinedload(Game.home_team),
         joinedload(Game.away_team)
@@ -414,7 +414,8 @@ def get_games_needing_reports(year, is_spring):
         Game.is_scrimmage == 0,
         Game.league_id.in_(enabled_league_ids),
         Game.home_ID.isnot(None),
-        Game.away_ID.isnot(None)
+        Game.away_ID.isnot(None),
+        ~Game.status.in_(['cancelled', 'rainout', 'postponed'])
     ).order_by(Game.game_date.desc()).all()
 
     # Filter to those needing reports
@@ -466,6 +467,7 @@ def get_games_needing_emails(minutes_after_start=105, max_hours_ago=18):
     # - Started before cutoff_min (enough time has passed since game start)
     # - Started after cutoff_max (not too old - only recent games)
     # - Exclude scrimmages
+    # - Exclude cancelled/rainout/postponed games
     games = Game.query.filter(
         Game.active == 1,
         Game.game_date < cutoff_min,
@@ -473,7 +475,8 @@ def get_games_needing_emails(minutes_after_start=105, max_hours_ago=18):
         Game.game_type.in_(['regular', 'playoff']),
         Game.is_scrimmage == 0,
         Game.home_ID.isnot(None),
-        Game.away_ID.isnot(None)
+        Game.away_ID.isnot(None),
+        ~Game.status.in_(['cancelled', 'rainout', 'postponed'])
     ).all()
 
     results = []
