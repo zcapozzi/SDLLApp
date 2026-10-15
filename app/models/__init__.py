@@ -77,3 +77,6 @@ from .draft import DraftSession, DraftPick, DraftOrder, DraftProtection
 
 # GC Screenshot parsing
 from .gc_screenshot_session import GCScreenshotSession
+
+# Communication preferences (SMS/email opt-in/opt-out)
+from .contact_preference import ContactPreference
