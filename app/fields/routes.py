@@ -260,7 +260,6 @@ def manage_allocations(year, is_spring):
                 day_of_week=day_of_week,
                 start_time=start_time,
                 end_time=end_time,
-                league=league,
                 league_id=league_id,
                 is_owned=is_owned,
                 notes=notes
@@ -365,7 +364,6 @@ def manage_allocations(year, is_spring):
                 allocation_date=allocation_date,
                 start_time=start_time,
                 end_time=end_time,
-                league=league,
                 league_id=league_id,
                 is_owned=is_owned,
                 notes=notes
