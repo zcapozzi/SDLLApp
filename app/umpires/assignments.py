@@ -374,7 +374,7 @@ def umpire_calendar(year, is_spring):
         leagues=leagues,
         teams=teams,
         fields=fields,
-        current_league=league,
+        current_league=league_id,
         today=today,
         partners=partners,
         seasons=seasons
