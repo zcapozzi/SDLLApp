@@ -11,6 +11,8 @@ from app.models.player import (
     EvaluationMetric, PlayerEvaluationScore, EvaluationMetricAgeRange
 )
 from app.models.org_season import OrgSeason
+from app.models.game import Game
+from app.models.team import TeamSeason
 from app.utils.auth import role_required
 from app.utils.tracking import log_authenticated_view
 
@@ -1483,3 +1485,311 @@ def registration_trends():
     return render_template('players/registration_trends.html',
                            seasons_data=seasons_data,
                            summary_stats=summary_stats)
+
+
+# =============================================================================
+# Call-Up Tracking
+# =============================================================================
+
+@players_bp.route('/callups')
+@players_bp.route('/callups/<int:year>/<int:is_spring>')
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def callups(year=None, is_spring=None):
+    """Call-ups dashboard - manage substitute requests."""
+    from app.services.callup_service import CallUpService
+    from app.models.league import League
+
+    # Default to current season
+    if year is None or is_spring is None:
+        current_season = OrgSeason.get_current_season()
+        if current_season:
+            return redirect(url_for('players.callups',
+                                    year=current_season.year,
+                                    is_spring=current_season.is_spring))
+        flash('No current season found.', 'error')
+        return redirect(url_for('players.index'))
+
+    org_season = OrgSeason.query.filter_by(
+        year=year, is_spring=is_spring, org_id=1
+    ).first_or_404()
+
+    # Log the view
+    log_authenticated_view('callups', f'{year}/{is_spring}')
+
+    # Get filter parameters
+    status_filter = request.args.get('status')
+    league_filter = request.args.get('league_id', type=int)
+
+    filters = {}
+    if status_filter:
+        filters['status'] = status_filter
+    if league_filter:
+        filters['league_id'] = league_filter
+
+    # Get requests and stats
+    requests = CallUpService.get_active_requests(org_season.ID, filters)
+    stats = CallUpService.get_dashboard_stats(org_season.ID)
+
+    # Get leagues for filter dropdown
+    leagues = League.get_all_active()
+
+    # Get all seasons for season selector
+    seasons = OrgSeason.query.order_by(
+        OrgSeason.year.desc(),
+        OrgSeason.is_spring.desc()
+    ).limit(10).all()
+
+    # Get upcoming games for the game dropdown (only actual games, not practices/scrimmages)
+    upcoming_games = CallUpService.get_upcoming_games_for_callup(org_season.ID)
+
+    return render_template('players/callups.html',
+                           org_season=org_season,
+                           requests=requests,
+                           stats=stats,
+                           leagues=leagues,
+                           seasons=seasons,
+                           upcoming_games=upcoming_games,
+                           current_status=status_filter,
+                           current_league_id=league_filter)
+
+
+@players_bp.route('/callups/<int:year>/<int:is_spring>/create', methods=['POST'])
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def callups_create(year, is_spring):
+    """Create a new call-up request and optionally send email."""
+    from app.services.callup_service import CallUpService
+
+    org_season = OrgSeason.query.filter_by(
+        year=year, is_spring=is_spring, org_id=1
+    ).first_or_404()
+
+    # Get form data
+    player_season_id = request.form.get('player_season_id', type=int)
+    game_id = request.form.get('game_id', type=int)
+    target_team_id = request.form.get('target_team_id', type=int)
+    send_email = request.form.get('send_email') == '1'
+    contact_email = request.form.get('recipient', '').strip()
+    email_subject = request.form.get('msg_subject', '').strip()
+    email_body = request.form.get('msg_body', '').strip()
+    notes = request.form.get('notes', '').strip()
+
+    # Validate required fields
+    if not all([player_season_id, game_id, target_team_id]):
+        flash('Please select a player, game, and team.', 'error')
+        return redirect(url_for('players.callups', year=year, is_spring=is_spring))
+
+    # Email is required only if sending
+    if send_email and not contact_email:
+        flash('Please enter an email address.', 'error')
+        return redirect(url_for('players.callups', year=year, is_spring=is_spring))
+
+    # Verify player exists and get their email for tracking
+    player_season = PlayerSeason.query.options(
+        db.joinedload(PlayerSeason.player)
+    ).get(player_season_id)
+    if not player_season:
+        flash('Player not found.', 'error')
+        return redirect(url_for('players.callups', year=year, is_spring=is_spring))
+
+    # If not sending email, use stored email for tracking (or empty)
+    if not send_email:
+        contact_email = player_season.player.parent_email or ''
+
+    try:
+        callup_request = CallUpService.create_request(
+            player_season_id=player_season_id,
+            game_id=game_id,
+            target_team_id=target_team_id,
+            requested_by_id=current_user.ID,
+            contact_email=contact_email,
+            send_email=send_email,
+            email_subject=email_subject,
+            email_body=email_body,
+            notes=notes
+        )
+
+        if send_email:
+            flash(f'Call-up request created and email sent to {contact_email}.', 'success')
+        else:
+            flash('Call-up request recorded (no email sent).', 'success')
+
+    except ValueError as e:
+        flash(str(e), 'error')
+
+    return redirect(url_for('players.callups', year=year, is_spring=is_spring))
+
+
+@players_bp.route('/callups/<int:request_id>/update', methods=['POST'])
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def callups_update_status(request_id):
+    """Update the status of a call-up request."""
+    from app.services.callup_service import CallUpService
+    from app.models.callup_request import CallUpRequest
+
+    callup_request = CallUpRequest.query.get_or_404(request_id)
+
+    status = request.form.get('status')
+    notes = request.form.get('notes', '').strip()
+
+    if status not in CallUpRequest.STATUSES:
+        flash('Invalid status.', 'error')
+    else:
+        try:
+            CallUpService.update_status(request_id, status, notes)
+            flash(f'Request marked as {status}.', 'success')
+        except ValueError as e:
+            flash(str(e), 'error')
+
+    # Get the org_season to redirect back
+    player_season = callup_request.player_season
+    if player_season and player_season.org_season:
+        org_season = player_season.org_season
+        return redirect(url_for('players.callups',
+                                year=org_season.year,
+                                is_spring=org_season.is_spring))
+
+    return redirect(url_for('players.index'))
+
+
+@players_bp.route('/callups/email-template', methods=['GET'])
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def callups_email_template():
+    """AJAX endpoint to get email template for a player/game combination."""
+    from app.services.callup_service import CallUpService
+
+    player_season_id = request.args.get('player_season_id', type=int)
+    game_id = request.args.get('game_id', type=int)
+    target_team_id = request.args.get('target_team_id', type=int)
+
+    if not all([player_season_id, game_id, target_team_id]):
+        return jsonify({'error': 'Missing parameters'}), 400
+
+    player_season = PlayerSeason.query.options(
+        db.joinedload(PlayerSeason.player)
+    ).get(player_season_id)
+
+    game = Game.query.get(game_id)
+    team = TeamSeason.query.get(target_team_id)
+
+    if not all([player_season, game, team]):
+        return jsonify({'error': 'Invalid player, game, or team'}), 404
+
+    template = CallUpService.build_callup_email_template(
+        player_season.player,
+        game,
+        team
+    )
+
+    return jsonify({
+        'subject': template['subject'],
+        'body': template['body'],
+        'parent_email': player_season.player.parent_email
+    })
+
+
+@players_bp.route('/api/player/<int:player_season_id>/callup-count')
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def api_player_callup_count(player_season_id):
+    """AJAX endpoint to get call-up count for a player."""
+    from app.services.callup_service import CallUpService
+
+    counts = CallUpService.get_player_callup_count(player_season_id)
+    return jsonify(counts)
+
+
+@players_bp.route('/api/callups/eligible-players/<int:game_id>')
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def api_eligible_players_for_callup(game_id):
+    """AJAX endpoint to get eligible players for a specific game.
+
+    Returns players from the feeder league (one age_rank below) who:
+    - Are assigned to a team
+    - Optionally includes players with conflicts (if include_conflicts=1)
+
+    Always returns counts for both available and conflicting players for display.
+    """
+    from app.services.callup_service import CallUpService
+
+    game = Game.query.get(game_id)
+    if not game:
+        return jsonify({'error': 'Game not found'}), 404
+
+    # Get the org_season from the game
+    org_season = OrgSeason.query.filter_by(
+        year=game.year,
+        is_spring=game.is_spring,
+        org_id=1
+    ).first()
+
+    if not org_season:
+        return jsonify({'error': 'Season not found'}), 404
+
+    include_conflicts = request.args.get('include_conflicts', '0') == '1'
+
+    # Always fetch ALL players (with conflicts) so we can get accurate counts
+    all_players = CallUpService.get_eligible_players_for_callup(
+        org_season.ID,
+        game,
+        include_conflicts=True  # Always get all players for counting
+    )
+
+    # Count available vs conflicting
+    available_players = [p for p in all_players if not p.has_conflict]
+    conflicting_players = [p for p in all_players if p.has_conflict]
+
+    # Return either all players or just available based on checkbox
+    players_to_return = all_players if include_conflicts else available_players
+
+    # Get feeder league info (pass org_season.ID to handle inactive leagues)
+    feeder_league = CallUpService.get_feeder_league(game.league_id, org_season.ID)
+
+    # Build response
+    players_data = []
+    for ep in players_to_return:
+        players_data.append({
+            'player_season_id': ep.player_season.id,
+            'first_name': ep.player.first_name,
+            'last_name': ep.player.last_name,
+            'team_name': ep.team.scheduler_display_name if ep.team else '',
+            'league_name': ep.team.league_display_name if ep.team else '',
+            'eval_score': round(ep.eval_score, 2) if ep.eval_score else None,
+            'callup_count': ep.callup_count,
+            'pending_count': ep.pending_count,
+            'has_conflict': ep.has_conflict,
+            'conflict_info': None,
+            'parent_email': ep.player.parent_email
+        })
+        if ep.has_conflict and ep.conflict_info:
+            players_data[-1]['conflict_info'] = {
+                'type': ep.conflict_info.conflict_type,  # 'game', 'practice', or 'scrimmage'
+                'time': ep.conflict_info.time,
+                'field': ep.conflict_info.field
+            }
+
+    return jsonify({
+        'feeder_league': {
+            'id': feeder_league.ID if feeder_league else None,
+            'name': feeder_league.get_seasonal_name(game.is_spring) if feeder_league else None,
+            'sport': feeder_league.sport if feeder_league else None
+        },
+        'target_game': {
+            'id': game.ID,
+            'date': game.game_date.strftime('%Y-%m-%d') if game.game_date else None,
+            'time': game.game_date.strftime('%I:%M %p').lstrip('0') if game.game_date else 'TBD',
+            'league': game.league_display_name,
+            'home_team': game.home_team.scheduler_display_name if game.home_team else 'TBD',
+            'home_team_id': game.home_ID,
+            'away_team': game.away_team.scheduler_display_name if game.away_team else 'TBD',
+            'away_team_id': game.away_ID,
+            'field': game.field_name
+        },
+        'players': players_data,
+        'total_available': len(available_players),
+        'total_with_conflicts': len(conflicting_players)
+    })

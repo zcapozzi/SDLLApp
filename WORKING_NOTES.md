@@ -4,7 +4,133 @@
 This is a Flask web application for managing South Durham Little League schedules, including game scheduling, field management, and team coordination.
 
 ## Current Status
-Last session: Added LLM response time tracking to GameChanger screenshot parsing. This enables statistical timeout detection (3 standard deviations from mean) to automatically switch to manual mode when the service is slow/unavailable.
+Last session: Implemented Call-Up Tracking feature for Player Agent to manage substitute requests.
+
+---
+
+## Session: October 16, 2026 - Call-Up Tracking Feature (Updated)
+
+### Overview
+Implemented a new feature for the Player Agent to track substitute/call-up requests when teams need extra players. The workflow is **game-first**: select a game, then see all eligible players from the feeder league.
+
+### Key Design Decisions
+1. **Game-first workflow** - Select a game, then system shows eligible players from the division below
+2. **Only actual games** - Dropdown excludes practices and scrimmages (game_type in ['regular', 'playoff'], is_scrimmage=0)
+3. **Feeder league logic** - Uses `age_rank` to find the next ACTIVE league below (same sport). Skips inactive leagues (e.g., BB Majors doesn't exist in Fall, so Intermediate pulls from AAA/Grapefruit)
+4. **Team assignment required** - Only shows players who have been assigned to a team (team_id is not null)
+5. **Conflict detection** - Players with games at same time are hidden by default (checkbox to show)
+6. **Equity tracking** - Shows eval scores and call-up counts to help distribute fairly
+7. **Available/Conflict counts** - Label shows "n available; y unavailable because of a conflict"
+
+### New Feature Capabilities
+1. **Track call-up requests** - Record when a player is asked to sub up for a specific game
+2. **Track responses** - Did they accept, decline, or not respond?
+3. **Maintain equity** - Show call-up history + eval scores to distribute fairly
+4. **Conflict detection** - Automatically hide players with game conflicts
+5. **Streamlined workflow** - Game-first selection with inline email composition
+
+### Files Created
+- `app/models/callup_request.py` - CallUpRequest model
+- `app/services/callup_service.py` - Business logic service with feeder league logic
+- `app/templates/players/callups.html` - Dashboard page with game-first workflow
+- `scripts/add_callup_requests_table.sql` - Database migration
+
+### Files Modified
+- `app/models/__init__.py` - Added CallUpRequest import
+- `app/players/routes.py` - Added callups routes + eligible players API
+- `app/templates/players/pool.html` - Updated "Request Call-Up" to go to callups page
+- `app/templates/players/index.html` - Added Call-Ups card to actions
+- `ThingsWeCanDoNow.md` - Added Player Management section (17)
+
+### Routes Added
+- `GET /players/callups` - Dashboard (redirects to current season)
+- `GET /players/callups/<year>/<is_spring>` - Dashboard for specific season
+- `POST /players/callups/<year>/<is_spring>/create` - Create new request
+- `POST /players/callups/<request_id>/update` - Update request status
+- `GET /players/callups/email-template` - AJAX endpoint for email template
+- `GET /players/api/player/<id>/callup-count` - AJAX endpoint for player callup count
+- `GET /players/api/callups/eligible-players/<game_id>` - AJAX endpoint for eligible players
+
+### User Flow (Updated)
+1. Go to Call-Ups page
+2. Select a game from dropdown (only actual games, no practices/scrimmages)
+3. System shows all eligible players from the feeder league with:
+   - Eval score (color-coded: high/medium/low)
+   - Call-up count (for equity tracking)
+   - Conflict info (if checkbox enabled)
+4. Select which team needs the sub (home or away)
+5. Click "Request" on a player
+6. Review/edit email content in modal
+7. Click "Send Request" -> email sent + record created
+8. Update status when response received
+
+### Service Methods (callup_service.py)
+- `get_upcoming_games_for_callup()` - Only returns actual games (not practices/scrimmages), filtered to leagues with active teams
+- `get_feeder_league(target_league_id, org_season_id)` - Finds the **highest age_rank league BELOW** target that has teams in the current season. Skips inactive leagues (e.g., BB Majors in Fall has no teams, so Intermediate pulls from AAA)
+- `get_eligible_players_for_callup()` - Players from feeder league, on teams, with eval/callup data, conflict detection
+
+### Bug Fixes (October 16, 2026)
+1. **Fixed `avg_score` column error** - PlayerEvaluation model had `overall_score = db.Column('avg_score', ...)` but DB column is `overall_score`. Fixed mapping.
+2. **Fixed inactive leagues showing** - Games dropdown now only shows leagues with active teams (BB Majors filtered out in Fall)
+3. **Fixed feeder league for inactive divisions** - `get_feeder_league()` now accepts `org_season_id` and finds the highest active league below target, not just age_rank - 1
+4. **Conflict detection now includes practices** - Previously only checked games; now checks games, practices, and scrimmages
+5. **Conflict label shows time + field** - Changed from "3:00 PM vs Tigers" to "Practice @ 3:00 PM at Field 1" (specifies game/practice/scrimmage)
+6. **Added player name search** - Input field to filter players by name in the eligible players list
+
+### Conflict Detection Logic
+- **Window**: ±3 hours from target game start time
+- **Events checked**: All games, practices, and scrimmages where the player's team is participating
+- **Display format**: "[Type] @ [Time] at [Field]" (e.g., "Practice @ 5:30 PM at Lowe's Grove #3")
+
+### Access Control
+Restricted to `admin`, `BBPlayerAgent`, `SBPlayerAgent` roles
+
+---
+
+## Session: October 14, 2026 (Continued) - Player Team Assignment Script
+
+### Overview
+Created a Python script to batch update `team_id` for `sdll_player_seasons` records using the Fall 2026 roster Excel file provided by SI Play.
+
+### Script Location
+`scripts/batch_update_player_teams.py`
+
+### Usage
+```bash
+# Dry run (see what would be updated)
+python scripts/batch_update_player_teams.py --dry-run
+
+# Verbose dry run (see all matching details)
+python scripts/batch_update_player_teams.py --dry-run --verbose
+
+# Live update
+python scripts/batch_update_player_teams.py
+```
+
+### How It Works
+1. Reads the Excel file (`docs/Fall 2026 Roster - Full - For Zack.xlsx`)
+2. Builds lookup of player_seasons without team_id (by decrypted first+last name)
+3. Builds lookup of teams by coach_name
+4. Matches Excel rows (player name → team coach name) to database records
+5. Updates `team_id` in `sdll_player_seasons`
+
+### Data Matching
+- **Players**: Match by `(first_name, last_name)` from Excel to decrypted Player names
+- **Teams**: Match by coach last name in Excel to `TeamSeason.coach_name`
+
+### Important Note
+The script requires the correct `ENCRYPTION_KEY` environment variable to decrypt player names. On local development with a different key, you'll see decryption errors. Run on production (Railway) where the key matches.
+
+### Expected Results (Fall 2026)
+- 401 players with team assignments in Excel
+- 535 player_seasons without team_id in database
+- 55 teams with coach_name set
+
+### Page View Tracking Added
+Also added `log_authenticated_view()` calls to scheduler-related routes for usage analytics:
+- `scheduler/routes.py`: index, review, picker, email_coaches
+- `games/routes.py`: manage, calendar, day_view, rainout, league_practice
+- `seasons/routes.py`: schedule_settings, blackout_dates, release_schedule, org_events
 
 ---
 

@@ -1,0 +1,883 @@
+{% extends "base.html" %}
+
+{% block title %}Call-Ups - {{ org_season.season_desc }}{% endblock %}
+
+{% block content %}
+<style>
+/* Players table */
+.players-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+.players-table th, .players-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+.players-table th {
+    background: #f5f5f5;
+    font-weight: 600;
+    font-size: 13px;
+    color: #666;
+}
+.players-table tr:hover {
+    background: #f9f9f9;
+}
+.players-table tr.has-conflict {
+    opacity: 0.6;
+    background: #fff8e8;
+}
+
+/* Eval score display */
+.eval-score {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.eval-high { background: #d4edda; color: #155724; }
+.eval-medium { background: #fff3cd; color: #856404; }
+.eval-low { background: #f8d7da; color: #721c24; }
+.eval-none { background: #e9ecef; color: #6c757d; }
+
+/* Call-up count badge */
+.callup-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+.callup-badge.zero { background: #e9ecef; color: #6c757d; }
+.callup-badge.low { background: #d4edda; color: #155724; }
+.callup-badge.medium { background: #fff3cd; color: #856404; }
+.callup-badge.high { background: #f8d7da; color: #721c24; }
+
+/* Conflict indicator */
+.conflict-tag {
+    display: inline-block;
+    background: #f8d7da;
+    color: #721c24;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+/* Request button */
+.btn-request {
+    padding: 4px 12px;
+    font-size: 12px;
+    background: rgb(34, 139, 34);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.btn-request:hover {
+    background: rgb(28, 119, 28);
+}
+.btn-request:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+/* Email composer modal */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    display: none;
+}
+.modal-backdrop.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.modal-content {
+    background: white;
+    border-radius: 8px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 24px;
+}
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.modal-header h3 {
+    margin: 0;
+}
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #999;
+}
+.modal-close:hover {
+    color: #333;
+}
+
+/* Email form styling */
+.email-field {
+    margin-bottom: 15px;
+}
+.email-field label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: #666;
+}
+.email-field input, .email-field textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+.email-field textarea {
+    min-height: 180px;
+    font-family: inherit;
+}
+
+/* Status badges */
+.status-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: white;
+}
+
+/* Game info card */
+.game-info-card {
+    background: #f0f7f0;
+    border: 1px solid rgb(34, 139, 34);
+    border-radius: 8px;
+    padding: 15px 20px;
+    margin-bottom: 20px;
+}
+.game-info-card h4 {
+    margin: 0 0 10px 0;
+    color: rgb(34, 139, 34);
+}
+.game-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+}
+.game-detail-item {
+    font-size: 14px;
+}
+.game-detail-item strong {
+    color: #333;
+}
+
+/* Feeder league info */
+.feeder-info {
+    background: #e8f4fd;
+    border: 1px solid #bee5eb;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 15px;
+    font-size: 14px;
+    color: #0c5460;
+}
+
+/* Status dropdown */
+.status-dropdown {
+    position: relative;
+    display: inline-block;
+}
+.status-dropdown-btn {
+    background: none;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+}
+.status-dropdown-btn:hover {
+    background: #f5f5f5;
+}
+.status-dropdown-menu {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 100;
+    min-width: 150px;
+}
+.status-dropdown-menu.show {
+    display: block;
+}
+.status-dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+}
+.status-dropdown-item:hover {
+    background: #f5f5f5;
+}
+.status-dropdown-item.accepted { color: #27ae60; }
+.status-dropdown-item.declined { color: #e74c3c; }
+.status-dropdown-item.no-response { color: #7f8c8d; }
+.status-dropdown-item.cancelled { color: #95a5a6; }
+
+/* Mobile styles */
+@media (max-width: 768px) {
+    .players-table {
+        font-size: 13px;
+    }
+    .players-table th, .players-table td {
+        padding: 8px;
+    }
+    .hide-mobile {
+        display: none;
+    }
+}
+</style>
+
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; flex-wrap: wrap; gap: 15px;">
+    <div>
+        <h1 style="margin-bottom: 0;">Call-Ups</h1>
+        <p style="color: #666; margin-top: 5px;">Request substitutes for {{ org_season.season_desc }}</p>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center;">
+        <select id="season-selector" class="form-control" style="width: auto;" onchange="changeSeason(this.value)">
+            {% for s in seasons %}
+            <option value="{{ s.year }}/{{ s.is_spring }}" {% if s.ID == org_season.ID %}selected{% endif %}>
+                {{ s.season_desc }}
+            </option>
+            {% endfor %}
+        </select>
+        <a href="{{ url_for('players.player_pool', org_season_id=org_season.ID) }}" class="btn btn-outline">Player Pool</a>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 15px; margin-bottom: 30px;">
+    <div class="card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 28px; font-weight: bold; color: #f39c12;">{{ stats.pending }}</div>
+        <div style="color: #666; font-size: 13px;">Pending</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 28px; font-weight: bold; color: #27ae60;">{{ stats.accepted }}</div>
+        <div style="color: #666; font-size: 13px;">Accepted</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 28px; font-weight: bold; color: #e74c3c;">{{ stats.declined }}</div>
+        <div style="color: #666; font-size: 13px;">Declined</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 28px; font-weight: bold; color: #666;">{{ stats.total }}</div>
+        <div style="color: #666; font-size: 13px;">Total</div>
+    </div>
+</div>
+
+<!-- New Request Section -->
+<div class="card" style="margin-bottom: 30px;">
+    <h3 style="margin-top: 0; margin-bottom: 15px;">New Call-Up Request</h3>
+
+    <div style="margin-bottom: 15px;">
+        <label style="display: block; font-weight: 500; margin-bottom: 6px; font-size: 14px;">Select a Game</label>
+        <select id="game-select" class="form-control" style="max-width: 600px;" onchange="onGameSelected()">
+            <option value="">Choose a game to find eligible players...</option>
+            {% for game in upcoming_games %}
+            <option value="{{ game.ID }}"
+                    data-league-id="{{ game.league_id or '' }}"
+                    data-home-team-id="{{ game.home_ID or '' }}"
+                    data-away-team-id="{{ game.away_ID or '' }}">
+                {{ game.game_date.strftime('%m/%d %I:%M%p').replace(' 0', ' ').lstrip('0') if game.game_date else 'TBD' }} -
+                {{ game.league_display_name }}:
+                {{ game.home_team.scheduler_display_name if game.home_team else 'TBD' }} vs
+                {{ game.away_team.scheduler_display_name if game.away_team else 'TBD' }}
+                @ {{ game.field_name or 'TBD' }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <!-- Game Info (shown after selection) -->
+    <div id="game-info-section" style="display: none;">
+        <div class="game-info-card">
+            <h4>Selected Game</h4>
+            <div class="game-details">
+                <div class="game-detail-item"><strong>Date:</strong> <span id="game-date"></span></div>
+                <div class="game-detail-item"><strong>Time:</strong> <span id="game-time"></span></div>
+                <div class="game-detail-item"><strong>Field:</strong> <span id="game-field"></span></div>
+                <div class="game-detail-item"><strong>League:</strong> <span id="game-league"></span></div>
+                <div class="game-detail-item"><strong>Home:</strong> <span id="game-home"></span></div>
+                <div class="game-detail-item"><strong>Away:</strong> <span id="game-away"></span></div>
+            </div>
+        </div>
+
+        <div class="feeder-info" id="feeder-info">
+            <span id="feeder-league-text">Loading eligible players...</span>
+        </div>
+
+        <!-- Show conflicts checkbox -->
+        <div style="margin-bottom: 15px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+                <input type="checkbox" id="show-conflicts-checkbox" onchange="onShowConflictsChanged()">
+                <span>Show players with scheduling conflicts (games or practices)</span>
+            </label>
+        </div>
+
+        <!-- Select Team for Call-Up -->
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; font-weight: 500; margin-bottom: 6px; font-size: 14px;">Which team needs the sub?</label>
+            <select id="team-select" class="form-control" style="max-width: 300px;">
+                <option value="">Select team...</option>
+            </select>
+        </div>
+
+        <!-- Players Table -->
+        <div id="players-loading" style="padding: 40px; text-align: center; color: #666;">
+            Loading eligible players...
+        </div>
+
+        <div id="players-container" style="display: none;">
+            <!-- Player Search -->
+            <div style="margin-bottom: 15px;">
+                <input type="text" id="player-search" class="form-control" style="max-width: 300px;"
+                       placeholder="Search by player name..."
+                       oninput="filterPlayersByName()">
+            </div>
+
+            <table class="players-table">
+                <thead>
+                    <tr>
+                        <th>Player</th>
+                        <th>Team</th>
+                        <th class="hide-mobile">Eval Score</th>
+                        <th>Call-Ups</th>
+                        <th>Conflict</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="players-tbody">
+                </tbody>
+            </table>
+            <div id="no-players-message" style="display: none; padding: 30px; text-align: center; color: #666;">
+                No eligible players found in the feeder league.
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Existing Requests -->
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+        <h3 style="margin: 0;">Call-Up Requests</h3>
+        <div style="display: flex; gap: 10px;">
+            <select id="status-filter" class="form-control" onchange="applyFilters()">
+                <option value="">All Statuses</option>
+                <option value="pending" {% if current_status == 'pending' %}selected{% endif %}>Pending</option>
+                <option value="accepted" {% if current_status == 'accepted' %}selected{% endif %}>Accepted</option>
+                <option value="declined" {% if current_status == 'declined' %}selected{% endif %}>Declined</option>
+                <option value="no_response" {% if current_status == 'no_response' %}selected{% endif %}>No Response</option>
+                <option value="cancelled" {% if current_status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+            </select>
+            <select id="league-filter" class="form-control" onchange="applyFilters()">
+                <option value="">All Leagues</option>
+                {% for league in leagues %}
+                <option value="{{ league.ID }}" {% if current_league_id == league.ID %}selected{% endif %}>
+                    {{ league.get_seasonal_name(org_season.is_spring) }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    {% if requests %}
+    <table class="players-table">
+        <thead>
+            <tr>
+                <th>Player</th>
+                <th>From League</th>
+                <th>Game</th>
+                <th>Team Needing Sub</th>
+                <th>Requested</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for req in requests %}
+            <tr data-status="{{ req.status }}" data-league="{{ req.target_team.league_id if req.target_team else '' }}">
+                <td>
+                    <strong>{{ req.player_season.player.last_name }}, {{ req.player_season.player.first_name }}</strong>
+                </td>
+                <td>
+                    {% if req.player_season.team and req.player_season.team.league_rel %}
+                    {{ req.player_season.team.league_display_name }}
+                    {% else %}
+                    <span style="color: #999;">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if req.game %}
+                    {{ req.game.game_date.strftime('%m/%d %I:%M%p').replace(' 0', ' ').lstrip('0') if req.game.game_date else 'TBD' }}
+                    <br><span style="font-size: 12px; color: #666;">{{ req.game.field_name or '' }}</span>
+                    {% else %}
+                    <span style="color: #999;">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if req.target_team %}
+                    {{ req.target_team.league_display_name }} {{ req.target_team.scheduler_display_name }}
+                    {% else %}
+                    <span style="color: #999;">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {{ req.requested_at.strftime('%m/%d/%y') if req.requested_at else '-' }}
+                </td>
+                <td>
+                    <span class="status-badge" style="background-color: {{ req.status_color }};">
+                        {{ req.status_display }}
+                    </span>
+                </td>
+                <td>
+                    <div class="status-dropdown">
+                        <button type="button" class="status-dropdown-btn" onclick="toggleStatusMenu(this)">
+                            Update &#9662;
+                        </button>
+                        <div class="status-dropdown-menu">
+                            <form method="POST" action="{{ url_for('players.callups_update_status', request_id=req.id) }}" style="margin: 0;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="status" value="accepted">
+                                <button type="submit" class="status-dropdown-item accepted">Mark Accepted</button>
+                            </form>
+                            <form method="POST" action="{{ url_for('players.callups_update_status', request_id=req.id) }}" style="margin: 0;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="status" value="declined">
+                                <button type="submit" class="status-dropdown-item declined">Mark Declined</button>
+                            </form>
+                            <form method="POST" action="{{ url_for('players.callups_update_status', request_id=req.id) }}" style="margin: 0;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="status" value="no_response">
+                                <button type="submit" class="status-dropdown-item no-response">No Response</button>
+                            </form>
+                            <form method="POST" action="{{ url_for('players.callups_update_status', request_id=req.id) }}" style="margin: 0;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="status" value="cancelled">
+                                <button type="submit" class="status-dropdown-item cancelled">Cancel</button>
+                            </form>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: #666; padding: 30px;">
+        No call-up requests yet. Select a game above to get started.
+    </p>
+    {% endif %}
+</div>
+
+<!-- Email Modal -->
+<div class="modal-backdrop" id="email-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Request Call-Up</h3>
+            <button type="button" class="modal-close" onclick="closeEmailModal()">&times;</button>
+        </div>
+
+        <form method="POST" action="{{ url_for('players.callups_create', year=org_season.year, is_spring=org_season.is_spring) }}" id="callup-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="player_season_id" id="form-player-id">
+            <input type="hidden" name="game_id" id="form-game-id">
+            <input type="hidden" name="target_team_id" id="form-team-id">
+            <input type="hidden" name="send_email" id="form-send-email" value="1">
+
+            <p id="modal-player-info" style="margin-bottom: 15px; font-size: 14px;"></p>
+
+            <div class="email-field">
+                <label>To</label>
+                <input type="email" name="recipient" id="modal-recipient" autocomplete="email">
+            </div>
+
+            <div class="email-field">
+                <label>Subject</label>
+                <input type="text" name="msg_subject" id="modal-subject">
+            </div>
+
+            <div class="email-field">
+                <label>Message</label>
+                <textarea name="msg_body" id="modal-body"></textarea>
+            </div>
+
+            <div class="email-field">
+                <label>Notes <span style="font-weight: normal; color: #888;">(optional - for your records)</span></label>
+                <input type="text" name="notes" id="modal-notes" placeholder="e.g., Texted parent, waiting for response">
+            </div>
+
+            <div style="margin-top: 20px; display: flex; gap: 10px; align-items: center;">
+                <button type="submit" class="btn btn-primary" onclick="setEmailMode(true)">Send Email & Track</button>
+                <button type="button" class="btn btn-outline" onclick="closeEmailModal()">Cancel</button>
+                <span style="margin-left: auto;">
+                    <a href="#" onclick="submitTrackOnly(event)" style="font-size: 13px; color: #666;">Record without emailing</a>
+                </span>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+var currentGameData = null;
+var currentPlayersData = [];
+
+function changeSeason(value) {
+    window.location.href = '{{ url_for("players.callups") }}/' + value;
+}
+
+function onGameSelected() {
+    var gameSelect = document.getElementById('game-select');
+    var gameId = gameSelect.value;
+
+    if (!gameId) {
+        document.getElementById('game-info-section').style.display = 'none';
+        return;
+    }
+
+    document.getElementById('game-info-section').style.display = 'block';
+    document.getElementById('players-loading').style.display = 'block';
+    document.getElementById('players-container').style.display = 'none';
+
+    // Fetch eligible players
+    var includeConflicts = document.getElementById('show-conflicts-checkbox').checked ? '1' : '0';
+    fetch('{{ url_for("players.api_eligible_players_for_callup", game_id=0) }}'.replace('/0', '/' + gameId) + '?include_conflicts=' + includeConflicts)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            currentGameData = data;
+            currentPlayersData = data.players;
+            renderGameInfo(data);
+            renderPlayers(data.players);
+        })
+        .catch(function(err) {
+            console.error('Error loading players:', err);
+            document.getElementById('players-loading').innerHTML = 'Error loading players. Please try again.';
+        });
+}
+
+function onShowConflictsChanged() {
+    onGameSelected();  // Reload with new setting
+}
+
+function renderGameInfo(data) {
+    var game = data.target_game;
+    document.getElementById('game-date').textContent = game.date || 'TBD';
+    document.getElementById('game-time').textContent = game.time || 'TBD';
+    document.getElementById('game-field').textContent = game.field || 'TBD';
+    document.getElementById('game-league').textContent = game.league || 'TBD';
+    document.getElementById('game-home').textContent = game.home_team;
+    document.getElementById('game-away').textContent = game.away_team;
+
+    // Update feeder league info
+    var feederInfo = document.getElementById('feeder-league-text');
+    if (data.feeder_league && data.feeder_league.name) {
+        feederInfo.innerHTML = 'Showing players from <strong>' + data.feeder_league.name + '</strong>: ' +
+            data.total_available + ' available' +
+            (data.total_with_conflicts > 0 ? '; ' + data.total_with_conflicts + ' unavailable because of a conflict' : '');
+    } else {
+        feederInfo.textContent = 'No feeder league found for this game (may be the lowest division).';
+    }
+
+    // Update team dropdown
+    var teamSelect = document.getElementById('team-select');
+    teamSelect.innerHTML = '<option value="">Select team...</option>';
+    if (game.home_team_id) {
+        var opt = document.createElement('option');
+        opt.value = game.home_team_id;
+        opt.textContent = game.home_team + ' (Home)';
+        teamSelect.appendChild(opt);
+    }
+    if (game.away_team_id) {
+        var opt = document.createElement('option');
+        opt.value = game.away_team_id;
+        opt.textContent = game.away_team + ' (Away)';
+        teamSelect.appendChild(opt);
+    }
+}
+
+function renderPlayers(players) {
+    var tbody = document.getElementById('players-tbody');
+    var noPlayersMsg = document.getElementById('no-players-message');
+
+    document.getElementById('players-loading').style.display = 'none';
+    document.getElementById('players-container').style.display = 'block';
+
+    tbody.innerHTML = '';
+
+    if (!players || players.length === 0) {
+        noPlayersMsg.style.display = 'block';
+        return;
+    }
+
+    noPlayersMsg.style.display = 'none';
+
+    players.forEach(function(p) {
+        var tr = document.createElement('tr');
+        if (p.has_conflict) {
+            tr.className = 'has-conflict';
+        }
+
+        // Eval score styling
+        var evalClass = 'eval-none';
+        var evalText = '-';
+        if (p.eval_score !== null) {
+            evalText = p.eval_score.toFixed(1);
+            if (p.eval_score >= 5) evalClass = 'eval-high';
+            else if (p.eval_score >= 3) evalClass = 'eval-medium';
+            else evalClass = 'eval-low';
+        }
+
+        // Call-up badge styling
+        var callupClass = 'zero';
+        if (p.callup_count >= 3) callupClass = 'high';
+        else if (p.callup_count >= 2) callupClass = 'medium';
+        else if (p.callup_count >= 1) callupClass = 'low';
+
+        var callupText = p.callup_count;
+        if (p.pending_count > 0) {
+            callupText += ' (' + p.pending_count + ' pending)';
+        }
+
+        // Conflict info - show time @ field and type (game/practice)
+        var conflictHtml = '-';
+        if (p.has_conflict && p.conflict_info) {
+            var typeLabel = p.conflict_info.type.charAt(0).toUpperCase() + p.conflict_info.type.slice(1);
+            conflictHtml = '<span class="conflict-tag">' + typeLabel + ' @ ' + p.conflict_info.time + '<br>' + p.conflict_info.field + '</span>';
+        }
+
+        // Request button - enabled even with conflicts (will prompt for confirmation)
+        var btnHtml = '<button class="btn-request" onclick="requestCallUp(' + p.player_season_id + ')">Request</button>';
+
+        tr.innerHTML =
+            '<td><strong>' + p.last_name + ', ' + p.first_name + '</strong></td>' +
+            '<td>' + p.team_name + '</td>' +
+            '<td class="hide-mobile"><span class="eval-score ' + evalClass + '">' + evalText + '</span></td>' +
+            '<td><span class="callup-badge ' + callupClass + '">' + callupText + '</span></td>' +
+            '<td>' + conflictHtml + '</td>' +
+            '<td>' + btnHtml + '</td>';
+
+        tr.dataset.playerSeasonId = p.player_season_id;
+        tr.dataset.firstName = p.first_name;
+        tr.dataset.lastName = p.last_name;
+        tr.dataset.name = (p.first_name + ' ' + p.last_name + ' ' + p.last_name + ' ' + p.first_name).toLowerCase();
+        tr.dataset.parentEmail = p.parent_email || '';
+
+        tbody.appendChild(tr);
+    });
+
+    // Clear search when new players loaded
+    document.getElementById('player-search').value = '';
+}
+
+function filterPlayersByName() {
+    var search = document.getElementById('player-search').value.toLowerCase().trim();
+    var rows = document.querySelectorAll('#players-tbody tr');
+    var visibleCount = 0;
+
+    rows.forEach(function(row) {
+        var name = row.dataset.name || '';
+        var show = !search || name.indexOf(search) !== -1;
+        row.style.display = show ? '' : 'none';
+        if (show) visibleCount++;
+    });
+
+    // Update no-players message if all are filtered out
+    var noPlayersMsg = document.getElementById('no-players-message');
+    if (visibleCount === 0 && rows.length > 0) {
+        noPlayersMsg.textContent = 'No players match "' + search + '"';
+        noPlayersMsg.style.display = 'block';
+    } else if (rows.length === 0) {
+        noPlayersMsg.textContent = 'No eligible players found in the feeder league.';
+        noPlayersMsg.style.display = 'block';
+    } else {
+        noPlayersMsg.style.display = 'none';
+    }
+}
+
+function openRequestModal(playerSeasonId) {
+    var teamSelect = document.getElementById('team-select');
+    if (!teamSelect.value) {
+        alert('Please select which team needs the sub first.');
+        return;
+    }
+
+    // Find player data
+    var player = null;
+    for (var i = 0; i < currentPlayersData.length; i++) {
+        if (currentPlayersData[i].player_season_id === playerSeasonId) {
+            player = currentPlayersData[i];
+            break;
+        }
+    }
+
+    if (!player) {
+        alert('Player data not found.');
+        return;
+    }
+
+    // Set form values
+    document.getElementById('form-player-id').value = playerSeasonId;
+    document.getElementById('form-game-id').value = currentGameData.target_game.id;
+    document.getElementById('form-team-id').value = teamSelect.value;
+
+    document.getElementById('modal-player-info').innerHTML =
+        'Requesting <strong>' + player.first_name + ' ' + player.last_name + '</strong> (' + player.team_name + ') ' +
+        'to sub for the <strong>' + currentGameData.target_game.league + '</strong> game on ' +
+        currentGameData.target_game.date + ' at ' + currentGameData.target_game.time + '.';
+
+    // Fetch email template
+    var templateUrl = '{{ url_for("players.callups_email_template") }}' +
+        '?player_season_id=' + playerSeasonId +
+        '&game_id=' + currentGameData.target_game.id +
+        '&target_team_id=' + teamSelect.value;
+
+    fetch(templateUrl)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            document.getElementById('modal-recipient').value = data.parent_email || '';
+            document.getElementById('modal-subject').value = data.subject || '';
+            document.getElementById('modal-body').value = data.body || '';
+        });
+
+    document.getElementById('email-modal').classList.add('show');
+}
+
+function closeEmailModal() {
+    document.getElementById('email-modal').classList.remove('show');
+}
+
+function setEmailMode(sendEmail) {
+    document.getElementById('form-send-email').value = sendEmail ? '1' : '0';
+}
+
+function submitTrackOnly(event) {
+    event.preventDefault();
+    setEmailMode(false);
+    document.getElementById('callup-form').submit();
+}
+
+function requestCallUp(playerSeasonId) {
+    // Find player data
+    var player = null;
+    for (var i = 0; i < currentPlayersData.length; i++) {
+        if (currentPlayersData[i].player_season_id === playerSeasonId) {
+            player = currentPlayersData[i];
+            break;
+        }
+    }
+
+    if (!player) {
+        alert('Player data not found.');
+        return;
+    }
+
+    // If player has a conflict, confirm before proceeding
+    if (player.has_conflict && player.conflict_info) {
+        var typeLabel = player.conflict_info.type.charAt(0).toUpperCase() + player.conflict_info.type.slice(1);
+        var msg = player.first_name + ' ' + player.last_name + ' has a ' + player.conflict_info.type +
+            ' at ' + player.conflict_info.time + ' (' + player.conflict_info.field + ').\n\n' +
+            'Do you still want to request them for this game?';
+
+        if (!confirm(msg)) {
+            return;
+        }
+    }
+
+    openRequestModal(playerSeasonId);
+}
+
+// Close modal on backdrop click (but not when dragging from inside)
+var modalMouseDownTarget = null;
+document.getElementById('email-modal').addEventListener('mousedown', function(e) {
+    modalMouseDownTarget = e.target;
+});
+document.getElementById('email-modal').addEventListener('click', function(e) {
+    // Only close if both mousedown and click were on the backdrop itself
+    if (e.target === this && modalMouseDownTarget === this) {
+        closeEmailModal();
+    }
+    modalMouseDownTarget = null;
+});
+
+// Status dropdown toggle
+var activeStatusMenu = null;
+function toggleStatusMenu(btn) {
+    var menu = btn.nextElementSibling;
+    var isOpen = menu.classList.contains('show');
+
+    if (activeStatusMenu && activeStatusMenu !== menu) {
+        activeStatusMenu.classList.remove('show');
+    }
+
+    if (isOpen) {
+        menu.classList.remove('show');
+        activeStatusMenu = null;
+    } else {
+        menu.classList.add('show');
+        activeStatusMenu = menu;
+    }
+}
+
+document.addEventListener('click', function(e) {
+    if (activeStatusMenu && !e.target.closest('.status-dropdown')) {
+        activeStatusMenu.classList.remove('show');
+        activeStatusMenu = null;
+    }
+});
+
+// Request table filtering
+function applyFilters() {
+    var status = document.getElementById('status-filter').value;
+    var league = document.getElementById('league-filter').value;
+
+    var rows = document.querySelectorAll('tbody tr[data-status]');
+    rows.forEach(function(row) {
+        var rowStatus = row.dataset.status || '';
+        var rowLeague = row.dataset.league || '';
+
+        var matchStatus = !status || rowStatus === status;
+        var matchLeague = !league || rowLeague === league;
+
+        row.style.display = (matchStatus && matchLeague) ? '' : 'none';
+    });
+
+    // Update URL
+    var url = new URL(window.location.href);
+    if (status) url.searchParams.set('status', status);
+    else url.searchParams.delete('status');
+    if (league) url.searchParams.set('league_id', league);
+    else url.searchParams.delete('league_id');
+    history.replaceState(null, '', url.toString());
+}
+</script>
+{% endblock %}

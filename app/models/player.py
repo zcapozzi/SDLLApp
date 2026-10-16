@@ -544,7 +544,7 @@ class PlayerEvaluation(db.Model):
     evaluator_id = db.Column(db.BigInteger, db.ForeignKey('sdll_users.ID'))
 
     # Overall/average score (calculated from individual metric scores)
-    overall_score = db.Column('avg_score', db.Numeric(3, 2))
+    overall_score = db.Column(db.Numeric(3, 2))
 
     notes = db.Column(db.Text)
 
@@ -663,5 +663,5 @@ class PlayerEvaluation(db.Model):
                     db.session.add(score)
                     evaluation.scores.append(score)
 
-        evaluation.calculate_avg_score()
+        evaluation.calculate_overall_score()
         return evaluation

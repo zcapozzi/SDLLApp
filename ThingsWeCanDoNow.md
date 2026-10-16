@@ -1293,6 +1293,75 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
 
 ---
 
+## 17. Player Management
+
+### 17.1 Player Index
+- **Access:** `admin`, `BBPlayerAgent`, `SBPlayerAgent`
+- **Path:** `/players/`
+- **Actions:**
+  - View player statistics (total, season registrations)
+  - Quick links to Player Pool, Call-Ups, Import, and Evaluation Metrics
+  - View recent seasons registration trends for baseball and softball
+- **Navigation:** Dashboard → "Players"
+
+### 17.2 Player Pool
+- **Access:** `admin`, `BBPlayerAgent`, `SBPlayerAgent`
+- **Path:** `/players/pool/<org_season_id>`
+- **Actions:**
+  - View all players registered for a season
+  - Filter by sport, division, status, assignment status
+  - Search players by name
+  - Assign players to teams (inline autocomplete)
+  - Remove players from teams
+  - Request call-ups (redirects to Call-Ups page)
+  - Withdraw players from pool
+  - Reinstate withdrawn players
+  - Quick-assign workflow (after first assignment, press Enter to assign next player to same team)
+- **Navigation:** Players → "View Player Pool"
+
+### 17.3 Call-Ups Dashboard
+- **Access:** `admin`, `BBPlayerAgent`, `SBPlayerAgent`
+- **Path:** `/players/callups/<year>/<is_spring>`
+- **Actions:**
+  - View call-up request statistics (pending, accepted, declined, total)
+  - Create new call-up request:
+    - Select player from dropdown
+    - Select game from upcoming games list
+    - Select team needing substitute (home or away)
+    - Compose email to parent inline
+    - Option to send email immediately or just track
+  - Update request status (Accept, Decline, No Response, Cancel)
+  - Filter requests by status and league
+  - Track equity (see call-up count per player)
+- **Navigation:** Players → "Manage Call-Ups" or Player Pool → "Call-Ups" button
+
+### 17.4 Import Players
+- **Access:** `admin`, `BBPlayerAgent`, `SBPlayerAgent`
+- **Path:** `/players/import/`
+- **Actions:**
+  - Import registration CSV files
+  - Import roster CSV for team assignments
+- **Navigation:** Players → "Import Players"
+
+### 17.5 Evaluation Metrics
+- **Access:** `admin`, `BBPlayerAgent`, `SBPlayerAgent`
+- **Path:** `/players/metrics/`
+- **Actions:**
+  - Configure evaluation metrics (skills measured during player evaluations)
+  - Set metrics by age range
+- **Navigation:** Players → "Manage Metrics"
+
+### 17.6 Registration Trends
+- **Access:** `admin`, `BBPlayerAgent`, `SBPlayerAgent`
+- **Path:** `/players/registration-trends`
+- **Actions:**
+  - View historical registration data across seasons
+  - Compare baseball vs softball trends
+  - See new player percentages and year-over-year changes
+- **Navigation:** Players → Recent Seasons card → "View Full Report"
+
+---
+
 ## Quick Reference: Navigation Paths
 
 | Feature | Role | Navigation Path |
@@ -1322,6 +1391,9 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
 | Assignr Webhooks | Ump Coord+ | Umpires → "Assignr" → "Webhooks" |
 | Game Reapportionment | Ump Coord+ | Umpires → "Reapportionment" |
 | Post-Game Report | Coach | Click link in post-game email |
+| Player Pool | Player Agent+ | Dashboard → "Players" → "View Player Pool" |
+| Call-Ups | Player Agent+ | Dashboard → "Players" → "Manage Call-Ups" |
+| Import Players | Player Agent+ | Dashboard → "Players" → "Import Players" |
 
 ---
 
@@ -1353,12 +1425,15 @@ Roles can be combined (e.g., `admin|scheduler`). Access checks use `has_role()` 
 | Post-Game Reports | - | ✓ | - | - | - | - | - | ✓ |
 | Assignr Webhooks | - | - | - | ✓ | - | - | - | ✓ |
 | Game Reapportionment | - | - | - | ✓ | - | - | - | ✓ |
+| Player Pool | - | - | - | - | - | - | - | ✓****** |
+| Call-Ups | - | - | - | - | - | - | - | ✓****** |
 
 \* With valid token
 \** Landing page only
 \*** If coach in that division
 \**** Requires email in PRODUCT_ADMIN_EMAILS env var
 \***** Also available to BoardExec, BB_VP, SB_VP, BBPlayerAgent, SBPlayerAgent, coaching_coordinator, treasurer
+\****** Also available to BBPlayerAgent, SBPlayerAgent
 
 ---
 
@@ -1370,4 +1445,4 @@ When adding new routes or features:
 3. Update feature matrix if needed
 4. Update quick reference navigation paths
 
-Last updated: September 15, 2026
+Last updated: October 16, 2026

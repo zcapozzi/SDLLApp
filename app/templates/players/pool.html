@@ -304,7 +304,8 @@
             </option>
             {% endfor %}
         </select>
-        <a href="{{ url_for('players.roster_import', org_season_id=org_season.ID) }}" class="btn btn-secondary">Import Roster CSV</a>
+        <a href="{{ url_for('players.callups', year=org_season.year, is_spring=org_season.is_spring) }}" class="btn btn-secondary">Call-Ups</a>
+        <a href="{{ url_for('players.roster_import', org_season_id=org_season.ID) }}" class="btn btn-outline">Import Roster CSV</a>
         <a href="{{ url_for('players.index') }}" class="btn btn-outline">Back to Players</a>
     </div>
 </div>
@@ -345,7 +346,7 @@
         <ul>
             <li><strong>Assign players to teams</strong> - Type a team name in the "Team Assignment" column to assign an unassigned player to a team. The dropdown will suggest teams, with the player's placed division shown first.</li>
             <li><strong>Withdraw from pool</strong> - Use the menu (&#8942;) on any player row to mark them as withdrawn. This removes them from the active pool (e.g., if they've decided not to play this season). Withdrawn players can be reinstated later.</li>
-            <li><strong>Request a call-up</strong> - Use the menu (&#8942;) to open an email draft addressed to a player's parent. You can edit the message before sending to ask if they're available to sub up for a game in a higher division.</li>
+            <li><strong>Request a call-up</strong> - Use the menu (&#8942;) to go to the Call-Ups page with that player pre-selected. There you can select a specific game, compose an email, track the request and response.</li>
         </ul>
     </div>
 </div>
@@ -915,7 +916,7 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// Request call-up email
+// Request call-up - redirect to call-ups page
 function requestCallUp(playerId, firstName, parentEmail) {
     // Close the menu
     if (activeActionMenu) {
@@ -924,17 +925,12 @@ function requestCallUp(playerId, firstName, parentEmail) {
     }
 
     if (!parentEmail) {
-        alert('No parent email on file for this player.');
+        alert('No parent email on file for this player. Add parent contact info first.');
         return;
     }
 
-    var subject = firstName + ' Subbing Up?';
-
-    // Navigate to email tool with pre-filled recipient and subject
-    var url = '{{ url_for("scheduler.email_coaches") }}' +
-        '?to=' + encodeURIComponent(parentEmail) +
-        '&subject=' + encodeURIComponent(subject);
-
+    // Navigate to call-ups page (game-first workflow)
+    var url = '{{ url_for("players.callups", year=org_season.year, is_spring=org_season.is_spring) }}';
     window.location.href = url;
 }
 
