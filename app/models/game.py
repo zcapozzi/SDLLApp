@@ -286,7 +286,6 @@ class Game(db.Model):
                 game_date=new_game_date,
                 home_ID=new_home_ID,
                 away_ID=new_away_ID,
-                league=game.league,
                 league_id=game.league_id,
                 field_id=game.field_id,
                 status='scheduled',

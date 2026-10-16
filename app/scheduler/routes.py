@@ -590,7 +590,6 @@ def save(year, is_spring):
                 active=1,
                 year=year,
                 is_spring=is_spring,
-                league=league_name,
                 league_id=league_id,
                 home_ID=proposed_game['home_team_id'],
                 away_ID=proposed_game['away_team_id'],  # None for practices
@@ -966,7 +965,6 @@ def api_add_event(year, is_spring):
                 game_date=game_datetime,
                 home_ID=home_team_id,
                 away_ID=away_team_id,
-                league=league,
                 league_id=league_id,
                 field_id=field_id,
                 game_type=actual_game_type,

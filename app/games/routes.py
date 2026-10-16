@@ -343,7 +343,6 @@ def api_add_event(year, is_spring):
                 active=1,
                 year=year,
                 is_spring=is_spring,
-                league=league,
                 league_id=league_id,
                 game_type='practice' if event_type in ['practice', 'division_practice'] else 'regular',
                 game_date=game_dt,
@@ -802,7 +801,6 @@ def manage(year, is_spring):
                     active=1,
                     year=year,
                     is_spring=is_spring,
-                    league=league,
                     league_id=league_id,
                     game_type=game_type,
                     game_date=game_date,
@@ -1972,11 +1970,15 @@ def league_practice(year, is_spring):
             flash('Invalid field selected.', 'error')
             return redirect(url_for('games.league_practice', year=year, is_spring=is_spring))
 
+        # Look up league_id from league name
+        league_obj = League.get_by_name(league) if league else None
+        league_id = league_obj.ID if league_obj else None
+
         # Get all active teams in this league for this season
         teams = TeamSeason.query.filter_by(
             year=year,
             is_spring=is_spring,
-            league=league,
+            league_id=league_id,
             is_placeholder=0,
             active=1
         ).all()
@@ -1984,10 +1986,6 @@ def league_practice(year, is_spring):
         if not teams:
             flash(f'No teams found for {league}.', 'error')
             return redirect(url_for('games.league_practice', year=year, is_spring=is_spring))
-
-        # Look up league_id from league name
-        league_obj = League.get_by_name(league) if league else None
-        league_id = league_obj.ID if league_obj else None
 
         # Create a practice for each team, all marked as league practice
         created_count = 0
@@ -1997,7 +1995,6 @@ def league_practice(year, is_spring):
                 game_date=practice_datetime,
                 home_ID=team.team_ID,
                 away_ID=None,  # Practice = no away team
-                league=league,
                 league_id=league_id,
                 field_id=field.ID,
                 status='scheduled',

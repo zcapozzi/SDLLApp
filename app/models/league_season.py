@@ -170,7 +170,7 @@ class LeagueSeason(db.Model):
         team_count = TeamSeason.query.filter_by(
             year=self.year,
             is_spring=self.is_spring,
-            league=self.league,
+            league_id=self.league_id,
             is_placeholder=0,
             active=1
         ).count()
@@ -254,7 +254,7 @@ class LeagueSeason(db.Model):
             existing = cls.query.filter_by(
                 year=target_year,
                 is_spring=target_is_spring,
-                league=source.league,
+                league_id=source.league_id,
                 active=1
             ).first()
 
@@ -263,7 +263,6 @@ class LeagueSeason(db.Model):
                     active=1,
                     year=target_year,
                     is_spring=target_is_spring,
-                    league=source.league,
                     league_id=source.league_id,
                     playoff_format=source.playoff_format,
                     playoff_teams=source.playoff_teams,
