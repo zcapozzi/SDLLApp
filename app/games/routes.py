@@ -969,11 +969,16 @@ def external_teams():
             league = request.form.get('league', '').strip()
 
             if org_id and team_name:
+                # Convert league name to league_id
+                league_name = league or 'External'
+                league_obj = League.get_by_name(league_name)
+                league_id = league_obj.ID if league_obj else None
+
                 team = TeamSeason(
                     active=1,
                     year=year,
                     is_spring=is_spring,
-                    league=league or 'External',
+                    league_id=league_id,
                     display_name=team_name,
                     team_name=team_name,
                     organization_id=org_id,

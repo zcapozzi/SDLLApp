@@ -169,10 +169,14 @@ def manage_teams(year, is_spring):
             display_name = request.form.get('display_name')
             is_placeholder = 1 if request.form.get('is_placeholder') else 0
 
+            # Convert league name to league_id
+            league_obj = League.get_by_name(league)
+            league_id = league_obj.ID if league_obj else None
+
             team = TeamSeason(
                 active=1,
                 year=year,
-                league=league,
+                league_id=league_id,
                 display_name=display_name,
                 is_placeholder=is_placeholder,
                 is_spring=is_spring
@@ -187,11 +191,15 @@ def manage_teams(year, is_spring):
             league = request.form.get('league')
             count = int(request.form.get('team_count', 1))
 
+            # Convert league name to league_id
+            league_obj = League.get_by_name(league)
+            league_id = league_obj.ID if league_obj else None
+
             # Get current team count for this league in this season
             existing_count = TeamSeason.query.filter_by(
                 year=year,
                 is_spring=is_spring,
-                league=league,
+                league_id=league_id,
                 active=1
             ).count()
 
@@ -201,7 +209,7 @@ def manage_teams(year, is_spring):
                 team = TeamSeason(
                     active=1,
                     year=year,
-                    league=league,
+                    league_id=league_id,
                     display_name=display_name,
                     is_placeholder=0,
                     is_spring=is_spring
