@@ -1461,11 +1461,32 @@ def cron_assignr_sync_check():
                 'message': 'No discrepancies found'
             }), 200
 
-        # Send email alert
-        recipient_email = os.environ.get('UMPIRE_COORDINATOR_EMAIL')
+        # Send email alert to umpire coordinator
+        from app.models.user import User
+        recipient_email = None
+
+        # Look up umpire coordinator from database
+        umpire_coordinators = User.query.filter(
+            User.role.contains('umpire_coordinator'),
+            User.active == 1
+        ).all()
+        for user in umpire_coordinators:
+            if user.has_role('umpire_coordinator') and user.email:
+                recipient_email = user.email
+                break
+
+        # Fall back to environment variable if no DB match
         if not recipient_email:
-            # Fall back to admin email
-            recipient_email = os.environ.get('ADMIN_EMAIL', 'scheduler@sdll.org')
+            recipient_email = os.environ.get('UMPIRE_COORDINATOR_EMAIL')
+        if not recipient_email:
+            recipient_email = os.environ.get('ADMIN_EMAIL')
+
+        if not recipient_email:
+            return jsonify({
+                'status': 'error',
+                'error': 'No umpire coordinator email configured',
+                'discrepancies': len(discrepancies)
+            }), 500
 
         subject = f"SDLL Assignr Sync Alert: {len(discrepancies)} discrepancy(ies) found"
         body_html = format_discrepancies_html(discrepancies)
