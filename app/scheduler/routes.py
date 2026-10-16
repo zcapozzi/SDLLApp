@@ -1571,3 +1571,107 @@ def api_users_by_role(role):
         'users': results,
         'emails': [u['email'] for u in results]
     })
+
+
+@scheduler_bp.route('/email-coaches/<int:email_id>/cancel', methods=['POST'])
+@login_required
+def cancel_scheduled_email(email_id):
+    """Cancel a pending scheduled email."""
+    if not can_email_coaches():
+        flash('You do not have permission to cancel emails.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    from app.models.scheduled_email import ScheduledEmail
+
+    email = ScheduledEmail.query.get(email_id)
+    if not email:
+        flash('Email not found.', 'error')
+        return redirect(url_for('scheduler.email_coaches_history'))
+
+    if email.status != ScheduledEmail.STATUS_PENDING:
+        flash('Only pending emails can be cancelled.', 'error')
+        return redirect(url_for('scheduler.email_coaches_history'))
+
+    # Mark as cancelled (using failed status with message)
+    email.status = ScheduledEmail.STATUS_FAILED
+    email.error_message = f'Cancelled by {current_user.name or current_user.email}'
+    email.sent_at = datetime.utcnow()
+    db.session.commit()
+
+    logger.info(f'Cancelled scheduled email {email_id} by user {current_user.ID}')
+    flash('Scheduled email has been cancelled.', 'success')
+    return redirect(url_for('scheduler.email_coaches_history'))
+
+
+@scheduler_bp.route('/email-coaches/<int:email_id>/reschedule', methods=['POST'])
+@login_required
+def reschedule_scheduled_email(email_id):
+    """Reschedule a pending scheduled email."""
+    if not can_email_coaches():
+        flash('You do not have permission to reschedule emails.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    from app.models.scheduled_email import ScheduledEmail
+
+    email = ScheduledEmail.query.get(email_id)
+    if not email:
+        flash('Email not found.', 'error')
+        return redirect(url_for('scheduler.email_coaches_history'))
+
+    if email.status != ScheduledEmail.STATUS_PENDING:
+        flash('Only pending emails can be rescheduled.', 'error')
+        return redirect(url_for('scheduler.email_coaches_history'))
+
+    new_datetime_str = request.form.get('new_datetime', '').strip()
+    if not new_datetime_str:
+        flash('Please select a new date and time.', 'error')
+        return redirect(url_for('scheduler.email_coaches_history'))
+
+    try:
+        # Parse the local datetime input
+        local_dt = datetime.strptime(new_datetime_str, '%Y-%m-%dT%H:%M')
+        # Convert from Eastern time to UTC for storage
+        email.scheduled_for = Organization.local_to_utc(local_dt)
+        db.session.commit()
+
+        # Show local time in flash
+        display_time = local_dt.strftime('%b %d, %Y at %I:%M %p')
+        logger.info(f'Rescheduled email {email_id} to {email.scheduled_for} by user {current_user.ID}')
+        flash(f'Email rescheduled for {display_time} Eastern.', 'success')
+    except ValueError:
+        flash('Invalid date/time format.', 'error')
+
+    return redirect(url_for('scheduler.email_coaches_history'))
+
+
+@scheduler_bp.route('/email-coaches/<int:email_id>/send-now', methods=['POST'])
+@login_required
+def send_scheduled_email_now(email_id):
+    """Send a pending scheduled email immediately."""
+    if not can_email_coaches():
+        flash('You do not have permission to send emails.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    from app.models.scheduled_email import ScheduledEmail
+    from app.services.email_blast_service import send_scheduled_email
+
+    email = ScheduledEmail.query.get(email_id)
+    if not email:
+        flash('Email not found.', 'error')
+        return redirect(url_for('scheduler.email_coaches_history'))
+
+    if email.status != ScheduledEmail.STATUS_PENDING:
+        flash('Only pending emails can be sent.', 'error')
+        return redirect(url_for('scheduler.email_coaches_history'))
+
+    # Send immediately
+    send_scheduled_email(email)
+
+    if email.status == ScheduledEmail.STATUS_SENT:
+        flash(f'Email sent successfully to {email.sent_count} recipients!', 'success')
+    elif email.status == ScheduledEmail.STATUS_PARTIAL:
+        flash(f'Email partially sent: {email.sent_count} sent, {email.failed_count} failed.', 'warning')
+    else:
+        flash(f'Email failed to send: {email.error_message}', 'error')
+
+    return redirect(url_for('scheduler.email_coaches_history'))

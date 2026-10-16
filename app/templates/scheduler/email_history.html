@@ -30,6 +30,10 @@
         background: rgba(200, 50, 50, 0.2);
         color: #c33;
     }
+    .status-cancelled {
+        background: rgba(128, 128, 128, 0.2);
+        color: #666;
+    }
     .header-row {
         display: flex;
         justify-content: space-between;
@@ -63,6 +67,51 @@
         padding: 40px;
         color: #666;
     }
+    .action-btn {
+        padding: 4px 10px;
+        font-size: 12px;
+        border-radius: 4px;
+        border: none;
+        cursor: pointer;
+        margin-right: 5px;
+    }
+    .action-btn.cancel {
+        background: rgba(200, 50, 50, 0.15);
+        color: #c33;
+    }
+    .action-btn.cancel:hover {
+        background: rgba(200, 50, 50, 0.25);
+    }
+    .action-btn.reschedule {
+        background: rgba(255, 140, 0, 0.15);
+        color: #cc7000;
+    }
+    .action-btn.reschedule:hover {
+        background: rgba(255, 140, 0, 0.25);
+    }
+    .action-btn.send-now {
+        background: rgba(34, 139, 34, 0.15);
+        color: rgb(34, 139, 34);
+    }
+    .action-btn.send-now:hover {
+        background: rgba(34, 139, 34, 0.25);
+    }
+    .reschedule-form {
+        display: none;
+        margin-top: 8px;
+        padding: 10px;
+        background: #f9f9f9;
+        border-radius: 4px;
+    }
+    .reschedule-form.show {
+        display: block;
+    }
+    .reschedule-form input[type="datetime-local"] {
+        padding: 6px 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 13px;
+    }
 </style>
 {% endblock %}
 
@@ -83,6 +132,7 @@
                 <th>Recipients</th>
                 <th>Mode</th>
                 <th>Status</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -120,6 +170,10 @@
                     <span class="mode-badge">{{ email.send_mode.upper() }}</span>
                 </td>
                 <td>
+                    {% if email.status == 'failed' and email.error_message and email.error_message.startswith('Cancelled by') %}
+                    <span class="status-badge status-cancelled">Cancelled</span>
+                    <div class="text-small text-muted">{{ email.error_message }}</div>
+                    {% else %}
                     <span class="status-badge status-{{ email.status }}">
                         {{ email.status_display }}
                     </span>
@@ -127,6 +181,31 @@
                     <div class="text-small text-muted">
                         {{ email.sent_at|local_datetime('%I:%M %p') }}
                     </div>
+                    {% endif %}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if email.status == 'pending' and email.is_scheduled %}
+                    <div class="action-buttons">
+                        <form method="POST" action="{{ url_for('scheduler.send_scheduled_email_now', email_id=email.id) }}" style="display: inline;">
+                            <button type="submit" class="action-btn send-now" onclick="return confirm('Send this email now?');">Send Now</button>
+                        </form>
+                        <button type="button" class="action-btn reschedule" onclick="toggleReschedule({{ email.id }})">Reschedule</button>
+                        <form method="POST" action="{{ url_for('scheduler.cancel_scheduled_email', email_id=email.id) }}" style="display: inline;">
+                            <button type="submit" class="action-btn cancel" onclick="return confirm('Cancel this scheduled email?');">Cancel</button>
+                        </form>
+                    </div>
+                    <div id="reschedule-form-{{ email.id }}" class="reschedule-form">
+                        <form method="POST" action="{{ url_for('scheduler.reschedule_scheduled_email', email_id=email.id) }}">
+                            <input type="datetime-local" name="new_datetime" required>
+                            <button type="submit" class="action-btn send-now">Save</button>
+                            <button type="button" class="action-btn" onclick="toggleReschedule({{ email.id }})">Cancel</button>
+                        </form>
+                    </div>
+                    {% elif email.status == 'pending' and not email.is_scheduled %}
+                    <span class="text-small text-muted">Sending...</span>
+                    {% else %}
+                    <span class="text-small text-muted">-</span>
                     {% endif %}
                 </td>
             </tr>
@@ -140,4 +219,13 @@
     </div>
     {% endif %}
 </div>
+
+<script>
+function toggleReschedule(emailId) {
+    var form = document.getElementById('reschedule-form-' + emailId);
+    if (form) {
+        form.classList.toggle('show');
+    }
+}
+</script>
 {% endblock %}
