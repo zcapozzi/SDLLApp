@@ -1461,7 +1461,7 @@ def cron_assignr_sync_check():
                 'message': 'No discrepancies found'
             }), 200
 
-        # Send email alert to umpire coordinator
+        # Send email alert to umpire coordinator (or admin as fallback)
         from app.models.user import User
         recipient_email = None
 
@@ -1475,7 +1475,18 @@ def cron_assignr_sync_check():
                 recipient_email = user.email
                 break
 
-        # Fall back to environment variable if no DB match
+        # Fall back to admin (admins are implicitly umpire coordinators)
+        if not recipient_email:
+            admins = User.query.filter(
+                User.role.contains('admin'),
+                User.active == 1
+            ).all()
+            for user in admins:
+                if user.has_role('admin') and user.email:
+                    recipient_email = user.email
+                    break
+
+        # Fall back to environment variables
         if not recipient_email:
             recipient_email = os.environ.get('UMPIRE_COORDINATOR_EMAIL')
         if not recipient_email:
@@ -1484,7 +1495,7 @@ def cron_assignr_sync_check():
         if not recipient_email:
             return jsonify({
                 'status': 'error',
-                'error': 'No umpire coordinator email configured',
+                'error': 'No umpire coordinator or admin email configured',
                 'discrepancies': len(discrepancies)
             }), 500
 
