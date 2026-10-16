@@ -28,9 +28,12 @@ class GameChange(db.Model):
 
     # Denormalized for easier querying
     game_date = db.Column(db.Date)
-    league = db.Column(db.String(50))
+    league_id = db.Column(db.BigInteger, db.ForeignKey('sdll_leagues.ID'))
     home_team_id = db.Column(db.BigInteger)
     away_team_id = db.Column(db.BigInteger)
+
+    # Relationships
+    league_rel = db.relationship('League', foreign_keys=[league_id])
 
     # Pre-release acknowledgment - changes before schedule release don't show "Originally..."
     acknowledged = db.Column(db.SmallInteger, default=0)
@@ -38,6 +41,11 @@ class GameChange(db.Model):
     # Relationships
     game = db.relationship('Game', backref=db.backref('changes', lazy='dynamic'))
     user = db.relationship('User', backref=db.backref('game_changes', lazy='dynamic'))
+
+    @property
+    def league(self):
+        """Backward-compatible property returning league display name."""
+        return self.league_rel.display_name if self.league_rel else None
 
     def __repr__(self):
         return f'<GameChange {self.id}: {self.change_type} on game {self.game_id}>'
@@ -103,15 +111,15 @@ class GameChange(db.Model):
         return cls.query.filter_by(game_id=game_id).order_by(cls.changed_at.desc()).all()
 
     @classmethod
-    def get_recent(cls, days=7, league=None, change_type=None, limit=100):
+    def get_recent(cls, days=7, league_id=None, change_type=None, limit=100):
         """Get recent changes with optional filters"""
         from datetime import timedelta
         cutoff = datetime.utcnow() - timedelta(days=days)
 
         query = cls.query.filter(cls.changed_at >= cutoff)
 
-        if league:
-            query = query.filter_by(league=league)
+        if league_id:
+            query = query.filter_by(league_id=league_id)
         if change_type:
             query = query.filter_by(change_type=change_type)
 

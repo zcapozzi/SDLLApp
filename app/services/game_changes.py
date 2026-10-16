@@ -48,7 +48,7 @@ class GameChangeService:
             changes_json=changes_dict,
             reason=reason,
             game_date=game.game_date.date() if game.game_date else None,
-            league=game.league,
+            league_id=game.league_id,
             home_team_id=game.home_ID,
             away_team_id=game.away_ID
         )

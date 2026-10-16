@@ -254,6 +254,7 @@ class DayOfNotificationService:
                 game_date = game.get('_game_date')
                 location = local.get('field') or game.get('venue_name', 'TBD')
                 league = local.get('league') or game.get('game_type', '')
+                league_id = local.get('league_id')  # FK to sdll_leagues
                 home_team = local.get('home_team') or ''
                 away_team = local.get('away_team') or ''
                 home_team_id = local.get('home_team_id')
@@ -295,7 +296,7 @@ class DayOfNotificationService:
                     body_html=body_html,
                     game_date=game_date,
                     game_location=location,
-                    game_league=league,
+                    game_league_id=league_id,
                     home_team=home_team,
                     away_team=away_team,
                     status=UmpireDayOfNotification.STATUS_SCHEDULED,
@@ -702,6 +703,7 @@ Here are some resources that are good to have handy.<BR><BR>
                 game_date = game.get('_game_date')
                 location = local.get('field') or game.get('venue_name', 'TBD')
                 league = local.get('league') or game.get('game_type', '')
+                league_id = local.get('league_id')  # FK to sdll_leagues
                 home_team = local.get('home_team') or ''
                 away_team = local.get('away_team') or ''
                 home_team_id = local.get('home_team_id')
@@ -743,7 +745,7 @@ Here are some resources that are good to have handy.<BR><BR>
                     body_html=body_html,
                     game_date=game_date,
                     game_location=location,
-                    game_league=league,
+                    game_league_id=league_id,
                     home_team=home_team,
                     away_team=away_team,
                     status=UmpireDayOfNotification.STATUS_SCHEDULED,
@@ -816,6 +818,7 @@ Here are some resources that are good to have handy.<BR><BR>
             game_date = game.get('_game_date')
             location = local.get('field') or game.get('venue_name', 'TBD')
             league = local.get('league') or game.get('game_type', '')
+            league_id = local.get('league_id')  # FK to sdll_leagues
             home_team = local.get('home_team') or ''
             away_team = local.get('away_team') or ''
             home_team_id = local.get('home_team_id')
@@ -852,7 +855,7 @@ Here are some resources that are good to have handy.<BR><BR>
             notification.body_html = body_html
             notification.game_date = game_date
             notification.game_location = location
-            notification.game_league = league
+            notification.game_league_id = league_id
             notification.home_team = home_team
             notification.away_team = away_team
 

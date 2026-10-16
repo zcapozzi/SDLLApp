@@ -39,9 +39,12 @@ class UmpirePaymentEvent(db.Model):
     original_time = db.Column(db.Time)
     original_field_id = db.Column(db.BigInteger)
     original_field_name = db.Column(db.String(100))
-    original_league = db.Column(db.String(30))
+    original_league_id = db.Column(db.BigInteger, db.ForeignKey('sdll_leagues.ID'))
     original_home_team = db.Column(db.String(100))
     original_away_team = db.Column(db.String(100))
+
+    # League relationship
+    original_league_rel = db.relationship('League', foreign_keys=[original_league_id])
 
     # Who gets paid (mutually exclusive - one or the other)
     umpire_profile_id = db.Column(db.Integer, db.ForeignKey('sdll_umpire_profiles.id'))
@@ -190,6 +193,11 @@ class UmpirePaymentEvent(db.Model):
         return self.umpire_display_name or self.partner_display_name or 'Unknown'
 
     @property
+    def original_league(self):
+        """Backward-compatible property returning league display name."""
+        return self.original_league_rel.display_name if self.original_league_rel else None
+
+    @property
     def game_display(self):
         """Get a display string for the original game."""
         parts = []
@@ -297,7 +305,7 @@ class UmpirePaymentEvent(db.Model):
             original_time=game.game_time,
             original_field_id=game.field_id,
             original_field_name=game.field_rel.location_title if game.field_rel else None,
-            original_league=game.league,
+            original_league_id=game.league_id,
             original_home_team=game.home_team,
             original_away_team=game.away_team,
             umpire_count=umpire_count,

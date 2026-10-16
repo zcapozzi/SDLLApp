@@ -96,11 +96,11 @@
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
             <div class="form-group">
-                <label for="original_league">League</label>
-                <select name="original_league" id="original_league" class="form-control">
+                <label for="original_league_id">League</label>
+                <select name="original_league_id" id="original_league_id" class="form-control">
                     <option value="">-- Select League --</option>
                     {% for league in leagues %}
-                    <option value="{{ league.display_name }}">{{ league.display_name }}</option>
+                    <option value="{{ league.ID }}">{{ league.display_name }}</option>
                     {% endfor %}
                 </select>
             </div>

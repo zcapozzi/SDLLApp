@@ -58,9 +58,12 @@ class UmpireDayOfNotification(db.Model):
     # Game details for display
     game_date = db.Column(db.DateTime, nullable=False)
     game_location = db.Column(db.String(100))
-    game_league = db.Column(db.String(50))
+    game_league_id = db.Column(db.BigInteger, db.ForeignKey('sdll_leagues.ID'))
     home_team = db.Column(db.String(100))
     away_team = db.Column(db.String(100))
+
+    # League relationship
+    league_rel = db.relationship('League', foreign_keys=[game_league_id])
 
     # Workflow
     status = db.Column(db.Enum('draft', 'scheduled', 'sent', 'skipped'),
@@ -90,6 +93,11 @@ class UmpireDayOfNotification(db.Model):
 
     def __repr__(self):
         return f'<UmpireDayOfNotification {self.umpire_name} game={self.assignr_game_id}>'
+
+    @property
+    def game_league(self):
+        """Backward-compatible property returning league display name."""
+        return self.league_rel.display_name if self.league_rel else None
 
     @property
     def recipient_emails_list(self):

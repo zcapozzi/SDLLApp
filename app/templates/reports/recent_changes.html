@@ -54,10 +54,10 @@
         </select>
     </label>
     <label>League:
-        <select name="league" class="form-control" style="width: auto;">
+        <select name="league_id" class="form-control" style="width: auto;">
             <option value="">All Leagues</option>
             {% for l in leagues %}
-            <option value="{{ l }}" {{ 'selected' if current_filters.league == l }}>{{ l }}</option>
+            <option value="{{ l.ID }}" {{ 'selected' if current_filters.league_id == l.ID }}>{{ l.display_name }}</option>
             {% endfor %}
         </select>
     </label>

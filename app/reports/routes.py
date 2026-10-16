@@ -30,18 +30,23 @@ def index():
 @login_required
 def recent_changes():
     """View recent game changes with filters"""
+    from app.models.league import League
+    from sqlalchemy.orm import joinedload
+
     # Get filter parameters
     days = request.args.get('days', 7, type=int)
-    league = request.args.get('league')
+    league_id = request.args.get('league_id', type=int)
     change_type = request.args.get('change_type')
     changed_by = request.args.get('changed_by', type=int)
 
-    # Build query
+    # Build query with eager loading for league
     cutoff = datetime.utcnow() - timedelta(days=days)
-    query = GameChange.query.filter(GameChange.changed_at >= cutoff)
+    query = GameChange.query.options(
+        joinedload(GameChange.league_rel)
+    ).filter(GameChange.changed_at >= cutoff)
 
-    if league:
-        query = query.filter(GameChange.league == league)
+    if league_id:
+        query = query.filter(GameChange.league_id == league_id)
     if change_type:
         query = query.filter(GameChange.change_type == change_type)
     if changed_by:
@@ -49,11 +54,12 @@ def recent_changes():
 
     changes = query.order_by(GameChange.changed_at.desc()).limit(200).all()
 
-    # Get filter options
-    leagues = db.session.query(GameChange.league).distinct().filter(
-        GameChange.league.isnot(None)
+    # Get filter options - all leagues that have changes
+    league_ids_with_changes = db.session.query(GameChange.league_id).distinct().filter(
+        GameChange.league_id.isnot(None)
     ).all()
-    leagues = sorted([l[0] for l in leagues if l[0]])
+    league_ids = [l[0] for l in league_ids_with_changes if l[0]]
+    leagues = League.query.filter(League.ID.in_(league_ids)).order_by(League.display_name).all() if league_ids else []
 
     users = User.query.filter(User.role.in_(['admin', 'scheduler'])).all()
 
@@ -64,7 +70,7 @@ def recent_changes():
         users=users,
         current_filters={
             'days': days,
-            'league': league,
+            'league_id': league_id,
             'change_type': change_type,
             'changed_by': changed_by
         }

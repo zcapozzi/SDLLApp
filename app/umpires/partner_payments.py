@@ -643,7 +643,7 @@ def new_payment_event():
         # Get game info
         original_date_str = request.form.get('original_date')
         original_time_str = request.form.get('original_time')
-        original_league = request.form.get('original_league', '').strip()
+        original_league_id = request.form.get('original_league_id', type=int)
         original_field_name = request.form.get('original_field_name', '').strip()
 
         # Parse date/time
@@ -683,7 +683,7 @@ def new_payment_event():
             event_type=event_type,
             original_date=original_date,
             original_time=original_time,
-            original_league=original_league or None,
+            original_league_id=original_league_id,
             original_field_name=original_field_name or None,
             umpire_profile_id=umpire_profile_id,
             partner_id=partner_id,
