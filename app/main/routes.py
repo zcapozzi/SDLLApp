@@ -1430,7 +1430,7 @@ def cron_assignr_sync_check():
     from app.services.assignr_sync_service import (
         run_sync_check, format_discrepancies_html, format_discrepancies_text
     )
-    from app.services.notification_service import SESService
+    from app.services.notification_service import GmailService
 
     # Verify secret token
     expected_token = os.environ.get('CRON_SECRET')
@@ -1486,12 +1486,12 @@ def cron_assignr_sync_check():
         </html>
         """
 
-        ses = SESService()
-        success = ses.send_email(
-            to_addresses=[recipient_email],
+        gmail = GmailService()
+        success = gmail.send_email(
+            to=recipient_email,
             subject=subject,
-            body_html=html_content,
-            body_text=body_text
+            body_text=body_text,
+            body_html=html_content
         )
 
         return jsonify({
