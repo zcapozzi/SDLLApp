@@ -1410,6 +1410,107 @@ def cron_postgame_emails():
         }), 500
 
 
+@main_bp.route('/cron/assignr-sync-check')
+def cron_assignr_sync_check():
+    """
+    Cron endpoint to check for discrepancies between local SDL games and Assignr.
+
+    Compares SDL Academy games (umpire_override='SDL') against Assignr records.
+    Sends an email alert if any discrepancies are found:
+    - Games missing from Assignr (need to be added)
+    - Time/date mismatches
+    - Location/field mismatches
+
+    Protected by CRON_SECRET token. Call with ?token=YOUR_SECRET
+
+    Set up an external cron service to hit this daily at 6am ET:
+    https://your-app.railway.app/cron/assignr-sync-check?token=YOUR_CRON_SECRET
+    """
+    import os
+    from app.services.assignr_sync_service import (
+        run_sync_check, format_discrepancies_html, format_discrepancies_text
+    )
+    from app.services.notification_service import SESService
+
+    # Verify secret token
+    expected_token = os.environ.get('CRON_SECRET')
+    provided_token = request.args.get('token')
+
+    if not expected_token:
+        return jsonify({'error': 'CRON_SECRET not configured'}), 500
+
+    if provided_token != expected_token:
+        return jsonify({'error': 'Invalid token'}), 403
+
+    try:
+        # Run the sync check
+        days_ahead = int(request.args.get('days', 60))
+        discrepancies, error = run_sync_check(days_ahead=days_ahead)
+
+        if error:
+            return jsonify({
+                'status': 'error',
+                'error': error
+            }), 500
+
+        # If no discrepancies, just return success
+        if not discrepancies:
+            return jsonify({
+                'status': 'ok',
+                'discrepancies': 0,
+                'message': 'No discrepancies found'
+            }), 200
+
+        # Send email alert
+        recipient_email = os.environ.get('UMPIRE_COORDINATOR_EMAIL')
+        if not recipient_email:
+            # Fall back to admin email
+            recipient_email = os.environ.get('ADMIN_EMAIL', 'scheduler@sdll.org')
+
+        subject = f"SDLL Assignr Sync Alert: {len(discrepancies)} discrepancy(ies) found"
+        body_html = format_discrepancies_html(discrepancies)
+        body_text = format_discrepancies_text(discrepancies)
+
+        # Wrap in email template
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2 style="color: #cc7000;">Assignr Sync Check Results</h2>
+            {body_html}
+            <hr style="margin-top: 30px;">
+            <p style="color: #666; font-size: 12px;">
+                This is an automated alert from the SDLL Assignr sync check.
+                Review and resolve these discrepancies in Assignr.
+            </p>
+        </body>
+        </html>
+        """
+
+        ses = SESService()
+        success = ses.send_email(
+            to_addresses=[recipient_email],
+            subject=subject,
+            body_html=html_content,
+            body_text=body_text
+        )
+
+        return jsonify({
+            'status': 'ok',
+            'discrepancies': len(discrepancies),
+            'missing_in_assignr': len([d for d in discrepancies if d.discrepancy_type == 'missing_in_assignr']),
+            'time_mismatches': len([d for d in discrepancies if d.discrepancy_type == 'time_mismatch']),
+            'location_mismatches': len([d for d in discrepancies if d.discrepancy_type == 'location_mismatch']),
+            'email_sent': success,
+            'email_recipient': recipient_email
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
 @main_bp.route('/preview-postgame-email/<int:game_id>')
 @login_required
 def preview_postgame_email(game_id):
