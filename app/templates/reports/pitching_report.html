@@ -142,6 +142,7 @@
                         <th title="Number of games pitched">G</th>
                         <th title="Innings Pitched">IP</th>
                         <th title="Total Pitches">Pitches</th>
+                        <th title="Strike Percentage">Str%</th>
                         <th title="Strikeouts">K</th>
                         <th title="Walks">BB</th>
                         <th title="Earned Run Average (per 9 innings)">ERA</th>
@@ -154,6 +155,7 @@
                         <td>{{ pitcher.appearances }}</td>
                         <td>{{ format_innings(pitcher.total_innings) }}</td>
                         <td>{{ pitcher.total_pitches }}</td>
+                        <td>{{ format_strike_pct(pitcher.strike_pct) }}</td>
                         <td>{{ pitcher.total_strikeouts }}</td>
                         <td>{{ pitcher.total_walks }}</td>
                         <td class="{% if pitcher.era is not none %}{% if pitcher.era < 3.0 %}stat-good{% elif pitcher.era > 6.0 %}stat-bad{% endif %}{% endif %}">
@@ -167,6 +169,15 @@
                     {% endfor %}
                 </tbody>
             </table>
+            {% if team_summary.has_incomplete_strike_data %}
+            <div style="padding: 12px 16px; background: #fffbeb; border-top: 1px solid #f0e6c0; font-size: 13px; color: #856404;">
+                Some pitchers have games without strike count data:
+                {% for p in team_summary.pitchers if p.games_without_strikes > 0 %}
+                    {{ p.player.full_name }} ({{ p.games_without_strikes }} game{{ 's' if p.games_without_strikes > 1 else '' }}){% if not loop.last %}, {% endif %}
+                {% endfor %}.
+                Strike percentages are calculated only from games with complete data. Uploading GameChanger screenshots for post-game reports will provide more accurate strike percentages.
+            </div>
+            {% endif %}
             {% else %}
             <div class="empty-team">
                 No pitching data recorded for this team yet.

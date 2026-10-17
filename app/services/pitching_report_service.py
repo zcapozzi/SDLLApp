@@ -21,8 +21,10 @@ class PitcherSummary:
     appearances: int
     total_pitches: int
     total_strikes: int
+    pitches_with_strike_data: int  # Pitches from games where strikes were recorded
+    games_without_strikes: int  # Number of games where strikes were NULL
     total_innings: float
-    strike_ball_ratio: Optional[float]
+    strike_pct: Optional[float]
     total_strikeouts: int
     total_walks: int
     total_earned_runs: int
@@ -34,6 +36,7 @@ class TeamPitchingSummary:
     """Pitching summary for a team."""
     team: TeamSeason
     pitchers: List[PitcherSummary]
+    has_incomplete_strike_data: bool  # True if any pitcher has games without strike counts
 
 
 class PitchingReportService:
@@ -71,18 +74,17 @@ class PitchingReportService:
         team_ids = {t.team_ID for t in teams}
         team_lookup = {t.team_ID: t for t in teams}
 
-        # Get aggregated pitching stats grouped by team and player
-        # Join through PostGameReport -> Game to filter by season/league
-        stats_query = db.session.query(
+        # Get individual pitching stats (not aggregated) so we can track
+        # which games have strike data and which don't
+        stats_records = db.session.query(
             PostGameReport.team_id,
             PitchingStats.player_id,
-            func.count(PitchingStats.id).label('appearances'),
-            func.sum(PitchingStats.pitch_count).label('total_pitches'),
-            func.sum(PitchingStats.strikes).label('total_strikes'),
-            func.sum(PitchingStats.innings_pitched).label('total_innings'),
-            func.sum(PitchingStats.strikeouts).label('total_strikeouts'),
-            func.sum(PitchingStats.walks).label('total_walks'),
-            func.sum(PitchingStats.earned_runs).label('total_earned_runs')
+            PitchingStats.pitch_count,
+            PitchingStats.strikes,
+            PitchingStats.innings_pitched,
+            PitchingStats.strikeouts,
+            PitchingStats.walks,
+            PitchingStats.earned_runs
         ).join(
             PostGameReport, PitchingStats.report_id == PostGameReport.id
         ).join(
@@ -94,58 +96,84 @@ class PitchingReportService:
             Game.active == 1,
             PostGameReport.status == PostGameReport.STATUS_SUBMITTED,
             PostGameReport.team_id.in_(team_ids)
-        ).group_by(
-            PostGameReport.team_id,
-            PitchingStats.player_id
         ).all()
 
-        if not stats_query:
+        if not stats_records:
             return []
 
         # Get all player objects
-        player_ids = {row.player_id for row in stats_query}
+        player_ids = {row.player_id for row in stats_records}
         players = Player.query.filter(Player.id.in_(player_ids)).all()
         player_lookup = {p.id: p for p in players}
 
-        # Group stats by team
+        # Aggregate stats by team and player, tracking strike data availability
+        # Key: (team_id, player_id) -> aggregated data
+        aggregated: Dict[tuple, dict] = {}
+
+        for row in stats_records:
+            key = (row.team_id, row.player_id)
+            if key not in aggregated:
+                aggregated[key] = {
+                    'appearances': 0,
+                    'total_pitches': 0,
+                    'total_strikes': 0,
+                    'pitches_with_strike_data': 0,
+                    'games_without_strikes': 0,
+                    'total_innings': 0.0,
+                    'total_strikeouts': 0,
+                    'total_walks': 0,
+                    'total_earned_runs': 0,
+                }
+
+            agg = aggregated[key]
+            pitch_count = int(row.pitch_count or 0)
+
+            agg['appearances'] += 1
+            agg['total_pitches'] += pitch_count
+            agg['total_innings'] += float(row.innings_pitched or 0)
+            agg['total_strikeouts'] += int(row.strikeouts or 0)
+            agg['total_walks'] += int(row.walks or 0)
+            agg['total_earned_runs'] += int(row.earned_runs or 0)
+
+            # Track strike data separately
+            if row.strikes is not None:
+                agg['total_strikes'] += int(row.strikes)
+                agg['pitches_with_strike_data'] += pitch_count
+            else:
+                agg['games_without_strikes'] += 1
+
+        # Build pitcher summaries grouped by team
         team_stats: Dict[int, List] = {tid: [] for tid in team_ids}
 
-        for row in stats_query:
-            team_id = row.team_id
-            player = player_lookup.get(row.player_id)
+        for (team_id, player_id), agg in aggregated.items():
+            player = player_lookup.get(player_id)
             if not player or team_id not in team_stats:
                 continue
 
-            total_pitches = int(row.total_pitches or 0)
-            total_strikes = int(row.total_strikes or 0)
-            total_innings = float(row.total_innings or 0)
-            total_earned_runs = int(row.total_earned_runs or 0)
-
-            # Calculate strike/ball ratio: strikes / (pitches - strikes)
-            balls = total_pitches - total_strikes
-            strike_ball_ratio = None
-            if balls > 0:
-                strike_ball_ratio = round(total_strikes / balls, 2)
-            elif total_strikes > 0:
-                # All strikes, no balls - show as high ratio
-                strike_ball_ratio = float('inf') if total_pitches > 0 else None
+            # Calculate strike percentage only from games with strike data
+            strike_pct = None
+            if agg['pitches_with_strike_data'] > 0:
+                strike_pct = round(
+                    (agg['total_strikes'] / agg['pitches_with_strike_data']) * 100, 1
+                )
 
             # Calculate ERA: (earned_runs / innings) * 9
-            # Note: For Little League, sometimes 6-inning games, but ERA traditionally uses 9
             era = None
-            if total_innings > 0:
-                era = round((total_earned_runs / total_innings) * 9, 2)
+            if agg['total_innings'] > 0:
+                era = round((agg['total_earned_runs'] / agg['total_innings']) * 9, 2)
 
             pitcher_summary = PitcherSummary(
                 player=player,
-                appearances=int(row.appearances),
-                total_pitches=total_pitches,
-                total_strikes=total_strikes,
-                total_innings=total_innings,
-                strike_ball_ratio=strike_ball_ratio,
-                total_strikeouts=int(row.total_strikeouts or 0),
-                total_walks=int(row.total_walks or 0),
-                total_earned_runs=total_earned_runs,
+                appearances=agg['appearances'],
+                total_pitches=agg['total_pitches'],
+                total_strikes=agg['total_strikes'],
+                pitches_with_strike_data=agg['pitches_with_strike_data'],
+                games_without_strikes=agg['games_without_strikes'],
+                total_innings=agg['total_innings'],
+                strike_pct=strike_pct,
+                total_strikeouts=agg['total_strikeouts'],
+                total_walks=agg['total_walks'],
+                total_earned_runs=agg['total_earned_runs'],
                 era=era
             )
             team_stats[team_id].append(pitcher_summary)
@@ -158,10 +186,13 @@ class PitchingReportService:
         result = []
         for team in teams:
             pitchers = team_stats.get(team.team_ID, [])
-            if pitchers:  # Only include teams with pitching data
+            if pitchers:
+                # Check if any pitcher has incomplete strike data
+                has_incomplete = any(p.games_without_strikes > 0 for p in pitchers)
                 result.append(TeamPitchingSummary(
                     team=team,
-                    pitchers=pitchers
+                    pitchers=pitchers,
+                    has_incomplete_strike_data=has_incomplete
                 ))
 
         return result
@@ -194,17 +225,15 @@ class PitchingReportService:
         return str(float(innings))
 
     @staticmethod
-    def format_strike_ball_ratio(ratio: Optional[float]) -> str:
-        """Format strike/ball ratio for display.
+    def format_strike_pct(pct: Optional[float]) -> str:
+        """Format strike percentage for display.
 
         Args:
-            ratio: Strike to ball ratio
+            pct: Strike percentage (0-100)
 
         Returns:
-            Formatted string
+            Formatted string with % symbol
         """
-        if ratio is None:
+        if pct is None:
             return '-'
-        if ratio == float('inf'):
-            return 'All Strikes'
-        return f"{ratio:.2f}"
+        return f"{pct:.0f}%"

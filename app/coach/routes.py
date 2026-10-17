@@ -793,12 +793,14 @@ def postgame_screenshot_submit(game_id, team_id):
                 if pitch_count_str and pitch_count_str.isdigit() and int(pitch_count_str) > 0:
                     pitch_count = int(pitch_count_str)
                     innings = _parse_innings(request.form.get(f'innings_code_{player_code}', ''))
+                    strikes = _parse_int(request.form.get(f'strikes_code_{player_code}', ''))
                     strikeouts = _parse_int(request.form.get(f'strikeouts_code_{player_code}', ''))
                     walks = _parse_int(request.form.get(f'walks_code_{player_code}', ''))
 
                     pitch_data.append({
                         'player_id': player.id,
                         'pitch_count': pitch_count,
+                        'strikes': strikes,
                         'innings_pitched': innings,
                         'strikeouts': strikeouts,
                         'walks': walks,
@@ -809,6 +811,7 @@ def postgame_screenshot_submit(game_id, team_id):
                         'player_code': player_code,
                         'name': player.full_name,
                         'pitches_thrown': pitch_count,
+                        'strikes_thrown': strikes,
                         'innings_pitched': innings,
                         'strikeouts': strikeouts,
                         'walks': walks

@@ -566,5 +566,5 @@ def pitching_report(year, is_spring, league):
         is_spring=is_spring,
         season_name=season_name,
         format_innings=PitchingReportService.format_innings,
-        format_sb_ratio=PitchingReportService.format_strike_ball_ratio
+        format_strike_pct=PitchingReportService.format_strike_pct
     )

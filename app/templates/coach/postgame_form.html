@@ -457,6 +457,7 @@
                             <tr style="background: #f5f5f5;">
                                 <th style="text-align: left; padding: 8px;">Player</th>
                                 <th style="width: 60px; text-align: center; padding: 8px;">Pitches</th>
+                                <th style="width: 50px; text-align: center; padding: 8px;" title="Strikes Thrown">Strikes</th>
                                 <th style="width: 50px; text-align: center; padding: 8px;">IP</th>
                                 <th class="pitch-optional" style="width: 40px; text-align: center; padding: 8px;">K</th>
                                 <th class="pitch-optional" style="width: 40px; text-align: center; padding: 8px;">BB</th>
@@ -963,6 +964,19 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
     tdPitches.appendChild(inputPitches);
     row.appendChild(tdPitches);
 
+    // Strikes
+    var tdStrikes = document.createElement('td');
+    tdStrikes.style.padding = '4px';
+    var inputStrikes = document.createElement('input');
+    inputStrikes.type = 'number';
+    inputStrikes.name = 'pitcher_strikes_' + idx;
+    inputStrikes.value = (data && data.strikes_thrown) || '';
+    inputStrikes.style.cssText = 'width: 45px; text-align: center; padding: 4px;';
+    inputStrikes.min = '0';
+    inputStrikes.max = '150';
+    tdStrikes.appendChild(inputStrikes);
+    row.appendChild(tdStrikes);
+
     // IP
     var tdIP = document.createElement('td');
     tdIP.style.padding = '4px';
@@ -1186,6 +1200,7 @@ document.getElementById('screenshot-submit-form').addEventListener('submit', fun
     rows.forEach(function(row) {
         var select = row.querySelector('select');
         var pitchInput = row.querySelector('input[name^="pitcher_pitches_"]');
+        var strikesInput = row.querySelector('input[name^="pitcher_strikes_"]');
         var ipInput = row.querySelector('input[name^="pitcher_ip_"]');
         var kInput = row.querySelector('input[name^="pitcher_k_"]');
         var bbInput = row.querySelector('input[name^="pitcher_bb_"]');
@@ -1199,6 +1214,9 @@ document.getElementById('screenshot-submit-form').addEventListener('submit', fun
             var player = rosterByCode[playerCode];
             if (player) {
                 formData.append('pitch_code_' + playerCode, pitchInput.value);
+                if (strikesInput && strikesInput.value) {
+                    formData.append('strikes_code_' + playerCode, strikesInput.value);
+                }
                 if (ipInput && ipInput.value) {
                     formData.append('innings_code_' + playerCode, ipInput.value);
                 }
