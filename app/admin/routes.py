@@ -974,6 +974,7 @@ def postgame_game(game_id):
     """View post-game reports for a specific game."""
     from app.models.post_game_report import PostGameReport
     from app.models.game import Game
+    from app.models.gc_screenshot_session import GCScreenshotSession
     from sqlalchemy.orm import joinedload
 
     game = Game.query.options(
@@ -995,6 +996,36 @@ def postgame_game(game_id):
     home_report = next((r for r in reports if r.team_id == game.home_ID), None)
     away_report = next((r for r in reports if r.team_id == game.away_ID), None)
 
+    # Get screenshots for each team (most recent submitted session)
+    home_screenshot = None
+    away_screenshot = None
+
+    if game.home_ID:
+        home_session = GCScreenshotSession.query.filter_by(
+            game_id=game_id,
+            team_id=game.home_ID,
+            status=GCScreenshotSession.STATUS_SUBMITTED
+        ).order_by(GCScreenshotSession.created_at.desc()).first()
+        if home_session and home_session.image_data:
+            home_screenshot = {
+                'data': home_session.image_data,
+                'content_type': home_session.image_content_type or 'image/jpeg',
+                'filename': home_session.image_filename
+            }
+
+    if game.away_ID:
+        away_session = GCScreenshotSession.query.filter_by(
+            game_id=game_id,
+            team_id=game.away_ID,
+            status=GCScreenshotSession.STATUS_SUBMITTED
+        ).order_by(GCScreenshotSession.created_at.desc()).first()
+        if away_session and away_session.image_data:
+            away_screenshot = {
+                'data': away_session.image_data,
+                'content_type': away_session.image_content_type or 'image/jpeg',
+                'filename': away_session.image_filename
+            }
+
     # Check for score dispute
     score_dispute = False
     if home_report and away_report:
@@ -1008,6 +1039,8 @@ def postgame_game(game_id):
         game=game,
         home_report=home_report,
         away_report=away_report,
+        home_screenshot=home_screenshot,
+        away_screenshot=away_screenshot,
         score_dispute=score_dispute
     )
 

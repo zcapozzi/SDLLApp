@@ -103,6 +103,18 @@
             <em style="color: #666;">"{{ home_report.umpire_comments }}"</em></p>
             {% endif %}
 
+            {% if home_screenshot %}
+            <hr>
+            <h4>GameChanger Screenshot</h4>
+            <div style="margin-top: 10px;">
+                <img src="data:{{ home_screenshot.content_type }};base64,{{ home_screenshot.data }}"
+                     alt="GameChanger Screenshot"
+                     style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;"
+                     onclick="window.open(this.src, '_blank')">
+                <p style="font-size: 11px; color: #888; margin-top: 5px;">Click image to view full size</p>
+            </div>
+            {% endif %}
+
             <hr>
 
             <p style="color: #888; font-size: 12px;">
@@ -165,6 +177,18 @@
             {% if away_report.umpire_comments %}
             <p><strong>Comments:</strong><br>
             <em style="color: #666;">"{{ away_report.umpire_comments }}"</em></p>
+            {% endif %}
+
+            {% if away_screenshot %}
+            <hr>
+            <h4>GameChanger Screenshot</h4>
+            <div style="margin-top: 10px;">
+                <img src="data:{{ away_screenshot.content_type }};base64,{{ away_screenshot.data }}"
+                     alt="GameChanger Screenshot"
+                     style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;"
+                     onclick="window.open(this.src, '_blank')">
+                <p style="font-size: 11px; color: #888; margin-top: 5px;">Click image to view full size</p>
+            </div>
             {% endif %}
 
             <hr>
