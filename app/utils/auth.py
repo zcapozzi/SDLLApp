@@ -29,15 +29,48 @@ def get_view_as_role():
     return getattr(g, '_view_as_role', None)
 
 
+def get_view_as_user():
+    """Get the user being impersonated via ?view_as=email parameter.
+
+    Only works for product admins. Returns None if not impersonating.
+    """
+    return getattr(g, '_view_as_user', None)
+
+
+def get_effective_user():
+    """Get the effective user for permission checks.
+
+    Returns the impersonated user if view_as is active, otherwise current_user.
+    """
+    view_as_user = get_view_as_user()
+    if view_as_user:
+        return view_as_user
+    return current_user
+
+
 def setup_view_as():
-    """Set up view-as role simulation for this request.
+    """Set up view-as role/user simulation for this request.
 
     Call this in before_request. Only product admins can use this feature.
+
+    Supports:
+    - ?view_as=role_name - Simulate having only that role
+    - ?view_as=email@example.com - Impersonate a specific user
     """
     view_as = request.args.get('view_as')
     if view_as and is_product_admin():
         from app.models.user import User
-        if view_as in User.ROLES:
+
+        # Check if it's an email address (contains @)
+        if '@' in view_as:
+            # Impersonate a specific user
+            target_user = User.get_by_email(view_as)
+            if target_user:
+                g._view_as_user = target_user
+                # Also set their roles for role checks
+                g._view_as_role = None  # Clear role override, use user's actual roles
+        elif view_as in User.ROLES:
+            # Simulate a specific role
             g._view_as_role = view_as
 
 
@@ -46,7 +79,16 @@ def has_role_with_override(user, *check_roles):
 
     When a product admin is using ?view_as=Role, this returns True
     only if the simulated role matches.
+
+    When impersonating a user via email, uses that user's actual roles.
     """
+    # Check for user impersonation first
+    view_as_user = get_view_as_user()
+    if view_as_user:
+        # Use the impersonated user's actual roles
+        return view_as_user._original_has_role(*check_roles)
+
+    # Check for role simulation
     view_as = get_view_as_role()
     if view_as:
         # When simulating, only return True if the simulated role matches

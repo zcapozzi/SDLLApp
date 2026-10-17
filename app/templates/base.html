@@ -169,9 +169,13 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    {% if view_as_role %}
+    {% if view_as_role or view_as_user %}
     <div class="view-as-banner">
+        {% if view_as_user %}
+        <span>👁 Impersonating: <strong>{{ view_as_user.email }}</strong> ({{ view_as_user.name }})</span>
+        {% else %}
         <span>👁 Viewing as: <strong>{{ view_as_role }}</strong></span>
+        {% endif %}
         <a href="{{ request.path }}" class="view-as-exit">Exit View-As</a>
     </div>
     <style>
