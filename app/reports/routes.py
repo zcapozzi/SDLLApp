@@ -50,7 +50,14 @@ def index():
 @reports_bp.route('/recent-changes')
 @login_required
 def recent_changes():
-    """View recent game changes with filters"""
+    """View recent game changes with filters.
+
+    Access: Admin, scheduler, VP roles only.
+    """
+    if not current_user.can_edit_schedule():
+        flash('You do not have permission to view this report.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     from app.models.league import League
     from sqlalchemy.orm import joinedload
 
@@ -236,14 +243,17 @@ def schedule_downloads():
         proposal = ScheduleProposal.get_for_season(year, is_spring)
 
         # Get leagues from saved games (games and scrimmages, with dates)
-        saved_leagues = db.session.query(Game.league).filter(
+        # Query league_id and join with League to get display_name
+        saved_league_rows = db.session.query(League.display_name).join(
+            Game, Game.league_id == League.ID
+        ).filter(
             Game.year == year,
             Game.is_spring == is_spring,
             Game.active == 1,
             Game.game_type.in_(['regular', 'playoff']),
             Game.game_date.isnot(None)
         ).distinct().all()
-        saved_leagues = set(l[0] for l in saved_leagues if l[0])
+        saved_leagues = set(l[0] for l in saved_league_rows if l[0])
 
         # Get leagues from proposal (games and scrimmages, with dates)
         proposal_leagues = set()
