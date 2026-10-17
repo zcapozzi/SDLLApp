@@ -621,6 +621,22 @@ function switchTab(tabName) {
     }
 }
 
+// Check URL params for default tab (e.g., ?tab=screenshot from pitching report)
+(function() {
+    var urlParams = new URLSearchParams(window.location.search);
+    var defaultTab = urlParams.get('tab');
+    if (defaultTab === 'screenshot') {
+        // Find and click the screenshot tab button
+        var tabs = document.querySelectorAll('.postgame-tab');
+        for (var i = 0; i < tabs.length; i++) {
+            if (tabs[i].textContent.indexOf('GC Screenshot') !== -1) {
+                tabs[i].click();
+                break;
+            }
+        }
+    }
+})();
+
 // Screenshot upload handling
 var uploadZone = document.getElementById('screenshot-upload-zone');
 var fileInput = document.getElementById('screenshot-file');
