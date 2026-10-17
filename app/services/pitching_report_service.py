@@ -16,8 +16,8 @@ from app.utils.league_helpers import get_league_id_from_param
 
 
 @dataclass
-class GameMissingStrikes:
-    """A game that's missing strike count data."""
+class GameNeedingData:
+    """A game that needs post-game data."""
     game_id: int
     team_id: int
     game_date: date
@@ -45,7 +45,8 @@ class TeamPitchingSummary:
     team: TeamSeason
     pitchers: List[PitcherSummary]
     has_incomplete_strike_data: bool  # True if any pitcher has games without strike counts
-    games_missing_strikes: List[GameMissingStrikes]  # Games that need strike data
+    games_missing_strikes: List[GameNeedingData]  # Games with reports but missing strike data
+    games_without_reports: List[GameNeedingData]  # Games with no post-game report at all
 
 
 class PitchingReportService:
@@ -82,6 +83,49 @@ class PitchingReportService:
 
         team_ids = {t.team_ID for t in teams}
         team_lookup = {t.team_ID: t for t in teams}
+
+        # Get all completed games for these teams
+        all_games = Game.query.filter(
+            Game.year == year,
+            Game.is_spring == is_spring,
+            Game.league_id == league_id,
+            Game.active == 1,
+            Game.game_date < db.func.now(),
+            Game.game_type.in_(['regular', 'playoff']),
+            db.or_(
+                Game.home_ID.in_(team_ids),
+                Game.away_ID.in_(team_ids)
+            )
+        ).all()
+
+        # Get all submitted post-game reports for these teams
+        submitted_reports = PostGameReport.query.filter(
+            PostGameReport.status == PostGameReport.STATUS_SUBMITTED,
+            PostGameReport.team_id.in_(team_ids)
+        ).all()
+
+        # Build set of (game_id, team_id) that have reports
+        games_with_reports = {(r.game_id, r.team_id) for r in submitted_reports}
+
+        # Find games without reports for each team
+        games_without_reports_per_team: Dict[int, List[GameNeedingData]] = {tid: [] for tid in team_ids}
+        for game in all_games:
+            for team_id in [game.home_ID, game.away_ID]:
+                if team_id in team_ids:
+                    if (game.ID, team_id) not in games_with_reports:
+                        opponent_id = game.away_ID if team_id == game.home_ID else game.home_ID
+                        opponent = team_lookup.get(opponent_id)
+                        opponent_name = opponent.computed_display_name if opponent else 'Unknown'
+                        games_without_reports_per_team[team_id].append(GameNeedingData(
+                            game_id=game.ID,
+                            team_id=team_id,
+                            game_date=game.game_date.date() if hasattr(game.game_date, 'date') else game.game_date,
+                            opponent_name=opponent_name
+                        ))
+
+        # Sort games without reports by date
+        for team_id in games_without_reports_per_team:
+            games_without_reports_per_team[team_id].sort(key=lambda g: g.game_date)
 
         # Get individual pitching stats (not aggregated) so we can track
         # which games have strike data and which don't
@@ -193,34 +237,38 @@ class PitchingReportService:
         for team_id in team_stats:
             team_stats[team_id].sort(key=lambda p: (-p.appearances, -p.total_pitches))
 
-        # Build result list (only teams with pitching data)
+        # Build result list - include teams with pitching data OR games needing reports
         result = []
         for team in teams:
             pitchers = team_stats.get(team.team_ID, [])
-            if pitchers:
-                # Check if any pitcher has incomplete strike data
-                has_incomplete = any(p.games_without_strikes > 0 for p in pitchers)
+            games_without_reports = games_without_reports_per_team.get(team.team_ID, [])
 
-                # Build list of games missing strike data with opponent names
-                games_missing = []
-                if has_incomplete:
-                    for game_id, team_id, game_date, opponent_id in games_missing_per_team.get(team.team_ID, []):
-                        opponent = team_lookup.get(opponent_id)
-                        opponent_name = opponent.computed_display_name if opponent else 'Unknown'
-                        games_missing.append(GameMissingStrikes(
-                            game_id=game_id,
-                            team_id=team_id,
-                            game_date=game_date,
-                            opponent_name=opponent_name
-                        ))
-                    # Sort by game date
-                    games_missing.sort(key=lambda g: g.game_date)
+            # Check if any pitcher has incomplete strike data
+            has_incomplete = any(p.games_without_strikes > 0 for p in pitchers)
 
+            # Build list of games missing strike data with opponent names
+            games_missing = []
+            if has_incomplete:
+                for game_id, team_id, game_date, opponent_id in games_missing_per_team.get(team.team_ID, []):
+                    opponent = team_lookup.get(opponent_id)
+                    opponent_name = opponent.computed_display_name if opponent else 'Unknown'
+                    games_missing.append(GameNeedingData(
+                        game_id=game_id,
+                        team_id=team_id,
+                        game_date=game_date,
+                        opponent_name=opponent_name
+                    ))
+                # Sort by game date
+                games_missing.sort(key=lambda g: g.game_date)
+
+            # Include team if it has pitchers OR games without reports
+            if pitchers or games_without_reports:
                 result.append(TeamPitchingSummary(
                     team=team,
                     pitchers=pitchers,
                     has_incomplete_strike_data=has_incomplete,
-                    games_missing_strikes=games_missing
+                    games_missing_strikes=games_missing,
+                    games_without_reports=games_without_reports
                 ))
 
         return result

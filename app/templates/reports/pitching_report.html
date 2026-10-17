@@ -183,6 +183,23 @@
                 No pitching data recorded for this team yet.
             </div>
             {% endif %}
+            {% if team_summary.games_without_reports %}
+            <div style="padding: 12px 16px; background: #f8d7da; border-top: 1px solid #f5c6cb; font-size: 13px; color: #721c24;">
+                <p style="margin: 0 0 8px 0;">
+                    <strong>{{ team_summary.games_without_reports|length }} game{{ 's' if team_summary.games_without_reports|length > 1 else '' }} without post-game reports.</strong>
+                    Submit reports for these games to track pitching stats:
+                </p>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    {% for game in team_summary.games_without_reports %}
+                    <a href="{{ url_for('coach.postgame_form', game_id=game.game_id, team_id=game.team_id) }}"
+                       style="display: inline-block; padding: 4px 10px; background: #fff; border: 1px solid #f5c6cb; border-radius: 4px; color: #721c24; text-decoration: none; font-size: 12px;"
+                       title="Submit post-game report for this game">
+                        {{ game.game_date.strftime('%m/%d') }} vs {{ game.opponent_name }}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
     {% endfor %}
