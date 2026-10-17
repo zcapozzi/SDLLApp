@@ -145,7 +145,6 @@
                         <th title="Strike Percentage">Str%</th>
                         <th title="Strikeouts">K</th>
                         <th title="Walks">BB</th>
-                        <th title="Earned Run Average (per 9 innings)">ERA</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -158,13 +157,6 @@
                         <td>{{ format_strike_pct(pitcher.strike_pct) }}</td>
                         <td>{{ pitcher.total_strikeouts }}</td>
                         <td>{{ pitcher.total_walks }}</td>
-                        <td class="{% if pitcher.era is not none %}{% if pitcher.era < 3.0 %}stat-good{% elif pitcher.era > 6.0 %}stat-bad{% endif %}{% endif %}">
-                            {% if pitcher.era is not none %}
-                                {{ '%.2f' % pitcher.era }}
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

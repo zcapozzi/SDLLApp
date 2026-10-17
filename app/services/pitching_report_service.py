@@ -37,8 +37,6 @@ class PitcherSummary:
     strike_pct: Optional[float]
     total_strikeouts: int
     total_walks: int
-    total_earned_runs: int
-    era: Optional[float]
 
 
 @dataclass
@@ -96,7 +94,6 @@ class PitchingReportService:
             PitchingStats.innings_pitched,
             PitchingStats.strikeouts,
             PitchingStats.walks,
-            PitchingStats.earned_runs,
             Game.game_date,
             Game.home_ID,
             Game.away_ID
@@ -139,7 +136,6 @@ class PitchingReportService:
                     'total_innings': 0.0,
                     'total_strikeouts': 0,
                     'total_walks': 0,
-                    'total_earned_runs': 0,
                 }
 
             agg = aggregated[key]
@@ -150,7 +146,6 @@ class PitchingReportService:
             agg['total_innings'] += float(row.innings_pitched or 0)
             agg['total_strikeouts'] += int(row.strikeouts or 0)
             agg['total_walks'] += int(row.walks or 0)
-            agg['total_earned_runs'] += int(row.earned_runs or 0)
 
             # Track strike data separately
             if row.strikes is not None:
@@ -180,11 +175,6 @@ class PitchingReportService:
                     (agg['total_strikes'] / agg['pitches_with_strike_data']) * 100, 1
                 )
 
-            # Calculate ERA: (earned_runs / innings) * 9
-            era = None
-            if agg['total_innings'] > 0:
-                era = round((agg['total_earned_runs'] / agg['total_innings']) * 9, 2)
-
             pitcher_summary = PitcherSummary(
                 player=player,
                 appearances=agg['appearances'],
@@ -196,8 +186,6 @@ class PitchingReportService:
                 strike_pct=strike_pct,
                 total_strikeouts=agg['total_strikeouts'],
                 total_walks=agg['total_walks'],
-                total_earned_runs=agg['total_earned_runs'],
-                era=era
             )
             team_stats[team_id].append(pitcher_summary)
 

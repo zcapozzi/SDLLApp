@@ -384,6 +384,16 @@
             </div>
             {% endif %}
 
+            {% if current_user.is_coach() %}
+            <div class="nav-item">
+                <a href="#" class="nav-link" onclick="toggleDropdown(this, event)">Coaching ▾</a>
+                <div class="dropdown-menu">
+                    <a href="{{ url_for('coach.my_games') }}"><strong>My Games</strong></a>
+                    <a href="{{ url_for('coach.pitch_counts') }}">Pitch Counts</a>
+                </div>
+            </div>
+            {% endif %}
+
             {% if current_user.has_role('admin', 'facilities', 'fieldCaptain') %}
             <div class="nav-item">
                 <a href="#" class="nav-link" onclick="toggleDropdown(this, event)">Facilities ▾</a>
