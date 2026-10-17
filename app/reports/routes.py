@@ -18,12 +18,15 @@ from app.models.field import Field
 from app.models.coach import CoachUser, CoachSeason
 from app.extensions import db
 from app.utils.league_helpers import get_league_id_from_request, get_league_id_from_param
+from app.utils.tracking import log_authenticated_view
 
 
 @reports_bp.route('/')
 @login_required
 def index():
     """Reports index page"""
+    log_authenticated_view('reports_index')
+
     # Get current season for pitching reports
     current_season = LeagueSeason.query.filter_by(active=1).order_by(
         LeagueSeason.year.desc(),
@@ -57,6 +60,8 @@ def recent_changes():
     if not current_user.can_edit_schedule():
         flash('You do not have permission to view this report.', 'error')
         return redirect(url_for('main.dashboard'))
+
+    log_authenticated_view('reports_recent_changes')
 
     from app.models.league import League
     from sqlalchemy.orm import joinedload
@@ -200,6 +205,8 @@ def my_changes():
 @login_required
 def schedule_downloads():
     """Page for downloading league schedules as CSV files."""
+    log_authenticated_view('reports_schedule_downloads')
+
     # Get available seasons
     from sqlalchemy import func
 
@@ -559,6 +566,8 @@ def pitching_report(year, is_spring, league):
         if not _user_has_team_in_league(current_user.ID, league_id, year, is_spring):
             flash('You do not have permission to view this report.', 'error')
             return redirect(url_for('reports.index'))
+
+    log_authenticated_view('reports_pitching', f'{year}/{is_spring}/{league}')
 
     # Get pitching data
     pitching_data = PitchingReportService.get_league_pitching_summary(year, is_spring, league_id)
