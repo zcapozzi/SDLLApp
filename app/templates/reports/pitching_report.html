@@ -171,11 +171,19 @@
             </table>
             {% if team_summary.has_incomplete_strike_data %}
             <div style="padding: 12px 16px; background: #fffbeb; border-top: 1px solid #f0e6c0; font-size: 13px; color: #856404;">
-                Some pitchers have games without strike count data:
-                {% for p in team_summary.pitchers if p.games_without_strikes > 0 %}
-                    {{ p.player.full_name }} ({{ p.games_without_strikes }} game{{ 's' if p.games_without_strikes > 1 else '' }}){% if not loop.last %}, {% endif %}
-                {% endfor %}.
-                Strike percentages are calculated only from games with complete data. Uploading GameChanger screenshots for post-game reports will provide more accurate strike percentages.
+                <p style="margin: 0 0 8px 0;">
+                    Strike percentages are calculated only from games with complete data.
+                    Upload GameChanger screenshots for the following games to get more accurate strike percentages:
+                </p>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    {% for game in team_summary.games_missing_strikes %}
+                    <a href="{{ url_for('coach.postgame_form', game_id=game.game_id, team_id=game.team_id) }}"
+                       style="display: inline-block; padding: 4px 10px; background: #fff; border: 1px solid #f0e6c0; border-radius: 4px; color: #856404; text-decoration: none; font-size: 12px;"
+                       title="Upload GameChanger screenshot for this game">
+                        {{ game.game_date.strftime('%m/%d') }} vs {{ game.opponent_name }}
+                    </a>
+                    {% endfor %}
+                </div>
             </div>
             {% endif %}
             {% else %}

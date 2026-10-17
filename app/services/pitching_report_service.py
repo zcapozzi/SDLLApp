@@ -1,8 +1,9 @@
 """Pitching report service - aggregate pitching stats by team/league."""
 
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from app.extensions import db
@@ -12,6 +13,15 @@ from app.models.game import Game
 from app.models.team import TeamSeason
 from app.models.player import Player
 from app.utils.league_helpers import get_league_id_from_param
+
+
+@dataclass
+class GameMissingStrikes:
+    """A game that's missing strike count data."""
+    game_id: int
+    team_id: int
+    game_date: date
+    opponent_name: str
 
 
 @dataclass
@@ -37,6 +47,7 @@ class TeamPitchingSummary:
     team: TeamSeason
     pitchers: List[PitcherSummary]
     has_incomplete_strike_data: bool  # True if any pitcher has games without strike counts
+    games_missing_strikes: List[GameMissingStrikes]  # Games that need strike data
 
 
 class PitchingReportService:
@@ -78,13 +89,17 @@ class PitchingReportService:
         # which games have strike data and which don't
         stats_records = db.session.query(
             PostGameReport.team_id,
+            PostGameReport.game_id,
             PitchingStats.player_id,
             PitchingStats.pitch_count,
             PitchingStats.strikes,
             PitchingStats.innings_pitched,
             PitchingStats.strikeouts,
             PitchingStats.walks,
-            PitchingStats.earned_runs
+            PitchingStats.earned_runs,
+            Game.game_date,
+            Game.home_ID,
+            Game.away_ID
         ).join(
             PostGameReport, PitchingStats.report_id == PostGameReport.id
         ).join(
@@ -109,6 +124,8 @@ class PitchingReportService:
         # Aggregate stats by team and player, tracking strike data availability
         # Key: (team_id, player_id) -> aggregated data
         aggregated: Dict[tuple, dict] = {}
+        # Track games missing strike data per team: team_id -> set of (game_id, game_date, opponent_id)
+        games_missing_per_team: Dict[int, Set[tuple]] = {tid: set() for tid in team_ids}
 
         for row in stats_records:
             key = (row.team_id, row.player_id)
@@ -141,6 +158,12 @@ class PitchingReportService:
                 agg['pitches_with_strike_data'] += pitch_count
             else:
                 agg['games_without_strikes'] += 1
+                # Track this game as missing strike data
+                # Determine opponent: if team is home, opponent is away and vice versa
+                opponent_id = row.away_ID if row.team_id == row.home_ID else row.home_ID
+                games_missing_per_team[row.team_id].add(
+                    (row.game_id, row.team_id, row.game_date, opponent_id)
+                )
 
         # Build pitcher summaries grouped by team
         team_stats: Dict[int, List] = {tid: [] for tid in team_ids}
@@ -189,10 +212,27 @@ class PitchingReportService:
             if pitchers:
                 # Check if any pitcher has incomplete strike data
                 has_incomplete = any(p.games_without_strikes > 0 for p in pitchers)
+
+                # Build list of games missing strike data with opponent names
+                games_missing = []
+                if has_incomplete:
+                    for game_id, team_id, game_date, opponent_id in games_missing_per_team.get(team.team_ID, []):
+                        opponent = team_lookup.get(opponent_id)
+                        opponent_name = opponent.computed_display_name if opponent else 'Unknown'
+                        games_missing.append(GameMissingStrikes(
+                            game_id=game_id,
+                            team_id=team_id,
+                            game_date=game_date,
+                            opponent_name=opponent_name
+                        ))
+                    # Sort by game date
+                    games_missing.sort(key=lambda g: g.game_date)
+
                 result.append(TeamPitchingSummary(
                     team=team,
                     pitchers=pitchers,
-                    has_incomplete_strike_data=has_incomplete
+                    has_incomplete_strike_data=has_incomplete,
+                    games_missing_strikes=games_missing
                 ))
 
         return result
