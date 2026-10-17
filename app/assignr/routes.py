@@ -780,3 +780,105 @@ def groups_list():
         'assignr/groups.html',
         groups=groups
     )
+
+
+@assignr_bp.route('/sync-discrepancies')
+@login_required
+@umpire_coordinator_required
+def sync_discrepancies():
+    """Show sync discrepancies between local games and Assignr with ability to fix."""
+    from app.services.assignr_sync_service import run_sync_check
+
+    service = get_assignr_service()
+
+    if not service.is_configured():
+        return redirect(url_for('assignr.index'))
+
+    # Run the sync check
+    discrepancies, error = run_sync_check(days_ahead=60)
+
+    if error:
+        flash(f'Error running sync check: {error}', 'error')
+        discrepancies = []
+
+    # Group discrepancies by type
+    missing = [d for d in discrepancies if d.discrepancy_type == 'missing_in_assignr']
+    time_mismatches = [d for d in discrepancies if d.discrepancy_type == 'time_mismatch']
+    location_mismatches = [d for d in discrepancies if d.discrepancy_type == 'location_mismatch']
+
+    return render_template(
+        'assignr/sync_discrepancies.html',
+        discrepancies=discrepancies,
+        missing=missing,
+        time_mismatches=time_mismatches,
+        location_mismatches=location_mismatches,
+        error=error,
+        now=datetime.now()
+    )
+
+
+@assignr_bp.route('/sync-to-assignr', methods=['POST'])
+@login_required
+@umpire_coordinator_required
+def sync_to_assignr():
+    """Apply selected sync fixes to Assignr."""
+    from app.services.assignr_sync_service import run_sync_check, apply_sync_fix, SyncDiscrepancy
+
+    service = get_assignr_service()
+
+    if not service.is_configured():
+        flash('Assignr not configured.', 'error')
+        return redirect(url_for('assignr.sync_discrepancies'))
+
+    # Get selected discrepancy indices from form
+    selected = request.form.getlist('selected')
+
+    if not selected:
+        flash('No discrepancies selected for sync.', 'warning')
+        return redirect(url_for('assignr.sync_discrepancies'))
+
+    # Re-run sync check to get current discrepancies
+    discrepancies, error = run_sync_check(days_ahead=60)
+
+    if error:
+        flash(f'Error running sync check: {error}', 'error')
+        return redirect(url_for('assignr.sync_discrepancies'))
+
+    # Build a lookup by game_id + discrepancy_type
+    discrepancy_lookup = {}
+    for d in discrepancies:
+        key = f"{d.game_id}_{d.discrepancy_type}"
+        discrepancy_lookup[key] = d
+
+    # Process selected discrepancies
+    success_count = 0
+    failure_count = 0
+    messages = []
+
+    for key in selected:
+        discrepancy = discrepancy_lookup.get(key)
+        if not discrepancy:
+            logger.warning(f"Discrepancy not found for key: {key}")
+            failure_count += 1
+            messages.append(f"Discrepancy not found: {key}")
+            continue
+
+        success, message = apply_sync_fix(discrepancy)
+        if success:
+            success_count += 1
+            messages.append(f"Game #{discrepancy.game_id}: {message}")
+        else:
+            failure_count += 1
+            messages.append(f"Game #{discrepancy.game_id} FAILED: {message}")
+
+    # Flash summary
+    if success_count > 0:
+        flash(f'Successfully synced {success_count} game(s) to Assignr.', 'success')
+    if failure_count > 0:
+        flash(f'Failed to sync {failure_count} game(s). Check logs for details.', 'error')
+
+    # Log detailed messages
+    for msg in messages:
+        logger.info(f"Sync result: {msg}")
+
+    return redirect(url_for('assignr.sync_discrepancies'))

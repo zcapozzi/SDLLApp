@@ -208,11 +208,64 @@ def run_sync_check(days_ahead: int = 60) -> Tuple[List[SyncDiscrepancy], str]:
         return [], str(e)
 
 
-def format_discrepancies_html(discrepancies: List[SyncDiscrepancy]) -> str:
+def apply_sync_fix(discrepancy: SyncDiscrepancy) -> Tuple[bool, str]:
+    """Apply a single sync fix to Assignr.
+
+    Args:
+        discrepancy: SyncDiscrepancy object describing what to fix
+
+    Returns:
+        Tuple of (success, message)
+    """
+    service = get_assignr_service()
+    game = Game.query.get(discrepancy.game_id)
+    if not game:
+        return False, f"Game {discrepancy.game_id} not found"
+
+    if discrepancy.discrepancy_type == 'missing_in_assignr':
+        # Create game in Assignr
+        assignr_id, error = service.create_game(game)
+        if assignr_id:
+            # Update local record with new assignr_id
+            game.assignr_id = str(assignr_id)
+            db.session.commit()
+            logger.info(f"Created game {game.ID} in Assignr with ID {assignr_id}")
+            return True, f"Created game in Assignr (ID: {assignr_id})"
+        return False, error or "Failed to create game"
+
+    elif discrepancy.discrepancy_type == 'time_mismatch':
+        if not discrepancy.assignr_id:
+            return False, "No Assignr ID available for time update"
+        success, error = service.update_game_time(
+            int(discrepancy.assignr_id),
+            game.game_date
+        )
+        if success:
+            logger.info(f"Updated time for game {game.ID} in Assignr")
+            return True, "Updated time in Assignr"
+        return False, error or "Failed to update time"
+
+    elif discrepancy.discrepancy_type == 'location_mismatch':
+        if not discrepancy.assignr_id:
+            return False, "No Assignr ID available for location update"
+        success, error = service.update_game_location(
+            int(discrepancy.assignr_id),
+            game.field_name
+        )
+        if success:
+            logger.info(f"Updated location for game {game.ID} in Assignr")
+            return True, "Updated location in Assignr"
+        return False, error or "Failed to update location"
+
+    return False, f"Unknown discrepancy type: {discrepancy.discrepancy_type}"
+
+
+def format_discrepancies_html(discrepancies: List[SyncDiscrepancy], include_manage_link: bool = True) -> str:
     """Format discrepancies as HTML for email.
 
     Args:
         discrepancies: List of SyncDiscrepancy objects
+        include_manage_link: Whether to include link to management page
 
     Returns:
         HTML string
@@ -226,6 +279,14 @@ def format_discrepancies_html(discrepancies: List[SyncDiscrepancy]) -> str:
     location_mismatches = [d for d in discrepancies if d.discrepancy_type == 'location_mismatch']
 
     html = []
+
+    # Add link to management page at the top
+    if include_manage_link:
+        html.append("<p style='background: #e3f2fd; padding: 10px; border-radius: 4px;'>")
+        html.append("<strong>Manage these discrepancies:</strong> ")
+        html.append("<a href='https://southdurhamlittleleague.org/assignr/sync-discrepancies' style='color: #1976d2;'>")
+        html.append("Click here to review and sync to Assignr</a></p>")
+
     html.append(f"<p><strong>Found {len(discrepancies)} discrepancy(ies)</strong> between SDLL database and Assignr.</p>")
 
     if missing:

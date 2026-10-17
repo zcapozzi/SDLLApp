@@ -1,0 +1,332 @@
+{% extends "base.html" %}
+
+{% block title %}Sync Discrepancies{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <a href="{{ url_for('assignr.index') }}" style="color: var(--text-muted); text-decoration: none;">&larr; Back to Assignr Dashboard</a>
+    <h1 style="margin: 10px 0 0 0;">Sync Discrepancies</h1>
+    <p style="color: var(--text-muted); margin: 5px 0 0 0;">
+        Manage discrepancies between local SDL games and Assignr (next 60 days)
+    </p>
+</div>
+
+{# Warning Banner #}
+<div class="warning-banner" style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: flex-start; gap: 10px;">
+        <span style="font-size: 24px;">&#9888;</span>
+        <div>
+            <strong style="color: #856404;">Warning: Umpire Notifications</strong>
+            <p style="margin: 5px 0 0 0; color: #856404;">
+                Updating games in Assignr will notify any assigned umpires. They will need to re-confirm their assignments after changes are made. Only sync changes that you're sure are correct.
+            </p>
+        </div>
+    </div>
+</div>
+
+{# Action Bar #}
+<div class="card" style="margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div>
+            <a href="{{ url_for('assignr.sync_discrepancies') }}" class="btn btn-outline">
+                &#x21bb; Refresh
+            </a>
+        </div>
+        <div style="color: var(--text-muted);">
+            Last checked: {{ now.strftime('%I:%M %p').lstrip('0') if now else 'just now' }}
+        </div>
+    </div>
+</div>
+
+{# Summary Cards #}
+<div class="stats-grid" style="margin-bottom: 20px;">
+    <div class="stat-card {% if missing %}status-error{% else %}status-synced{% endif %}">
+        <div class="stat-value">{{ missing|length }}</div>
+        <div class="stat-label">Missing</div>
+        <div class="stat-desc">Not in Assignr</div>
+    </div>
+    <div class="stat-card {% if time_mismatches %}status-warning{% else %}status-synced{% endif %}">
+        <div class="stat-value">{{ time_mismatches|length }}</div>
+        <div class="stat-label">Time Mismatch</div>
+        <div class="stat-desc">Different start times</div>
+    </div>
+    <div class="stat-card {% if location_mismatches %}status-warning{% else %}status-synced{% endif %}">
+        <div class="stat-value">{{ location_mismatches|length }}</div>
+        <div class="stat-label">Location Mismatch</div>
+        <div class="stat-desc">Different venues</div>
+    </div>
+    <div class="stat-card status-synced">
+        <div class="stat-value">{{ discrepancies|length }}</div>
+        <div class="stat-label">Total</div>
+        <div class="stat-desc">All discrepancies</div>
+    </div>
+</div>
+
+{% if discrepancies %}
+<form method="POST" action="{{ url_for('assignr.sync_to_assignr') }}">
+    {# Select All / Sync Button Bar #}
+    <div class="card" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="select-all" onclick="toggleSelectAll(this)">
+            <span>Select All</span>
+        </label>
+        <button type="submit" class="btn btn-primary" id="sync-btn" disabled>
+            Sync Selected to Assignr
+        </button>
+    </div>
+
+    {# Missing Games Section #}
+    {% if missing %}
+    <div class="card" style="margin-bottom: 20px;">
+        <h3 style="margin-top: 0; color: #c33;">
+            &#x2716; Games Missing from Assignr ({{ missing|length }})
+        </h3>
+        <p style="color: var(--text-muted); margin-bottom: 15px;">
+            These SDL Academy games exist locally but need to be created in Assignr.
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 40px;"></th>
+                    <th>Game</th>
+                    <th>Date/Time</th>
+                    <th>Field</th>
+                    <th>Teams</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in missing|sort(attribute='game_date') %}
+                <tr>
+                    <td>
+                        <input type="checkbox" name="selected" value="{{ d.game_id }}_{{ d.discrepancy_type }}" class="discrepancy-checkbox">
+                    </td>
+                    <td>
+                        <strong>#{{ d.game_id }}</strong><br>
+                        <span class="badge">{{ d.league }}</span>
+                    </td>
+                    <td>{{ d.game_date.strftime('%b %d, %Y') }}<br>{{ d.game_date.strftime('%I:%M %p').lstrip('0') }}</td>
+                    <td>{{ d.local_value if d.local_value != 'exists' else '-' }}</td>
+                    <td>{{ d.game_desc.split(' at ')[0].replace(d.league + ' - ', '') if ' at ' in d.game_desc else d.game_desc }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {# Time Mismatches Section #}
+    {% if time_mismatches %}
+    <div class="card" style="margin-bottom: 20px;">
+        <h3 style="margin-top: 0; color: #cc7000;">
+            &#x23F0; Time Mismatches ({{ time_mismatches|length }})
+        </h3>
+        <p style="color: var(--text-muted); margin-bottom: 15px;">
+            These games have different start times in Assignr. Syncing will update Assignr to match local time.
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 40px;"></th>
+                    <th>Game</th>
+                    <th>Local Time</th>
+                    <th>Assignr Time</th>
+                    <th>Assignr ID</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in time_mismatches|sort(attribute='game_date') %}
+                <tr>
+                    <td>
+                        <input type="checkbox" name="selected" value="{{ d.game_id }}_{{ d.discrepancy_type }}" class="discrepancy-checkbox">
+                    </td>
+                    <td>
+                        <strong>#{{ d.game_id }}</strong><br>
+                        <span class="badge">{{ d.league }}</span>
+                    </td>
+                    <td style="color: #28a745; font-weight: 600;">{{ d.local_value }}</td>
+                    <td style="color: #dc3545; text-decoration: line-through;">{{ d.assignr_value }}</td>
+                    <td><code>{{ d.assignr_id }}</code></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {# Location Mismatches Section #}
+    {% if location_mismatches %}
+    <div class="card" style="margin-bottom: 20px;">
+        <h3 style="margin-top: 0; color: #cc7000;">
+            &#x1F4CD; Location Mismatches ({{ location_mismatches|length }})
+        </h3>
+        <p style="color: var(--text-muted); margin-bottom: 15px;">
+            These games have different venues in Assignr. Syncing will update Assignr to match local field.
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 40px;"></th>
+                    <th>Game</th>
+                    <th>Local Field</th>
+                    <th>Assignr Venue</th>
+                    <th>Assignr ID</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in location_mismatches|sort(attribute='game_date') %}
+                <tr>
+                    <td>
+                        <input type="checkbox" name="selected" value="{{ d.game_id }}_{{ d.discrepancy_type }}" class="discrepancy-checkbox">
+                    </td>
+                    <td>
+                        <strong>#{{ d.game_id }}</strong><br>
+                        <span class="badge">{{ d.league }}</span><br>
+                        <span style="font-size: 12px; color: var(--text-muted);">{{ d.game_date.strftime('%b %d %I:%M %p').replace(' 0', ' ') }}</span>
+                    </td>
+                    <td style="color: #28a745; font-weight: 600;">{{ d.local_value }}</td>
+                    <td style="color: #dc3545; text-decoration: line-through;">{{ d.assignr_value }}</td>
+                    <td><code>{{ d.assignr_id }}</code></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</form>
+{% else %}
+<div class="card" style="text-align: center; padding: 40px;">
+    <div style="font-size: 48px; margin-bottom: 10px;">&#x2705;</div>
+    <h3 style="margin: 0 0 10px 0; color: var(--success-color);">All Synced!</h3>
+    <p style="color: var(--text-muted); margin: 0;">
+        No discrepancies found between local SDL games and Assignr.
+    </p>
+</div>
+{% endif %}
+
+<style>
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 15px;
+}
+.stat-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+}
+.stat-card.status-synced {
+    border-color: var(--success-color);
+    background: #d4edda;
+}
+.stat-card.status-warning {
+    border-color: var(--warning-color);
+    background: #fff3cd;
+}
+.stat-card.status-error {
+    border-color: #dc3545;
+    background: #f8d7da;
+}
+.stat-value {
+    font-size: 28px;
+    font-weight: 700;
+}
+.stat-label {
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: 4px;
+}
+.stat-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #e9ecef;
+    color: #495057;
+}
+
+code {
+    background: var(--bg-color);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+th, td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+th {
+    background: var(--bg-color);
+    font-weight: 600;
+    font-size: 13px;
+}
+tr:hover {
+    background: var(--bg-color);
+}
+
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    table {
+        font-size: 13px;
+    }
+    th, td {
+        padding: 8px;
+    }
+}
+</style>
+
+<script>
+function toggleSelectAll(checkbox) {
+    var checkboxes = document.querySelectorAll('.discrepancy-checkbox');
+    checkboxes.forEach(function(cb) {
+        cb.checked = checkbox.checked;
+    });
+    updateSyncButton();
+}
+
+function updateSyncButton() {
+    var checkboxes = document.querySelectorAll('.discrepancy-checkbox:checked');
+    var btn = document.getElementById('sync-btn');
+    if (btn) {
+        btn.disabled = checkboxes.length === 0;
+        btn.textContent = checkboxes.length > 0
+            ? 'Sync ' + checkboxes.length + ' Selected to Assignr'
+            : 'Sync Selected to Assignr';
+    }
+}
+
+// Add event listeners to all checkboxes
+document.addEventListener('DOMContentLoaded', function() {
+    var checkboxes = document.querySelectorAll('.discrepancy-checkbox');
+    checkboxes.forEach(function(cb) {
+        cb.addEventListener('change', updateSyncButton);
+    });
+
+    // Update select-all state when individual checkboxes change
+    checkboxes.forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            var selectAll = document.getElementById('select-all');
+            var allChecked = document.querySelectorAll('.discrepancy-checkbox:checked').length === checkboxes.length;
+            if (selectAll) {
+                selectAll.checked = allChecked;
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

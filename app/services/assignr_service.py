@@ -154,6 +154,117 @@ class AssignrService:
             logger.error(f"Assignr PUT request failed: {error_msg}")
             return False, error_msg
 
+    def _post_request(self, url: str, data: Dict) -> Tuple[bool, Optional[str], Optional[Dict]]:
+        """Make an authenticated POST request to the Assignr API.
+
+        Args:
+            url: API endpoint URL
+            data: Form data to send (application/x-www-form-urlencoded)
+
+        Returns:
+            Tuple of (success, error_message, response_dict)
+        """
+        token = self._get_access_token(scope="write")
+        if not token:
+            return False, "Failed to obtain write access token", None
+
+        try:
+            response = requests.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                data=data,
+                timeout=30
+            )
+            response.raise_for_status()
+            return True, None, response.json()
+        except requests.RequestException as e:
+            error_msg = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    error_msg = error_data.get('message', error_data.get('error', str(e)))
+                except Exception:
+                    error_msg = e.response.text[:200]
+            logger.error(f"Assignr POST request failed: {error_msg}")
+            return False, error_msg, None
+
+    def update_game_location(self, assignr_id: int, venue_name: str) -> Tuple[bool, Optional[str]]:
+        """Update game venue in Assignr.
+
+        Args:
+            assignr_id: Assignr game ID
+            venue_name: New venue name
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        url = f"{self.BASE_URL}/games/{assignr_id}"
+        data = {"venue_name": venue_name}
+        return self._put_request(url, data)
+
+    def update_game_time(self, assignr_id: int, game_datetime: datetime, duration_hours: float = 2.0) -> Tuple[bool, Optional[str]]:
+        """Update game time in Assignr.
+
+        Args:
+            assignr_id: Assignr game ID
+            game_datetime: New game start datetime
+            duration_hours: Game duration in hours (default 2.0)
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        url = f"{self.BASE_URL}/games/{assignr_id}"
+        end_time = game_datetime + timedelta(hours=duration_hours)
+        data = {
+            "localized_date": game_datetime.strftime("%Y-%m-%d"),
+            "localized_time": game_datetime.strftime("%H:%M:%S"),
+            "user_end_time_formatted": end_time.strftime("%H:%M:%S")
+        }
+        return self._put_request(url, data)
+
+    def create_game(self, game: 'Game') -> Tuple[Optional[int], Optional[str]]:
+        """Create a new game in Assignr.
+
+        Args:
+            game: Game model instance to create in Assignr
+
+        Returns:
+            Tuple of (assignr_id or None, error_message)
+        """
+        url = f"{self.BASE_URL}/sites/{self.site_id}/games"
+        end_time = game.game_date + timedelta(hours=2.0)
+
+        # Get team names
+        home_team_name = "TBD"
+        away_team_name = "TBD"
+        if game.home_team:
+            home_team_name = game.home_team.computed_display_name
+        if game.away_team:
+            away_team_name = game.away_team.computed_display_name
+
+        data = {
+            "venue_name": game.field_name or "TBD",
+            "pattern_name": "1 umpire",
+            "is_public": "y",
+            "home_team_name": home_team_name,
+            "away_team_name": away_team_name,
+            "localized_date": game.game_date.strftime("%Y-%m-%d"),
+            "localized_time": game.game_date.strftime("%H:%M:%S"),
+            "age_group_name": game.league or "",
+            "external_id": str(game.ID),
+            "user_end_time_formatted": end_time.strftime("%H:%M:%S")
+        }
+
+        success, error, response = self._post_request(url, data)
+        if success and response and response.get('id'):
+            logger.info(f"Created game in Assignr: ID {response['id']} for local game {game.ID}")
+            return response['id'], None
+        return None, error or "No game ID returned"
+
     def get_games(
         self,
         start_date: datetime,

@@ -59,8 +59,15 @@ def _send_tier1_alert(context, error, request=None):
 
     Uses the external send_message.py script for Telegram alerts.
     Fails silently if the script doesn't exist or fails.
+
+    NOTE: Disabled on dev server (localhost) to avoid noise from database issues.
     """
     try:
+        # Skip Telegram alerts on dev server (only send in production on Railway)
+        from app.config import is_running_on_railway
+        if not is_running_on_railway():
+            return False
+
         script_path = r"C:\Users\zcapo\Documents\workspace\send_message.py"
 
         # Only try to send if script exists
@@ -282,7 +289,7 @@ def register_global_handler(app):
         from flask import render_template, request
         from flask_login import current_user
 
-        user_id = current_user.id if current_user.is_authenticated else None
+        user_id = current_user.ID if current_user.is_authenticated else None
 
         # Log as Tier I since 500 errors are serious
         log_tier1('unhandled_500', error, request, user_id)
@@ -303,7 +310,7 @@ def register_global_handler(app):
         if isinstance(error, HTTPException):
             return error
 
-        user_id = current_user.id if current_user.is_authenticated else None
+        user_id = current_user.ID if current_user.is_authenticated else None
 
         # Log as Tier I - unhandled exceptions are serious
         log_tier1('unhandled_exception', error, request, user_id)

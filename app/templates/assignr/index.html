@@ -33,6 +33,7 @@
         <div style="margin-left: auto; display: flex; gap: 8px;">
             <a href="{{ url_for('assignr.games_list', start=start_date.strftime('%Y-%m-%d')) }}{% if end_date %}&end={{ end_date.strftime('%Y-%m-%d') }}{% endif %}" class="btn btn-outline">View All Games</a>
             <a href="{{ url_for('assignr.officials_list') }}" class="btn btn-outline">Officials</a>
+            <a href="{{ url_for('assignr.sync_discrepancies') }}" class="btn btn-outline">Sync SDL Games</a>
             <a href="{{ url_for('assignr.sync_status', start=start_date.strftime('%Y-%m-%d')) }}{% if end_date %}&end={{ end_date.strftime('%Y-%m-%d') }}{% endif %}" class="btn btn-outline">Sync Status</a>
             <a href="{{ url_for('assignr.webhook_list') }}" class="btn btn-outline">Webhooks</a>
         </div>
