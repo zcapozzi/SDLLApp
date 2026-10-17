@@ -168,31 +168,30 @@ class PitchingReportService:
 
     @staticmethod
     def format_innings(innings: float) -> str:
-        """Format innings pitched in baseball notation (e.g., 12.1 = 12 and 1/3).
+        """Format innings pitched in baseball notation (e.g., 2.1 = 2 and 1/3).
+
+        The database already stores innings in baseball notation:
+        - 0.1 = 1/3 inning (1 out)
+        - 0.2 = 2/3 inning (2 outs)
+        - 1.0 = 1 inning
+        - 2.1 = 2 and 1/3 innings
 
         Args:
-            innings: Decimal innings (e.g., 12.333...)
+            innings: Innings in baseball notation (already stored correctly)
 
         Returns:
-            String like "12.1" for 12 1/3 innings
+            String representation (e.g., "2.1" or "3.0")
         """
         if innings is None:
             return '-'
 
-        whole = int(innings)
-        fraction = innings - whole
+        # Data is already stored in baseball notation, just format it
+        # Remove trailing .0 for whole innings (2.0 -> "2")
+        if innings == int(innings):
+            return str(int(innings))
 
-        # Convert fraction to outs (0, 1, or 2)
-        if fraction < 0.17:
-            outs = 0
-        elif fraction < 0.5:
-            outs = 1
-        else:
-            outs = 2
-
-        if outs == 0:
-            return str(whole)
-        return f"{whole}.{outs}"
+        # Otherwise show as-is (2.1 -> "2.1", 2.2 -> "2.2")
+        return str(float(innings))
 
     @staticmethod
     def format_strike_ball_ratio(ratio: Optional[float]) -> str:

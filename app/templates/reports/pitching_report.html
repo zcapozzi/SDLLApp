@@ -142,7 +142,6 @@
                         <th title="Number of games pitched">G</th>
                         <th title="Innings Pitched">IP</th>
                         <th title="Total Pitches">Pitches</th>
-                        <th title="Strike to Ball Ratio">S/B</th>
                         <th title="Strikeouts">K</th>
                         <th title="Walks">BB</th>
                         <th title="Earned Run Average (per 9 innings)">ERA</th>
@@ -155,7 +154,6 @@
                         <td>{{ pitcher.appearances }}</td>
                         <td>{{ format_innings(pitcher.total_innings) }}</td>
                         <td>{{ pitcher.total_pitches }}</td>
-                        <td>{{ format_sb_ratio(pitcher.strike_ball_ratio) }}</td>
                         <td>{{ pitcher.total_strikeouts }}</td>
                         <td>{{ pitcher.total_walks }}</td>
                         <td class="{% if pitcher.era is not none %}{% if pitcher.era < 3.0 %}stat-good{% elif pitcher.era > 6.0 %}stat-bad{% endif %}{% endif %}">
