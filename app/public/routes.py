@@ -2785,3 +2785,42 @@ def request_access_pending():
 
     content = messages.get(request_type, messages['parent'])
     return render_template('public/request_access_pending.html', **content)
+
+
+@public_bp.route('/standings/<int:year>/<int:is_spring>/<league>')
+def standings(year, is_spring, league):
+    """Public league standings page.
+
+    Shows W/L/T record, run differential, and runs allowed per inning
+    for all teams in a league. No authentication required.
+    """
+    from app.services.standings_service import StandingsService
+    from app.models.league import League
+
+    # Get league info
+    league_id = get_league_id_from_param(league)
+    if not league_id:
+        abort(404)
+
+    league_obj = League.query.get(league_id)
+    if not league_obj:
+        abort(404)
+
+    # Get standings
+    standings_data = StandingsService.get_league_standings(year, is_spring, league_id)
+    has_ties = StandingsService.has_ties(standings_data)
+
+    # Get league display name for the season
+    season_name = 'Spring' if is_spring else 'Fall'
+    league_display = league_obj.get_seasonal_name(is_spring)
+
+    return render_template(
+        'public/standings.html',
+        standings=standings_data,
+        has_ties=has_ties,
+        league=league_obj,
+        league_display=league_display,
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name
+    )

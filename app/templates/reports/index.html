@@ -31,5 +31,19 @@
         <p class="text-muted">Download league schedules as CSV files for sharing with coaches and coordinators.</p>
         <a href="{{ url_for('reports.schedule_downloads') }}" class="btn btn-primary">Download Schedules</a>
     </div>
+
+    {% if pitching_leagues %}
+    <div class="card">
+        <h3>Pitching Reports</h3>
+        <p class="text-muted">View aggregated pitching statistics by league for the current season.</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
+            {% for lg in pitching_leagues %}
+            <a href="{{ url_for('reports.pitching_report', year=current_year, is_spring=current_is_spring, league=lg.display_name) }}" class="btn btn-outline btn-sm">
+                {{ lg.get_seasonal_name(current_is_spring) }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

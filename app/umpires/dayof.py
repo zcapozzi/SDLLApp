@@ -315,6 +315,36 @@ def quick_deactivate_dayof(token):
     )
 
 
+@umpires_bp.route('/dayof/quick-deactivate-all/<token>')
+def quick_deactivate_all_dayof(token):
+    """Quick deactivate ALL scheduled day-of notifications from email link.
+
+    No login required - uses signed token for authentication.
+    Immediately deactivates all scheduled notifications for today.
+    """
+    from app.utils.mute_tokens import verify_dayof_deactivate_all_token
+
+    is_valid, error = verify_dayof_deactivate_all_token(token)
+
+    if not is_valid:
+        return render_template(
+            'umpires/dayof_deactivate_all_result.html',
+            success=False,
+            error=error
+        )
+
+    # Deactivate all scheduled notifications
+    count = UmpireDayOfNotification.deactivate_all_scheduled(
+        reason=UmpireDayOfNotification.REASON_BULK_DEACTIVATE
+    )
+
+    return render_template(
+        'umpires/dayof_deactivate_all_result.html',
+        success=True,
+        count=count
+    )
+
+
 @umpires_bp.route('/dayof/deactivate-all', methods=['GET', 'POST'])
 @login_required
 @umpire_coordinator_required

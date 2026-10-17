@@ -15,6 +15,7 @@ from app.models.schedule_proposal import ScheduleProposal
 from app.models.league_season import LeagueSeason
 from app.models.league import League
 from app.models.field import Field
+from app.models.coach import CoachUser, CoachSeason
 from app.extensions import db
 from app.utils.league_helpers import get_league_id_from_request, get_league_id_from_param
 
@@ -23,7 +24,27 @@ from app.utils.league_helpers import get_league_id_from_request, get_league_id_f
 @login_required
 def index():
     """Reports index page"""
-    return render_template('reports/index.html')
+    # Get current season for pitching reports
+    current_season = LeagueSeason.query.filter_by(active=1).order_by(
+        LeagueSeason.year.desc(),
+        LeagueSeason.is_spring.desc()
+    ).first()
+
+    current_year = current_season.year if current_season else None
+    current_is_spring = current_season.is_spring if current_season else 0
+
+    # Get leagues that track pitching stats
+    pitching_leagues = League.query.filter(
+        League.active == 1,
+        League.track_pitching_stats == 1
+    ).order_by(League.sort_order, League.display_name).all()
+
+    return render_template(
+        'reports/index.html',
+        pitching_leagues=pitching_leagues,
+        current_year=current_year,
+        current_is_spring=current_is_spring
+    )
 
 
 @reports_bp.route('/recent-changes')
@@ -451,4 +472,99 @@ def download_league_schedule(year, is_spring, league):
         headers={
             'Content-Disposition': f'attachment; filename="{filename}"'
         }
+    )
+
+
+def _user_has_team_in_league(user_id: int, league_id: int, year: int, is_spring: int) -> bool:
+    """Check if user coaches any team in the specified league/season.
+
+    Args:
+        user_id: User ID to check
+        league_id: League ID
+        year: Season year
+        is_spring: 1 for spring, 0 for fall
+
+    Returns:
+        True if user coaches a team in the league
+    """
+    # Get coach record for this user
+    coach_user = CoachUser.get_by_user(user_id)
+    if not coach_user:
+        return False
+
+    # Get all team assignments for this coach
+    team_assignments = CoachSeason.query.filter_by(coach_id=coach_user.id).all()
+    if not team_assignments:
+        return False
+
+    team_ids = [a.team_id for a in team_assignments]
+
+    # Check if any of those teams are in this league/season
+    matching_team = TeamSeason.query.filter(
+        TeamSeason.team_ID.in_(team_ids),
+        TeamSeason.league_id == league_id,
+        TeamSeason.year == year,
+        TeamSeason.is_spring == is_spring,
+        TeamSeason.active == 1
+    ).first()
+
+    return matching_team is not None
+
+
+@reports_bp.route('/pitching/<int:year>/<int:is_spring>/<league>')
+@login_required
+def pitching_report(year, is_spring, league):
+    """Pitching report for a league.
+
+    Shows aggregated pitching stats for all teams/pitchers in the league.
+
+    Access control:
+    - Admins can view any league
+    - BB_VP, SB_VP, coaching_coordinator can view any league
+    - Coaches can only view leagues where they have a team
+    """
+    from app.services.pitching_report_service import PitchingReportService
+
+    # Get league info
+    league_id = get_league_id_from_param(league)
+    if not league_id:
+        flash('League not found.', 'error')
+        return redirect(url_for('reports.index'))
+
+    league_obj = League.query.get(league_id)
+    if not league_obj:
+        flash('League not found.', 'error')
+        return redirect(url_for('reports.index'))
+
+    # Check if league tracks pitching stats
+    if not league_obj.captures_pitching_data:
+        flash(f'{league_obj.display_name} does not track pitching statistics.', 'warning')
+        return redirect(url_for('reports.index'))
+
+    # Access control
+    has_admin_access = current_user.has_role('admin', 'BB_VP', 'SB_VP', 'coaching_coordinator')
+
+    if not has_admin_access:
+        # Check if user coaches a team in this league
+        if not _user_has_team_in_league(current_user.ID, league_id, year, is_spring):
+            flash('You do not have permission to view this report.', 'error')
+            return redirect(url_for('reports.index'))
+
+    # Get pitching data
+    pitching_data = PitchingReportService.get_league_pitching_summary(year, is_spring, league_id)
+
+    # Get league display name for the season
+    season_name = 'Spring' if is_spring else 'Fall'
+    league_display = league_obj.get_seasonal_name(is_spring)
+
+    return render_template(
+        'reports/pitching_report.html',
+        pitching_data=pitching_data,
+        league=league_obj,
+        league_display=league_display,
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name,
+        format_innings=PitchingReportService.format_innings,
+        format_sb_ratio=PitchingReportService.format_strike_ball_ratio
     )

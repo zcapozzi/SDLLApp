@@ -923,7 +923,7 @@ Here are some resources that are good to have handy.<BR><BR>
             return True
 
         from app.models.user import User
-        from app.utils.mute_tokens import generate_dayof_deactivate_token
+        from app.utils.mute_tokens import generate_dayof_deactivate_token, generate_dayof_deactivate_all_token
 
         # Get umpire coordinators
         coordinators = User.query.filter(
@@ -1017,7 +1017,9 @@ Here are some resources that are good to have handy.<BR><BR>
             """)
 
         inbox_url = f"{base_url}/umpires/dayof"
-        deactivate_all_url = f"{base_url}/umpires/dayof/deactivate-all"
+        # Generate token for deactivate-all (no login required)
+        deactivate_all_token = generate_dayof_deactivate_all_token()
+        deactivate_all_url = f"{base_url}/umpires/dayof/quick-deactivate-all/{deactivate_all_token}"
 
         # Build urgency banner
         urgency_color = '#c33' if minutes_until <= 5 else '#ff8c00' if minutes_until <= 10 else '#228B22'

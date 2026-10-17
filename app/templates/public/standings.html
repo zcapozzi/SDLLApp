@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ league_display }} Standings - SDLL</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background: rgb(34, 139, 34);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            margin: -20px -20px 20px -20px;
+        }
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        .header .season {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        /* Standings Table */
+        .standings-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .standings-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .standings-table th {
+            background: #f8f9fa;
+            color: #555;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 12px 8px;
+            text-align: center;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .standings-table th:first-child,
+        .standings-table th:nth-child(2) {
+            text-align: left;
+        }
+
+        .standings-table td {
+            padding: 12px 8px;
+            text-align: center;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .standings-table td:first-child {
+            text-align: center;
+            font-weight: 600;
+            color: #888;
+            width: 30px;
+        }
+
+        .standings-table td:nth-child(2) {
+            text-align: left;
+            font-weight: 500;
+        }
+
+        .standings-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .standings-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        /* Rank styling */
+        .rank-1 { color: #ffc107; font-weight: bold; }
+        .rank-2 { color: #aaa; font-weight: bold; }
+        .rank-3 { color: #cd7f32; font-weight: bold; }
+
+        /* Win percentage */
+        .win-pct {
+            font-weight: 500;
+        }
+
+        /* Run differential */
+        .run-diff {
+            font-weight: 500;
+        }
+        .run-diff.positive {
+            color: #28a745;
+        }
+        .run-diff.negative {
+            color: #dc3545;
+        }
+        .run-diff.neutral {
+            color: #6c757d;
+        }
+
+        /* RA/Inn */
+        .ra-inn {
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* No data message */
+        .no-data {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+        .no-data-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            padding: 15px;
+            color: #888;
+            font-size: 12px;
+        }
+        .footer a {
+            color: rgb(34, 139, 34);
+            text-decoration: none;
+        }
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .container {
+                padding: 10px;
+            }
+            .header {
+                margin: -10px -10px 15px -10px;
+                padding: 15px;
+            }
+            .standings-table th,
+            .standings-table td {
+                padding: 10px 6px;
+                font-size: 13px;
+            }
+            .standings-table th {
+                font-size: 10px;
+            }
+            /* Hide less important columns on mobile */
+            .hide-mobile {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{{ league_display }} Standings</h1>
+            <div class="season">{{ season_name }} {{ year }}</div>
+        </div>
+
+        {% if standings %}
+        <div class="standings-card">
+            <table class="standings-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Team</th>
+                        <th>W</th>
+                        <th>L</th>
+                        {% if has_ties %}<th>T</th>{% endif %}
+                        <th>Pct</th>
+                        <th class="hide-mobile">RS</th>
+                        <th class="hide-mobile">RA</th>
+                        <th>Diff</th>
+                        <th class="hide-mobile" title="Runs Allowed per Inning">RA/Inn</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in standings %}
+                    <tr>
+                        <td class="{% if loop.index == 1 %}rank-1{% elif loop.index == 2 %}rank-2{% elif loop.index == 3 %}rank-3{% endif %}">
+                            {{ loop.index }}
+                        </td>
+                        <td>{{ s.team.computed_display_name }}</td>
+                        <td>{{ s.wins }}</td>
+                        <td>{{ s.losses }}</td>
+                        {% if has_ties %}<td>{{ s.ties }}</td>{% endif %}
+                        <td class="win-pct">{{ '%.3f' % s.win_pct }}</td>
+                        <td class="hide-mobile">{{ s.runs_scored }}</td>
+                        <td class="hide-mobile">{{ s.runs_allowed }}</td>
+                        <td class="run-diff {% if s.run_diff > 0 %}positive{% elif s.run_diff < 0 %}negative{% else %}neutral{% endif %}">
+                            {% if s.run_diff > 0 %}+{% endif %}{{ s.run_diff }}
+                        </td>
+                        <td class="hide-mobile ra-inn">
+                            {% if s.runs_allowed_per_inning is not none %}
+                                {{ '%.2f' % s.runs_allowed_per_inning }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="standings-card">
+            <div class="no-data">
+                <div class="no-data-icon">&#9918;</div>
+                <p><strong>No standings data available</strong></p>
+                <p style="margin-top: 8px; font-size: 14px;">
+                    Standings will appear once games have been completed.
+                </p>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="footer">
+            <p>South Durham Little League</p>
+            <p style="margin-top: 5px;">
+                <a href="https://southdurhamlittleleague.org">southdurhamlittleleague.org</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

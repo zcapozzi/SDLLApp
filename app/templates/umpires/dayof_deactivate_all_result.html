@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if success %}All Emails Stopped{% else %}Stop All Failed{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 800px; padding: 40px 20px;">
+    {% if success %}
+    <div style="text-align: center; margin-bottom: 30px;">
+        <div style="font-size: 64px; margin-bottom: 20px;">&#9989;</div>
+        <h1 style="color: rgb(34, 139, 34); margin-bottom: 15px;">All Emails Stopped</h1>
+        {% if count > 0 %}
+        <p style="font-size: 18px; color: #555; margin-bottom: 20px;">
+            <strong>{{ count }}</strong> scheduled email(s) have been deactivated and will not be sent.
+        </p>
+        {% else %}
+        <p style="font-size: 18px; color: #555; margin-bottom: 20px;">
+            No scheduled emails were pending. All emails may have already been sent or stopped.
+        </p>
+        {% endif %}
+
+        <div class="card" style="background: #d4edda; border: 1px solid #c3e6cb; margin-bottom: 30px;">
+            <p style="margin: 0; color: #155724;">
+                <strong>All clear!</strong> No more day-of emails will be sent today.
+            </p>
+        </div>
+
+        <p style="margin-top: 20px;">
+            <a href="{{ url_for('umpires.dayof_notifications') }}" class="btn btn-primary">
+                Go to Day-of Inbox
+            </a>
+        </p>
+    </div>
+
+    {% else %}
+    {# Error state #}
+    <div style="text-align: center;">
+        <div style="font-size: 64px; margin-bottom: 20px;">&#10060;</div>
+        <h1 style="color: #c33; margin-bottom: 15px;">Stop All Failed</h1>
+        <p style="font-size: 18px; color: #555; margin-bottom: 30px;">
+            {{ error or 'Unable to process the request.' }}
+        </p>
+
+        <div class="card" style="background: rgba(200, 50, 50, 0.1); border-left: 4px solid #c33;">
+            <p style="margin: 0;">
+                This link may have expired. Links are valid for 1 hour.
+            </p>
+        </div>
+
+        <p style="margin-top: 30px; color: #888; font-size: 14px;">
+            <a href="{{ url_for('auth.login') }}">Log in</a> to manage day-of notifications.
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

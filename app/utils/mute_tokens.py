@@ -323,3 +323,94 @@ def verify_dayof_deactivate_token(token: str) -> Tuple[bool, Optional[Dict[str, 
 
     except (ValueError, KeyError, json.JSONDecodeError) as e:
         return False, None, f"Token decode error: {str(e)}"
+
+
+def generate_dayof_deactivate_all_token(
+    expires_minutes: int = 60
+) -> str:
+    """Generate a signed token for deactivating ALL scheduled day-of notifications.
+
+    Args:
+        expires_minutes: Minutes until token expires (default 60)
+
+    Returns:
+        URL-safe base64-encoded signed token
+    """
+    expires_at = datetime.utcnow() + timedelta(minutes=expires_minutes)
+    payload = {
+        'a': 'deactivate_all',
+        'e': int(expires_at.timestamp())
+    }
+
+    # Encode payload
+    payload_json = json.dumps(payload, separators=(',', ':'))
+    payload_bytes = payload_json.encode('utf-8')
+    payload_b64 = base64.urlsafe_b64encode(payload_bytes).decode('utf-8').rstrip('=')
+
+    # Sign it
+    signature = hmac.new(
+        _get_secret_key(),
+        payload_bytes,
+        hashlib.sha256
+    ).digest()
+    signature_b64 = base64.urlsafe_b64encode(signature[:16]).decode('utf-8').rstrip('=')
+
+    return f"{payload_b64}.{signature_b64}"
+
+
+def verify_dayof_deactivate_all_token(token: str) -> Tuple[bool, str]:
+    """Verify a day-of deactivate-all token.
+
+    Args:
+        token: The token to verify
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if not token or '.' not in token:
+        return False, "Invalid token format"
+
+    try:
+        # Split payload and signature
+        parts = token.split('.')
+        if len(parts) != 2:
+            return False, "Invalid token format"
+
+        payload_b64, signature_b64 = parts
+
+        # Add padding back
+        payload_b64 += '=' * (4 - len(payload_b64) % 4) if len(payload_b64) % 4 else ''
+        signature_b64 += '=' * (4 - len(signature_b64) % 4) if len(signature_b64) % 4 else ''
+
+        # Decode payload
+        payload_bytes = base64.urlsafe_b64decode(payload_b64)
+        payload = json.loads(payload_bytes.decode('utf-8'))
+
+        # Verify signature
+        expected_signature = hmac.new(
+            _get_secret_key(),
+            payload_bytes,
+            hashlib.sha256
+        ).digest()
+        expected_sig_b64 = base64.urlsafe_b64encode(expected_signature[:16]).decode('utf-8').rstrip('=')
+
+        # Add padding for comparison
+        expected_sig_b64_padded = expected_sig_b64 + '=' * (4 - len(expected_sig_b64) % 4) if len(expected_sig_b64) % 4 else expected_sig_b64
+        actual_sig_padded = signature_b64
+
+        if not hmac.compare_digest(expected_sig_b64_padded.encode(), actual_sig_padded.encode()):
+            return False, "Invalid signature"
+
+        # Check expiration
+        expires_at = datetime.fromtimestamp(payload['e'])
+        if datetime.utcnow() > expires_at:
+            return False, "Token has expired"
+
+        # Verify action
+        if payload.get('a') != 'deactivate_all':
+            return False, "Invalid action type"
+
+        return True, ""
+
+    except (ValueError, KeyError, json.JSONDecodeError) as e:
+        return False, f"Token decode error: {str(e)}"

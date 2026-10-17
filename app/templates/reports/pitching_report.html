@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Pitching Report - {{ league_display }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+
+    .team-section {
+        margin-bottom: 30px;
+    }
+
+    .team-header {
+        background: rgb(34, 139, 34);
+        color: white;
+        padding: 12px 16px;
+        border-radius: 8px 8px 0 0;
+        font-size: 16px;
+        font-weight: 600;
+    }
+
+    .team-table-container {
+        background: white;
+        border-radius: 0 0 8px 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .pitching-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .pitching-table th {
+        background: #f8f9fa;
+        color: #555;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 10px 8px;
+        text-align: center;
+        border-bottom: 2px solid #e9ecef;
+    }
+
+    .pitching-table th:first-child {
+        text-align: left;
+        padding-left: 16px;
+    }
+
+    .pitching-table td {
+        padding: 10px 8px;
+        text-align: center;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 13px;
+    }
+
+    .pitching-table td:first-child {
+        text-align: left;
+        padding-left: 16px;
+        font-weight: 500;
+    }
+
+    .pitching-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .pitching-table tr:hover {
+        background: #f8f9fa;
+    }
+
+    /* Stat highlights */
+    .stat-good {
+        color: #28a745;
+        font-weight: 500;
+    }
+    .stat-warning {
+        color: #ffc107;
+        font-weight: 500;
+    }
+    .stat-bad {
+        color: #dc3545;
+        font-weight: 500;
+    }
+
+    /* Column tooltips */
+    .pitching-table th[title] {
+        cursor: help;
+        text-decoration: underline dotted;
+    }
+
+    /* No data message */
+    .no-data {
+        text-align: center;
+        padding: 60px 20px;
+        color: #666;
+    }
+    .no-data-icon {
+        font-size: 64px;
+        margin-bottom: 15px;
+        opacity: 0.5;
+    }
+
+    /* Empty team notice */
+    .empty-team {
+        padding: 20px;
+        text-align: center;
+        color: #888;
+        font-style: italic;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="report-header">
+    <div>
+        <h1>Pitching Report: {{ league_display }}</h1>
+        <p style="color: #666; margin-top: 5px;">{{ season_name }} {{ year }}</p>
+    </div>
+    <a href="{{ url_for('reports.index') }}" class="btn btn-outline">Back to Reports</a>
+</div>
+
+{% if pitching_data %}
+    {% for team_summary in pitching_data %}
+    <div class="team-section" id="team-{{ team_summary.team.team_ID }}">
+        <div class="team-header">
+            {{ team_summary.team.computed_display_name }}
+        </div>
+        <div class="team-table-container">
+            {% if team_summary.pitchers %}
+            <table class="pitching-table">
+                <thead>
+                    <tr>
+                        <th>Pitcher</th>
+                        <th title="Number of games pitched">G</th>
+                        <th title="Innings Pitched">IP</th>
+                        <th title="Total Pitches">Pitches</th>
+                        <th title="Strike to Ball Ratio">S/B</th>
+                        <th title="Strikeouts">K</th>
+                        <th title="Walks">BB</th>
+                        <th title="Earned Run Average (per 9 innings)">ERA</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pitcher in team_summary.pitchers %}
+                    <tr>
+                        <td>{{ pitcher.player.full_name }}</td>
+                        <td>{{ pitcher.appearances }}</td>
+                        <td>{{ format_innings(pitcher.total_innings) }}</td>
+                        <td>{{ pitcher.total_pitches }}</td>
+                        <td>{{ format_sb_ratio(pitcher.strike_ball_ratio) }}</td>
+                        <td>{{ pitcher.total_strikeouts }}</td>
+                        <td>{{ pitcher.total_walks }}</td>
+                        <td class="{% if pitcher.era is not none %}{% if pitcher.era < 3.0 %}stat-good{% elif pitcher.era > 6.0 %}stat-bad{% endif %}{% endif %}">
+                            {% if pitcher.era is not none %}
+                                {{ '%.2f' % pitcher.era }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-team">
+                No pitching data recorded for this team yet.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+<div class="card">
+    <div class="no-data">
+        <div class="no-data-icon">&#9918;</div>
+        <p><strong>No pitching data available</strong></p>
+        <p style="margin-top: 8px; font-size: 14px;">
+            Pitching statistics will appear once post-game reports with pitching data have been submitted.
+        </p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
