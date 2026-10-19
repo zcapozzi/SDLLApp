@@ -166,6 +166,12 @@
                     <span class="stat-label">Umpires</span>
                     <span class="stat-value">{{ ps.umpires + ps.ntl_umpires }} assignments</span>
                 </div>
+                {% if ps.adjustments %}
+                <div class="stat">
+                    <span class="stat-label">Adjustments</span>
+                    <span class="stat-value" style="color: #c63;">{{ ps.adjustments }} / ${{ "%.2f"|format(ps.adjustment_amount) }}</span>
+                </div>
+                {% endif %}
                 <div class="stat">
                     <span class="stat-label">Total</span>
                     <span class="stat-value total">${{ "%.2f"|format(ps.cost_total) }}</span>
@@ -195,6 +201,12 @@
             <div class="stat">
                 <span class="stat-label">Booking Fees</span>
                 <span class="stat-value">${{ "%.2f"|format(totals.cost_booking) }}</span>
+            </div>
+            {% endif %}
+            {% if totals.adjustments %}
+            <div class="stat">
+                <span class="stat-label"><abbr title="Rainouts, bonuses, and other non-game payments">Adjustments</abbr></span>
+                <span class="stat-value" style="color: #c63;">{{ totals.adjustments }} / ${{ "%.2f"|format(totals.adjustment_amount) }}</span>
             </div>
             {% endif %}
             <div class="stat">
@@ -270,6 +282,69 @@
     </div>
     {% else %}
     <p class="text-muted">No games found for the selected date range.</p>
+    {% endif %}
+
+    {% if payment_event_rows %}
+    <!-- Non-Game Payment Events (Rainouts, Adjustments, Bonuses) -->
+    <h3 style="margin-top: 30px; margin-bottom: 15px;">
+        Non-Game Payments
+        <span style="font-size: 14px; font-weight: normal; color: #666;">({{ payment_event_rows|length }} payment{{ 's' if payment_event_rows|length != 1 else '' }})</span>
+    </h3>
+    <p class="text-muted text-small" style="margin-bottom: 15px;">
+        These are payments for rainout arrivals, bonuses, and adjustments that are not tied to completed games.
+        <a href="{{ url_for('umpires.payment_events') }}">View all payment events</a> |
+        <a href="{{ url_for('umpires.new_payment_event') }}">Add new payment</a>
+    </p>
+
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Partner</th>
+                    <th>League</th>
+                    <th>Notes</th>
+                    <th style="text-align: center;">Status</th>
+                    <th style="text-align: right;">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in payment_event_rows %}
+                <tr class="payment-event-row" data-partner="{{ event.partner }}">
+                    <td>{{ event.date.strftime('%a %b %d') }}</td>
+                    <td>
+                        <span class="badge" style="background: #c63; color: white; font-size: 11px;">{{ event.event_type_label }}</span>
+                    </td>
+                    <td>{{ event.partner }}</td>
+                    <td>{{ event.league or '-' }}</td>
+                    <td style="max-width: 300px;">
+                        {% if event.reason %}
+                        <strong>{{ event.reason }}</strong><br>
+                        {% endif %}
+                        {{ event.notes or '-' }}
+                    </td>
+                    <td style="text-align: center;">
+                        {% if event.status == 'pending' %}
+                        <span class="badge" style="background: #ffc107; color: #333;">Pending</span>
+                        {% elif event.status == 'approved' %}
+                        <span class="badge" style="background: #17a2b8; color: white;">Approved</span>
+                        {% elif event.status == 'paid' %}
+                        <span class="badge badge-active">Paid</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right; font-weight: bold; color: #c63;">${{ "%.2f"|format(event.amount) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr style="background: #f8f8f8; font-weight: bold;">
+                    <td colspan="6" style="text-align: right;">Non-Game Payments Total:</td>
+                    <td style="text-align: right; color: #c63;">${{ "%.2f"|format(totals.adjustment_amount) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
     {% endif %}
 </div>
 {% endblock %}

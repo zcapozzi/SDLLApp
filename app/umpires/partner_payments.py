@@ -672,6 +672,10 @@ def new_payment_event():
             flash('Date and amount are required.', 'error')
             return redirect(url_for('umpires.new_payment_event'))
 
+        if not notes:
+            flash('Notes are required for non-game payments.', 'error')
+            return redirect(url_for('umpires.new_payment_event'))
+
         try:
             amount = Decimal(amount_str)
         except (ValueError, TypeError):

@@ -16,6 +16,7 @@ from decimal import Decimal
 from app.extensions import db
 from app.models.umpire_partner import UmpirePartner
 from app.models.umpire_delegation import UmpireDelegationRule, UmpireDelegationOverride
+from app.models.umpire_payment_event import UmpirePaymentEvent
 from app.models.league import League
 from app.models.game import Game
 
@@ -701,6 +702,95 @@ def invoice_tieout():
     # Sort partner summaries by name
     partner_summaries_list = sorted(partner_summaries.values(), key=lambda x: x['name'])
 
+    # Query non-game payment events (rainouts, adjustments, bonuses) for the date range
+    # These are payments not tied to completed games that still need to be accounted for
+    payment_events_query = UmpirePaymentEvent.query.filter(
+        UmpirePaymentEvent.original_date >= start_date,
+        UmpirePaymentEvent.original_date <= end_date,
+        UmpirePaymentEvent.status != UmpirePaymentEvent.STATUS_VOIDED,
+        UmpirePaymentEvent.partner_id.isnot(None)  # Partner payments only for this report
+    )
+
+    # Filter by partner if specified
+    if partner_code:
+        # Find the partner object for this code
+        filter_partner = partner_objs.get(partner_code.upper())
+        if filter_partner:
+            payment_events_query = payment_events_query.filter(
+                UmpirePaymentEvent.partner_id == filter_partner.id
+            )
+
+    payment_events = payment_events_query.order_by(UmpirePaymentEvent.original_date).all()
+
+    # Build payment event rows and update summaries
+    payment_event_rows = []
+    adjustment_totals = {
+        'count': 0,
+        'amount': 0
+    }
+
+    for event in payment_events:
+        # Get partner info
+        event_partner = event.partner
+        if not event_partner:
+            continue
+
+        event_partner_code = event_partner.short_code
+        event_amount = float(event.amount or 0)
+
+        payment_event_rows.append({
+            'id': event.id,
+            'date': event.original_date,
+            'time': event.original_time,
+            'league': event.original_league or '',
+            'field': event.original_field_name or '',
+            'partner': event_partner_code,
+            'partner_name': event_partner.name,
+            'event_type': event.event_type,
+            'event_type_label': event.event_type_label,
+            'amount': event_amount,
+            'reason': event.reason,
+            'notes': event.notes,
+            'status': event.status,
+            'status_label': event.status_label
+        })
+
+        # Update adjustment totals
+        adjustment_totals['count'] += 1
+        adjustment_totals['amount'] += event_amount
+
+        # Update per-partner summary with non-game payments
+        if event_partner_code not in partner_summaries:
+            partner_summaries[event_partner_code] = {
+                'code': event_partner_code,
+                'name': event_partner.name,
+                'games': 0,
+                'ntl_games': 0,
+                'umpires': 0,
+                'ntl_umpires': 0,
+                'cost_umpires': 0,
+                'cost_booking': 0,
+                'cost_total': 0,
+                'adjustments': 0,
+                'adjustment_amount': 0,
+                'rate_description': event_partner.get_rate_description() if event_partner else ''
+            }
+        ps = partner_summaries[event_partner_code]
+        if 'adjustments' not in ps:
+            ps['adjustments'] = 0
+            ps['adjustment_amount'] = 0
+        ps['adjustments'] += 1
+        ps['adjustment_amount'] += event_amount
+        ps['cost_total'] += event_amount
+
+    # Update overall totals with adjustments
+    totals['adjustments'] = adjustment_totals['count']
+    totals['adjustment_amount'] = adjustment_totals['amount']
+    totals['cost_total'] += adjustment_totals['amount']
+
+    # Re-sort partner summaries (in case new partners were added from payment events)
+    partner_summaries_list = sorted(partner_summaries.values(), key=lambda x: x['name'])
+
     # Get selected partner name for display
     selected_partner_name = None
     if partner_code:
@@ -735,6 +825,7 @@ def invoice_tieout():
         start_date=start_date,
         end_date=end_date,
         game_rows=game_rows,
+        payment_event_rows=payment_event_rows,
         totals=totals,
         quick_ranges=quick_ranges,
         partner_summaries=partner_summaries_list
