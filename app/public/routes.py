@@ -492,16 +492,23 @@ def team_schedule(token):
     # =========================================================================
 
     # Find games eligible for start time recording
-    # Normally only today's games, but allowStartTimeRecord=1 enables all upcoming games
+    # Game must be within 2 hours before to 30 minutes after scheduled start time
+    # allowStartTimeRecord=1 bypasses the time check for testing
     recordable_game_ids = set()
+    now_local = datetime.now()  # Local time (game_date is stored in local time)
+
     for game in template_vars.get('upcoming_games', []):
         # Skip org events - they don't have game_date or game_type
         if hasattr(game, '_is_org_event') and game._is_org_event:
             continue
         if game.game_date and game.game_type != 'practice':
-            game_date = game.game_date.date() if hasattr(game.game_date, 'date') else game.game_date
-            # Include if it's today, OR if testing flag is set
-            if game_date == today or allow_start_time_record:
+            # Check time window: 2 hours before to 30 minutes after game time
+            game_datetime = game.game_date
+            window_start = game_datetime - timedelta(hours=2)
+            window_end = game_datetime + timedelta(minutes=30)
+
+            # Include if within time window OR if testing flag is set
+            if (window_start <= now_local <= window_end) or allow_start_time_record:
                 # Get the actual game ID (handle both Game objects and wrapper objects)
                 game_id = getattr(game, 'ID', None)
                 if game_id and isinstance(game_id, int):
