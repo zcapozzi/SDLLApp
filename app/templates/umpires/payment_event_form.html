@@ -7,10 +7,11 @@
     <a href="{{ url_for('umpires.payment_events') }}">&larr; Back to Payment Events</a>
 </div>
 
-<h1>{% if event %}Edit{% else %}New{% endif %} Payment Event</h1>
+<h1>{% if event %}Edit{% else %}Record{% endif %} Amount Owed</h1>
 
 <p style="color: var(--text-muted); margin-bottom: 20px;">
-    Create a payment event for rainout arrivals, bonuses, adjustments, or other non-game payments.
+    Record an amount owed to an umpire or partner for rainout arrivals, bonuses, adjustments, or other non-game obligations.
+    This will appear in the invoice tieout report.
 </p>
 
 <div class="card">

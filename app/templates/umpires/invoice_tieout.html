@@ -285,15 +285,15 @@
     {% endif %}
 
     {% if payment_event_rows %}
-    <!-- Non-Game Payment Events (Rainouts, Adjustments, Bonuses) -->
+    <!-- Non-Game Payment Obligations (Rainouts, Adjustments, Bonuses) -->
     <h3 style="margin-top: 30px; margin-bottom: 15px;">
-        Non-Game Payments
-        <span style="font-size: 14px; font-weight: normal; color: #666;">({{ payment_event_rows|length }} payment{{ 's' if payment_event_rows|length != 1 else '' }})</span>
+        Additional Amounts Owed
+        <span style="font-size: 14px; font-weight: normal; color: #666;">({{ payment_event_rows|length }} item{{ 's' if payment_event_rows|length != 1 else '' }})</span>
     </h3>
     <p class="text-muted text-small" style="margin-bottom: 15px;">
-        These are payments for rainout arrivals, bonuses, and adjustments that are not tied to completed games.
-        <a href="{{ url_for('umpires.payment_events') }}">View all payment events</a> |
-        <a href="{{ url_for('umpires.new_payment_event') }}">Add new payment</a>
+        These are amounts owed for rainout arrivals, bonuses, and adjustments that are not tied to completed games.
+        <a href="{{ url_for('umpires.payment_events') }}">View all</a> |
+        <a href="{{ url_for('umpires.new_payment_event') }}">Record new amount owed</a>
     </p>
 
     <div style="overflow-x: auto;">
@@ -339,7 +339,7 @@
             </tbody>
             <tfoot>
                 <tr style="background: #f8f8f8; font-weight: bold;">
-                    <td colspan="6" style="text-align: right;">Non-Game Payments Total:</td>
+                    <td colspan="6" style="text-align: right;">Additional Amounts Owed:</td>
                     <td style="text-align: right; color: #c63;">${{ "%.2f"|format(totals.adjustment_amount) }}</td>
                 </tr>
             </tfoot>
