@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block title %}Umpire Survey Management{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <a href="{{ url_for('umpires.index') }}">&larr; Back to Umpires</a>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Umpire Survey - {{ season.season_name }}</h1>
+    <a href="{{ url_for('umpires.survey_responses') }}" class="btn btn-outline">View Responses</a>
+</div>
+
+<!-- Summary Cards -->
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px;">
+    <div class="card" style="text-align: center; padding: 15px;">
+        <div style="font-size: 28px; font-weight: 600; color: #333;">{{ total }}</div>
+        <div style="color: #666; font-size: 13px;">Total Umpires</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 15px;">
+        <div style="font-size: 28px; font-weight: 600; color: #dc3545;">{{ not_sent_count }}</div>
+        <div style="color: #666; font-size: 13px;">Not Yet Sent</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 15px;">
+        <div style="font-size: 28px; font-weight: 600; color: #0d6efd;">{{ sent_count }}</div>
+        <div style="color: #666; font-size: 13px;">Email Sent</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 15px;">
+        <div style="font-size: 28px; font-weight: 600; color: rgb(34, 139, 34);">{{ responded_count }}</div>
+        <div style="color: #666; font-size: 13px;">Responded</div>
+    </div>
+</div>
+
+<div class="card">
+    <form method="POST" action="{{ url_for('umpires.survey_send') }}" id="sendForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button type="button" onclick="selectNotSent()" class="btn btn-outline" style="padding: 6px 12px; font-size: 13px;">
+                    Select Not Sent
+                </button>
+                <button type="button" onclick="selectAll()" class="btn btn-outline" style="padding: 6px 12px; font-size: 13px;">
+                    Select All
+                </button>
+                <button type="button" onclick="selectNone()" class="btn btn-outline" style="padding: 6px 12px; font-size: 13px;">
+                    Clear Selection
+                </button>
+                <span id="selectedCount" style="color: #666; font-size: 13px; margin-left: 10px;">0 selected</span>
+            </div>
+            <button type="submit" class="btn btn-primary" id="sendBtn" disabled>
+                Send Survey Email
+            </button>
+        </div>
+
+        <!-- Filter tabs -->
+        <div style="display: flex; gap: 5px; margin-bottom: 15px; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px;">
+            <button type="button" class="filter-btn active" data-filter="all" onclick="filterUmpires('all', this)">
+                All ({{ total }})
+            </button>
+            <button type="button" class="filter-btn" data-filter="not-sent" onclick="filterUmpires('not-sent', this)">
+                Not Sent ({{ not_sent_count }})
+            </button>
+            <button type="button" class="filter-btn" data-filter="sent" onclick="filterUmpires('sent', this)">
+                Sent ({{ sent_count }})
+            </button>
+            <button type="button" class="filter-btn" data-filter="responded" onclick="filterUmpires('responded', this)">
+                Responded ({{ responded_count }})
+            </button>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid #e0e0e0;">
+                    <th style="padding: 10px; text-align: left; width: 40px;"></th>
+                    <th style="padding: 10px; text-align: left;">Umpire</th>
+                    <th style="padding: 10px; text-align: left;">Email</th>
+                    <th style="padding: 10px; text-align: center;">Email Status</th>
+                    <th style="padding: 10px; text-align: center;">Response</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in umpire_rows %}
+                <tr class="umpire-row"
+                    data-sent="{{ 'true' if row.has_been_sent else 'false' }}"
+                    data-responded="{{ 'true' if row.has_responded else 'false' }}"
+                    style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px;">
+                        {% if row.has_email %}
+                        <input type="checkbox" name="umpire_ids" value="{{ row.profile.id }}"
+                               class="umpire-checkbox" onchange="updateSelectedCount()">
+                        {% else %}
+                        <span title="No email address" style="color: #ccc;">-</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 10px;">
+                        <strong>{{ row.profile.name }}</strong>
+                    </td>
+                    <td style="padding: 10px; color: #666; font-size: 13px;">
+                        {% if row.has_email %}
+                        {{ row.profile.contact_email }}
+                        {% else %}
+                        <span style="color: #dc3545;">No email</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 10px; text-align: center;">
+                        {% if row.has_been_sent %}
+                        <span style="background: #e3f2fd; color: #1565c0; padding: 3px 8px; border-radius: 12px; font-size: 12px;">
+                            Sent {% if row.send_count > 1 %}({{ row.send_count }}x){% endif %}
+                        </span>
+                        <div style="font-size: 11px; color: #888; margin-top: 2px;">
+                            {{ row.last_sent.strftime('%m/%d %I:%M%p') if row.last_sent else '' }}
+                        </div>
+                        {% else %}
+                        <span style="background: #fff3e0; color: #e65100; padding: 3px 8px; border-radius: 12px; font-size: 12px;">
+                            Not sent
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 10px; text-align: center;">
+                        {% if row.has_responded %}
+                        <span style="background: #e8f5e9; color: #2e7d32; padding: 3px 8px; border-radius: 12px; font-size: 12px;">
+                            Responded
+                        </span>
+                        {% if row.response %}
+                        <div style="font-size: 11px; color: #666; margin-top: 4px;">
+                            {% if row.response.returning_next_season %}Returning{% else %}Not sure{% endif %} |
+                            {% if row.response.wanted_more_games %}Wanted more{% else %}Enough games{% endif %}
+                        </div>
+                        {% endif %}
+                        {% else %}
+                        <span style="color: #999; font-size: 12px;">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </form>
+</div>
+
+<style>
+.filter-btn {
+    background: none;
+    border: none;
+    padding: 8px 16px;
+    cursor: pointer;
+    color: #666;
+    font-size: 13px;
+    border-radius: 4px;
+}
+.filter-btn:hover {
+    background: #f5f5f5;
+}
+.filter-btn.active {
+    background: rgb(34, 139, 34);
+    color: white;
+}
+</style>
+
+<script>
+function updateSelectedCount() {
+    var checkboxes = document.querySelectorAll('.umpire-checkbox:checked');
+    var count = checkboxes.length;
+    document.getElementById('selectedCount').textContent = count + ' selected';
+    document.getElementById('sendBtn').disabled = count === 0;
+}
+
+function selectNotSent() {
+    document.querySelectorAll('.umpire-row').forEach(function(row) {
+        var checkbox = row.querySelector('.umpire-checkbox');
+        if (checkbox && row.dataset.sent === 'false') {
+            checkbox.checked = true;
+        } else if (checkbox) {
+            checkbox.checked = false;
+        }
+    });
+    updateSelectedCount();
+}
+
+function selectAll() {
+    document.querySelectorAll('.umpire-checkbox').forEach(function(cb) {
+        if (cb.closest('.umpire-row').style.display !== 'none') {
+            cb.checked = true;
+        }
+    });
+    updateSelectedCount();
+}
+
+function selectNone() {
+    document.querySelectorAll('.umpire-checkbox').forEach(function(cb) {
+        cb.checked = false;
+    });
+    updateSelectedCount();
+}
+
+function filterUmpires(filter, btn) {
+    // Update active button
+    document.querySelectorAll('.filter-btn').forEach(function(b) {
+        b.classList.remove('active');
+    });
+    btn.classList.add('active');
+
+    // Filter rows
+    document.querySelectorAll('.umpire-row').forEach(function(row) {
+        var show = false;
+        switch(filter) {
+            case 'all':
+                show = true;
+                break;
+            case 'not-sent':
+                show = row.dataset.sent === 'false';
+                break;
+            case 'sent':
+                show = row.dataset.sent === 'true';
+                break;
+            case 'responded':
+                show = row.dataset.responded === 'true';
+                break;
+        }
+        row.style.display = show ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}

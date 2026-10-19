@@ -43,6 +43,8 @@ from .field_captain import FieldCaptain
 from .umpire_group_assignment import UmpireGroupAssignment
 from .umpire_game_payment import UmpireGamePayment
 from .umpire_dayof_notification import UmpireDayOfNotification
+from .umpire_survey import UmpireSurveyResponse
+from .umpire_survey_send import UmpireSurveySend
 from .notification_mute import NotificationMute
 
 # Email campaign system

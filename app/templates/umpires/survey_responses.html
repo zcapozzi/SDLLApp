@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Survey Responses{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <a href="{{ url_for('umpires.survey_management') }}">&larr; Back to Survey Management</a>
+</div>
+
+<h1>Survey Responses - {{ season.season_name }}</h1>
+
+{% if summary %}
+<!-- Summary Stats -->
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px;">
+    <div class="card" style="text-align: center; padding: 15px;">
+        <div style="font-size: 28px; font-weight: 600; color: rgb(34, 139, 34);">{{ summary.total_responses }}</div>
+        <div style="color: #666; font-size: 13px;">Total Responses</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 15px;">
+        <div style="font-size: 28px; font-weight: 600; color: #0d6efd;">{{ summary.returning_next_season }}</div>
+        <div style="color: #666; font-size: 13px;">Returning ({{ summary.returning_next_season_pct }}%)</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 15px;">
+        <div style="font-size: 28px; font-weight: 600; color: #6f42c1;">{{ summary.wanted_more_games }}</div>
+        <div style="color: #666; font-size: 13px;">Wanted More Games ({{ summary.wanted_more_games_pct }}%)</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 15px;">
+        <div style="font-size: 28px; font-weight: 600; color: #fd7e14;">{{ summary.with_feedback }}</div>
+        <div style="color: #666; font-size: 13px;">With Feedback</div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    {% if responses %}
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid #e0e0e0;">
+                <th style="padding: 10px; text-align: left;">Umpire</th>
+                <th style="padding: 10px; text-align: center;">Returning?</th>
+                <th style="padding: 10px; text-align: center;">Wanted More?</th>
+                <th style="padding: 10px; text-align: left;">Feedback</th>
+                <th style="padding: 10px; text-align: right;">Submitted</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for response in responses %}
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 10px;">
+                    <strong>{{ response.umpire_profile.name }}</strong>
+                </td>
+                <td style="padding: 10px; text-align: center;">
+                    {% if response.returning_next_season %}
+                    <span style="color: rgb(34, 139, 34);">Yes</span>
+                    {% else %}
+                    <span style="color: #dc3545;">Not sure</span>
+                    {% endif %}
+                </td>
+                <td style="padding: 10px; text-align: center;">
+                    {% if response.wanted_more_games %}
+                    <span style="color: #0d6efd;">Yes</span>
+                    {% else %}
+                    <span style="color: #666;">No</span>
+                    {% endif %}
+                </td>
+                <td style="padding: 10px; max-width: 400px;">
+                    {% if response.feedback %}
+                    <div style="font-size: 13px; color: #333; white-space: pre-wrap;">{{ response.feedback }}</div>
+                    {% else %}
+                    <span style="color: #999; font-size: 13px;">-</span>
+                    {% endif %}
+                </td>
+                <td style="padding: 10px; text-align: right; color: #666; font-size: 13px;">
+                    {{ response.created_at.strftime('%m/%d/%Y %I:%M%p') }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #666; text-align: center; padding: 40px;">
+        No survey responses yet.
+    </p>
+    {% endif %}
+</div>
+{% endblock %}

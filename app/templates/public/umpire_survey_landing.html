@@ -1,0 +1,40 @@
+{% extends "base_minimal.html" %}
+
+{% block title %}SDLL Umpire Survey{% endblock %}
+
+{% block content %}
+<div style="max-width: 500px; margin: 60px auto; padding: 20px;">
+    <div class="card" style="text-align: center;">
+        <h1 style="color: rgb(34, 139, 34); margin-bottom: 20px;">SDLL Umpire Survey</h1>
+        <p style="font-size: 18px; color: #333; margin-bottom: 10px;">
+            {{ season.season_name }} Feedback
+        </p>
+        <p style="color: #666; margin-bottom: 30px;">
+            This survey is for South Durham Little League Academy umpires.
+            We want to hear about your experience this season!
+        </p>
+
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+            <p style="margin-bottom: 15px; font-weight: 500;">
+                Already have an account?
+            </p>
+            <a href="{{ login_url }}" class="btn btn-primary" style="width: 100%; margin-bottom: 10px;">
+                Log In
+            </a>
+            <a href="{{ forgot_url }}" style="font-size: 14px; color: #666;">
+                Forgot your password?
+            </a>
+        </div>
+
+        <div style="border-top: 1px solid #e0e0e0; padding-top: 20px;">
+            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                All SDLL umpires should already have an account.
+                If you haven't logged in before, use "Forgot password" to set one up.
+            </p>
+            <p style="color: #888; font-size: 13px;">
+                Questions? Contact the umpire coordinator.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base_minimal.html" %}
+
+{% block title %}Survey Not Available - SDLL{% endblock %}
+
+{% block content %}
+<div style="max-width: 500px; margin: 80px auto; padding: 20px; text-align: center;">
+    <div class="card">
+        <div style="font-size: 48px; margin-bottom: 20px;">&#128100;</div>
+        <h1 style="color: #666; margin-bottom: 15px;">Survey Not Available</h1>
+        <p style="font-size: 16px; color: #333; margin-bottom: 20px;">
+            This survey is for SDLL Academy umpires only.
+        </p>
+        <p style="color: #666; margin-bottom: 30px;">
+            We don't have an umpire profile associated with your account.
+            If you believe this is an error, please contact the umpire coordinator.
+        </p>
+
+        <div style="border-top: 1px solid #e0e0e0; padding-top: 20px;">
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline">
+                Go to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

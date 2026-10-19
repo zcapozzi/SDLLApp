@@ -2831,3 +2831,120 @@ def standings(year, is_spring, league):
         is_spring=is_spring,
         season_name=season_name
     )
+
+
+# =============================================================================
+# UMPIRE SURVEY - End of season feedback
+# =============================================================================
+
+@public_bp.route('/umpire-survey', methods=['GET', 'POST'])
+def umpire_survey():
+    """End-of-season survey for Academy umpires.
+
+    If not logged in: shows landing page with login/request access links
+    If logged in without umpire profile: shows error
+    If logged in with umpire profile: shows survey form
+    """
+    from flask_login import current_user
+    from app.models.umpire_profile import UmpireProfile
+    from app.models.umpire_survey import UmpireSurveyResponse
+    from app.models.org_season import OrgSeason
+    from app.utils.auth import get_effective_user
+
+    # Get current season
+    current_season = OrgSeason.get_current_season()
+    if not current_season:
+        return render_template(
+            'public/umpire_survey_closed.html',
+            message='No active season found.'
+        )
+
+    # Check authentication
+    if not current_user.is_authenticated:
+        # Show landing page with login/request access options
+        login_url = url_for('auth.login', next=request.url)
+        forgot_url = url_for('auth.forgot_password')
+        return render_template(
+            'public/umpire_survey_landing.html',
+            login_url=login_url,
+            forgot_url=forgot_url,
+            season=current_season
+        )
+
+    # Use effective user (supports view_as for admins)
+    effective_user = get_effective_user()
+
+    # Check if user has an umpire profile
+    profile = UmpireProfile.query.filter_by(user_id=effective_user.ID).first()
+    if not profile:
+        return render_template(
+            'public/umpire_survey_not_umpire.html',
+            message='This survey is for SDLL Academy umpires only.'
+        )
+
+    # Check if already responded
+    existing_response = UmpireSurveyResponse.get_for_umpire_season(
+        profile.id, current_season.ID
+    )
+
+    if request.method == 'POST':
+        # Handle form submission
+        wanted_more = request.form.get('wanted_more_games') == 'yes'
+        returning = request.form.get('returning_next_season') == 'yes'
+        feedback = request.form.get('feedback', '').strip()
+
+        if existing_response:
+            # Update existing response
+            existing_response.wanted_more_games = wanted_more
+            existing_response.returning_next_season = returning
+            existing_response.feedback = feedback
+            db.session.commit()
+        else:
+            # Create new response
+            response = UmpireSurveyResponse(
+                umpire_profile_id=profile.id,
+                user_id=effective_user.ID,
+                org_season_id=current_season.ID,
+                wanted_more_games=wanted_more,
+                returning_next_season=returning,
+                feedback=feedback
+            )
+            db.session.add(response)
+            db.session.commit()
+
+        return redirect(url_for('public.umpire_survey_thanks'))
+
+    return render_template(
+        'public/umpire_survey_form.html',
+        umpire_profile=profile,
+        season=current_season,
+        existing_response=existing_response
+    )
+
+
+@public_bp.route('/umpire-survey/thanks')
+def umpire_survey_thanks():
+    """Thank you page after survey submission."""
+    from flask_login import current_user
+    from app.models.org_season import OrgSeason
+
+    current_season = OrgSeason.get_current_season()
+
+    # Check if user indicated they're returning (for personalized message)
+    returning = False
+    if current_user.is_authenticated and current_season:
+        from app.models.umpire_profile import UmpireProfile
+        from app.models.umpire_survey import UmpireSurveyResponse
+        profile = UmpireProfile.query.filter_by(user_id=current_user.ID).first()
+        if profile:
+            response = UmpireSurveyResponse.get_for_umpire_season(
+                profile.id, current_season.ID
+            )
+            if response:
+                returning = response.returning_next_season
+
+    return render_template(
+        'public/umpire_survey_thanks.html',
+        season=current_season,
+        returning=returning
+    )

@@ -1,0 +1,25 @@
+{% extends "base_minimal.html" %}
+
+{% block title %}Survey Closed - SDLL{% endblock %}
+
+{% block content %}
+<div style="max-width: 500px; margin: 80px auto; padding: 20px; text-align: center;">
+    <div class="card">
+        <div style="font-size: 48px; margin-bottom: 20px;">&#128197;</div>
+        <h1 style="color: #666; margin-bottom: 15px;">Survey Closed</h1>
+        <p style="font-size: 16px; color: #333; margin-bottom: 20px;">
+            There is no active season survey at this time.
+        </p>
+        <p style="color: #666; margin-bottom: 30px;">
+            The umpire feedback survey is available at the end of each season.
+            Check back later or contact the umpire coordinator if you have questions.
+        </p>
+
+        <div style="border-top: 1px solid #e0e0e0; padding-top: 20px;">
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline">
+                Go to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
