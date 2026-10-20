@@ -24,7 +24,7 @@ from app.utils.tracking import log_authenticated_view
 @reports_bp.route('/')
 @login_required
 def index():
-    """Reports index page"""
+    """Reports index page - filtered by user role access."""
     log_authenticated_view('reports_index')
 
     # Get current season for pitching reports
@@ -36,11 +36,37 @@ def index():
     current_year = current_season.year if current_season else None
     current_is_spring = current_season.is_spring if current_season else 0
 
-    # Get leagues that track pitching stats
-    pitching_leagues = League.query.filter(
+    # Get leagues that track pitching stats - filtered by access
+    pitching_leagues = []
+    has_admin_access = current_user.has_role('admin', 'BB_VP', 'SB_VP', 'coaching_coordinator')
+
+    all_pitching_leagues = League.query.filter(
         League.active == 1,
         League.track_pitching_stats == 1
     ).order_by(League.sort_order, League.display_name).all()
+
+    if has_admin_access:
+        # Admins/VPs see all pitching leagues
+        pitching_leagues = all_pitching_leagues
+    elif current_year:
+        # Coaches only see leagues where they have a team
+        coach_user = CoachUser.get_by_user(current_user.ID)
+        if coach_user:
+            # Get league IDs where this coach has a team in the current season
+            team_assignments = CoachSeason.query.filter_by(coach_id=coach_user.id).all()
+            team_ids = [a.team_id for a in team_assignments]
+
+            if team_ids:
+                coach_league_ids = db.session.query(TeamSeason.league_id).filter(
+                    TeamSeason.team_ID.in_(team_ids),
+                    TeamSeason.year == current_year,
+                    TeamSeason.is_spring == current_is_spring,
+                    TeamSeason.active == 1
+                ).distinct().all()
+                coach_league_ids = {lid[0] for lid in coach_league_ids}
+
+                # Filter pitching leagues to only those the coach has access to
+                pitching_leagues = [lg for lg in all_pitching_leagues if lg.id in coach_league_ids]
 
     return render_template(
         'reports/index.html',
