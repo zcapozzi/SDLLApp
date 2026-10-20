@@ -19,13 +19,20 @@ from app.models.coach import CoachUser, CoachSeason
 from app.extensions import db
 from app.utils.league_helpers import get_league_id_from_request, get_league_id_from_param
 from app.utils.tracking import log_authenticated_view
+from app.utils.auth import get_effective_user
 
 
 @reports_bp.route('/')
 @login_required
 def index():
-    """Reports index page - filtered by user role access."""
+    """Reports index page - filtered by user role access.
+
+    Supports view_as parameter for admins to test as other users.
+    """
     log_authenticated_view('reports_index')
+
+    # Use effective user for view_as support
+    effective_user = get_effective_user()
 
     # Get current season for pitching reports
     current_season = LeagueSeason.query.filter_by(active=1).order_by(
@@ -38,7 +45,7 @@ def index():
 
     # Get leagues that track pitching stats - filtered by access
     pitching_leagues = []
-    has_admin_access = current_user.has_role('admin', 'BB_VP', 'SB_VP', 'coaching_coordinator')
+    has_admin_access = effective_user.has_role('admin', 'BB_VP', 'SB_VP', 'coaching_coordinator')
 
     all_pitching_leagues = League.query.filter(
         League.active == 1,
@@ -50,7 +57,7 @@ def index():
         pitching_leagues = all_pitching_leagues
     elif current_year:
         # Coaches only see leagues where they have a team
-        coach_user = CoachUser.get_by_user(current_user.ID)
+        coach_user = CoachUser.get_by_user(effective_user.ID)
         if coach_user:
             # Get league IDs where this coach has a team in the current season
             team_assignments = CoachSeason.query.filter_by(coach_id=coach_user.id).all()
@@ -72,7 +79,8 @@ def index():
         'reports/index.html',
         pitching_leagues=pitching_leagues,
         current_year=current_year,
-        current_is_spring=current_is_spring
+        current_is_spring=current_is_spring,
+        effective_user=effective_user
     )
 
 
