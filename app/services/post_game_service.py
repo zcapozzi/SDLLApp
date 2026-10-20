@@ -69,7 +69,9 @@ def get_report_url(game_id, team_id, external=True):
     Returns:
         str: URL to the post-game report form
     """
-    token = create_report_token(game_id, team_id)
+    # Token is kept for URL structure compatibility but is no longer validated.
+    # Authorization is handled by can_user_submit() in the form route.
+    token = 'link'  # Placeholder - any value works since tokens aren't validated
     if external:
         return url_for('coach.postgame_entry', token=token, g=game_id, t=team_id, _external=True)
     return url_for('coach.postgame_entry', token=token, g=game_id, t=team_id)
@@ -86,7 +88,8 @@ def get_not_played_url(game_id, team_id, external=True):
     Returns:
         str: URL to the not-played form
     """
-    token = create_report_token(game_id, team_id)
+    # Token is kept for URL structure compatibility but is no longer validated.
+    token = 'link'  # Placeholder - any value works since tokens aren't validated
     # Use 'skip' instead of 'not_played' to avoid &not being interpreted as HTML entity
     if external:
         return url_for('coach.postgame_entry', token=token, g=game_id, t=team_id, skip='1', _external=True)

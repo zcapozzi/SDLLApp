@@ -47,7 +47,11 @@ def _parse_innings(value):
 
 @coach_bp.route('/postgame/<token>')
 def postgame_entry(token):
-    """Entry point from email link - validates token and redirects to form.
+    """Entry point from email link - redirects to form after login.
+
+    The token parameter is kept for backwards compatibility with old email links,
+    but is no longer validated. Authorization is handled by the form itself via
+    can_user_submit() which verifies the user is a coach for the team.
 
     Query params:
         g: game_id
@@ -58,11 +62,6 @@ def postgame_entry(token):
 
     if not game_id or not team_id:
         flash('Invalid link. Please use the link from your email.', 'error')
-        return redirect(url_for('main.dashboard'))
-
-    # Validate token
-    if not post_game_service.validate_report_token(token, game_id, team_id):
-        flash('Invalid or expired link. Please use the link from your email.', 'error')
         return redirect(url_for('main.dashboard'))
 
     # Verify game and team exist
@@ -86,7 +85,7 @@ def postgame_entry(token):
     if skip == '1':
         return redirect(url_for('coach.postgame_not_played', game_id=game_id, team_id=team_id))
 
-    # Redirect to the actual form
+    # Redirect to the actual form (which does authorization via can_user_submit)
     return redirect(url_for('coach.postgame_form', game_id=game_id, team_id=team_id))
 
 
