@@ -1369,16 +1369,24 @@
         var pageViewId = {{ page_view_id|tojson }};
         var impressionToken = {{ impression_token|tojson }};
 
+        // Helper to send beacon with proper JSON content type
+        function sendJsonBeacon(url, data) {
+            if (navigator.sendBeacon) {
+                var blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
+                navigator.sendBeacon(url, blob);
+            }
+        }
+
         // Send beacon on page unload with time on page
         function sendPageBeacon() {
             var timeOnPage = Math.floor((Date.now() - pageLoadTime) / 1000);
-            if (pageViewId && navigator.sendBeacon) {
-                navigator.sendBeacon('/s/beacon', JSON.stringify({
+            if (pageViewId) {
+                sendJsonBeacon('/s/beacon', {
                     page_view_id: pageViewId,
                     viewport_width: window.innerWidth,
                     viewport_height: window.innerHeight,
                     time_on_page: timeOnPage
-                }));
+                });
             }
         }
 
@@ -1413,14 +1421,12 @@
                 if (adViewableTime >= 1 && !adWasViewable) {
                     adWasViewable = true;
                     // Send viewability beacon
-                    if (navigator.sendBeacon) {
-                        navigator.sendBeacon('/s/ad/viewability', JSON.stringify({
-                            impression_token: impressionToken,
-                            was_viewable: true,
-                            viewable_seconds: adViewableTime,
-                            viewport_width: window.innerWidth
-                        }));
-                    }
+                    sendJsonBeacon('/s/ad/viewability', {
+                        impression_token: impressionToken,
+                        was_viewable: true,
+                        viewable_seconds: adViewableTime,
+                        viewport_width: window.innerWidth
+                    });
                 }
             } else {
                 adViewStart = null;
@@ -1434,13 +1440,13 @@
 
         // Send final viewability on unload
         function sendAdBeacon() {
-            if (impressionToken && navigator.sendBeacon) {
-                navigator.sendBeacon('/s/ad/viewability', JSON.stringify({
+            if (impressionToken) {
+                sendJsonBeacon('/s/ad/viewability', {
                     impression_token: impressionToken,
                     was_viewable: adWasViewable,
                     viewable_seconds: adViewableTime,
                     viewport_width: window.innerWidth
-                }));
+                });
             }
         }
 

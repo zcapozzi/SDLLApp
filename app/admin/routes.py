@@ -1105,14 +1105,18 @@ def postgame_summary():
     # Get overall stats
     overall_stats = PostGameReport.get_completion_stats(year, is_spring)
 
-    # Get umpire summary
+    # Get umpire summary and sort by count (descending)
     umpire_summary = PostGameReport.get_umpire_summary(year, is_spring)
+    # Sort by count descending for template display
+    umpire_summary_sorted = dict(
+        sorted(umpire_summary.items(), key=lambda x: x[1].get('count', 0), reverse=True)
+    )
 
     return render_template(
         'admin/postgame_summary.html',
         league_stats=league_stats,
         overall_stats=overall_stats,
-        umpire_summary=umpire_summary,
+        umpire_summary=umpire_summary_sorted,
         year=year,
         is_spring=is_spring
     )

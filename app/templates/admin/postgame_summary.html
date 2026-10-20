@@ -99,7 +99,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for umpire_name, data in umpire_summary|dictsort(by='value', attribute='count', reverse=true) %}
+                {% for umpire_name, data in umpire_summary.items() %}
                 <tr>
                     <td><strong>{{ umpire_name }}</strong></td>
                     <td>{{ data.count }}</td>
