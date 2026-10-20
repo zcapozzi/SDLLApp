@@ -190,11 +190,18 @@ class AdImpression(db.Model):
     clicks = db.relationship('AdClick', backref='impression', lazy='dynamic')
 
     @classmethod
-    def log_impression(cls, ad, page_view, session_id, page_context, device_type):
-        """Log an ad impression."""
+    def log_impression(cls, ad, page_view, session_id, page_context, device_type,
+                       impression_token=None):
+        """Log an ad impression.
+
+        Args:
+            impression_token: If provided, use this token instead of generating a new one.
+                            This allows the token to be included in the page HTML before
+                            the impression is logged.
+        """
         impression = cls(
             ad_id=ad.ID,
-            impression_token=ad.generate_impression_token(),
+            impression_token=impression_token or ad.generate_impression_token(),
             page_view_id=page_view.ID if page_view else None,
             session_id=session_id,
             page_context=page_context,

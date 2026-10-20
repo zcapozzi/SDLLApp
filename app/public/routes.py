@@ -151,17 +151,23 @@ def _safe_log_page_view(page_type, page_context, session_id, user_id=None):
         return None
 
 
-def _safe_log_impression(ad, page_view, session_id, page_context):
+def _safe_log_impression(ad, page_view, session_id, page_context, impression_token=None):
     """
     Safely log an ad impression. Returns impression or None on failure.
     Called AFTER response is built - failure doesn't affect the page.
+
+    Args:
+        impression_token: Pre-generated token (so it can be in the HTML before logging)
     """
     if not ad or not page_view or not session_id:
         return None
     try:
         from app.models.analytics import AdImpression, PageView as PV
         device_type = PV._detect_device_type(request.headers.get('User-Agent', ''))
-        return AdImpression.log_impression(ad, page_view, session_id, page_context, device_type)
+        return AdImpression.log_impression(
+            ad, page_view, session_id, page_context, device_type,
+            impression_token=impression_token
+        )
     except Exception as e:
         _log_tracking_error("log_impression", e)
         _safe_rollback()
@@ -574,6 +580,16 @@ def team_schedule(token):
     ad = _safe_get_ad()
     template_vars['ad'] = ad
 
+    # Generate impression token BEFORE rendering so it can be in the HTML
+    # (The actual impression is logged AFTER rendering for graceful degradation)
+    impression_token = None
+    if ad:
+        try:
+            impression_token = ad.generate_impression_token()
+            template_vars['impression_token'] = impression_token
+        except Exception:
+            pass  # Fail silently - click tracking just won't work
+
     # =========================================================================
     # PHASE 3: BUILD RESPONSE (core content is ready)
     # =========================================================================
@@ -592,17 +608,12 @@ def team_schedule(token):
         # Log page view
         page_view = _safe_log_page_view('team_schedule', token, session_id)
 
-        # Log ad impression if we have an ad
-        impression = None
-        if ad and page_view:
-            impression = _safe_log_impression(ad, page_view, session_id, token)
+        # Log ad impression if we have an ad (using pre-generated token from Phase 2)
+        if ad and page_view and impression_token:
+            _safe_log_impression(ad, page_view, session_id, token, impression_token)
 
         # Set session cookie
         _set_session_cookie(response, session_id)
-
-        # Note: page_view_id and impression_token are already None in the rendered template.
-        # The JavaScript tracking will still work for time-on-page via the beacon,
-        # it just won't have a page_view_id to send. That's fine - graceful degradation.
 
     except Exception as e:
         _log_tracking_error("tracking_phase", e)
