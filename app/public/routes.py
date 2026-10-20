@@ -507,30 +507,24 @@ def team_schedule(token):
         now_local = datetime.now(eastern).replace(tzinfo=None)
 
     for game in template_vars.get('upcoming_games', []):
-        try:
-            # Skip org events - they don't have game_date or game_type
-            if hasattr(game, '_is_org_event') and game._is_org_event:
-                continue
-            if game.game_date and game.game_type != 'practice':
-                # Check time window: 2 hours before to 30 minutes after game time
-                game_datetime = game.game_date
-                # Strip timezone info if present (proposal games may have tzinfo)
-                if hasattr(game_datetime, 'tzinfo') and game_datetime.tzinfo is not None:
-                    game_datetime = game_datetime.replace(tzinfo=None)
-                window_start = game_datetime - timedelta(hours=2)
-                window_end = game_datetime + timedelta(minutes=30)
+        # Skip org events - they don't have game_date or game_type
+        if hasattr(game, '_is_org_event') and game._is_org_event:
+            continue
+        if game.game_date and game.game_type != 'practice':
+            # Check time window: 2 hours before to 30 minutes after game time
+            game_datetime = game.game_date
+            # Strip timezone info if present (proposal games may have tzinfo)
+            if hasattr(game_datetime, 'tzinfo') and game_datetime.tzinfo is not None:
+                game_datetime = game_datetime.replace(tzinfo=None)
+            window_start = game_datetime - timedelta(hours=2)
+            window_end = game_datetime + timedelta(minutes=30)
 
-                # Include if within time window OR if testing flag is set
-                if (window_start <= now_local <= window_end) or allow_start_time_record:
-                    # Get the actual game ID (handle both Game objects and wrapper objects)
-                    game_id = getattr(game, 'ID', None)
-                    if game_id and isinstance(game_id, int):
-                        recordable_game_ids.add(game_id)
-        except Exception as e:
-            # Log any errors for debugging
-            import traceback
-            print(f"[DEBUG] Error checking recordable game: {e}")
-            traceback.print_exc()
+            # Include if within time window OR if testing flag is set
+            if (window_start <= now_local <= window_end) or allow_start_time_record:
+                # Get the actual game ID (handle both Game objects and wrapper objects)
+                game_id = getattr(game, 'ID', None)
+                if game_id and isinstance(game_id, int):
+                    recordable_game_ids.add(game_id)
 
     # Get existing start records for user's session/user
     game_start_records = {}
