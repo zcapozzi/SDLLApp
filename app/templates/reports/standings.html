@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+
+{% block title %}League Standings{% endblock %}
+
+{% block content %}
+<style>
+.standings-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+.standings-table th {
+    background: #f5f5f5;
+    padding: 10px 8px;
+    text-align: left;
+    border-bottom: 2px solid #ddd;
+}
+.standings-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #eee;
+}
+.standings-table tr:hover {
+    background: #f9f9f9;
+}
+.standings-table .rank {
+    width: 40px;
+    text-align: center;
+    font-weight: 600;
+    color: #666;
+}
+.standings-table .team-name {
+    font-weight: 500;
+}
+.standings-table .numeric {
+    text-align: center;
+}
+.standings-table .positive {
+    color: rgb(34, 139, 34);
+}
+.standings-table .negative {
+    color: #dc3545;
+}
+.league-card {
+    margin-bottom: 30px;
+}
+.league-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+.league-tab {
+    padding: 8px 16px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    background: white;
+    color: #333;
+    text-decoration: none;
+    font-size: 14px;
+    cursor: pointer;
+}
+.league-tab:hover {
+    background: #f5f5f5;
+}
+.league-tab.active {
+    background: rgb(34, 139, 34);
+    color: white;
+    border-color: rgb(34, 139, 34);
+}
+.league-tab.user-league {
+    border-color: rgb(255, 140, 0);
+}
+.bracket-container {
+    margin-top: 20px;
+    padding: 15px;
+    background: #fafafa;
+    border-radius: 8px;
+}
+.bracket-header {
+    font-weight: 600;
+    margin-bottom: 15px;
+    color: rgb(34, 139, 34);
+}
+.bracket-teams {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    margin-bottom: 15px;
+}
+.bracket-team {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+}
+.bracket-team .seed {
+    font-weight: 700;
+    color: rgb(34, 139, 34);
+    margin-right: 10px;
+    min-width: 20px;
+}
+.bracket-team .record {
+    margin-left: auto;
+    color: #666;
+    font-size: 12px;
+}
+.bracket-rounds {
+    margin-top: 15px;
+}
+.bracket-round {
+    margin-bottom: 12px;
+    padding: 10px;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+.bracket-round-name {
+    font-weight: 600;
+    font-size: 13px;
+    color: #333;
+    margin-bottom: 8px;
+}
+.bracket-matchup {
+    display: inline-block;
+    padding: 4px 10px;
+    background: #f0f0f0;
+    border-radius: 4px;
+    font-size: 12px;
+    margin-right: 10px;
+    margin-bottom: 5px;
+}
+.bracket-note {
+    font-size: 12px;
+    color: #888;
+    font-style: italic;
+}
+.no-data {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+}
+@media (max-width: 768px) {
+    .standings-table {
+        font-size: 12px;
+    }
+    .standings-table th,
+    .standings-table td {
+        padding: 8px 4px;
+    }
+    .hide-mobile {
+        display: none;
+    }
+}
+</style>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>League Standings - {{ season_name }} {{ year }}</h1>
+    <a href="{{ url_for('reports.index') }}" class="btn btn-outline">&larr; Back to Reports</a>
+</div>
+
+{% if leagues_data %}
+<!-- League selector tabs -->
+<div class="league-tabs">
+    <a href="{{ url_for('reports.standings', year=year, is_spring=is_spring) }}"
+       class="league-tab {% if not selected_league_id %}active{% endif %}">
+        All Leagues
+    </a>
+    {% for data in leagues_data %}
+    <a href="{{ url_for('reports.standings', year=year, is_spring=is_spring, league=data.league.ID) }}"
+       class="league-tab {% if selected_league_id == data.league.ID %}active{% endif %} {% if data.is_user_league %}user-league{% endif %}">
+        {{ data.league.get_seasonal_name(is_spring) }}
+        {% if data.is_user_league %}<span style="font-size: 10px;">&star;</span>{% endif %}
+    </a>
+    {% endfor %}
+</div>
+
+{% for data in leagues_data %}
+{% if not selected_league_id or selected_league_id == data.league.ID %}
+<div class="card league-card" id="league-{{ data.league.ID }}">
+    <h2 style="margin-top: 0; color: rgb(34, 139, 34);">
+        {{ data.league.get_seasonal_name(is_spring) }}
+        {% if data.is_user_league %}
+        <span style="font-size: 14px; color: rgb(255, 140, 0); font-weight: normal;">(Your League)</span>
+        {% endif %}
+    </h2>
+
+    {% if data.standings %}
+    <div style="overflow-x: auto;">
+        <table class="standings-table">
+            <thead>
+                <tr>
+                    <th class="rank">#</th>
+                    <th>Team</th>
+                    <th class="numeric">W</th>
+                    <th class="numeric">L</th>
+                    {% if data.has_ties %}<th class="numeric">T</th>{% endif %}
+                    <th class="numeric">Pct</th>
+                    <th class="numeric hide-mobile">RS</th>
+                    <th class="numeric hide-mobile">RA</th>
+                    <th class="numeric">Diff</th>
+                    <th class="numeric hide-mobile">RA/Inn</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for standing in data.standings %}
+                <tr>
+                    <td class="rank">{{ loop.index }}</td>
+                    <td class="team-name">{{ standing.team.computed_display_name }}</td>
+                    <td class="numeric">{{ standing.wins }}</td>
+                    <td class="numeric">{{ standing.losses }}</td>
+                    {% if data.has_ties %}<td class="numeric">{{ standing.ties }}</td>{% endif %}
+                    <td class="numeric">{{ "%.3f"|format(standing.win_pct) }}</td>
+                    <td class="numeric hide-mobile">{{ standing.runs_scored }}</td>
+                    <td class="numeric hide-mobile">{{ standing.runs_allowed }}</td>
+                    <td class="numeric {% if standing.run_diff > 0 %}positive{% elif standing.run_diff < 0 %}negative{% endif %}">
+                        {% if standing.run_diff > 0 %}+{% endif %}{{ standing.run_diff }}
+                    </td>
+                    <td class="numeric hide-mobile">
+                        {% if standing.runs_allowed_per_inning is not none %}
+                        {{ "%.2f"|format(standing.runs_allowed_per_inning) }}
+                        {% else %}-{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Playoff bracket -->
+    {% if data.bracket %}
+    <div class="bracket-container">
+        <div class="bracket-header">
+            Projected Playoff Bracket ({{ data.bracket.format_display }})
+        </div>
+
+        <div class="bracket-teams">
+            {% for team_data in data.bracket.teams %}
+            <div class="bracket-team">
+                <span class="seed">#{{ team_data.seed }}</span>
+                <span>{{ team_data.team.computed_display_name }}</span>
+                <span class="record">({{ team_data.record }})</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if data.bracket.rounds %}
+        <div class="bracket-rounds">
+            {% for round in data.bracket.rounds %}
+            <div class="bracket-round">
+                <div class="bracket-round-name">{{ round.name }}</div>
+                {% if round.matchups %}
+                {% for matchup in round.matchups %}
+                <span class="bracket-matchup">
+                    {% if matchup.high_seed is number %}#{{ matchup.high_seed }}{% else %}{{ matchup.high_seed }}{% endif %}
+                    vs
+                    {% if matchup.low_seed is number %}#{{ matchup.low_seed }}{% elif matchup.low_seed == 'BYE' %}<em>BYE</em>{% else %}{{ matchup.low_seed }}{% endif %}
+                </span>
+                {% endfor %}
+                {% endif %}
+                {% if round.note %}
+                <div class="bracket-note">{{ round.note }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% elif data.league_season.playoff_format == 'none' %}
+    <div style="margin-top: 15px; color: #888; font-size: 13px;">
+        <em>No post-season for this league</em>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="no-data">
+        <p>No completed games yet.</p>
+        <p style="font-size: 13px; color: #888;">Standings will appear once games are completed and scores are recorded.</p>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+{% endfor %}
+
+{% else %}
+<div class="card">
+    <div class="no-data">
+        <p>No leagues found for this season.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

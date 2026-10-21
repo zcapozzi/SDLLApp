@@ -621,3 +621,234 @@ def pitching_report(year, is_spring, league):
         format_innings=PitchingReportService.format_innings,
         format_strike_pct=PitchingReportService.format_strike_pct
     )
+
+
+@reports_bp.route('/standings')
+@login_required
+def standings():
+    """League standings page with proposed playoff brackets.
+
+    Shows standings for all leagues, defaulting to the user's league if they're a coach.
+    Includes projected playoff bracket based on league's tournament format.
+    """
+    from app.services.standings_service import StandingsService
+    from app.models.org_season import OrgSeason
+
+    log_authenticated_view('reports_standings')
+
+    effective_user = get_effective_user()
+
+    # Get current season
+    current_season = OrgSeason.get_current_season()
+    if not current_season:
+        flash('No active season found.', 'error')
+        return redirect(url_for('reports.index'))
+
+    year = request.args.get('year', current_season.year, type=int)
+    is_spring = request.args.get('is_spring', current_season.is_spring, type=int)
+
+    # Get all active leagues for this season
+    league_seasons = LeagueSeason.query.filter_by(
+        year=year,
+        is_spring=is_spring,
+        active=1
+    ).all()
+
+    # Build league info with standings
+    leagues_data = []
+    user_league_id = None
+
+    # Find user's league if they're a coach
+    coach_user = CoachUser.get_by_user(effective_user.ID)
+    if coach_user:
+        team_assignments = CoachSeason.query.filter_by(coach_id=coach_user.id).all()
+        team_ids = [a.team_id for a in team_assignments]
+        if team_ids:
+            user_team = TeamSeason.query.filter(
+                TeamSeason.team_ID.in_(team_ids),
+                TeamSeason.year == year,
+                TeamSeason.is_spring == is_spring,
+                TeamSeason.active == 1
+            ).first()
+            if user_team:
+                user_league_id = user_team.league_id
+
+    # Check if user has admin access (can see all leagues)
+    has_admin_access = effective_user.has_role('admin', 'scheduler', 'BB_VP', 'SB_VP', 'coaching_coordinator')
+
+    for ls in league_seasons:
+        if not ls.league_rel:
+            continue
+
+        league = ls.league_rel
+
+        # Get standings for this league
+        standings_list = StandingsService.get_league_standings(year, is_spring, league.ID)
+
+        # Generate bracket data based on playoff format
+        bracket_data = _generate_bracket(standings_list, ls)
+
+        leagues_data.append({
+            'league': league,
+            'league_season': ls,
+            'standings': standings_list,
+            'has_ties': StandingsService.has_ties(standings_list),
+            'bracket': bracket_data,
+            'is_user_league': league.ID == user_league_id
+        })
+
+    # Sort leagues by age_rank (youngest first)
+    leagues_data.sort(key=lambda x: (x['league'].age_rank or 99, x['league'].display_name))
+
+    # Get selected league from URL param, or default to user's league
+    selected_league_id = request.args.get('league', type=int)
+    if not selected_league_id and user_league_id:
+        selected_league_id = user_league_id
+
+    season_name = 'Spring' if is_spring else 'Fall'
+
+    return render_template(
+        'reports/standings.html',
+        leagues_data=leagues_data,
+        year=year,
+        is_spring=is_spring,
+        season_name=season_name,
+        selected_league_id=selected_league_id,
+        has_admin_access=has_admin_access,
+        user_league_id=user_league_id
+    )
+
+
+def _generate_bracket(standings: list, league_season: LeagueSeason) -> dict:
+    """Generate playoff bracket data based on standings and playoff format.
+
+    Args:
+        standings: List of TeamStanding objects
+        league_season: LeagueSeason with playoff configuration
+
+    Returns:
+        Dict with bracket structure for template rendering
+    """
+    if not standings or league_season.playoff_format == 'none':
+        return None
+
+    # Determine number of playoff teams
+    num_teams = league_season.playoff_teams or len(standings)
+    if num_teams > len(standings):
+        num_teams = len(standings)
+
+    # Get qualifying teams
+    qualifying_teams = standings[:num_teams]
+
+    bracket = {
+        'format': league_season.playoff_format,
+        'format_display': dict(LeagueSeason.PLAYOFF_FORMATS).get(league_season.playoff_format, 'Unknown'),
+        'num_teams': num_teams,
+        'teams': [{'seed': i + 1, 'team': t.team, 'record': f'{t.wins}-{t.losses}'} for i, t in enumerate(qualifying_teams)],
+        'rounds': []
+    }
+
+    if league_season.playoff_format == 'single_elimination':
+        bracket['rounds'] = _generate_single_elimination_rounds(num_teams, qualifying_teams)
+    elif league_season.playoff_format == 'double_elimination':
+        bracket['rounds'] = _generate_double_elimination_rounds(num_teams, qualifying_teams)
+    elif league_season.playoff_format == 'round_robin_knockout':
+        bracket['rounds'] = _generate_round_robin_knockout_rounds(num_teams, qualifying_teams)
+
+    return bracket
+
+
+def _generate_single_elimination_rounds(num_teams: int, teams: list) -> list:
+    """Generate single elimination bracket rounds.
+
+    Standard seeding: 1v8, 4v5, 3v6, 2v7 (for 8 teams)
+    """
+    rounds = []
+
+    # Generate first round matchups with proper seeding
+    first_round = []
+
+    if num_teams == 2:
+        first_round.append({'high_seed': 1, 'low_seed': 2, 'round_name': 'Championship'})
+    elif num_teams <= 4:
+        # 1v4, 2v3 → winners play in championship
+        first_round.append({'high_seed': 1, 'low_seed': 4, 'round_name': 'Semifinals'})
+        first_round.append({'high_seed': 2, 'low_seed': 3, 'round_name': 'Semifinals'})
+        rounds.append({'name': 'Semifinals', 'matchups': first_round})
+        rounds.append({'name': 'Championship', 'matchups': [{'high_seed': 'W1', 'low_seed': 'W2'}]})
+        return rounds
+    elif num_teams <= 8:
+        # Standard 8-team bracket: 1v8, 4v5, 3v6, 2v7
+        matchups = [(1, 8), (4, 5), (3, 6), (2, 7)]
+        for high, low in matchups:
+            if low <= num_teams:
+                first_round.append({'high_seed': high, 'low_seed': low})
+            else:
+                # Bye for high seed
+                first_round.append({'high_seed': high, 'low_seed': 'BYE'})
+        rounds.append({'name': 'Quarterfinals', 'matchups': first_round})
+        rounds.append({'name': 'Semifinals', 'matchups': [
+            {'high_seed': 'W1', 'low_seed': 'W4'},
+            {'high_seed': 'W2', 'low_seed': 'W3'}
+        ]})
+        rounds.append({'name': 'Championship', 'matchups': [{'high_seed': 'SF1', 'low_seed': 'SF2'}]})
+        return rounds
+
+    # Default case
+    rounds.append({'name': 'First Round', 'matchups': first_round})
+    return rounds
+
+
+def _generate_double_elimination_rounds(num_teams: int, teams: list) -> list:
+    """Generate double elimination bracket structure."""
+    rounds = []
+
+    # Winners bracket first round
+    first_round = []
+    if num_teams <= 4:
+        first_round = [
+            {'high_seed': 1, 'low_seed': 4, 'bracket': 'winners'},
+            {'high_seed': 2, 'low_seed': 3, 'bracket': 'winners'}
+        ]
+    elif num_teams <= 8:
+        matchups = [(1, 8), (4, 5), (3, 6), (2, 7)]
+        for high, low in matchups:
+            if low <= num_teams:
+                first_round.append({'high_seed': high, 'low_seed': low, 'bracket': 'winners'})
+            else:
+                first_round.append({'high_seed': high, 'low_seed': 'BYE', 'bracket': 'winners'})
+
+    rounds.append({'name': 'Winners Round 1', 'matchups': first_round, 'bracket': 'winners'})
+    rounds.append({'name': 'Losers Round 1', 'matchups': [], 'bracket': 'losers', 'note': 'Losers from Winners R1'})
+    rounds.append({'name': 'Winners Finals', 'matchups': [], 'bracket': 'winners'})
+    rounds.append({'name': 'Losers Finals', 'matchups': [], 'bracket': 'losers'})
+    rounds.append({'name': 'Championship', 'matchups': [], 'note': 'Winners Finals winner vs Losers Finals winner'})
+
+    return rounds
+
+
+def _generate_round_robin_knockout_rounds(num_teams: int, teams: list) -> list:
+    """Generate round robin + knockout bracket structure."""
+    rounds = []
+
+    # Round robin phase
+    rounds.append({
+        'name': 'Round Robin',
+        'type': 'round_robin',
+        'note': f'All {num_teams} teams play each other once. Top 4 advance to knockout.'
+    })
+
+    # Knockout phase (top 4)
+    rounds.append({
+        'name': 'Semifinals',
+        'matchups': [
+            {'high_seed': '#1 Seed', 'low_seed': '#4 Seed'},
+            {'high_seed': '#2 Seed', 'low_seed': '#3 Seed'}
+        ]
+    })
+    rounds.append({
+        'name': 'Championship',
+        'matchups': [{'high_seed': 'SF1 Winner', 'low_seed': 'SF2 Winner'}]
+    })
+
+    return rounds
