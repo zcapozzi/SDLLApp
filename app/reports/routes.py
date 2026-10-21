@@ -73,7 +73,7 @@ def index():
                 coach_league_ids = {lid[0] for lid in coach_league_ids}
 
                 # Filter pitching leagues to only those the coach has access to
-                pitching_leagues = [lg for lg in all_pitching_leagues if lg.id in coach_league_ids]
+                pitching_leagues = [lg for lg in all_pitching_leagues if lg.ID in coach_league_ids]
 
     return render_template(
         'reports/index.html',
