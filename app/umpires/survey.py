@@ -3,7 +3,6 @@
 from flask import render_template, request, redirect, url_for, flash
 from flask_login import current_user
 from sqlalchemy.orm import joinedload
-from sqlalchemy import func
 
 from app.umpires import umpires_bp, umpire_coordinator_required
 from app.extensions import db
@@ -11,37 +10,125 @@ from app.models.umpire_profile import UmpireProfile
 from app.models.umpire_survey import UmpireSurveyResponse
 from app.models.umpire_survey_send import UmpireSurveySend
 from app.models.org_season import OrgSeason
-from app.models.game_umpire import GameUmpire
 from app.models.game import Game
 from app.models.training_completion import TrainingCompletion
 from app.models.training_type import TrainingType
 from app.services.notification_service import GmailService
 
 
-def get_umpire_game_counts(org_season_id):
-    """Get count of games worked by each umpire for a season.
+def get_umpire_game_counts_from_assignr(org_season_id):
+    """Get count of games worked by each umpire for a season from Assignr.
+
+    This fetches real game data from Assignr and maps it back to local
+    UmpireProfile records using their assignr_id.
 
     Returns dict mapping umpire_profile_id -> game_count
     """
+    from datetime import datetime, date
+    from collections import defaultdict
     from app.models.org_season import OrgSeason
+    from app.models.league_season import LeagueSeason
+    from app.services.assignr_service import get_assignr_service
 
     season = OrgSeason.query.get(org_season_id)
     if not season:
         return {}
 
-    # Count completed/confirmed game assignments for this season
-    results = db.session.query(
-        GameUmpire.umpire_profile_id,
-        func.count(GameUmpire.id).label('game_count')
-    ).join(Game, GameUmpire.game_id == Game.ID).filter(
-        Game.year == season.year,
-        Game.is_spring == season.is_spring,
-        GameUmpire.umpire_profile_id.isnot(None),
-        GameUmpire.status.in_([GameUmpire.STATUS_COMPLETED, GameUmpire.STATUS_CONFIRMED,
-                               GameUmpire.STATUS_ASSIGNED])
-    ).group_by(GameUmpire.umpire_profile_id).all()
+    # Get season date range from LeagueSeason
+    league_seasons = LeagueSeason.query.filter_by(
+        year=season.year,
+        is_spring=season.is_spring,
+        active=1
+    ).all()
 
-    return {r.umpire_profile_id: r.game_count for r in results}
+    if not league_seasons:
+        return {}
+
+    # Find the earliest opening_day_date and latest season_end_date
+    start_date = None
+    end_date = None
+    for ls in league_seasons:
+        if ls.opening_day_date:
+            if start_date is None or ls.opening_day_date < start_date:
+                start_date = ls.opening_day_date
+        if ls.season_end_date:
+            if end_date is None or ls.season_end_date > end_date:
+                end_date = ls.season_end_date
+
+    if not start_date or not end_date:
+        return {}
+
+    # Fetch games from Assignr
+    assignr = get_assignr_service()
+    if not assignr.is_configured():
+        return {}
+
+    start_dt = datetime.combine(start_date, datetime.min.time())
+    end_dt = datetime.combine(end_date, datetime.max.time())
+
+    try:
+        assignr_games = assignr.get_all_games(start_dt, end_dt)
+    except Exception:
+        return {}
+
+    # Get local game statuses for filtering cancelled games
+    assignr_ids = [str(g.get('id')) for g in assignr_games if g.get('id')]
+    local_games = {}
+    if assignr_ids:
+        games_query = Game.query.filter(
+            Game.assignr_id.in_(assignr_ids),
+            Game.active == 1
+        ).all()
+        local_games = {g.assignr_id: g for g in games_query}
+
+    # Count games per Assignr official_id
+    games_by_official = defaultdict(int)
+    for game in assignr_games:
+        # Skip cancelled games
+        if game.get('is_cancelled'):
+            continue
+
+        # Skip if local game is cancelled/rainout/postponed
+        assignr_id = str(game.get('id', ''))
+        local_game = local_games.get(assignr_id)
+        if local_game and local_game.status in ('cancelled', 'rainout', 'postponed'):
+            continue
+
+        # Only count completed games (game date has passed)
+        game_date = game.get('_game_date')
+        if not game_date or game_date.date() > date.today():
+            continue
+
+        # Count accepted assignments
+        assignments = game.get('_embedded', {}).get('assignments', []) or []
+        for assignment in assignments:
+            if assignment.get('accepted') not in [True, 'True']:
+                continue
+
+            embedded = assignment.get('_embedded', {}) or {}
+            official = embedded.get('official', {}) or {}
+            official_id = official.get('id')
+
+            if official_id:
+                games_by_official[str(official_id)] += 1
+
+    # Map Assignr official_ids to local UmpireProfile IDs
+    # Get all umpire profiles with assignr_ids
+    profiles_with_assignr = UmpireProfile.query.filter(
+        UmpireProfile.assignr_id.isnot(None),
+        UmpireProfile.assignr_id != ''
+    ).all()
+
+    assignr_to_profile = {str(p.assignr_id): p.id for p in profiles_with_assignr}
+
+    # Build final result mapping profile_id -> game_count
+    result = {}
+    for assignr_official_id, count in games_by_official.items():
+        profile_id = assignr_to_profile.get(assignr_official_id)
+        if profile_id:
+            result[profile_id] = count
+
+    return result
 
 
 def get_umpire_training_status(umpire_ids):
@@ -107,8 +194,8 @@ def survey_management():
     for r in responses:
         responded_ids.add(r.umpire_profile_id)
 
-    # Get game counts for all umpires this season
-    game_counts = get_umpire_game_counts(current_season.ID)
+    # Get game counts for all umpires this season (from Assignr)
+    game_counts = get_umpire_game_counts_from_assignr(current_season.ID)
 
     # Get training status for all umpires
     umpire_ids = [ump.id for ump in umpires]
