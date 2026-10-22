@@ -309,8 +309,6 @@ def survey_send():
             skipped_count += 1
             continue
 
-        first_name = ump.first_name or 'Umpire'
-
         # Check if user has ever logged in
         has_logged_in = ump.user and ump.user.last_login is not None
 
@@ -321,7 +319,7 @@ def survey_send():
                 reset_url = url_for('auth.reset_password', token=token, _external=True)
 
                 subject = f'SDLL Umpire Survey - Set Up Your Account'
-                body_text = f"""Hi {first_name},
+                body_text = f"""Hi there,
 
 Thank you for being part of the SDLL umpire team this season!
 
@@ -344,7 +342,7 @@ SDLL Umpire Coordinator
                 body_html = f"""
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
     <h2 style="color: rgb(34, 139, 34);">SDLL Umpire Survey</h2>
-    <p>Hi {first_name},</p>
+    <p>Hi there,</p>
     <p>Thank you for being part of the SDLL umpire team this season!</p>
     <p>We'd love to hear your feedback about your experience. Before you can access the survey, you'll need to set up your account password.</p>
 
@@ -394,7 +392,7 @@ SDLL Umpire Coordinator
             # User has logged in before - send direct survey link
             subject = f'SDLL Umpire Survey - {current_season.season_name}'
 
-            body_text = f"""Hi {first_name},
+            body_text = f"""Hi there,
 
 Thank you for being part of the SDLL umpire team this season!
 
@@ -411,7 +409,7 @@ SDLL Umpire Coordinator
             body_html = f"""
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
     <h2 style="color: rgb(34, 139, 34);">SDLL Umpire Survey</h2>
-    <p>Hi {first_name},</p>
+    <p>Hi there,</p>
     <p>Thank you for being part of the SDLL umpire team this season!</p>
     <p>We'd love to hear your feedback about your experience. Please take a moment to complete our brief survey:</p>
     <p style="margin: 25px 0;">
@@ -478,7 +476,6 @@ def survey_preview(umpire_id):
     survey_url = url_for('public.umpire_survey', _external=True)
 
     email = ump.contact_email
-    first_name = ump.first_name or 'Umpire'
 
     # Check login status
     has_logged_in = ump.user and ump.user.last_login is not None
@@ -509,7 +506,7 @@ def survey_preview(umpire_id):
         body_html = f"""
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
     <h2 style="color: rgb(34, 139, 34);">SDLL Umpire Survey</h2>
-    <p>Hi {first_name},</p>
+    <p>Hi there,</p>
     <p>Thank you for being part of the SDLL umpire team this season!</p>
     <p>We'd love to hear your feedback about your experience. Before you can access the survey, you'll need to set up your account password.</p>
 
@@ -540,7 +537,7 @@ def survey_preview(umpire_id):
         body_html = f"""
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
     <h2 style="color: rgb(34, 139, 34);">SDLL Umpire Survey</h2>
-    <p>Hi {first_name},</p>
+    <p>Hi there,</p>
     <p>Thank you for being part of the SDLL umpire team this season!</p>
     <p>We'd love to hear your feedback about your experience. Please take a moment to complete our brief survey:</p>
     <p style="margin: 25px 0;">
