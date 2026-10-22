@@ -2916,6 +2916,8 @@ def umpire_survey():
         returning = request.form.get('returning_next_season') == 'yes'
         feedback = request.form.get('feedback', '').strip()
 
+        is_update = existing_response is not None
+
         if existing_response:
             # Update existing response
             existing_response.wanted_more_games = wanted_more
@@ -2934,6 +2936,55 @@ def umpire_survey():
             )
             db.session.add(response)
             db.session.commit()
+
+        # Send notification email to umpire coordinator
+        try:
+            from app.services.notification_service import GmailService
+            email_service = GmailService()
+
+            action = 'updated' if is_update else 'submitted'
+            wanted_text = 'Yes' if wanted_more else 'No'
+            returning_text = 'Yes' if returning else 'No'
+
+            subject = f'Umpire Survey Response - {profile.name}'
+            body_text = f"""New umpire survey response {action}:
+
+Umpire: {profile.name}
+Season: {current_season.season_name}
+
+Wanted more games: {wanted_text}
+Returning next season: {returning_text}
+Feedback: {feedback if feedback else '(none)'}
+
+View all responses: {url_for('umpires.survey_responses', _external=True)}
+"""
+            body_html = f"""
+<div style="font-family: Arial, sans-serif; max-width: 600px;">
+    <h3 style="color: rgb(34, 139, 34); margin-bottom: 20px;">Umpire Survey Response {action.title()}</h3>
+
+    <table style="border-collapse: collapse; width: 100%;">
+        <tr><td style="padding: 8px 0; font-weight: bold;">Umpire:</td><td style="padding: 8px 0;">{profile.name}</td></tr>
+        <tr><td style="padding: 8px 0; font-weight: bold;">Season:</td><td style="padding: 8px 0;">{current_season.season_name}</td></tr>
+        <tr><td style="padding: 8px 0; font-weight: bold;">Wanted more games:</td><td style="padding: 8px 0;">{wanted_text}</td></tr>
+        <tr><td style="padding: 8px 0; font-weight: bold;">Returning next season:</td><td style="padding: 8px 0;">{returning_text}</td></tr>
+    </table>
+
+    {'<div style="margin-top: 15px; padding: 15px; background: #f5f5f5; border-radius: 8px;"><strong>Feedback:</strong><br>' + feedback + '</div>' if feedback else ''}
+
+    <p style="margin-top: 20px;">
+        <a href="{url_for('umpires.survey_responses', _external=True)}" style="color: rgb(34, 139, 34);">View all responses</a>
+    </p>
+</div>
+"""
+            email_service.send_email(
+                to='umpires@sdll.org',
+                subject=subject,
+                body_text=body_text,
+                body_html=body_html
+            )
+        except Exception:
+            # Don't fail the submission if notification fails
+            pass
 
         return redirect(url_for('public.umpire_survey_thanks'))
 
