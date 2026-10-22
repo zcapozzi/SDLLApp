@@ -318,7 +318,7 @@ def survey_send():
                 token = ump.user.generate_reset_token()
                 reset_url = url_for('auth.reset_password', token=token, _external=True)
 
-                subject = f'SDLL Umpire Survey - Set Up Your Account'
+                subject = "SDLL Umpire Survey - It'll take 45 seconds"
                 body_text = f"""Hi there,
 
 Thank you for being part of the SDLL umpire team this season!
@@ -390,7 +390,7 @@ SDLL Umpire Coordinator
 
         else:
             # User has logged in before - send direct survey link
-            subject = f'SDLL Umpire Survey - {current_season.season_name}'
+            subject = "SDLL Umpire Survey - It'll take 45 seconds"
 
             body_text = f"""Hi there,
 
@@ -533,7 +533,7 @@ def survey_preview(umpire_id):
 
     else:
         # Direct survey link
-        subject = f'SDLL Umpire Survey - {current_season.season_name}'
+        subject = "SDLL Umpire Survey - It'll take 45 seconds"
         body_html = f"""
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
     <h2 style="color: rgb(34, 139, 34);">SDLL Umpire Survey</h2>
