@@ -3,6 +3,7 @@
 from flask import render_template, request, redirect, url_for, flash
 from flask_login import current_user
 from sqlalchemy.orm import joinedload
+from sqlalchemy import func
 
 from app.umpires import umpires_bp, umpire_coordinator_required
 from app.extensions import db
@@ -10,7 +11,72 @@ from app.models.umpire_profile import UmpireProfile
 from app.models.umpire_survey import UmpireSurveyResponse
 from app.models.umpire_survey_send import UmpireSurveySend
 from app.models.org_season import OrgSeason
+from app.models.game_umpire import GameUmpire
+from app.models.game import Game
+from app.models.training_completion import TrainingCompletion
+from app.models.training_type import TrainingType
 from app.services.notification_service import GmailService
+
+
+def get_umpire_game_counts(org_season_id):
+    """Get count of games worked by each umpire for a season.
+
+    Returns dict mapping umpire_profile_id -> game_count
+    """
+    from app.models.org_season import OrgSeason
+
+    season = OrgSeason.query.get(org_season_id)
+    if not season:
+        return {}
+
+    # Count completed/confirmed game assignments for this season
+    results = db.session.query(
+        GameUmpire.umpire_profile_id,
+        func.count(GameUmpire.id).label('game_count')
+    ).join(Game, GameUmpire.game_id == Game.ID).filter(
+        Game.year == season.year,
+        Game.is_spring == season.is_spring,
+        GameUmpire.umpire_profile_id.isnot(None),
+        GameUmpire.status.in_([GameUmpire.STATUS_COMPLETED, GameUmpire.STATUS_CONFIRMED,
+                               GameUmpire.STATUS_ASSIGNED])
+    ).group_by(GameUmpire.umpire_profile_id).all()
+
+    return {r.umpire_profile_id: r.game_count for r in results}
+
+
+def get_umpire_training_status(umpire_ids):
+    """Get training completion status for umpires.
+
+    Returns dict mapping umpire_profile_id -> {
+        'completed_trainings': bool (all required trainings complete),
+        'training_list': list of completed training names
+    }
+    """
+    # Get required trainings for umpires
+    required_trainings = TrainingType.get_required_for_umpires()
+    required_ids = {t.id for t in required_trainings}
+
+    # Get completions for all these umpires
+    completions = TrainingCompletion.query.filter(
+        TrainingCompletion.umpire_profile_id.in_(umpire_ids)
+    ).options(
+        joinedload(TrainingCompletion.training_type)
+    ).all()
+
+    # Build per-umpire status
+    result = {}
+    for ump_id in umpire_ids:
+        ump_completions = [c for c in completions if c.umpire_profile_id == ump_id]
+        valid_completions = [c for c in ump_completions if c.is_valid]
+        completed_ids = {c.training_type_id for c in valid_completions}
+        training_names = [c.training_type.name for c in valid_completions if c.training_type]
+
+        result[ump_id] = {
+            'completed_trainings': required_ids.issubset(completed_ids) if required_ids else True,
+            'training_list': training_names
+        }
+
+    return result
 
 
 @umpires_bp.route('/survey')
@@ -26,6 +92,8 @@ def survey_management():
     # Get all active umpires with their survey status
     umpires = UmpireProfile.query.filter(
         UmpireProfile.status == 'active'
+    ).options(
+        joinedload(UmpireProfile.user)
     ).order_by(UmpireProfile._last_name, UmpireProfile._first_name).all()
 
     # Get who's been sent the survey
@@ -38,6 +106,13 @@ def survey_management():
     ).all()
     for r in responses:
         responded_ids.add(r.umpire_profile_id)
+
+    # Get game counts for all umpires this season
+    game_counts = get_umpire_game_counts(current_season.ID)
+
+    # Get training status for all umpires
+    umpire_ids = [ump.id for ump in umpires]
+    training_status = get_umpire_training_status(umpire_ids)
 
     # Build umpire list with status
     umpire_rows = []
@@ -52,6 +127,19 @@ def survey_management():
         if ump.id in responded_ids:
             response = UmpireSurveyResponse.get_for_umpire_season(ump.id, current_season.ID)
 
+        # Check login status (has_logged_in = user exists and has logged in)
+        has_logged_in = False
+        has_account = False
+        if ump.user:
+            has_account = True
+            has_logged_in = ump.user.last_login is not None
+
+        # Get game count
+        games_worked = game_counts.get(ump.id, 0)
+
+        # Get training status
+        training = training_status.get(ump.id, {'completed_trainings': False, 'training_list': []})
+
         umpire_rows.append({
             'profile': ump,
             'has_been_sent': ump.id in sent_ids,
@@ -59,7 +147,12 @@ def survey_management():
             'send_count': send_count,
             'has_responded': ump.id in responded_ids,
             'response': response,
-            'has_email': bool(ump.contact_email)
+            'has_email': bool(ump.contact_email),
+            'has_account': has_account,
+            'has_logged_in': has_logged_in,
+            'games_worked': games_worked,
+            'trained': training['completed_trainings'],
+            'training_list': training['training_list']
         })
 
     # Counts for summary
@@ -67,6 +160,8 @@ def survey_management():
     sent_count = sum(1 for r in umpire_rows if r['has_been_sent'])
     not_sent_count = total - sent_count
     responded_count = sum(1 for r in umpire_rows if r['has_responded'])
+    worked_games_count = sum(1 for r in umpire_rows if r['games_worked'] > 0)
+    trained_count = sum(1 for r in umpire_rows if r['trained'])
 
     return render_template(
         'umpires/survey_management.html',
@@ -75,14 +170,20 @@ def survey_management():
         total=total,
         sent_count=sent_count,
         not_sent_count=not_sent_count,
-        responded_count=responded_count
+        responded_count=responded_count,
+        worked_games_count=worked_games_count,
+        trained_count=trained_count
     )
 
 
 @umpires_bp.route('/survey/send', methods=['POST'])
 @umpire_coordinator_required
 def survey_send():
-    """Send survey emails to selected umpires."""
+    """Send survey emails to selected umpires.
+
+    For umpires who have never logged in, sends a password setup email first.
+    For umpires who have logged in, sends direct survey link.
+    """
     current_season = OrgSeason.get_current_season()
     if not current_season:
         flash('No active season found.', 'error')
@@ -101,14 +202,19 @@ def survey_send():
         flash('Invalid umpire selection.', 'error')
         return redirect(url_for('umpires.survey_management'))
 
-    # Get umpire profiles
-    umpires = UmpireProfile.query.filter(UmpireProfile.id.in_(umpire_ids)).all()
+    # Get umpire profiles with user relationships
+    umpires = UmpireProfile.query.filter(
+        UmpireProfile.id.in_(umpire_ids)
+    ).options(
+        joinedload(UmpireProfile.user)
+    ).all()
 
     # Build survey URL
     survey_url = url_for('public.umpire_survey', _external=True)
 
     sent_count = 0
     skipped_count = 0
+    setup_count = 0  # Track password setup emails
 
     for ump in umpires:
         email = ump.contact_email
@@ -116,11 +222,92 @@ def survey_send():
             skipped_count += 1
             continue
 
-        # Build email content
         first_name = ump.first_name or 'Umpire'
-        subject = f'SDLL Umpire Survey - {current_season.season_name}'
 
-        body_text = f"""Hi {first_name},
+        # Check if user has ever logged in
+        has_logged_in = ump.user and ump.user.last_login is not None
+
+        if not has_logged_in and ump.user:
+            # User has account but never logged in - send password setup + survey
+            try:
+                token = ump.user.generate_reset_token()
+                reset_url = url_for('auth.reset_password', token=token, _external=True)
+
+                subject = f'SDLL Umpire Survey - Set Up Your Account'
+                body_text = f"""Hi {first_name},
+
+Thank you for being part of the SDLL umpire team this season!
+
+We'd love to hear your feedback about your experience. Before you can access the survey, you'll need to set up your account password.
+
+Step 1: Set up your password
+{reset_url}
+
+Step 2: Take the survey (after logging in)
+{survey_url}
+
+The survey only takes a minute and helps us improve the program for next season.
+
+This password link will expire in 24 hours.
+
+Thanks,
+SDLL Umpire Coordinator
+"""
+
+                body_html = f"""
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <h2 style="color: rgb(34, 139, 34);">SDLL Umpire Survey</h2>
+    <p>Hi {first_name},</p>
+    <p>Thank you for being part of the SDLL umpire team this season!</p>
+    <p>We'd love to hear your feedback about your experience. Before you can access the survey, you'll need to set up your account password.</p>
+
+    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <p style="margin: 0 0 15px 0;"><strong>Step 1:</strong> Set up your password</p>
+        <a href="{reset_url}" style="background-color: rgb(255, 140, 0); color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+            Set Your Password
+        </a>
+        <p style="font-size: 12px; color: #666; margin-top: 10px;">This link expires in 24 hours</p>
+    </div>
+
+    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <p style="margin: 0 0 15px 0;"><strong>Step 2:</strong> Take the survey (after logging in)</p>
+        <a href="{survey_url}" style="background-color: rgb(34, 139, 34); color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+            Take the Survey
+        </a>
+    </div>
+
+    <p>The survey only takes a minute and helps us improve the program for next season.</p>
+    <p>Thanks,<br>SDLL Umpire Coordinator</p>
+</div>
+"""
+                email_service = GmailService()
+                email_service.send_email(
+                    to=email,
+                    subject=subject,
+                    body_text=body_text,
+                    body_html=body_html
+                )
+
+                # Record the send
+                UmpireSurveySend.record_send(
+                    umpire_profile_id=ump.id,
+                    org_season_id=current_season.ID,
+                    sent_by_user_id=current_user.ID
+                )
+                sent_count += 1
+                setup_count += 1
+            except Exception as e:
+                flash(f'Error sending to {ump.name}: {str(e)}', 'error')
+
+        elif not ump.user:
+            # Managed umpire without account - can't send survey (no way to authenticate)
+            skipped_count += 1
+
+        else:
+            # User has logged in before - send direct survey link
+            subject = f'SDLL Umpire Survey - {current_season.season_name}'
+
+            body_text = f"""Hi {first_name},
 
 Thank you for being part of the SDLL umpire team this season!
 
@@ -134,7 +321,7 @@ Thanks,
 SDLL Umpire Coordinator
 """
 
-        body_html = f"""
+            body_html = f"""
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
     <h2 style="color: rgb(34, 139, 34);">SDLL Umpire Survey</h2>
     <p>Hi {first_name},</p>
@@ -150,32 +337,35 @@ SDLL Umpire Coordinator
 </div>
 """
 
-        # Send the email
-        try:
-            email_service = GmailService()
-            email_service.send_email(
-                to=email,
-                subject=subject,
-                body_text=body_text,
-                body_html=body_html
-            )
+            # Send the email
+            try:
+                email_service = GmailService()
+                email_service.send_email(
+                    to=email,
+                    subject=subject,
+                    body_text=body_text,
+                    body_html=body_html
+                )
 
-            # Record the send
-            UmpireSurveySend.record_send(
-                umpire_profile_id=ump.id,
-                org_season_id=current_season.ID,
-                sent_by_user_id=current_user.ID
-            )
-            sent_count += 1
-        except Exception as e:
-            flash(f'Error sending to {ump.name}: {str(e)}', 'error')
+                # Record the send
+                UmpireSurveySend.record_send(
+                    umpire_profile_id=ump.id,
+                    org_season_id=current_season.ID,
+                    sent_by_user_id=current_user.ID
+                )
+                sent_count += 1
+            except Exception as e:
+                flash(f'Error sending to {ump.name}: {str(e)}', 'error')
 
     db.session.commit()
 
     if sent_count > 0:
-        flash(f'Survey sent to {sent_count} umpire(s).', 'success')
+        msg = f'Survey sent to {sent_count} umpire(s).'
+        if setup_count > 0:
+            msg += f' ({setup_count} included password setup instructions)'
+        flash(msg, 'success')
     if skipped_count > 0:
-        flash(f'Skipped {skipped_count} umpire(s) with no email address.', 'warning')
+        flash(f'Skipped {skipped_count} umpire(s) with no email or no account.', 'warning')
 
     return redirect(url_for('umpires.survey_management'))
 

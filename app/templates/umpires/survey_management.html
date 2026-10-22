@@ -13,10 +13,18 @@
 </div>
 
 <!-- Summary Cards -->
-<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px;">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 15px; margin-bottom: 25px;">
     <div class="card" style="text-align: center; padding: 15px;">
         <div style="font-size: 28px; font-weight: 600; color: #333;">{{ total }}</div>
-        <div style="color: #666; font-size: 13px;">Total Umpires</div>
+        <div style="color: #666; font-size: 13px;">Total Active</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 15px;">
+        <div style="font-size: 28px; font-weight: 600; color: rgb(34, 139, 34);">{{ worked_games_count }}</div>
+        <div style="color: #666; font-size: 13px;">Worked Games</div>
+    </div>
+    <div class="card" style="text-align: center; padding: 15px;">
+        <div style="font-size: 28px; font-weight: 600; color: #6f42c1;">{{ trained_count }}</div>
+        <div style="color: #666; font-size: 13px;">Trained</div>
     </div>
     <div class="card" style="text-align: center; padding: 15px;">
         <div style="font-size: 28px; font-weight: 600; color: #dc3545;">{{ not_sent_count }}</div>
@@ -27,7 +35,7 @@
         <div style="color: #666; font-size: 13px;">Email Sent</div>
     </div>
     <div class="card" style="text-align: center; padding: 15px;">
-        <div style="font-size: 28px; font-weight: 600; color: rgb(34, 139, 34);">{{ responded_count }}</div>
+        <div style="font-size: 28px; font-weight: 600; color: rgb(255, 140, 0);">{{ responded_count }}</div>
         <div style="color: #666; font-size: 13px;">Responded</div>
     </div>
 </div>
@@ -36,16 +44,16 @@
     <form method="POST" action="{{ url_for('umpires.survey_send') }}" id="sendForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <button type="button" onclick="selectNotSent()" class="btn btn-outline" style="padding: 6px 12px; font-size: 13px;">
-                    Select Not Sent
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <button type="button" onclick="selectWorkedNotSent()" class="btn btn-primary" style="padding: 6px 12px; font-size: 13px;">
+                    Select Worked Games (Not Sent)
                 </button>
-                <button type="button" onclick="selectAll()" class="btn btn-outline" style="padding: 6px 12px; font-size: 13px;">
-                    Select All
+                <button type="button" onclick="selectTrainedNotWorked()" class="btn btn-outline" style="padding: 6px 12px; font-size: 13px;">
+                    Select Trained Only
                 </button>
                 <button type="button" onclick="selectNone()" class="btn btn-outline" style="padding: 6px 12px; font-size: 13px;">
-                    Clear Selection
+                    Clear
                 </button>
                 <span id="selectedCount" style="color: #666; font-size: 13px; margin-left: 10px;">0 selected</span>
             </div>
@@ -55,88 +63,137 @@
         </div>
 
         <!-- Filter tabs -->
-        <div style="display: flex; gap: 5px; margin-bottom: 15px; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px;">
+        <div style="display: flex; gap: 5px; margin-bottom: 15px; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px; flex-wrap: wrap;">
             <button type="button" class="filter-btn active" data-filter="all" onclick="filterUmpires('all', this)">
                 All ({{ total }})
             </button>
+            <button type="button" class="filter-btn" data-filter="worked" onclick="filterUmpires('worked', this)">
+                Worked Games ({{ worked_games_count }})
+            </button>
+            <button type="button" class="filter-btn" data-filter="trained-only" onclick="filterUmpires('trained-only', this)">
+                Trained Only ({{ trained_count - worked_games_count if trained_count > worked_games_count else 0 }})
+            </button>
             <button type="button" class="filter-btn" data-filter="not-sent" onclick="filterUmpires('not-sent', this)">
                 Not Sent ({{ not_sent_count }})
-            </button>
-            <button type="button" class="filter-btn" data-filter="sent" onclick="filterUmpires('sent', this)">
-                Sent ({{ sent_count }})
             </button>
             <button type="button" class="filter-btn" data-filter="responded" onclick="filterUmpires('responded', this)">
                 Responded ({{ responded_count }})
             </button>
         </div>
 
-        <table style="width: 100%; border-collapse: collapse;">
-            <thead>
-                <tr style="border-bottom: 2px solid #e0e0e0;">
-                    <th style="padding: 10px; text-align: left; width: 40px;"></th>
-                    <th style="padding: 10px; text-align: left;">Umpire</th>
-                    <th style="padding: 10px; text-align: left;">Email</th>
-                    <th style="padding: 10px; text-align: center;">Email Status</th>
-                    <th style="padding: 10px; text-align: center;">Response</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in umpire_rows %}
-                <tr class="umpire-row"
-                    data-sent="{{ 'true' if row.has_been_sent else 'false' }}"
-                    data-responded="{{ 'true' if row.has_responded else 'false' }}"
-                    style="border-bottom: 1px solid #eee;">
-                    <td style="padding: 10px;">
-                        {% if row.has_email %}
-                        <input type="checkbox" name="umpire_ids" value="{{ row.profile.id }}"
-                               class="umpire-checkbox" onchange="updateSelectedCount()">
-                        {% else %}
-                        <span title="No email address" style="color: #ccc;">-</span>
-                        {% endif %}
-                    </td>
-                    <td style="padding: 10px;">
-                        <strong>{{ row.profile.name }}</strong>
-                    </td>
-                    <td style="padding: 10px; color: #666; font-size: 13px;">
-                        {% if row.has_email %}
-                        {{ row.profile.contact_email }}
-                        {% else %}
-                        <span style="color: #dc3545;">No email</span>
-                        {% endif %}
-                    </td>
-                    <td style="padding: 10px; text-align: center;">
-                        {% if row.has_been_sent %}
-                        <span style="background: #e3f2fd; color: #1565c0; padding: 3px 8px; border-radius: 12px; font-size: 12px;">
-                            Sent {% if row.send_count > 1 %}({{ row.send_count }}x){% endif %}
-                        </span>
-                        <div style="font-size: 11px; color: #888; margin-top: 2px;">
-                            {{ row.last_sent.strftime('%m/%d %I:%M%p') if row.last_sent else '' }}
-                        </div>
-                        {% else %}
-                        <span style="background: #fff3e0; color: #e65100; padding: 3px 8px; border-radius: 12px; font-size: 12px;">
-                            Not sent
-                        </span>
-                        {% endif %}
-                    </td>
-                    <td style="padding: 10px; text-align: center;">
-                        {% if row.has_responded %}
-                        <span style="background: #e8f5e9; color: #2e7d32; padding: 3px 8px; border-radius: 12px; font-size: 12px;">
-                            Responded
-                        </span>
-                        {% if row.response %}
-                        <div style="font-size: 11px; color: #666; margin-top: 4px;">
-                            {% if row.response.returning_next_season %}Returning{% else %}Not sure{% endif %} |
-                            {% if row.response.wanted_more_games %}Wanted more{% else %}Enough games{% endif %}
-                        </div>
-                        {% endif %}
-                        {% else %}
-                        <span style="color: #999; font-size: 12px;">-</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; min-width: 800px;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #e0e0e0;">
+                        <th style="padding: 10px; text-align: left; width: 40px;"></th>
+                        <th style="padding: 10px; text-align: left;">Umpire</th>
+                        <th style="padding: 10px; text-align: center;">Games</th>
+                        <th style="padding: 10px; text-align: center;">Training</th>
+                        <th style="padding: 10px; text-align: center;">Account</th>
+                        <th style="padding: 10px; text-align: center;">Email Status</th>
+                        <th style="padding: 10px; text-align: center;">Response</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in umpire_rows %}
+                    <tr class="umpire-row"
+                        data-sent="{{ 'true' if row.has_been_sent else 'false' }}"
+                        data-responded="{{ 'true' if row.has_responded else 'false' }}"
+                        data-worked="{{ 'true' if row.games_worked > 0 else 'false' }}"
+                        data-trained="{{ 'true' if row.trained else 'false' }}"
+                        data-has-account="{{ 'true' if row.has_account else 'false' }}"
+                        style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 10px;">
+                            {% if row.has_account %}
+                            <input type="checkbox" name="umpire_ids" value="{{ row.profile.id }}"
+                                   class="umpire-checkbox" onchange="updateSelectedCount()">
+                            {% else %}
+                            <span title="No account - cannot send survey" style="color: #ccc;">-</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 10px;">
+                            <strong>{{ row.profile.name }}</strong>
+                            {% if row.has_email %}
+                            <div style="font-size: 12px; color: #666;">{{ row.profile.contact_email }}</div>
+                            {% else %}
+                            <div style="font-size: 12px; color: #dc3545;">No email</div>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 10px; text-align: center;">
+                            {% if row.games_worked > 0 %}
+                            <span style="background: #e8f5e9; color: #2e7d32; padding: 3px 10px; border-radius: 12px; font-size: 13px; font-weight: 600;">
+                                {{ row.games_worked }}
+                            </span>
+                            {% else %}
+                            <span style="color: #999; font-size: 12px;">0</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 10px; text-align: center;">
+                            {% if row.trained %}
+                            <span style="background: #f3e5f5; color: #7b1fa2; padding: 3px 8px; border-radius: 12px; font-size: 12px;"
+                                  title="{{ row.training_list|join(', ') }}">
+                                Trained
+                            </span>
+                            {% elif row.training_list %}
+                            <span style="background: #fff3e0; color: #e65100; padding: 3px 8px; border-radius: 12px; font-size: 12px;"
+                                  title="{{ row.training_list|join(', ') }}">
+                                Partial
+                            </span>
+                            {% else %}
+                            <span style="color: #999; font-size: 12px;">-</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 10px; text-align: center;">
+                            {% if row.has_logged_in %}
+                            <span style="background: #e8f5e9; color: #2e7d32; padding: 3px 8px; border-radius: 12px; font-size: 12px;">
+                                Active
+                            </span>
+                            {% elif row.has_account %}
+                            <span style="background: #fff3e0; color: #e65100; padding: 3px 8px; border-radius: 12px; font-size: 12px;"
+                                  title="Has account but never logged in - will receive password setup email">
+                                Never Logged In
+                            </span>
+                            {% else %}
+                            <span style="background: #ffebee; color: #c62828; padding: 3px 8px; border-radius: 12px; font-size: 12px;"
+                                  title="No account - cannot receive survey">
+                                No Account
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 10px; text-align: center;">
+                            {% if row.has_been_sent %}
+                            <span style="background: #e3f2fd; color: #1565c0; padding: 3px 8px; border-radius: 12px; font-size: 12px;">
+                                Sent {% if row.send_count > 1 %}({{ row.send_count }}x){% endif %}
+                            </span>
+                            <div style="font-size: 11px; color: #888; margin-top: 2px;">
+                                {{ row.last_sent.strftime('%m/%d %I:%M%p').lstrip('0') if row.last_sent else '' }}
+                            </div>
+                            {% else %}
+                            <span style="background: #f5f5f5; color: #666; padding: 3px 8px; border-radius: 12px; font-size: 12px;">
+                                Not sent
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 10px; text-align: center;">
+                            {% if row.has_responded %}
+                            <span style="background: #fff3e0; color: #e65100; padding: 3px 8px; border-radius: 12px; font-size: 12px;">
+                                Responded
+                            </span>
+                            {% if row.response %}
+                            <div style="font-size: 11px; color: #666; margin-top: 4px;">
+                                {% if row.response.returning_next_season %}Returning{% else %}Not sure{% endif %} |
+                                {% if row.response.wanted_more_games %}Wanted more{% else %}Enough{% endif %}
+                            </div>
+                            {% endif %}
+                            {% else %}
+                            <span style="color: #999; font-size: 12px;">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </form>
 </div>
 
@@ -167,10 +224,11 @@ function updateSelectedCount() {
     document.getElementById('sendBtn').disabled = count === 0;
 }
 
-function selectNotSent() {
+function selectWorkedNotSent() {
+    // Select umpires who worked games but haven't been sent the survey
     document.querySelectorAll('.umpire-row').forEach(function(row) {
         var checkbox = row.querySelector('.umpire-checkbox');
-        if (checkbox && row.dataset.sent === 'false') {
+        if (checkbox && row.dataset.worked === 'true' && row.dataset.sent === 'false') {
             checkbox.checked = true;
         } else if (checkbox) {
             checkbox.checked = false;
@@ -179,10 +237,14 @@ function selectNotSent() {
     updateSelectedCount();
 }
 
-function selectAll() {
-    document.querySelectorAll('.umpire-checkbox').forEach(function(cb) {
-        if (cb.closest('.umpire-row').style.display !== 'none') {
-            cb.checked = true;
+function selectTrainedNotWorked() {
+    // Select umpires who are trained but didn't work any games (for separate survey)
+    document.querySelectorAll('.umpire-row').forEach(function(row) {
+        var checkbox = row.querySelector('.umpire-checkbox');
+        if (checkbox && row.dataset.trained === 'true' && row.dataset.worked === 'false' && row.dataset.sent === 'false') {
+            checkbox.checked = true;
+        } else if (checkbox) {
+            checkbox.checked = false;
         }
     });
     updateSelectedCount();
@@ -209,11 +271,14 @@ function filterUmpires(filter, btn) {
             case 'all':
                 show = true;
                 break;
+            case 'worked':
+                show = row.dataset.worked === 'true';
+                break;
+            case 'trained-only':
+                show = row.dataset.trained === 'true' && row.dataset.worked === 'false';
+                break;
             case 'not-sent':
                 show = row.dataset.sent === 'false';
-                break;
-            case 'sent':
-                show = row.dataset.sent === 'true';
                 break;
             case 'responded':
                 show = row.dataset.responded === 'true';
