@@ -457,6 +457,114 @@ SDLL Umpire Coordinator
     return redirect(url_for('umpires.survey_management'))
 
 
+@umpires_bp.route('/survey/preview/<int:umpire_id>')
+@umpire_coordinator_required
+def survey_preview(umpire_id):
+    """Preview the email that would be sent to an umpire."""
+    from flask import jsonify
+
+    current_season = OrgSeason.get_current_season()
+    if not current_season:
+        return jsonify({'error': 'No active season found'}), 400
+
+    ump = UmpireProfile.query.options(
+        joinedload(UmpireProfile.user)
+    ).get(umpire_id)
+
+    if not ump:
+        return jsonify({'error': 'Umpire not found'}), 404
+
+    # Build survey URL
+    survey_url = url_for('public.umpire_survey', _external=True)
+
+    email = ump.contact_email
+    first_name = ump.first_name or 'Umpire'
+
+    # Check login status
+    has_logged_in = ump.user and ump.user.last_login is not None
+
+    if not ump.user:
+        # No account - can't send
+        return jsonify({
+            'can_send': False,
+            'reason': 'No account linked to this umpire profile',
+            'umpire_name': ump.name,
+            'email': email or 'No email'
+        })
+
+    if not email:
+        return jsonify({
+            'can_send': False,
+            'reason': 'No email address on file',
+            'umpire_name': ump.name,
+            'email': None
+        })
+
+    if not has_logged_in:
+        # Password setup + survey email
+        # Note: We don't actually generate the token for preview, just show placeholder
+        reset_url = '[Password Reset Link - generated at send time]'
+
+        subject = 'SDLL Umpire Survey - Set Up Your Account'
+        body_html = f"""
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <h2 style="color: rgb(34, 139, 34);">SDLL Umpire Survey</h2>
+    <p>Hi {first_name},</p>
+    <p>Thank you for being part of the SDLL umpire team this season!</p>
+    <p>We'd love to hear your feedback about your experience. Before you can access the survey, you'll need to set up your account password.</p>
+
+    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <p style="margin: 0 0 15px 0;"><strong>Step 1:</strong> Set up your password</p>
+        <a href="#" style="background-color: rgb(255, 140, 0); color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+            Set Your Password
+        </a>
+        <p style="font-size: 12px; color: #666; margin-top: 10px;">This link expires in 24 hours</p>
+    </div>
+
+    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <p style="margin: 0 0 15px 0;"><strong>Step 2:</strong> Take the survey (after logging in)</p>
+        <a href="{survey_url}" style="background-color: rgb(34, 139, 34); color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+            Take the Survey
+        </a>
+    </div>
+
+    <p>The survey only takes a minute and helps us improve the program for next season.</p>
+    <p>Thanks,<br>SDLL Umpire Coordinator</p>
+</div>
+"""
+        email_type = 'password_setup'
+
+    else:
+        # Direct survey link
+        subject = f'SDLL Umpire Survey - {current_season.season_name}'
+        body_html = f"""
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <h2 style="color: rgb(34, 139, 34);">SDLL Umpire Survey</h2>
+    <p>Hi {first_name},</p>
+    <p>Thank you for being part of the SDLL umpire team this season!</p>
+    <p>We'd love to hear your feedback about your experience. Please take a moment to complete our brief survey:</p>
+    <p style="margin: 25px 0;">
+        <a href="{survey_url}" style="background-color: rgb(34, 139, 34); color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+            Take the Survey
+        </a>
+    </p>
+    <p>The survey only takes a minute and helps us improve the program for next season.</p>
+    <p>Thanks,<br>SDLL Umpire Coordinator</p>
+</div>
+"""
+        email_type = 'direct_survey'
+
+    return jsonify({
+        'can_send': True,
+        'umpire_name': ump.name,
+        'email': email,
+        'subject': subject,
+        'body_html': body_html,
+        'email_type': email_type,
+        'has_logged_in': has_logged_in
+    })
+
+
 @umpires_bp.route('/survey/responses')
 @umpire_coordinator_required
 def survey_responses():

@@ -112,12 +112,22 @@
                             {% endif %}
                         </td>
                         <td style="padding: 10px;">
-                            <strong>{{ row.profile.name }}</strong>
-                            {% if row.has_email %}
-                            <div style="font-size: 12px; color: #666;">{{ row.profile.contact_email }}</div>
-                            {% else %}
-                            <div style="font-size: 12px; color: #dc3545;">No email</div>
-                            {% endif %}
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div>
+                                    <strong>{{ row.profile.name }}</strong>
+                                    {% if row.has_email %}
+                                    <div style="font-size: 12px; color: #666;">{{ row.profile.contact_email }}</div>
+                                    {% else %}
+                                    <div style="font-size: 12px; color: #dc3545;">No email</div>
+                                    {% endif %}
+                                </div>
+                                {% if row.has_account %}
+                                <button type="button" onclick="previewEmail({{ row.profile.id }})"
+                                        class="btn btn-outline" style="padding: 2px 8px; font-size: 11px; margin-left: auto;">
+                                    Preview
+                                </button>
+                                {% endif %}
+                            </div>
                         </td>
                         <td style="padding: 10px; text-align: center;">
                             {% if row.games_worked > 0 %}
@@ -287,5 +297,82 @@ function filterUmpires(filter, btn) {
         row.style.display = show ? '' : 'none';
     });
 }
+
+function previewEmail(umpireId) {
+    var modal = document.getElementById('previewModal');
+    var content = document.getElementById('previewContent');
+    content.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">Loading preview...</div>';
+    modal.style.display = 'flex';
+
+    fetch('/umpires/survey/preview/' + umpireId)
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.error) {
+                content.innerHTML = '<div style="color: #dc3545; padding: 20px;">' + data.error + '</div>';
+                return;
+            }
+
+            if (!data.can_send) {
+                content.innerHTML = `
+                    <div style="padding: 20px;">
+                        <h3 style="margin-top: 0; color: #dc3545;">Cannot Send Email</h3>
+                        <p><strong>Umpire:</strong> ${data.umpire_name}</p>
+                        <p><strong>Reason:</strong> ${data.reason}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            var emailTypeLabel = data.email_type === 'password_setup'
+                ? '<span style="background: #fff3e0; color: #e65100; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Includes Password Setup</span>'
+                : '<span style="background: #e8f5e9; color: #2e7d32; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Direct Survey Link</span>';
+
+            content.innerHTML = `
+                <div style="padding: 20px;">
+                    <div style="margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <h3 style="margin: 0;">Email Preview</h3>
+                            ${emailTypeLabel}
+                        </div>
+                        <p style="margin: 5px 0;"><strong>To:</strong> ${data.email}</p>
+                        <p style="margin: 5px 0;"><strong>Subject:</strong> ${data.subject}</p>
+                    </div>
+                    <div style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">
+                        ${data.body_html}
+                    </div>
+                </div>
+            `;
+        })
+        .catch(function(err) {
+            content.innerHTML = '<div style="color: #dc3545; padding: 20px;">Error loading preview: ' + err.message + '</div>';
+        });
+}
+
+function closePreviewModal() {
+    document.getElementById('previewModal').style.display = 'none';
+}
+
+// Close modal when clicking outside
+document.addEventListener('click', function(e) {
+    var modal = document.getElementById('previewModal');
+    if (e.target === modal) {
+        closePreviewModal();
+    }
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closePreviewModal();
+    }
+});
 </script>
+
+<!-- Email Preview Modal -->
+<div id="previewModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div style="background: #f9f9f9; border-radius: 12px; max-width: 700px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative;">
+        <button onclick="closePreviewModal()" style="position: absolute; top: 10px; right: 10px; background: none; border: none; font-size: 24px; cursor: pointer; color: #666; padding: 5px 10px;">&times;</button>
+        <div id="previewContent"></div>
+    </div>
+</div>
 {% endblock %}
