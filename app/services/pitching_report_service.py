@@ -84,7 +84,7 @@ class PitchingReportService:
         team_ids = {t.team_ID for t in teams}
         team_lookup = {t.team_ID: t for t in teams}
 
-        # Get all completed games for these teams
+        # Get all completed games for these teams (exclude cancelled/rainout/postponed)
         all_games = Game.query.filter(
             Game.year == year,
             Game.is_spring == is_spring,
@@ -92,6 +92,7 @@ class PitchingReportService:
             Game.active == 1,
             Game.game_date < db.func.now(),
             Game.game_type.in_(['regular', 'playoff']),
+            ~Game.status.in_(['cancelled', 'rainout', 'postponed']),
             db.or_(
                 Game.home_ID.in_(team_ids),
                 Game.away_ID.in_(team_ids)
@@ -226,7 +227,7 @@ class PitchingReportService:
                 total_strikes=agg['total_strikes'],
                 pitches_with_strike_data=agg['pitches_with_strike_data'],
                 games_without_strikes=agg['games_without_strikes'],
-                total_innings=agg['total_innings'],
+                total_innings=round(agg['total_innings'], 1),  # Round to 1 decimal to avoid floating point artifacts
                 strike_pct=strike_pct,
                 total_strikeouts=agg['total_strikeouts'],
                 total_walks=agg['total_walks'],

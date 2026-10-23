@@ -96,6 +96,28 @@
         text-decoration: underline dotted;
     }
 
+    /* Sortable columns */
+    .pitching-table th.sortable {
+        cursor: pointer;
+        user-select: none;
+    }
+    .pitching-table th.sortable:hover {
+        background: #e9ecef;
+    }
+    .pitching-table th.sortable::after {
+        content: ' ⇅';
+        opacity: 0.3;
+        font-size: 10px;
+    }
+    .pitching-table th.sortable.sort-asc::after {
+        content: ' ↑';
+        opacity: 1;
+    }
+    .pitching-table th.sortable.sort-desc::after {
+        content: ' ↓';
+        opacity: 1;
+    }
+
     /* No data message */
     .no-data {
         text-align: center;
@@ -135,28 +157,28 @@
         </div>
         <div class="team-table-container">
             {% if team_summary.pitchers %}
-            <table class="pitching-table">
+            <table class="pitching-table sortable-table">
                 <thead>
                     <tr>
-                        <th>Pitcher</th>
-                        <th title="Number of games pitched">G</th>
-                        <th title="Innings Pitched">IP</th>
-                        <th title="Total Pitches">Pitches</th>
-                        <th title="Strike Percentage">Str%</th>
-                        <th title="Strikeouts">K</th>
-                        <th title="Walks">BB</th>
+                        <th class="sortable" data-sort="string">Pitcher</th>
+                        <th class="sortable" data-sort="number" title="Number of games pitched">G</th>
+                        <th class="sortable" data-sort="number" title="Innings Pitched">IP</th>
+                        <th class="sortable" data-sort="number" title="Total Pitches">Pitches</th>
+                        <th class="sortable" data-sort="number" title="Strike Percentage">Str%</th>
+                        <th class="sortable" data-sort="number" title="Strikeouts">K</th>
+                        <th class="sortable" data-sort="number" title="Walks">BB</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for pitcher in team_summary.pitchers %}
                     <tr>
-                        <td>{{ pitcher.player.full_name }}</td>
-                        <td>{{ pitcher.appearances }}</td>
-                        <td>{{ format_innings(pitcher.total_innings) }}</td>
-                        <td>{{ pitcher.total_pitches }}</td>
-                        <td>{{ format_strike_pct(pitcher.strike_pct) }}</td>
-                        <td>{{ pitcher.total_strikeouts }}</td>
-                        <td>{{ pitcher.total_walks }}</td>
+                        <td data-value="{{ pitcher.player.full_name }}">{{ pitcher.player.full_name }}</td>
+                        <td data-value="{{ pitcher.appearances }}">{{ pitcher.appearances }}</td>
+                        <td data-value="{{ pitcher.total_innings }}">{{ format_innings(pitcher.total_innings) }}</td>
+                        <td data-value="{{ pitcher.total_pitches }}">{{ pitcher.total_pitches }}</td>
+                        <td data-value="{{ pitcher.strike_pct if pitcher.strike_pct is not none else -1 }}">{{ format_strike_pct(pitcher.strike_pct) }}</td>
+                        <td data-value="{{ pitcher.total_strikeouts }}">{{ pitcher.total_strikeouts }}</td>
+                        <td data-value="{{ pitcher.total_walks }}">{{ pitcher.total_walks }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -214,4 +236,57 @@
     </div>
 </div>
 {% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Make all sortable tables work
+    document.querySelectorAll('.sortable-table').forEach(function(table) {
+        var headers = table.querySelectorAll('th.sortable');
+        headers.forEach(function(header, index) {
+            header.addEventListener('click', function() {
+                sortTable(table, index, header);
+            });
+        });
+    });
+});
+
+function sortTable(table, columnIndex, header) {
+    var tbody = table.querySelector('tbody');
+    var rows = Array.from(tbody.querySelectorAll('tr'));
+    var sortType = header.dataset.sort || 'string';
+
+    // Determine sort direction
+    var isAsc = header.classList.contains('sort-asc');
+    var direction = isAsc ? -1 : 1;
+
+    // Remove sort classes from all headers in this table
+    table.querySelectorAll('th.sortable').forEach(function(th) {
+        th.classList.remove('sort-asc', 'sort-desc');
+    });
+
+    // Add appropriate class to clicked header
+    header.classList.add(isAsc ? 'sort-desc' : 'sort-asc');
+
+    // Sort rows
+    rows.sort(function(a, b) {
+        var aCell = a.cells[columnIndex];
+        var bCell = b.cells[columnIndex];
+        var aVal = aCell.dataset.value || aCell.textContent.trim();
+        var bVal = bCell.dataset.value || bCell.textContent.trim();
+
+        if (sortType === 'number') {
+            aVal = parseFloat(aVal) || 0;
+            bVal = parseFloat(bVal) || 0;
+            return (aVal - bVal) * direction;
+        } else {
+            return aVal.localeCompare(bVal) * direction;
+        }
+    });
+
+    // Re-append rows in sorted order
+    rows.forEach(function(row) {
+        tbody.appendChild(row);
+    });
+}
+</script>
 {% endblock %}
