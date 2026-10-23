@@ -837,7 +837,9 @@ def postgame_screenshot_submit(game_id, team_id):
         'umpire_comments': umpire_comments
     }
 
-    success, report_obj, submit_error = post_game_service.submit_report(game_id, team_id, current_user.ID, data)
+    success, report_obj, submit_error = post_game_service.submit_report(
+        game_id, team_id, current_user.ID, data, source='gamechanger'
+    )
 
     if not success:
         return jsonify({'error': f'Failed to submit report: {submit_error}'}), 500

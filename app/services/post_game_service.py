@@ -132,7 +132,7 @@ def can_user_submit(user_id, game_id, team_id):
     return False, None, "You are not a coach for this team"
 
 
-def submit_report(game_id, team_id, user_id, data):
+def submit_report(game_id, team_id, user_id, data, source='manual'):
     """Save or update a post-game report.
 
     Args:
@@ -147,6 +147,8 @@ def submit_report(game_id, team_id, user_id, data):
             - umpire_rating: str (excellent/good/ok/poor)
             - umpire_name: str (optional - auto-populated from assignments if not provided)
             - umpire_comments: str (optional)
+        source: 'manual' or 'gamechanger' - GameChanger updates are always allowed,
+                manual updates lock after 24 hours
 
     Returns:
         tuple: (success: bool, report: PostGameReport or None, error: str or None)
@@ -154,7 +156,7 @@ def submit_report(game_id, team_id, user_id, data):
     import logging
     logger = logging.getLogger(__name__)
 
-    logger.info(f'PostGame submit_report started: game={game_id}, team={team_id}, user={user_id}')
+    logger.info(f'PostGame submit_report started: game={game_id}, team={team_id}, user={user_id}, source={source}')
 
     can_submit, role, error = can_user_submit(user_id, game_id, team_id)
     if not can_submit:
@@ -166,10 +168,10 @@ def submit_report(game_id, team_id, user_id, data):
         report = PostGameReport.get_or_create(game_id, team_id)
         logger.info(f'PostGame report retrieved/created: id={report.id}, status={report.status}')
 
-        # Check if editable
-        if not report.is_editable:
-            logger.warning(f'PostGame edit window expired: report={report.id}')
-            return False, None, "Edit window has expired (24 hours after submission)"
+        # Check if editable - GameChanger updates are always allowed, manual updates lock after 24 hours
+        if source != 'gamechanger' and not report.is_editable:
+            logger.warning(f'PostGame edit window expired for manual update: report={report.id}')
+            return False, None, "Edit window has expired (24 hours after submission). You can still update via GameChanger screenshot."
 
         # Update fields
         report.our_score = data.get('our_score')
