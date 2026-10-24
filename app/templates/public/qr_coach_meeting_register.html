@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}Coach Registration - {{ campaign.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .registration-container {
+        max-width: 600px;
+        margin: 40px auto;
+        padding: 0 20px;
+    }
+
+    .welcome-card {
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        margin-bottom: 24px;
+    }
+
+    .welcome-header {
+        text-align: center;
+        margin-bottom: 24px;
+    }
+
+    .welcome-header h1 {
+        color: #228B22;
+        font-size: 28px;
+        margin-bottom: 8px;
+    }
+
+    .welcome-header p {
+        color: #666;
+        font-size: 16px;
+    }
+
+    .welcome-message {
+        background: #f0f8f0;
+        padding: 16px;
+        border-radius: 8px;
+        margin-bottom: 24px;
+        color: #2d5a2d;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 6px;
+        color: #333;
+    }
+
+    .form-group input,
+    .form-group select {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 16px;
+        box-sizing: border-box;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+        border-color: #228B22;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(34, 139, 34, 0.1);
+    }
+
+    .form-group .hint {
+        font-size: 13px;
+        color: #888;
+        margin-top: 4px;
+    }
+
+    .submit-btn {
+        width: 100%;
+        padding: 14px;
+        background: #228B22;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 18px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .submit-btn:hover {
+        background: #1a6b1a;
+    }
+
+    .login-link {
+        text-align: center;
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid #eee;
+    }
+
+    .login-link a {
+        color: #228B22;
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .login-link a:hover {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="registration-container">
+    <div class="welcome-card">
+        <div class="welcome-header">
+            <h1>Welcome, Coach!</h1>
+            <p>{{ campaign.name }}{% if season %} - {{ season.display_name }}{% endif %}</p>
+        </div>
+
+        {% if campaign.welcome_message %}
+        <div class="welcome-message">
+            {{ campaign.welcome_message }}
+        </div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('public.qr_coach_meeting_register', token=campaign.token) }}">
+            <div class="form-group">
+                <label for="first_name">First Name *</label>
+                <input type="text" id="first_name" name="first_name" required
+                       value="{{ request.form.get('first_name', '') }}">
+            </div>
+
+            <div class="form-group">
+                <label for="last_name">Last Name *</label>
+                <input type="text" id="last_name" name="last_name" required
+                       value="{{ request.form.get('last_name', '') }}">
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email *</label>
+                <input type="email" id="email" name="email" required
+                       value="{{ request.form.get('email', '') }}">
+                <div class="hint">We'll send your login credentials and schedule updates here.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="phone">Phone (optional)</label>
+                <input type="tel" id="phone" name="phone"
+                       value="{{ request.form.get('phone', '') }}">
+                <div class="hint">For game-day notifications (optional).</div>
+            </div>
+
+            {% if teams %}
+            <div class="form-group">
+                <label for="team_id">Your Team (if known)</label>
+                <select id="team_id" name="team_id">
+                    <option value="">-- Select your team --</option>
+                    {% set current_league = None %}
+                    {% for team in teams %}
+                        {% if team.league and team.league.name != current_league %}
+                            {% if current_league is not none %}</optgroup>{% endif %}
+                            {% set current_league = team.league.name %}
+                            <optgroup label="{{ team.league.name }}">
+                        {% endif %}
+                        <option value="{{ team.team_ID }}">{{ team.computed_display_name }}</option>
+                    {% endfor %}
+                    {% if current_league is not none %}</optgroup>{% endif %}
+                </select>
+                <div class="hint">Don't worry if you don't know yet - you can update this later.</div>
+            </div>
+            {% endif %}
+
+            <button type="submit" class="submit-btn">Request Coach Access</button>
+        </form>
+
+        <div class="login-link">
+            Already have an account? <a href="{{ url_for('auth.login', next=url_for('public.qr_coach_meeting', token=campaign.token)) }}">Log in here</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

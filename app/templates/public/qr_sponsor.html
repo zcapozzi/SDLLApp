@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Sponsor Information - {{ campaign.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .sponsor-container {
+        max-width: 700px;
+        margin: 40px auto;
+        padding: 0 20px;
+    }
+
+    .welcome-card {
+        background: linear-gradient(135deg, #228B22 0%, #1a6b1a 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 40px;
+        text-align: center;
+        margin-bottom: 24px;
+    }
+
+    .welcome-card h1 {
+        font-size: 32px;
+        margin-bottom: 12px;
+    }
+
+    .welcome-card p {
+        font-size: 18px;
+        opacity: 0.9;
+    }
+
+    .info-card {
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        margin-bottom: 24px;
+    }
+
+    .info-card h2 {
+        color: #228B22;
+        font-size: 22px;
+        margin-bottom: 16px;
+    }
+
+    .info-card p {
+        color: #555;
+        line-height: 1.6;
+        margin-bottom: 16px;
+    }
+
+    .sponsor-benefits {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .sponsor-benefits li {
+        padding: 12px 0;
+        border-bottom: 1px solid #f0f0f0;
+        display: flex;
+        align-items: flex-start;
+    }
+
+    .sponsor-benefits li:last-child {
+        border-bottom: none;
+    }
+
+    .benefit-icon {
+        color: #228B22;
+        font-size: 20px;
+        margin-right: 12px;
+        flex-shrink: 0;
+    }
+
+    .contact-info {
+        background: #f0f8f0;
+        padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+    }
+
+    .contact-info h3 {
+        color: #228B22;
+        margin-bottom: 12px;
+    }
+
+    .contact-info p {
+        margin-bottom: 8px;
+    }
+
+    .contact-info a {
+        color: #228B22;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sponsor-container">
+    <div class="welcome-card">
+        <h1>Thank You for Your Interest!</h1>
+        <p>{{ campaign.name }}{% if season %} - {{ season.display_name }}{% endif %}</p>
+    </div>
+
+    {% if campaign.welcome_message %}
+    <div class="info-card">
+        <p>{{ campaign.welcome_message }}</p>
+    </div>
+    {% endif %}
+
+    <div class="info-card">
+        <h2>Sponsorship Benefits</h2>
+        <ul class="sponsor-benefits">
+            <li>
+                <span class="benefit-icon">&#10003;</span>
+                <span>Team jersey sponsorship with your company logo</span>
+            </li>
+            <li>
+                <span class="benefit-icon">&#10003;</span>
+                <span>Recognition on our website and social media</span>
+            </li>
+            <li>
+                <span class="benefit-icon">&#10003;</span>
+                <span>Field signage at games</span>
+            </li>
+            <li>
+                <span class="benefit-icon">&#10003;</span>
+                <span>Support youth sports in our community</span>
+            </li>
+        </ul>
+    </div>
+
+    <div class="info-card">
+        <h2>Contact Us</h2>
+        <div class="contact-info">
+            <h3>Ready to sponsor?</h3>
+            <p>Contact our sponsorship coordinator:</p>
+            <p><a href="mailto:sponsors@sdll.org">sponsors@sdll.org</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}

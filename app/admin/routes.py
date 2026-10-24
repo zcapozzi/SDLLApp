@@ -1120,3 +1120,166 @@ def postgame_summary():
         year=year,
         is_spring=is_spring
     )
+
+
+# =============================================================================
+# QR CAMPAIGN MANAGEMENT
+# =============================================================================
+
+@admin_bp.route('/qr-campaigns')
+@login_required
+@admin_required
+def qr_campaigns():
+    """List and manage QR campaigns."""
+    from app.models.qr_campaign import QRCampaign
+
+    campaigns = QRCampaign.query.order_by(QRCampaign.created_at.desc()).all()
+    current_season = OrgSeason.get_current_season()
+
+    return render_template(
+        'admin/qr_campaigns.html',
+        campaigns=campaigns,
+        campaign_types=QRCampaign.TYPES,
+        current_season=current_season
+    )
+
+
+@admin_bp.route('/qr-campaigns/create', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def qr_campaign_create():
+    """Create a new QR campaign."""
+    from app.models.qr_campaign import QRCampaign
+    from datetime import datetime
+
+    current_season = OrgSeason.get_current_season()
+
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        campaign_type = request.form.get('campaign_type', '')
+        description = request.form.get('description', '').strip()
+        sport = request.form.get('sport', '').strip() or None
+        welcome_message = request.form.get('welcome_message', '').strip() or None
+        expires_at_str = request.form.get('expires_at', '').strip()
+
+        if not name:
+            flash('Campaign name is required.', 'error')
+            return redirect(url_for('admin.qr_campaign_create'))
+
+        if campaign_type not in [t[0] for t in QRCampaign.TYPES]:
+            flash('Invalid campaign type.', 'error')
+            return redirect(url_for('admin.qr_campaign_create'))
+
+        expires_at = None
+        if expires_at_str:
+            try:
+                expires_at = datetime.strptime(expires_at_str, '%Y-%m-%d')
+            except ValueError:
+                flash('Invalid expiration date format.', 'error')
+                return redirect(url_for('admin.qr_campaign_create'))
+
+        campaign = QRCampaign.create(
+            name=name,
+            campaign_type=campaign_type,
+            created_by=current_user.ID,
+            description=description,
+            org_season_id=current_season.ID if current_season else None,
+            sport=sport,
+            welcome_message=welcome_message,
+            expires_at=expires_at
+        )
+
+        flash(f'QR campaign "{name}" created successfully.', 'success')
+        return redirect(url_for('admin.qr_campaign_detail', campaign_id=campaign.id))
+
+    return render_template(
+        'admin/qr_campaign_create.html',
+        campaign_types=QRCampaign.TYPES,
+        current_season=current_season
+    )
+
+
+@admin_bp.route('/qr-campaigns/<int:campaign_id>')
+@login_required
+@admin_required
+def qr_campaign_detail(campaign_id):
+    """View QR campaign details and analytics."""
+    from app.models.qr_campaign import QRCampaign, QRCampaignScan
+
+    campaign = QRCampaign.query.get_or_404(campaign_id)
+
+    # Get recent scans
+    recent_scans = QRCampaignScan.query.filter_by(
+        campaign_id=campaign_id
+    ).order_by(QRCampaignScan.scanned_at.desc()).limit(50).all()
+
+    # Get scan statistics by outcome
+    from sqlalchemy import func
+    outcome_stats = db.session.query(
+        QRCampaignScan.outcome,
+        func.count(QRCampaignScan.id)
+    ).filter_by(
+        campaign_id=campaign_id
+    ).group_by(QRCampaignScan.outcome).all()
+
+    outcome_counts = {outcome: count for outcome, count in outcome_stats}
+
+    return render_template(
+        'admin/qr_campaign_detail.html',
+        campaign=campaign,
+        recent_scans=recent_scans,
+        outcome_counts=outcome_counts
+    )
+
+
+@admin_bp.route('/qr-campaigns/<int:campaign_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def qr_campaign_edit(campaign_id):
+    """Edit a QR campaign."""
+    from app.models.qr_campaign import QRCampaign
+    from datetime import datetime
+
+    campaign = QRCampaign.query.get_or_404(campaign_id)
+
+    if request.method == 'POST':
+        campaign.name = request.form.get('name', '').strip()
+        campaign.description = request.form.get('description', '').strip() or None
+        campaign.sport = request.form.get('sport', '').strip() or None
+        campaign.welcome_message = request.form.get('welcome_message', '').strip() or None
+        campaign.active = 1 if request.form.get('active') else 0
+
+        expires_at_str = request.form.get('expires_at', '').strip()
+        if expires_at_str:
+            try:
+                campaign.expires_at = datetime.strptime(expires_at_str, '%Y-%m-%d')
+            except ValueError:
+                pass
+        else:
+            campaign.expires_at = None
+
+        db.session.commit()
+        flash('Campaign updated successfully.', 'success')
+        return redirect(url_for('admin.qr_campaign_detail', campaign_id=campaign_id))
+
+    return render_template(
+        'admin/qr_campaign_edit.html',
+        campaign=campaign,
+        campaign_types=QRCampaign.TYPES
+    )
+
+
+@admin_bp.route('/qr-campaigns/<int:campaign_id>/toggle', methods=['POST'])
+@login_required
+@admin_required
+def qr_campaign_toggle(campaign_id):
+    """Toggle campaign active status."""
+    from app.models.qr_campaign import QRCampaign
+
+    campaign = QRCampaign.query.get_or_404(campaign_id)
+    campaign.active = 0 if campaign.active == 1 else 1
+    db.session.commit()
+
+    status = 'activated' if campaign.active == 1 else 'deactivated'
+    flash(f'Campaign {status}.', 'success')
+    return redirect(url_for('admin.qr_campaigns'))

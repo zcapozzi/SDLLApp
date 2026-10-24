@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Edit {{ campaign.name }} - QR Campaign{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-container {
+        max-width: 700px;
+    }
+
+    .card {
+        background: white;
+        border-radius: 8px;
+        padding: 24px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 24px;
+    }
+
+    .card h2 {
+        color: #228B22;
+        font-size: 18px;
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid #f0f0f0;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 6px;
+        color: #333;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 15px;
+        box-sizing: border-box;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+        border-color: #228B22;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(34, 139, 34, 0.1);
+    }
+
+    .form-group .hint {
+        font-size: 13px;
+        color: #888;
+        margin-top: 4px;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+        width: auto;
+    }
+
+    .button-row {
+        display: flex;
+        gap: 12px;
+        margin-top: 24px;
+    }
+
+    .readonly-field {
+        background: #f8f9fa;
+        padding: 10px 12px;
+        border-radius: 6px;
+        font-family: monospace;
+        font-size: 14px;
+        color: #666;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Edit Campaign</h1>
+
+<div class="form-container">
+    <form method="POST">
+        <div class="card">
+            <h2>Campaign Details</h2>
+
+            <div class="form-group">
+                <label for="name">Campaign Name *</label>
+                <input type="text" id="name" name="name" required
+                       value="{{ campaign.name }}">
+            </div>
+
+            <div class="form-group">
+                <label>Campaign Type</label>
+                <div class="readonly-field">{{ campaign.type_display }}</div>
+                <div class="hint">Campaign type cannot be changed after creation.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="description">Description</label>
+                <textarea id="description" name="description" rows="2">{{ campaign.description or '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="active" name="active" value="1"
+                           {% if campaign.active == 1 %}checked{% endif %}>
+                    <label for="active" style="margin-bottom: 0;">Campaign is active</label>
+                </div>
+                <div class="hint">Inactive campaigns will show an "expired" message when scanned.</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Settings</h2>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="sport">Sport Filter</label>
+                    <select id="sport" name="sport">
+                        <option value="">All Sports</option>
+                        <option value="baseball" {% if campaign.sport == 'baseball' %}selected{% endif %}>Baseball Only</option>
+                        <option value="softball" {% if campaign.sport == 'softball' %}selected{% endif %}>Softball Only</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="expires_at">Expiration Date</label>
+                    <input type="date" id="expires_at" name="expires_at"
+                           value="{{ campaign.expires_at.strftime('%Y-%m-%d') if campaign.expires_at else '' }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="welcome_message">Welcome Message</label>
+                <textarea id="welcome_message" name="welcome_message" rows="3">{{ campaign.welcome_message or '' }}</textarea>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>QR Code URL</h2>
+            <div class="form-group">
+                <label>Campaign URL (cannot be changed)</label>
+                <div class="readonly-field">{{ request.url_root }}s/qr/{{ campaign.token }}</div>
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <a href="{{ url_for('admin.qr_campaign_detail', campaign_id=campaign.id) }}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

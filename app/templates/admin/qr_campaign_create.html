@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Create QR Campaign{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-container {
+        max-width: 700px;
+    }
+
+    .card {
+        background: white;
+        border-radius: 8px;
+        padding: 24px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 24px;
+    }
+
+    .card h2 {
+        color: #228B22;
+        font-size: 18px;
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid #f0f0f0;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 6px;
+        color: #333;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 15px;
+        box-sizing: border-box;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+        border-color: #228B22;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(34, 139, 34, 0.1);
+    }
+
+    .form-group .hint {
+        font-size: 13px;
+        color: #888;
+        margin-top: 4px;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    .button-row {
+        display: flex;
+        gap: 12px;
+        margin-top: 24px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Create QR Campaign</h1>
+
+<div class="form-container">
+    <form method="POST">
+        <div class="card">
+            <h2>Campaign Details</h2>
+
+            <div class="form-group">
+                <label for="name">Campaign Name *</label>
+                <input type="text" id="name" name="name" required
+                       placeholder="e.g., Fall 2026 Coach Meeting">
+            </div>
+
+            <div class="form-group">
+                <label for="campaign_type">Campaign Type *</label>
+                <select id="campaign_type" name="campaign_type" required>
+                    {% for code, label in campaign_types %}
+                    <option value="{{ code }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <div class="hint">Determines the flow users see when scanning the QR code.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="description">Description</label>
+                <textarea id="description" name="description" rows="2"
+                          placeholder="Internal notes about this campaign"></textarea>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Settings</h2>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="sport">Sport Filter</label>
+                    <select id="sport" name="sport">
+                        <option value="">All Sports</option>
+                        <option value="baseball">Baseball Only</option>
+                        <option value="softball">Softball Only</option>
+                    </select>
+                    <div class="hint">Filters teams shown for coach registration.</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="expires_at">Expiration Date</label>
+                    <input type="date" id="expires_at" name="expires_at">
+                    <div class="hint">Leave blank for no expiration.</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="welcome_message">Welcome Message</label>
+                <textarea id="welcome_message" name="welcome_message" rows="3"
+                          placeholder="Custom message shown after scanning the QR code"></textarea>
+                <div class="hint">Displayed at the top of the landing page.</div>
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button type="submit" class="btn btn-primary">Create Campaign</button>
+            <a href="{{ url_for('admin.qr_campaigns') }}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

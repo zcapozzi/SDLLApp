@@ -3022,3 +3022,302 @@ def umpire_survey_thanks():
         season=current_season,
         returning=returning
     )
+
+
+# =============================================================================
+# QR CAMPAIGN ROUTES
+# =============================================================================
+
+@public_bp.route('/qr/<token>')
+def qr_campaign_scan(token):
+    """Handle QR code scan - route to appropriate flow based on campaign type."""
+    from app.models.qr_campaign import QRCampaign, QRCampaignScan
+    from app.utils.encryption import hash_for_lookup
+
+    campaign = QRCampaign.get_by_token(token)
+    if not campaign:
+        flash('This QR code is not valid or has expired.', 'error')
+        return redirect(url_for('main.index'))
+
+    if not campaign.is_active:
+        flash('This QR code campaign has ended.', 'error')
+        return redirect(url_for('main.index'))
+
+    # Record the scan
+    campaign.record_scan()
+
+    # Hash IP for unique visitor tracking (privacy-preserving)
+    ip_hash = None
+    if request.remote_addr:
+        ip_hash = hashlib.sha256(request.remote_addr.encode()).hexdigest()[:32]
+
+    # Determine outcome based on login status
+    outcome = 'viewed'
+    user_id = None
+    if current_user.is_authenticated:
+        user_id = current_user.ID
+        outcome = 'logged_in'
+
+    # Record detailed scan
+    QRCampaignScan.record(
+        campaign_id=campaign.id,
+        user_id=user_id,
+        outcome=outcome,
+        user_agent=request.user_agent.string[:500] if request.user_agent else None,
+        ip_hash=ip_hash
+    )
+
+    # Route based on campaign type
+    if campaign.campaign_type == QRCampaign.TYPE_COACH_MEETING:
+        return redirect(url_for('public.qr_coach_meeting', token=token))
+    elif campaign.campaign_type == QRCampaign.TYPE_UMPIRE_MENTOR:
+        return redirect(url_for('public.qr_umpire_mentor', token=token))
+    elif campaign.campaign_type == QRCampaign.TYPE_SPONSOR:
+        return redirect(url_for('public.qr_sponsor', token=token))
+    elif campaign.campaign_type == QRCampaign.TYPE_VOLUNTEER:
+        return redirect(url_for('public.qr_volunteer', token=token))
+    else:
+        # General access - redirect to request-access landing
+        return redirect(url_for('public.request_access_landing'))
+
+
+@public_bp.route('/qr/<token>/coach-meeting')
+def qr_coach_meeting(token):
+    """Coach meeting flow - show schedule info or registration based on login status."""
+    from app.models.qr_campaign import QRCampaign
+    from app.models.org_season import OrgSeason
+    from app.models.coach import CoachUser, CoachSeason
+    from app.models.team import TeamSeason
+    from app.models.game import Game
+    from app.models.contact_preference import ContactPreference
+    from sqlalchemy.orm import joinedload
+
+    campaign = QRCampaign.get_by_token(token)
+    if not campaign or not campaign.is_active:
+        flash('This QR code is not valid or has expired.', 'error')
+        return redirect(url_for('main.index'))
+
+    current_season = OrgSeason.get_current_season()
+
+    # If user is logged in, check if they're a coach
+    if current_user.is_authenticated:
+        # Find their coach profile
+        coach_user = CoachUser.query.filter_by(
+            user_id=current_user.ID,
+            status='active'
+        ).first()
+
+        if coach_user:
+            # Get their team assignments for this season
+            coach_seasons = CoachSeason.query.filter_by(
+                coach_id=coach_user.id
+            ).options(
+                joinedload(CoachSeason.team)
+            ).all()
+
+            # Filter to current season teams
+            current_teams = []
+            for cs in coach_seasons:
+                if cs.team and current_season:
+                    if cs.team.year == current_season.year and cs.team.is_spring == current_season.is_spring:
+                        current_teams.append({
+                            'team': cs.team,
+                            'role': cs.role
+                        })
+
+            # Get upcoming games for their teams
+            upcoming_games = []
+            if current_teams:
+                team_ids = [t['team'].team_ID for t in current_teams]
+                games = Game.query.filter(
+                    Game.year == current_season.year,
+                    Game.is_spring == current_season.is_spring,
+                    Game.active == 1,
+                    Game.game_date >= date.today(),
+                    db.or_(
+                        Game.home_ID.in_(team_ids),
+                        Game.away_ID.in_(team_ids)
+                    )
+                ).options(
+                    joinedload(Game.home_team_rel),
+                    joinedload(Game.away_team_rel),
+                    joinedload(Game.field_rel)
+                ).order_by(Game.game_date, Game.start_time).limit(10).all()
+                upcoming_games = games
+
+            # Get their contact preferences
+            contact_prefs = ContactPreference.query.filter_by(
+                user_id=current_user.ID
+            ).all()
+
+            return render_template(
+                'public/qr_coach_meeting_logged_in.html',
+                campaign=campaign,
+                season=current_season,
+                coach_user=coach_user,
+                current_teams=current_teams,
+                upcoming_games=upcoming_games,
+                contact_prefs=contact_prefs
+            )
+
+        # User is logged in but not a coach - show option to request coach access
+        return render_template(
+            'public/qr_coach_meeting_not_coach.html',
+            campaign=campaign,
+            season=current_season,
+            user=current_user
+        )
+
+    # Not logged in - show registration form
+    teams = []
+    if current_season:
+        # Filter by sport if campaign specifies
+        query = TeamSeason.query.filter_by(
+            year=current_season.year,
+            is_spring=current_season.is_spring,
+            active=1,
+            is_placeholder=0
+        )
+        if campaign.sport:
+            from app.models.league import League
+            sport_leagues = League.query.filter_by(sport=campaign.sport).all()
+            league_ids = [l.id for l in sport_leagues]
+            query = query.filter(TeamSeason.league_id.in_(league_ids))
+
+        teams = query.order_by(TeamSeason.league_id, TeamSeason.display_name).all()
+
+    return render_template(
+        'public/qr_coach_meeting_register.html',
+        campaign=campaign,
+        season=current_season,
+        teams=teams
+    )
+
+
+@public_bp.route('/qr/<token>/coach-meeting/register', methods=['POST'])
+def qr_coach_meeting_register(token):
+    """Handle coach registration from QR campaign."""
+    from app.models.qr_campaign import QRCampaign
+    from app.models.access_request import AccessRequest
+    from app.models.user import User
+    from app.services.access_request_service import AccessRequestService
+
+    campaign = QRCampaign.get_by_token(token)
+    if not campaign or not campaign.is_active:
+        flash('This QR code is not valid or has expired.', 'error')
+        return redirect(url_for('main.index'))
+
+    first_name = request.form.get('first_name', '').strip()
+    last_name = request.form.get('last_name', '').strip()
+    email = request.form.get('email', '').strip().lower()
+    phone = request.form.get('phone', '').strip()
+    team_id = request.form.get('team_id', type=int)
+
+    errors = []
+    if not first_name:
+        errors.append('First name is required.')
+    if not last_name:
+        errors.append('Last name is required.')
+    if not email:
+        errors.append('Email is required.')
+    elif '@' not in email or '.' not in email:
+        errors.append('Please enter a valid email address.')
+
+    if errors:
+        flash(' '.join(errors), 'error')
+        return redirect(url_for('public.qr_coach_meeting', token=token))
+
+    # Check if user already exists
+    existing_user = User.get_by_email(email)
+    if existing_user:
+        flash('An account with this email already exists. Please log in instead.', 'warning')
+        return redirect(url_for('auth.login', next=url_for('public.qr_coach_meeting', token=token)))
+
+    # Check for pending request
+    pending = AccessRequest.get_pending_by_email(email)
+    if pending:
+        flash('A request with this email is already pending review.', 'info')
+        return redirect(url_for('public.request_access_pending', type='coach'))
+
+    try:
+        # Create the coach request
+        access_request = AccessRequest.create_coach_request(
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone if phone else None,
+            team_id=team_id if team_id else None
+        )
+
+        # Record the registration in campaign
+        campaign.record_registration()
+
+        # Notify admins
+        service = AccessRequestService()
+        service.notify_admins_of_new_request(access_request)
+
+        flash('Your coach access request has been submitted! You will receive an email once approved.', 'success')
+        return redirect(url_for('public.request_access_pending', type='coach'))
+
+    except Exception as e:
+        _log_tracking_error("qr_coach_meeting_register", e)
+        _safe_rollback()
+        flash('There was an error submitting your request. Please try again.', 'error')
+        return redirect(url_for('public.qr_coach_meeting', token=token))
+
+
+@public_bp.route('/qr/<token>/umpire-mentor')
+def qr_umpire_mentor(token):
+    """Umpire mentor signup flow."""
+    from app.models.qr_campaign import QRCampaign
+    from app.models.org_season import OrgSeason
+
+    campaign = QRCampaign.get_by_token(token)
+    if not campaign or not campaign.is_active:
+        flash('This QR code is not valid or has expired.', 'error')
+        return redirect(url_for('main.index'))
+
+    current_season = OrgSeason.get_current_season()
+
+    # Redirect to umpire interest form with campaign context
+    return redirect(url_for('public.umpire_interest', campaign=token))
+
+
+@public_bp.route('/qr/<token>/sponsor')
+def qr_sponsor(token):
+    """Sponsor registration flow."""
+    from app.models.qr_campaign import QRCampaign
+    from app.models.org_season import OrgSeason
+
+    campaign = QRCampaign.get_by_token(token)
+    if not campaign or not campaign.is_active:
+        flash('This QR code is not valid or has expired.', 'error')
+        return redirect(url_for('main.index'))
+
+    current_season = OrgSeason.get_current_season()
+
+    return render_template(
+        'public/qr_sponsor.html',
+        campaign=campaign,
+        season=current_season
+    )
+
+
+@public_bp.route('/qr/<token>/volunteer')
+def qr_volunteer(token):
+    """Volunteer signup flow."""
+    from app.models.qr_campaign import QRCampaign
+    from app.models.org_season import OrgSeason
+
+    campaign = QRCampaign.get_by_token(token)
+    if not campaign or not campaign.is_active:
+        flash('This QR code is not valid or has expired.', 'error')
+        return redirect(url_for('main.index'))
+
+    current_season = OrgSeason.get_current_season()
+
+    return render_template(
+        'public/qr_volunteer.html',
+        campaign=campaign,
+        season=current_season
+    )

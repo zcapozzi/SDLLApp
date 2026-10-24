@@ -85,3 +85,6 @@ from .contact_preference import ContactPreference
 
 # Call-up tracking for player substitutes
 from .callup_request import CallUpRequest
+
+# QR code-based onboarding campaigns
+from .qr_campaign import QRCampaign, QRCampaignScan

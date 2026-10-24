@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+
+{% block title %}{{ campaign.name }} - QR Campaign{% endblock %}
+
+{% block extra_css %}
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 24px;
+    }
+
+    .page-header h1 {
+        margin-bottom: 4px;
+    }
+
+    .campaign-type {
+        font-size: 14px;
+        color: #666;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .stat-card {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+
+    .stat-value {
+        font-size: 32px;
+        font-weight: 700;
+        color: #228B22;
+    }
+
+    .stat-label {
+        font-size: 13px;
+        color: #888;
+        text-transform: uppercase;
+        margin-top: 4px;
+    }
+
+    .content-grid {
+        display: grid;
+        grid-template-columns: 1fr 350px;
+        gap: 24px;
+    }
+
+    @media (max-width: 900px) {
+        .content-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .card {
+        background: white;
+        border-radius: 8px;
+        padding: 24px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 24px;
+    }
+
+    .card h2 {
+        color: #228B22;
+        font-size: 18px;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid #f0f0f0;
+    }
+
+    .qr-container {
+        text-align: center;
+        padding: 20px;
+    }
+
+    .qr-code {
+        background: white;
+        padding: 16px;
+        border-radius: 8px;
+        display: inline-block;
+        margin-bottom: 16px;
+    }
+
+    .qr-url {
+        font-family: monospace;
+        font-size: 14px;
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+        word-break: break-all;
+        margin-bottom: 12px;
+    }
+
+    .copy-btn {
+        padding: 8px 16px;
+        background: #228B22;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    .copy-btn:hover {
+        background: #1a6b1a;
+    }
+
+    .scan-list {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .scan-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .scan-item:last-child {
+        border-bottom: none;
+    }
+
+    .scan-time {
+        font-size: 14px;
+        color: #666;
+    }
+
+    .scan-outcome {
+        font-size: 12px;
+        padding: 3px 8px;
+        border-radius: 4px;
+        background: #e2e3e5;
+    }
+
+    .scan-outcome.logged_in {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .scan-outcome.registered {
+        background: #cce5ff;
+        color: #004085;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .badge-active {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .badge-inactive {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    .detail-row {
+        display: flex;
+        padding: 10px 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .detail-label {
+        width: 140px;
+        color: #666;
+        flex-shrink: 0;
+    }
+
+    .detail-value {
+        flex: 1;
+    }
+
+    .no-scans {
+        text-align: center;
+        padding: 40px;
+        color: #888;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ campaign.name }}</h1>
+        <div class="campaign-type">
+            {{ campaign.type_display }}
+            {% if campaign.is_active %}
+            <span class="badge badge-active">Active</span>
+            {% else %}
+            <span class="badge badge-inactive">Inactive</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('admin.qr_campaign_edit', campaign_id=campaign.id) }}" class="btn btn-outline">Edit</a>
+        <form method="POST" action="{{ url_for('admin.qr_campaign_toggle', campaign_id=campaign.id) }}" style="display: inline;">
+            <button type="submit" class="btn {% if campaign.is_active %}btn-outline{% else %}btn-primary{% endif %}">
+                {% if campaign.is_active %}Deactivate{% else %}Activate{% endif %}
+            </button>
+        </form>
+        <a href="{{ url_for('admin.qr_campaigns') }}" class="btn btn-outline">Back</a>
+    </div>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ campaign.scan_count or 0 }}</div>
+        <div class="stat-label">Total Scans</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ campaign.registration_count or 0 }}</div>
+        <div class="stat-label">Registrations</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ campaign.conversion_rate }}%</div>
+        <div class="stat-label">Conversion Rate</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ outcome_counts.get('logged_in', 0) }}</div>
+        <div class="stat-label">Logged In Users</div>
+    </div>
+</div>
+
+<div class="content-grid">
+    <div>
+        <div class="card">
+            <h2>Campaign Details</h2>
+            <div class="detail-row">
+                <div class="detail-label">Created</div>
+                <div class="detail-value">{{ campaign.created_at.strftime('%B %d, %Y at %I:%M %p') }}</div>
+            </div>
+            {% if campaign.creator %}
+            <div class="detail-row">
+                <div class="detail-label">Created By</div>
+                <div class="detail-value">{{ campaign.creator.name }}</div>
+            </div>
+            {% endif %}
+            {% if campaign.expires_at %}
+            <div class="detail-row">
+                <div class="detail-label">Expires</div>
+                <div class="detail-value">{{ campaign.expires_at.strftime('%B %d, %Y') }}</div>
+            </div>
+            {% endif %}
+            {% if campaign.sport %}
+            <div class="detail-row">
+                <div class="detail-label">Sport</div>
+                <div class="detail-value">{{ campaign.sport|title }}</div>
+            </div>
+            {% endif %}
+            {% if campaign.description %}
+            <div class="detail-row">
+                <div class="detail-label">Description</div>
+                <div class="detail-value">{{ campaign.description }}</div>
+            </div>
+            {% endif %}
+            {% if campaign.welcome_message %}
+            <div class="detail-row">
+                <div class="detail-label">Welcome Message</div>
+                <div class="detail-value">{{ campaign.welcome_message }}</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Recent Scans</h2>
+            {% if recent_scans %}
+            <div class="scan-list">
+                {% for scan in recent_scans %}
+                <div class="scan-item">
+                    <div>
+                        <div class="scan-time">{{ scan.scanned_at.strftime('%m/%d/%Y %I:%M %p') }}</div>
+                        {% if scan.user %}
+                        <div style="font-size: 13px; color: #228B22;">{{ scan.user.name }}</div>
+                        {% endif %}
+                    </div>
+                    <span class="scan-outcome {{ scan.outcome or '' }}">{{ scan.outcome or 'viewed' }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="no-scans">
+                <p>No scans recorded yet.</p>
+                <p style="font-size: 14px; margin-top: 8px;">Share the QR code to start tracking scans.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div>
+        <div class="card">
+            <h2>QR Code</h2>
+            <div class="qr-container">
+                <div class="qr-code">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={{ request.url_root }}s/qr/{{ campaign.token }}"
+                         alt="QR Code for {{ campaign.name }}"
+                         width="200" height="200">
+                </div>
+                <div class="qr-url" id="qr-url">{{ request.url_root }}s/qr/{{ campaign.token }}</div>
+                <button class="copy-btn" onclick="copyUrl()">Copy URL</button>
+            </div>
+            <p style="text-align: center; font-size: 13px; color: #888; margin-top: 12px;">
+                Right-click the QR code to save the image, or copy the URL to create your own QR code.
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>Test the Campaign</h2>
+            <p style="margin-bottom: 12px; color: #666;">Preview how users will experience this campaign:</p>
+            <a href="{{ url_for('public.qr_campaign_scan', token=campaign.token) }}" target="_blank" class="btn btn-primary" style="width: 100%; text-align: center;">
+                Open Landing Page
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyUrl() {
+    var url = document.getElementById('qr-url').textContent;
+    navigator.clipboard.writeText(url).then(function() {
+        var btn = document.querySelector('.copy-btn');
+        var original = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(function() {
+            btn.textContent = original;
+        }, 2000);
+    });
+}
+</script>
+{% endblock %}

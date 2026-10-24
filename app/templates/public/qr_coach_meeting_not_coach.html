@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Coach Registration - {{ campaign.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .container {
+        max-width: 600px;
+        margin: 40px auto;
+        padding: 0 20px;
+    }
+
+    .card {
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+
+    .card h1 {
+        color: #228B22;
+        font-size: 28px;
+        margin-bottom: 16px;
+    }
+
+    .card p {
+        color: #666;
+        font-size: 16px;
+        margin-bottom: 24px;
+    }
+
+    .user-info {
+        background: #f8f9fa;
+        padding: 16px;
+        border-radius: 8px;
+        margin-bottom: 24px;
+    }
+
+    .user-info .name {
+        font-weight: 600;
+        color: #333;
+        font-size: 18px;
+    }
+
+    .user-info .email {
+        color: #666;
+        font-size: 14px;
+    }
+
+    .action-btn {
+        display: inline-block;
+        padding: 14px 28px;
+        background: #228B22;
+        color: white;
+        text-decoration: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        transition: background 0.2s;
+        margin: 8px;
+    }
+
+    .action-btn:hover {
+        background: #1a6b1a;
+    }
+
+    .action-btn.secondary {
+        background: #6c757d;
+    }
+
+    .action-btn.secondary:hover {
+        background: #5a6268;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="card">
+        <h1>Welcome!</h1>
+        <p>You're logged in, but we don't have you registered as a coach yet.</p>
+
+        <div class="user-info">
+            <div class="name">{{ user.name }}</div>
+            <div class="email">{{ user.email }}</div>
+        </div>
+
+        <p>Would you like to request coach access for the {{ season.display_name if season else 'current' }} season?</p>
+
+        <div>
+            <a href="{{ url_for('public.request_access_coach') }}" class="action-btn">Request Coach Access</a>
+            <a href="{{ url_for('main.dashboard') }}" class="action-btn secondary">Go to Dashboard</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

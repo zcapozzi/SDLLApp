@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block title %}QR Campaigns{% endblock %}
+
+{% block extra_css %}
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+    }
+
+    .campaigns-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .campaigns-table th {
+        background: #f8f9fa;
+        padding: 12px 16px;
+        text-align: left;
+        font-weight: 600;
+        color: #555;
+        border-bottom: 2px solid #e9ecef;
+    }
+
+    .campaigns-table td {
+        padding: 14px 16px;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .campaigns-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .campaigns-table tr:hover {
+        background: #f8f9fa;
+    }
+
+    .campaign-name {
+        font-weight: 600;
+        color: #228B22;
+    }
+
+    .campaign-name a {
+        color: #228B22;
+        text-decoration: none;
+    }
+
+    .campaign-name a:hover {
+        text-decoration: underline;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .badge-active {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .badge-inactive {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    .badge-type {
+        background: #e2e3e5;
+        color: #383d41;
+    }
+
+    .stat-cell {
+        text-align: center;
+    }
+
+    .stat-number {
+        font-weight: 700;
+        font-size: 18px;
+        color: #228B22;
+    }
+
+    .stat-label {
+        font-size: 11px;
+        color: #888;
+        text-transform: uppercase;
+    }
+
+    .actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 13px;
+        border-radius: 4px;
+        text-decoration: none;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #666;
+    }
+
+    .empty-state-icon {
+        font-size: 64px;
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>QR Campaigns</h1>
+    <a href="{{ url_for('admin.qr_campaign_create') }}" class="btn btn-primary">Create Campaign</a>
+</div>
+
+{% if campaigns %}
+<table class="campaigns-table">
+    <thead>
+        <tr>
+            <th>Campaign</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th class="stat-cell">Scans</th>
+            <th class="stat-cell">Registrations</th>
+            <th class="stat-cell">Conversion</th>
+            <th>Created</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for campaign in campaigns %}
+        <tr>
+            <td class="campaign-name">
+                <a href="{{ url_for('admin.qr_campaign_detail', campaign_id=campaign.id) }}">
+                    {{ campaign.name }}
+                </a>
+                {% if campaign.description %}
+                <div style="font-size: 13px; color: #888; font-weight: normal; margin-top: 2px;">
+                    {{ campaign.description[:60] }}{% if campaign.description|length > 60 %}...{% endif %}
+                </div>
+                {% endif %}
+            </td>
+            <td>
+                <span class="badge badge-type">{{ campaign.type_display }}</span>
+            </td>
+            <td>
+                {% if campaign.is_active %}
+                <span class="badge badge-active">Active</span>
+                {% else %}
+                <span class="badge badge-inactive">Inactive</span>
+                {% endif %}
+            </td>
+            <td class="stat-cell">
+                <div class="stat-number">{{ campaign.scan_count or 0 }}</div>
+            </td>
+            <td class="stat-cell">
+                <div class="stat-number">{{ campaign.registration_count or 0 }}</div>
+            </td>
+            <td class="stat-cell">
+                <div class="stat-number">{{ campaign.conversion_rate }}%</div>
+            </td>
+            <td>{{ campaign.created_at.strftime('%m/%d/%Y') }}</td>
+            <td class="actions">
+                <a href="{{ url_for('admin.qr_campaign_detail', campaign_id=campaign.id) }}" class="btn btn-sm btn-outline">View</a>
+                <a href="{{ url_for('admin.qr_campaign_edit', campaign_id=campaign.id) }}" class="btn btn-sm btn-outline">Edit</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">&#128274;</div>
+    <h3>No QR Campaigns Yet</h3>
+    <p>Create your first QR campaign to start onboarding coaches, sponsors, and volunteers.</p>
+    <a href="{{ url_for('admin.qr_campaign_create') }}" class="btn btn-primary" style="margin-top: 16px;">Create Campaign</a>
+</div>
+{% endif %}
+{% endblock %}

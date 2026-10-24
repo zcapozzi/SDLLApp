@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Volunteer Signup - {{ campaign.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .volunteer-container {
+        max-width: 700px;
+        margin: 40px auto;
+        padding: 0 20px;
+    }
+
+    .welcome-card {
+        background: linear-gradient(135deg, #228B22 0%, #1a6b1a 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 40px;
+        text-align: center;
+        margin-bottom: 24px;
+    }
+
+    .welcome-card h1 {
+        font-size: 32px;
+        margin-bottom: 12px;
+    }
+
+    .welcome-card p {
+        font-size: 18px;
+        opacity: 0.9;
+    }
+
+    .info-card {
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        margin-bottom: 24px;
+    }
+
+    .info-card h2 {
+        color: #228B22;
+        font-size: 22px;
+        margin-bottom: 16px;
+    }
+
+    .volunteer-roles {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+    }
+
+    .role-card {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+        transition: all 0.2s;
+    }
+
+    .role-card:hover {
+        background: #f0f8f0;
+        transform: translateY(-2px);
+    }
+
+    .role-icon {
+        font-size: 32px;
+        margin-bottom: 8px;
+    }
+
+    .role-title {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 4px;
+    }
+
+    .role-desc {
+        font-size: 13px;
+        color: #666;
+    }
+
+    .signup-btn {
+        display: inline-block;
+        padding: 14px 32px;
+        background: #228B22;
+        color: white;
+        text-decoration: none;
+        border-radius: 8px;
+        font-size: 18px;
+        font-weight: 600;
+        transition: background 0.2s;
+    }
+
+    .signup-btn:hover {
+        background: #1a6b1a;
+    }
+
+    .signup-section {
+        text-align: center;
+        margin-top: 24px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="volunteer-container">
+    <div class="welcome-card">
+        <h1>Join Our Team!</h1>
+        <p>{{ campaign.name }}{% if season %} - {{ season.display_name }}{% endif %}</p>
+    </div>
+
+    {% if campaign.welcome_message %}
+    <div class="info-card">
+        <p>{{ campaign.welcome_message }}</p>
+    </div>
+    {% endif %}
+
+    <div class="info-card">
+        <h2>Volunteer Opportunities</h2>
+        <div class="volunteer-roles">
+            <div class="role-card">
+                <div class="role-icon">&#9918;</div>
+                <div class="role-title">Umpire</div>
+                <div class="role-desc">Officiate games for our youth players</div>
+            </div>
+            <div class="role-card">
+                <div class="role-icon">&#127939;</div>
+                <div class="role-title">Field Prep</div>
+                <div class="role-desc">Help prepare fields for games</div>
+            </div>
+            <div class="role-card">
+                <div class="role-icon">&#127837;</div>
+                <div class="role-title">Concessions</div>
+                <div class="role-desc">Run the snack bar during games</div>
+            </div>
+            <div class="role-card">
+                <div class="role-icon">&#128247;</div>
+                <div class="role-title">Scorekeeper</div>
+                <div class="role-desc">Keep official score for games</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="info-card">
+        <div class="signup-section">
+            <h2>Ready to Help?</h2>
+            <p style="color: #666; margin-bottom: 20px;">Sign up to receive information about volunteer opportunities.</p>
+            <a href="{{ url_for('public.request_access_parent') }}" class="signup-btn">Sign Up Now</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
