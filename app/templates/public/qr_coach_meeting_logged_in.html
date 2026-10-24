@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Coach Dashboard - {{ campaign.name }}{% endblock %}
+{% block title %}Coach Check-In - {{ campaign.name }}{% endblock %}
 
 {% block extra_css %}
 <style>
     .coach-container {
-        max-width: 800px;
+        max-width: 600px;
         margin: 40px auto;
         padding: 0 20px;
     }
@@ -13,19 +13,21 @@
     .welcome-banner {
         background: linear-gradient(135deg, #228B22 0%, #1a6b1a 100%);
         color: white;
-        padding: 30px;
+        padding: 24px 30px;
         border-radius: 12px;
         margin-bottom: 24px;
+        text-align: center;
     }
 
     .welcome-banner h1 {
-        font-size: 28px;
-        margin-bottom: 8px;
+        font-size: 24px;
+        margin-bottom: 4px;
     }
 
     .welcome-banner p {
         opacity: 0.9;
-        font-size: 16px;
+        font-size: 14px;
+        margin: 0;
     }
 
     .card {
@@ -42,6 +44,84 @@
         margin-bottom: 16px;
         padding-bottom: 12px;
         border-bottom: 2px solid #f0f0f0;
+    }
+
+    .card p.intro {
+        color: #666;
+        margin-bottom: 20px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 6px;
+        color: #333;
+    }
+
+    .form-group input,
+    .form-group select {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 16px;
+        box-sizing: border-box;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+        border-color: #228B22;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(34, 139, 34, 0.1);
+    }
+
+    .form-group .hint {
+        font-size: 13px;
+        color: #888;
+        margin-top: 4px;
+    }
+
+    .form-group .required {
+        color: #dc3545;
+    }
+
+    .form-group .current-value {
+        font-size: 13px;
+        color: #228B22;
+        margin-top: 4px;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    @media (max-width: 500px) {
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .btn-submit {
+        width: 100%;
+        padding: 14px;
+        background: #228B22;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .btn-submit:hover {
+        background: #1a6b1a;
     }
 
     .team-list {
@@ -69,91 +149,30 @@
         margin-left: 8px;
     }
 
-    .game-list {
-        margin: 0;
+    .success-card {
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        border-radius: 12px;
+        padding: 24px;
+        text-align: center;
+        margin-bottom: 24px;
+    }
+
+    .success-card h2 {
+        color: #155724;
+        border: none;
         padding: 0;
-        list-style: none;
+        margin-bottom: 8px;
     }
 
-    .game-item {
-        display: flex;
-        align-items: center;
-        padding: 14px 0;
-        border-bottom: 1px solid #f0f0f0;
-    }
-
-    .game-item:last-child {
-        border-bottom: none;
-    }
-
-    .game-date {
-        min-width: 80px;
-        text-align: center;
-        margin-right: 16px;
-    }
-
-    .game-date .day {
-        font-size: 24px;
-        font-weight: 700;
-        color: #228B22;
-        line-height: 1;
-    }
-
-    .game-date .month {
-        font-size: 12px;
-        color: #666;
-        text-transform: uppercase;
-    }
-
-    .game-details {
-        flex: 1;
-    }
-
-    .game-matchup {
-        font-weight: 600;
-        color: #333;
-        margin-bottom: 4px;
-    }
-
-    .game-info {
-        font-size: 14px;
-        color: #666;
-    }
-
-    .no-games {
-        text-align: center;
-        padding: 30px;
-        color: #888;
-    }
-
-    .contact-prefs {
-        margin-top: 16px;
-    }
-
-    .pref-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px 0;
-        border-bottom: 1px solid #f0f0f0;
-    }
-
-    .pref-item:last-child {
-        border-bottom: none;
-    }
-
-    .pref-label {
-        color: #333;
-    }
-
-    .pref-value {
-        font-size: 14px;
-        color: #666;
+    .success-card p {
+        color: #155724;
+        margin: 0;
     }
 
     .quick-links {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         gap: 12px;
     }
 
@@ -177,24 +196,139 @@
         font-size: 20px;
         margin-right: 12px;
     }
+
+    .info-box {
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+        border-radius: 8px;
+        padding: 14px;
+        margin-bottom: 20px;
+        font-size: 14px;
+        color: #856404;
+    }
+
+    .checkbox-group {
+        margin-top: 12px;
+    }
+
+    .checkbox-item {
+        display: flex;
+        align-items: flex-start;
+        padding: 12px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        cursor: pointer;
+    }
+
+    .checkbox-item:hover {
+        background: #f0f8f0;
+    }
+
+    .checkbox-item input[type="checkbox"] {
+        width: auto;
+        margin-right: 12px;
+        margin-top: 2px;
+    }
+
+    .checkbox-item .team-info {
+        flex: 1;
+    }
+
+    .checkbox-item .team-name {
+        font-weight: 600;
+        color: #333;
+    }
+
+    .checkbox-item .team-league {
+        font-size: 13px;
+        color: #666;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="coach-container">
     <div class="welcome-banner">
-        <h1>Welcome back, {{ current_user.name }}!</h1>
+        <h1>Welcome, {{ current_user.name.split()[0] if current_user.name else 'Coach' }}!</h1>
         <p>{{ campaign.name }}{% if season %} - {{ season.display_name }}{% endif %}</p>
+    </div>
+
+    {% if needs_profile_update %}
+    {# Profile completion form #}
+    <div class="card">
+        <h2>Complete Your Profile</h2>
+        <p class="intro">Please confirm your information so we can keep you updated on schedules and important announcements.</p>
+
+        {% if not current_teams %}
+        <div class="info-box">
+            We don't have a team assignment for you yet. Please select your team(s) below, or leave blank if you're not sure.
+        </div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('public.qr_coach_update_profile', token=campaign.token) }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="first_name">First Name <span class="required">*</span></label>
+                    <input type="text" id="first_name" name="first_name" required
+                           value="{{ current_user.name.split()[0] if current_user.name else '' }}">
+                </div>
+
+                <div class="form-group">
+                    <label for="last_name">Last Name <span class="required">*</span></label>
+                    <input type="text" id="last_name" name="last_name" required
+                           value="{{ ' '.join(current_user.name.split()[1:]) if current_user.name and ' ' in current_user.name else '' }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="phone">Phone <span class="required">*</span></label>
+                <input type="tel" id="phone" name="phone" required
+                       value="{{ current_user.phone or '' }}"
+                       placeholder="(919) 555-1234">
+                <div class="hint">For game-day notifications and schedule changes.</div>
+            </div>
+
+            {% if available_teams %}
+            <div class="form-group">
+                <label>Your Team(s) This Season</label>
+                <div class="hint" style="margin-bottom: 12px;">Select all teams you're coaching or assisting with.</div>
+                <div class="checkbox-group">
+                    {% for team in available_teams %}
+                    <label class="checkbox-item">
+                        <input type="checkbox" name="team_ids" value="{{ team.team_ID }}"
+                               {% if team.team_ID in current_team_ids %}checked{% endif %}>
+                        <div class="team-info">
+                            <div class="team-name">{{ team.computed_display_name }}</div>
+                            <div class="team-league">{{ team.league_display_name }}</div>
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <button type="submit" class="btn-submit">Save & Continue</button>
+        </form>
+    </div>
+
+    {% else %}
+    {# Profile is complete - show confirmation and links #}
+    <div class="success-card">
+        <h2>You're All Set!</h2>
+        <p>Your profile is up to date.</p>
     </div>
 
     {% if current_teams %}
     <div class="card">
-        <h2>Your Teams This Season</h2>
+        <h2>Your Teams</h2>
         <div class="team-list">
             {% for t in current_teams %}
             <div class="team-badge">
                 <span class="team-name">{{ t.team.computed_display_name }}</span>
-                <span class="team-role">({{ t.role|title if t.role else 'Coach' }})</span>
+                {% if t.role and t.role != 'head_coach' %}
+                <span class="team-role">({{ t.role|replace('_', ' ')|title }})</span>
+                {% endif %}
             </div>
             {% endfor %}
         </div>
@@ -202,70 +336,21 @@
     {% endif %}
 
     <div class="card">
-        <h2>Upcoming Games</h2>
-        {% if upcoming_games %}
-        <ul class="game-list">
-            {% for game in upcoming_games %}
-            <li class="game-item">
-                <div class="game-date">
-                    <div class="day">{{ game.game_date.strftime('%d').lstrip('0') }}</div>
-                    <div class="month">{{ game.game_date.strftime('%b') }}</div>
-                </div>
-                <div class="game-details">
-                    <div class="game-matchup">
-                        {{ game.home_team_rel.computed_display_name if game.home_team_rel else 'TBD' }}
-                        vs
-                        {{ game.away_team_rel.computed_display_name if game.away_team_rel else 'TBD' }}
-                    </div>
-                    <div class="game-info">
-                        {{ game.start_time.strftime('%I:%M %p').lstrip('0') if game.start_time else '' }}
-                        {% if game.field_rel %}@ {{ game.field_rel.name }}{% endif %}
-                    </div>
-                </div>
-            </li>
-            {% endfor %}
-        </ul>
-        {% else %}
-        <div class="no-games">
-            <p>No upcoming games scheduled yet.</p>
-        </div>
-        {% endif %}
-    </div>
-
-    <div class="card">
         <h2>Quick Links</h2>
         <div class="quick-links">
-            {% for t in current_teams %}
             <a href="{{ url_for('coach.index') }}" class="quick-link">
                 <span class="quick-link-icon">&#9918;</span>
                 <span>Coach Dashboard</span>
             </a>
-            {% endfor %}
             <a href="{{ url_for('main.profile') }}" class="quick-link">
                 <span class="quick-link-icon">&#9881;</span>
-                <span>Update Profile</span>
+                <span>Edit Profile</span>
             </a>
             <a href="{{ url_for('main.dashboard') }}" class="quick-link">
                 <span class="quick-link-icon">&#127968;</span>
                 <span>Main Dashboard</span>
             </a>
         </div>
-    </div>
-
-    {% if contact_prefs %}
-    <div class="card">
-        <h2>Communication Preferences</h2>
-        <div class="contact-prefs">
-            {% for pref in contact_prefs %}
-            <div class="pref-item">
-                <span class="pref-label">{{ pref.message_category|replace('_', ' ')|title }} via {{ pref.contact_type|title }}</span>
-                <span class="pref-value">{{ 'Enabled' if pref.opted_in else 'Disabled' }}</span>
-            </div>
-            {% endfor %}
-        </div>
-        <p style="margin-top: 16px; font-size: 14px; color: #888;">
-            <a href="{{ url_for('main.profile') }}">Update your preferences</a>
-        </p>
     </div>
     {% endif %}
 </div>

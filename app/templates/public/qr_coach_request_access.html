@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Request Coach Access - {{ campaign.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .request-container {
+        max-width: 500px;
+        margin: 40px auto;
+        padding: 0 20px;
+    }
+
+    .request-card {
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .request-header {
+        text-align: center;
+        margin-bottom: 24px;
+    }
+
+    .request-header h1 {
+        color: #228B22;
+        font-size: 24px;
+        margin-bottom: 8px;
+    }
+
+    .request-header p {
+        color: #666;
+        font-size: 14px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 6px;
+        color: #333;
+    }
+
+    .form-group input,
+    .form-group select {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 16px;
+        box-sizing: border-box;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+        border-color: #228B22;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(34, 139, 34, 0.1);
+    }
+
+    .form-group .hint {
+        font-size: 13px;
+        color: #888;
+        margin-top: 4px;
+    }
+
+    .form-group .required {
+        color: #dc3545;
+    }
+
+    .btn-submit {
+        width: 100%;
+        padding: 14px;
+        background: #228B22;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .btn-submit:hover {
+        background: #1a6b1a;
+    }
+
+    .back-link {
+        text-align: center;
+        margin-top: 20px;
+    }
+
+    .back-link a {
+        color: #666;
+        text-decoration: none;
+        font-size: 14px;
+    }
+
+    .back-link a:hover {
+        color: #228B22;
+    }
+
+    .info-box {
+        background: #e7f3ff;
+        border: 1px solid #b6d4fe;
+        border-radius: 8px;
+        padding: 14px;
+        margin-bottom: 24px;
+        font-size: 14px;
+        color: #0a58ca;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="request-container">
+    <div class="request-card">
+        <div class="request-header">
+            <h1>Request Coach Access</h1>
+            <p>Fill out this form and we'll set up your account</p>
+        </div>
+
+        <div class="info-box">
+            Once approved, you'll receive an email with instructions to set your password and access your coach dashboard.
+        </div>
+
+        <form method="POST" action="{{ url_for('public.qr_coach_meeting_register', token=campaign.token) }}">
+            <div class="form-group">
+                <label for="first_name">First Name <span class="required">*</span></label>
+                <input type="text" id="first_name" name="first_name" required
+                       value="{{ request.form.get('first_name', '') }}">
+            </div>
+
+            <div class="form-group">
+                <label for="last_name">Last Name <span class="required">*</span></label>
+                <input type="text" id="last_name" name="last_name" required
+                       value="{{ request.form.get('last_name', '') }}">
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email <span class="required">*</span></label>
+                <input type="email" id="email" name="email" required
+                       value="{{ request.form.get('email', '') }}">
+                <div class="hint">We'll send your login credentials here.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="phone">Phone <span class="required">*</span></label>
+                <input type="tel" id="phone" name="phone" required
+                       value="{{ request.form.get('phone', '') }}">
+                <div class="hint">For game-day notifications and schedule updates.</div>
+            </div>
+
+            {% if teams %}
+            <div class="form-group">
+                <label for="team_id">Your Team (if known)</label>
+                <select id="team_id" name="team_id">
+                    <option value="">-- I don't know yet --</option>
+                    {% set current_league = namespace(value=None) %}
+                    {% for team in teams %}
+                        {% if team.league_display_name and team.league_display_name != current_league.value %}
+                            {% if current_league.value is not none %}</optgroup>{% endif %}
+                            {% set current_league.value = team.league_display_name %}
+                            <optgroup label="{{ team.league_display_name }}">
+                        {% endif %}
+                        <option value="{{ team.team_ID }}">{{ team.computed_display_name }}</option>
+                    {% endfor %}
+                    {% if current_league.value is not none %}</optgroup>{% endif %}
+                </select>
+                <div class="hint">You can update this later if you're not sure.</div>
+            </div>
+            {% endif %}
+
+            <button type="submit" class="btn-submit">Submit Request</button>
+        </form>
+
+        <div class="back-link">
+            <a href="{{ url_for('public.qr_coach_meeting', token=campaign.token) }}">&larr; Back to options</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}Coach Check-In - {{ campaign.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .landing-container {
+        max-width: 500px;
+        margin: 40px auto;
+        padding: 0 20px;
+    }
+
+    .welcome-card {
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+
+    .welcome-header {
+        margin-bottom: 24px;
+    }
+
+    .welcome-header h1 {
+        color: #228B22;
+        font-size: 28px;
+        margin-bottom: 8px;
+    }
+
+    .welcome-header p {
+        color: #666;
+        font-size: 16px;
+    }
+
+    {% if campaign.welcome_message %}
+    .welcome-message {
+        background: #f0f8f0;
+        padding: 16px;
+        border-radius: 8px;
+        margin-bottom: 24px;
+        color: #2d5a2d;
+        text-align: left;
+    }
+    {% endif %}
+
+    .option-section {
+        margin-bottom: 24px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .option-section:last-child {
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: none;
+    }
+
+    .option-section h2 {
+        font-size: 18px;
+        color: #333;
+        margin-bottom: 8px;
+    }
+
+    .option-section p {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 16px;
+    }
+
+    .btn-primary {
+        display: inline-block;
+        width: 100%;
+        padding: 14px 24px;
+        background: #228B22;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+        transition: background 0.2s;
+        box-sizing: border-box;
+    }
+
+    .btn-primary:hover {
+        background: #1a6b1a;
+        color: white;
+    }
+
+    .btn-secondary {
+        display: inline-block;
+        width: 100%;
+        padding: 14px 24px;
+        background: white;
+        color: #228B22;
+        border: 2px solid #228B22;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-sizing: border-box;
+    }
+
+    .btn-secondary:hover {
+        background: #f0f8f0;
+        color: #1a6b1a;
+    }
+
+    .btn-outline {
+        display: inline-block;
+        width: 100%;
+        padding: 14px 24px;
+        background: #f8f9fa;
+        color: #333;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 500;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-sizing: border-box;
+    }
+
+    .btn-outline:hover {
+        background: #e9ecef;
+        color: #333;
+    }
+
+    .divider {
+        display: flex;
+        align-items: center;
+        margin: 20px 0;
+        color: #999;
+        font-size: 14px;
+    }
+
+    .divider::before,
+    .divider::after {
+        content: '';
+        flex: 1;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .divider span {
+        padding: 0 12px;
+    }
+
+    .help-text {
+        margin-top: 24px;
+        padding-top: 24px;
+        border-top: 1px solid #eee;
+        font-size: 14px;
+        color: #888;
+    }
+
+    .help-text a {
+        color: #228B22;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="landing-container">
+    <div class="welcome-card">
+        <div class="welcome-header">
+            <h1>Welcome, Coach!</h1>
+            <p>{{ campaign.name }}{% if season %} - {{ season.display_name }}{% endif %}</p>
+        </div>
+
+        {% if campaign.welcome_message %}
+        <div class="welcome-message">
+            {{ campaign.welcome_message }}
+        </div>
+        {% endif %}
+
+        <div class="option-section">
+            <h2>Already have an account?</h2>
+            <p>If you've coached with SDLL before or already have login credentials, sign in here.</p>
+            <a href="{{ url_for('auth.login', next=url_for('public.qr_coach_meeting', token=campaign.token)) }}" class="btn-primary">
+                Log In
+            </a>
+        </div>
+
+        <div class="option-section">
+            <h2>Forgot your password?</h2>
+            <p>No problem! We'll email you a link to reset it.</p>
+            <a href="{{ url_for('auth.forgot_password') }}" class="btn-secondary">
+                Reset Password
+            </a>
+        </div>
+
+        <div class="option-section">
+            <h2>New to SDLL coaching?</h2>
+            <p>If this is your first time coaching with us, request access to get started.</p>
+            <a href="{{ url_for('public.qr_coach_request_access', token=campaign.token) }}" class="btn-outline">
+                Request Coach Access
+            </a>
+        </div>
+
+        <div class="help-text">
+            Need help? Contact us at <a href="mailto:info@southdurhamlittleleague.org">info@southdurhamlittleleague.org</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

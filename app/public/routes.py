@@ -3083,13 +3083,11 @@ def qr_campaign_scan(token):
 
 @public_bp.route('/qr/<token>/coach-meeting')
 def qr_coach_meeting(token):
-    """Coach meeting flow - show schedule info or registration based on login status."""
+    """Coach meeting flow - login options or profile completion based on auth status."""
     from app.models.qr_campaign import QRCampaign
     from app.models.org_season import OrgSeason
     from app.models.coach import CoachUser, CoachSeason
     from app.models.team import TeamSeason
-    from app.models.game import Game
-    from app.models.contact_preference import ContactPreference
     from sqlalchemy.orm import joinedload
 
     campaign = QRCampaign.get_by_token(token)
@@ -3099,7 +3097,7 @@ def qr_coach_meeting(token):
 
     current_season = OrgSeason.get_current_season()
 
-    # If user is logged in, check if they're a coach
+    # If user is logged in, show profile completion or success
     if current_user.is_authenticated:
         # Find their coach profile
         coach_user = CoachUser.query.filter_by(
@@ -3107,71 +3105,82 @@ def qr_coach_meeting(token):
             status='active'
         ).first()
 
-        if coach_user:
-            # Get their team assignments for this season
+        # Get their team assignments for this season
+        current_teams = []
+        current_team_ids = []
+        if coach_user and current_season:
             coach_seasons = CoachSeason.query.filter_by(
                 coach_id=coach_user.id
             ).options(
                 joinedload(CoachSeason.team)
             ).all()
 
-            # Filter to current season teams
-            current_teams = []
             for cs in coach_seasons:
-                if cs.team and current_season:
+                if cs.team:
                     if cs.team.year == current_season.year and cs.team.is_spring == current_season.is_spring:
                         current_teams.append({
                             'team': cs.team,
                             'role': cs.role
                         })
+                        current_team_ids.append(cs.team.team_ID)
 
-            # Get upcoming games for their teams
-            upcoming_games = []
-            if current_teams:
-                team_ids = [t['team'].team_ID for t in current_teams]
-                games = Game.query.filter(
-                    Game.year == current_season.year,
-                    Game.is_spring == current_season.is_spring,
-                    Game.active == 1,
-                    Game.game_date >= date.today(),
-                    db.or_(
-                        Game.home_ID.in_(team_ids),
-                        Game.away_ID.in_(team_ids)
-                    )
-                ).options(
-                    joinedload(Game.home_team_rel),
-                    joinedload(Game.away_team_rel),
-                    joinedload(Game.field_rel)
-                ).order_by(Game.game_date, Game.start_time).limit(10).all()
-                upcoming_games = games
+        # Check if profile needs completion (name and phone required)
+        has_name = current_user.name and len(current_user.name.strip()) > 0
+        has_phone = current_user.phone and len(current_user.phone.strip()) > 0
+        needs_profile_update = not has_name or not has_phone
 
-            # Get their contact preferences
-            contact_prefs = ContactPreference.query.filter_by(
-                user_id=current_user.ID
-            ).all()
-
-            return render_template(
-                'public/qr_coach_meeting_logged_in.html',
-                campaign=campaign,
-                season=current_season,
-                coach_user=coach_user,
-                current_teams=current_teams,
-                upcoming_games=upcoming_games,
-                contact_prefs=contact_prefs
+        # Get available teams for selection
+        available_teams = []
+        if current_season:
+            query = TeamSeason.query.filter_by(
+                year=current_season.year,
+                is_spring=current_season.is_spring,
+                active=1,
+                is_placeholder=0
             )
+            if campaign.sport:
+                from app.models.league import League
+                sport_leagues = League.query.filter_by(sport=campaign.sport).all()
+                league_ids = [l.ID for l in sport_leagues]
+                query = query.filter(TeamSeason.league_id.in_(league_ids))
+            available_teams = query.order_by(TeamSeason.league_id, TeamSeason.display_name).all()
 
-        # User is logged in but not a coach - show option to request coach access
         return render_template(
-            'public/qr_coach_meeting_not_coach.html',
+            'public/qr_coach_meeting_logged_in.html',
             campaign=campaign,
             season=current_season,
-            user=current_user
+            coach_user=coach_user,
+            current_teams=current_teams,
+            current_team_ids=current_team_ids,
+            available_teams=available_teams,
+            needs_profile_update=needs_profile_update
         )
 
-    # Not logged in - show registration form
+    # Not logged in - show landing page with login/reset/request options
+    return render_template(
+        'public/qr_coach_landing.html',
+        campaign=campaign,
+        season=current_season
+    )
+
+
+@public_bp.route('/qr/<token>/coach-meeting/request-access')
+def qr_coach_request_access(token):
+    """Show the coach access request form."""
+    from app.models.qr_campaign import QRCampaign
+    from app.models.org_season import OrgSeason
+    from app.models.team import TeamSeason
+
+    campaign = QRCampaign.get_by_token(token)
+    if not campaign or not campaign.is_active:
+        flash('This QR code is not valid or has expired.', 'error')
+        return redirect(url_for('main.index'))
+
+    current_season = OrgSeason.get_current_season()
+
+    # Get teams for selection
     teams = []
     if current_season:
-        # Filter by sport if campaign specifies
         query = TeamSeason.query.filter_by(
             year=current_season.year,
             is_spring=current_season.is_spring,
@@ -3181,17 +3190,112 @@ def qr_coach_meeting(token):
         if campaign.sport:
             from app.models.league import League
             sport_leagues = League.query.filter_by(sport=campaign.sport).all()
-            league_ids = [l.id for l in sport_leagues]
+            league_ids = [l.ID for l in sport_leagues]
             query = query.filter(TeamSeason.league_id.in_(league_ids))
-
         teams = query.order_by(TeamSeason.league_id, TeamSeason.display_name).all()
 
     return render_template(
-        'public/qr_coach_meeting_register.html',
+        'public/qr_coach_request_access.html',
         campaign=campaign,
         season=current_season,
         teams=teams
     )
+
+
+@public_bp.route('/qr/<token>/coach-meeting/update-profile', methods=['POST'])
+@login_required
+def qr_coach_update_profile(token):
+    """Handle profile update from coach QR flow."""
+    from app.models.qr_campaign import QRCampaign
+    from app.models.org_season import OrgSeason
+    from app.models.coach import CoachUser, CoachSeason
+    from app.models.team import TeamSeason
+
+    campaign = QRCampaign.get_by_token(token)
+    if not campaign or not campaign.is_active:
+        flash('This QR code is not valid or has expired.', 'error')
+        return redirect(url_for('main.index'))
+
+    first_name = request.form.get('first_name', '').strip()
+    last_name = request.form.get('last_name', '').strip()
+    phone = request.form.get('phone', '').strip()
+    team_ids = request.form.getlist('team_ids', type=int)
+
+    # Validate required fields
+    errors = []
+    if not first_name:
+        errors.append('First name is required.')
+    if not last_name:
+        errors.append('Last name is required.')
+    if not phone:
+        errors.append('Phone number is required.')
+
+    if errors:
+        flash(' '.join(errors), 'error')
+        return redirect(url_for('public.qr_coach_meeting', token=token))
+
+    try:
+        # Update user profile
+        current_user.name = f'{first_name} {last_name}'
+        current_user.phone = phone
+
+        # Handle team assignments if they selected teams
+        if team_ids:
+            current_season = OrgSeason.get_current_season()
+
+            # Get or create coach profile
+            coach_user = CoachUser.query.filter_by(
+                user_id=current_user.ID
+            ).first()
+
+            if not coach_user:
+                coach_user = CoachUser(
+                    user_id=current_user.ID,
+                    status='active'
+                )
+                db.session.add(coach_user)
+                db.session.flush()
+
+                # Add coach role if not present
+                if not current_user.has_role('coach'):
+                    current_roles = current_user.role or ''
+                    if current_roles:
+                        current_user.role = f'{current_roles}|coach'
+                    else:
+                        current_user.role = 'coach'
+
+            # Get existing assignments for this season
+            existing_team_ids = set()
+            if current_season:
+                existing = CoachSeason.query.filter_by(
+                    coach_id=coach_user.id
+                ).join(TeamSeason, CoachSeason.team_id == TeamSeason.team_ID).filter(
+                    TeamSeason.year == current_season.year,
+                    TeamSeason.is_spring == current_season.is_spring
+                ).all()
+                existing_team_ids = {cs.team_id for cs in existing}
+
+            # Add new assignments
+            for team_id in team_ids:
+                if team_id not in existing_team_ids:
+                    team = TeamSeason.query.filter_by(team_ID=team_id).first()
+                    if team:
+                        coach_season = CoachSeason(
+                            coach_id=coach_user.id,
+                            team_id=team_id,
+                            role='assistant_coach'  # Default role
+                        )
+                        db.session.add(coach_season)
+
+        db.session.commit()
+        flash('Your profile has been updated!', 'success')
+
+    except Exception as e:
+        _log_tracking_error("qr_coach_update_profile", e)
+        _safe_rollback()
+        flash('There was an error updating your profile. Please try again.', 'error')
+
+    return redirect(url_for('public.qr_coach_meeting', token=token))
 
 
 @public_bp.route('/qr/<token>/coach-meeting/register', methods=['POST'])
