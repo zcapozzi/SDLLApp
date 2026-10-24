@@ -695,7 +695,7 @@
                 <select id="add-event-league" class="form-control" required onchange="updateTeamOptions()">
                     <option value="">-- Select League --</option>
                     {% for l in leagues %}
-                    <option value="{{ l }}">{{ l }}</option>
+                    <option value="{{ l.id }}">{{ l.display_name }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -755,7 +755,7 @@
                 <select id="add-event-home-team" class="form-control" onchange="setLeagueFromTeam(this)">
                     <option value="">-- Select --</option>
                     {% for team in teams %}
-                    <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
+                    <option value="{{ team.team_ID }}" data-league-id="{{ team.league_id }}">
                         {{ team.scheduler_display_name_with_league }}
                     </option>
                     {% endfor %}
@@ -767,7 +767,7 @@
                 <select id="add-event-away-team" class="form-control" onchange="setLeagueFromTeam(this)">
                     <option value="">-- Select --</option>
                     {% for team in teams %}
-                    <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
+                    <option value="{{ team.team_ID }}" data-league-id="{{ team.league_id }}">
                         {{ team.scheduler_display_name_with_league }}
                     </option>
                     {% endfor %}
@@ -1172,15 +1172,15 @@ function selectEventType(type) {
 }
 
 function updateTeamOptions() {
-    var league = document.getElementById('add-event-league').value;
+    var leagueId = document.getElementById('add-event-league').value;
     var homeSelect = document.getElementById('add-event-home-team');
     var awaySelect = document.getElementById('add-event-away-team');
 
-    // Show/hide team options based on league
+    // Show/hide team options based on league_id
     [homeSelect, awaySelect].forEach(function(select) {
-        var options = select.querySelectorAll('option[data-league]');
+        var options = select.querySelectorAll('option[data-league-id]');
         options.forEach(function(opt) {
-            if (!league || opt.dataset.league === league) {
+            if (!leagueId || opt.dataset.leagueId === leagueId) {
                 opt.style.display = '';
             } else {
                 opt.style.display = 'none';
@@ -1190,14 +1190,14 @@ function updateTeamOptions() {
 }
 
 function setLeagueFromTeam(selectElement) {
-    // Auto-set league dropdown based on selected team's league
+    // Auto-set league dropdown based on selected team's league_id
     var selectedOption = selectElement.options[selectElement.selectedIndex];
-    var teamLeague = selectedOption ? selectedOption.dataset.league : null;
+    var teamLeagueId = selectedOption ? selectedOption.dataset.leagueId : null;
 
-    if (teamLeague) {
+    if (teamLeagueId) {
         var leagueSelect = document.getElementById('add-event-league');
-        if (leagueSelect && leagueSelect.value !== teamLeague) {
-            leagueSelect.value = teamLeague;
+        if (leagueSelect && leagueSelect.value !== teamLeagueId) {
+            leagueSelect.value = teamLeagueId;
             updateTeamOptions();  // Re-filter to show only teams from this league
         }
     }
@@ -1206,9 +1206,10 @@ function setLeagueFromTeam(selectElement) {
 function submitAddEvent(e) {
     e.preventDefault();
 
+    var leagueId = document.getElementById('add-event-league').value;
     var data = {
         event_type: selectedEventType,
-        league: document.getElementById('add-event-league').value,
+        league_id: leagueId ? parseInt(leagueId) : null,
         game_date: document.getElementById('add-event-date-input').value,
         game_time: document.getElementById('add-event-time').value,
         field_name: document.getElementById('add-event-field').value,
@@ -1343,7 +1344,7 @@ addEventModal.addEventListener('click', function(e) {
                 <select name="home_id" id="create-home-team" class="form-control" onchange="setCreateLeagueFromTeam(this)">
                     <option value="">-- Select (optional) --</option>
                     {% for team in teams %}
-                    <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
+                    <option value="{{ team.team_ID }}" data-league-id="{{ team.league_id }}">
                         {{ team.scheduler_display_name_with_league }}
                     </option>
                     {% endfor %}
@@ -1356,7 +1357,7 @@ addEventModal.addEventListener('click', function(e) {
                 <select name="away_id" id="create-away-team" class="form-control" onchange="setCreateLeagueFromTeam(this)">
                     <option value="">-- None (Practice) --</option>
                     {% for team in teams %}
-                    <option value="{{ team.team_ID }}" data-league="{{ team.league }}">
+                    <option value="{{ team.team_ID }}" data-league-id="{{ team.league_id }}">
                         {{ team.scheduler_display_name_with_league }}
                     </option>
                     {% endfor %}

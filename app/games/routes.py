@@ -257,7 +257,7 @@ def api_add_event(year, is_spring):
     Expects JSON body:
     {
         "event_type": str ('game', 'practice', 'scrimmage', 'division_practice'),
-        "league": str,
+        "league_id": int,
         "game_date": str (YYYY-MM-DD),
         "game_time": str (HH:MM),
         "field_name": str,
@@ -274,15 +274,20 @@ def api_add_event(year, is_spring):
             return jsonify({'success': False, 'message': 'No data provided'}), 400
 
         event_type = data.get('event_type', 'game')
-        league = data.get('league')
+        league_id = data.get('league_id')
         game_date = data.get('game_date')
         game_time = data.get('game_time')
         field_name = data.get('field_name')
         home_team_id = data.get('home_team_id')
         away_team_id = data.get('away_team_id')
 
-        if not league or not game_date or not game_time or not field_name:
+        if not league_id or not game_date or not game_time or not field_name:
             return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+
+        # Convert league_id to int and look up league name for proposal display
+        league_id = int(league_id)
+        league_obj = League.query.get(league_id)
+        league_name = league_obj.display_name if league_obj else f'League {league_id}'
 
         # Build datetime
         game_datetime = f'{game_date}T{game_time}:00'
@@ -309,7 +314,8 @@ def api_add_event(year, is_spring):
                 'game_type': 'practice' if event_type in ['practice', 'division_practice'] else 'regular',
                 'game_date': game_datetime,
                 'field_name': field_name,
-                'league': league,
+                'league': league_name,
+                'league_id': league_id,
                 'home_team_id': int(home_team_id) if home_team_id else None,
                 'home_team_name': home_team_name or 'TBD',
                 'away_team_id': int(away_team_id) if away_team_id and event_type in ['game', 'scrimmage'] else None,
@@ -319,7 +325,7 @@ def api_add_event(year, is_spring):
             }
 
             new_id = proposal.add_game(game_data)
-            logger.info(f'API: Added event to proposal - ID={new_id}, type={event_type}, league={league}')
+            logger.info(f'API: Added event to proposal - ID={new_id}, type={event_type}, league_id={league_id}')
 
             return jsonify({
                 'success': True,
@@ -335,9 +341,7 @@ def api_add_event(year, is_spring):
             field_obj = Field.query.filter_by(location_title=field_name, active=1).first()
             field_id = field_obj.ID if field_obj else None
 
-            # Look up league_id from league name
-            league_obj = League.get_by_name(league) if league else None
-            league_id = league_obj.ID if league_obj else None
+            # league_id already validated above
 
             new_game = Game(
                 active=1,
@@ -356,7 +360,7 @@ def api_add_event(year, is_spring):
             db.session.add(new_game)
             db.session.commit()
 
-            logger.info(f'API: Added game directly - ID={new_game.ID}, type={event_type}, league={league}')
+            logger.info(f'API: Added game directly - ID={new_game.ID}, type={event_type}, league_id={league_id}')
 
             return jsonify({
                 'success': True,

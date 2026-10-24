@@ -876,7 +876,7 @@ def api_add_event(year, is_spring):
         "date": "YYYY-MM-DD",
         "time": "HH:MM",
         "field_name": str,
-        "league": str,
+        "league_id": int,
         "home_team_id": int (optional for division_practice),
         "away_team_id": int (optional for practices)
     }
@@ -894,10 +894,15 @@ def api_add_event(year, is_spring):
         date_str = data.get('date')
         time_str = data.get('time')
         field_name = data.get('field_name')
-        league = data.get('league')
+        league_id = data.get('league_id')
 
-        if not all([game_type, date_str, time_str, field_name, league]):
+        if not all([game_type, date_str, time_str, field_name, league_id]):
             return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+
+        # Convert league_id to int and look up league name for display/proposal
+        league_id = int(league_id)
+        league_obj = League.query.get(league_id)
+        league_name = league_obj.display_name if league_obj else f'League {league_id}'
 
         # Get team info
         home_team_id = data.get('home_team_id')
@@ -922,7 +927,7 @@ def api_add_event(year, is_spring):
         # For division practice, use league name as the "team"
         is_division_practice = game_type == 'division_practice'
         if is_division_practice:
-            home_team_name = league
+            home_team_name = league_name
 
         # Parse game datetime
         from datetime import datetime as dt
@@ -938,13 +943,14 @@ def api_add_event(year, is_spring):
                 'game_type': 'practice' if is_division_practice else game_type,
                 'game_date': game_datetime_str,
                 'field_name': field_name,
-                'league': league,
+                'league': league_name,
+                'league_id': league_id,
                 'home_team_id': home_team_id,
                 'home_team_name': home_team_name,
                 'away_team_id': away_team_id,
                 'away_team_name': away_team_name
             })
-            logger.info(f'API: Added {game_type} to proposal - {league} at {field_name} on {date_str} {time_str}')
+            logger.info(f'API: Added {game_type} to proposal - {league_name} at {field_name} on {date_str} {time_str}')
             target = 'proposal'
         else:
             # No proposal - add directly to Game table (saved/locked schedule)
@@ -955,9 +961,7 @@ def api_add_event(year, is_spring):
             field_obj = Field.query.filter_by(location_title=field_name, active=1).first()
             field_id = field_obj.ID if field_obj else None
 
-            # Look up league_id from league name
-            league_obj = League.get_by_name(league) if league else None
-            league_id = league_obj.ID if league_obj else None
+            # league_id already validated above
 
             new_game = Game(
                 year=year,
@@ -1007,7 +1011,7 @@ def api_event_options(year, is_spring):
 
     # Get active leagues for this season
     league_configs = LeagueSeason.get_by_season(year, is_spring)
-    leagues = [{'name': c.league, 'has_scrimmages': c.has_scrimmages} for c in league_configs]
+    leagues = [{'id': c.league_id, 'name': c.league, 'has_scrimmages': c.has_scrimmages} for c in league_configs]
 
     # Get all teams grouped by league
     teams_by_league = {}
@@ -1019,9 +1023,10 @@ def api_event_options(year, is_spring):
     ).all()
 
     for team in all_teams:
-        if team.league not in teams_by_league:
-            teams_by_league[team.league] = []
-        teams_by_league[team.league].append({
+        league_id = team.league_id
+        if league_id not in teams_by_league:
+            teams_by_league[league_id] = []
+        teams_by_league[league_id].append({
             'id': team.team_ID,
             'name': team.scheduler_display_name
         })

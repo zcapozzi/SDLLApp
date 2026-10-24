@@ -2495,11 +2495,11 @@ function populateEventOptions() {
         fieldSelect.innerHTML += '<option value="' + field.name + '">' + field.name + '</option>';
     });
 
-    // Populate leagues
+    // Populate leagues (use league.id as value)
     var leagueSelect = document.getElementById('add-event-league');
     leagueSelect.innerHTML = '<option value="">Select league...</option>';
     eventOptions.leagues.forEach(function(league) {
-        leagueSelect.innerHTML += '<option value="' + league.name + '">' + league.name + '</option>';
+        leagueSelect.innerHTML += '<option value="' + league.id + '">' + league.name + '</option>';
     });
 }
 
@@ -2540,15 +2540,16 @@ function selectEventType(type) {
 }
 
 function updateTeamOptions() {
-    var league = document.getElementById('add-event-league').value;
+    var leagueId = document.getElementById('add-event-league').value;
     var homeSelect = document.getElementById('add-event-home-team');
     var awaySelect = document.getElementById('add-event-away-team');
 
     homeSelect.innerHTML = '<option value="">Select team...</option>';
     awaySelect.innerHTML = '<option value="">Select team...</option>';
 
-    if (league && eventOptions && eventOptions.teams_by_league[league]) {
-        eventOptions.teams_by_league[league].forEach(function(team) {
+    // teams_by_league is keyed by league_id (integer)
+    if (leagueId && eventOptions && eventOptions.teams_by_league[leagueId]) {
+        eventOptions.teams_by_league[leagueId].forEach(function(team) {
             homeSelect.innerHTML += '<option value="' + team.id + '">' + team.name + '</option>';
             awaySelect.innerHTML += '<option value="' + team.id + '">' + team.name + '</option>';
         });
@@ -2559,12 +2560,12 @@ function submitAddEvent() {
     var date = document.getElementById('add-event-date').value;
     var time = document.getElementById('add-event-time').value;
     var field = document.getElementById('add-event-field').value;
-    var league = document.getElementById('add-event-league').value;
+    var leagueId = document.getElementById('add-event-league').value;
     var homeTeam = document.getElementById('add-event-home-team').value;
     var awayTeam = document.getElementById('add-event-away-team').value;
 
     // Validation
-    if (!date || !time || !field || !league) {
+    if (!date || !time || !field || !leagueId) {
         alert('Please fill in all required fields (Date, Time, Field, League)');
         return;
     }
@@ -2591,7 +2592,7 @@ function submitAddEvent() {
         date: date,
         time: time,
         field_name: field,
-        league: league,
+        league_id: parseInt(leagueId),
         home_team_id: homeTeam ? parseInt(homeTeam) : null,
         away_team_id: awayTeam ? parseInt(awayTeam) : null
     };

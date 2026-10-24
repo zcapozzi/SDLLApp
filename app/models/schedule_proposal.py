@@ -146,9 +146,17 @@ class ScheduleProposal(db.Model):
         games = self.data['games']
         for game in games:
             if game.get('id') == game_id:
-                # Update field
+                # Update field - MUST update both field_name AND field_id for FK consistency
                 if new_field is not None:
                     game['field_name'] = new_field
+                    # Look up the field ID from the field name
+                    from app.models.field import Field
+                    field = Field.get_by_name(new_field)
+                    if field:
+                        game['field_id'] = field.ID
+                    else:
+                        # Field not found - clear field_id to avoid wrong FK
+                        game['field_id'] = None
 
                 # Update date/time
                 if new_date is not None or new_time is not None:
@@ -218,18 +226,29 @@ class ScheduleProposal(db.Model):
         min_id = min(existing_ids) if existing_ids else 0
         new_id = min(min_id - 1, -1)  # Always negative for proposed games
 
+        # Look up field_id from field_name
+        field_name = game_data.get('field_name')
+        field_id = None
+        if field_name:
+            from app.models.field import Field
+            field = Field.get_by_name(field_name)
+            if field:
+                field_id = field.ID
+
         game = {
             'id': new_id,
             'game_type': game_data.get('game_type', 'regular'),
             'game_date': game_data.get('game_date'),
-            'field_name': game_data.get('field_name'),
+            'field_id': field_id,
+            'field_name': field_name,
             'league': game_data.get('league'),
+            'league_id': game_data.get('league_id'),
             'home_team_id': game_data.get('home_team_id'),
             'home_team_name': game_data.get('home_team_name'),
             'away_team_id': game_data.get('away_team_id'),
             'away_team_name': game_data.get('away_team_name'),
             'is_league_practice': game_data.get('game_type') == 'division_practice',
-            'location': game_data.get('field_name'),
+            'location': field_name,
             'manually_added': True
         }
 
