@@ -12,7 +12,7 @@ ARCHITECTURE:
 """
 
 from flask import render_template, abort, request, make_response, jsonify, redirect, Response, url_for, flash
-from flask_login import current_user
+from flask_login import current_user, login_required
 from datetime import datetime, date, timedelta
 from sqlalchemy.orm import joinedload
 import hashlib
