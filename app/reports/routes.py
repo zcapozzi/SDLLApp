@@ -574,6 +574,10 @@ def pitching_report(year, is_spring, league):
     - BB_VP, SB_VP, coaching_coordinator can view any league
     - Coaches can only view leagues where they have a team
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f'pitching_report accessed: year={year}, is_spring={is_spring}, league={league}, user={current_user.ID}')
+
     from app.services.pitching_report_service import PitchingReportService
 
     # Get league info
@@ -594,10 +598,13 @@ def pitching_report(year, is_spring, league):
 
     # Access control
     has_admin_access = current_user.has_role('admin', 'BB_VP', 'SB_VP', 'coaching_coordinator')
+    logger.info(f'pitching_report access check: user={current_user.ID}, has_admin_access={has_admin_access}')
 
     if not has_admin_access:
         # Check if user coaches a team in this league
-        if not _user_has_team_in_league(current_user.ID, league_id, year, is_spring):
+        has_team = _user_has_team_in_league(current_user.ID, league_id, year, is_spring)
+        logger.info(f'pitching_report coach check: user={current_user.ID}, league_id={league_id}, has_team={has_team}')
+        if not has_team:
             flash('You do not have permission to view this report.', 'error')
             return redirect(url_for('reports.index'))
 

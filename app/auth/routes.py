@@ -15,6 +15,9 @@ logger = SDLLLogger('auth')
 def login():
     """User login"""
     if current_user.is_authenticated:
+        # Log when skipping login due to existing auth
+        next_page = request.args.get('next')
+        logger.info(f'Already authenticated, next={next_page}, redirecting to dashboard')
         return redirect(url_for('main.dashboard'))
 
     if request.method == 'POST':
@@ -32,12 +35,20 @@ def login():
             logger.info(f'Login successful for user ID: {user.ID}')
 
             next_page = request.args.get('next')
+            logger.info(f'POST login next_page from args: {next_page}')
             if next_page:
+                logger.info(f'Redirecting to next_page: {next_page}')
                 return redirect(next_page)
+            logger.info('No next_page, redirecting to dashboard')
             return redirect(url_for('main.dashboard'))
 
         logger.info('Login failed - invalid credentials')
         flash('Invalid email or password', 'error')
+
+    # Log GET request with next parameter
+    if request.method == 'GET':
+        next_page = request.args.get('next')
+        logger.info(f'GET login page, next={next_page}')
 
     return render_template('auth/login.html')
 
