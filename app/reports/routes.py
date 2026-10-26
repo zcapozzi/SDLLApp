@@ -617,6 +617,8 @@ def pitching_report(year, is_spring, league):
     season_name = 'Spring' if is_spring else 'Fall'
     league_display = league_obj.get_seasonal_name(is_spring)
 
+    from app.models.pitching_stats import PitchingStats
+
     return render_template(
         'reports/pitching_report.html',
         pitching_data=pitching_data,
@@ -625,7 +627,7 @@ def pitching_report(year, is_spring, league):
         year=year,
         is_spring=is_spring,
         season_name=season_name,
-        format_innings=PitchingReportService.format_innings,
+        format_innings_from_outs=PitchingStats.format_innings_from_outs,
         format_strike_pct=PitchingReportService.format_strike_pct
     )
 

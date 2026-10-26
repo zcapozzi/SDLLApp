@@ -174,7 +174,7 @@
                     <tr>
                         <td data-value="{{ pitcher.player.full_name }}">{{ pitcher.player.full_name }}</td>
                         <td data-value="{{ pitcher.appearances }}">{{ pitcher.appearances }}</td>
-                        <td data-value="{{ pitcher.total_innings }}">{{ format_innings(pitcher.total_innings) }}</td>
+                        <td data-value="{{ pitcher.total_outs }}">{{ format_innings_from_outs(pitcher.total_outs) }}</td>
                         <td data-value="{{ pitcher.total_pitches }}">{{ pitcher.total_pitches }}</td>
                         <td data-value="{{ pitcher.strike_pct if pitcher.strike_pct is not none else -1 }}">{{ format_strike_pct(pitcher.strike_pct) }}</td>
                         <td data-value="{{ pitcher.total_strikeouts }}">{{ pitcher.total_strikeouts }}</td>

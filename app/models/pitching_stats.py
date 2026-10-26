@@ -22,7 +22,12 @@ class PitchingStats(db.Model):
     strikes = db.Column(db.SmallInteger)
 
     # Innings pitched (e.g., 2.1 = 2 and 1/3 innings)
+    # Note: innings_pitched uses baseball notation where .1 = 1/3, .2 = 2/3
     innings_pitched = db.Column(db.Numeric(3, 1))
+
+    # Outs recorded - the actual number of outs (3 outs = 1 inning)
+    # This is used for accurate aggregation across games
+    outs_recorded = db.Column(db.SmallInteger)
 
     # Results against
     batters_faced = db.Column(db.SmallInteger)
@@ -56,6 +61,63 @@ class PitchingStats(db.Model):
         if self.innings_pitched is None:
             return '-'
         return str(float(self.innings_pitched))
+
+    @staticmethod
+    def innings_to_outs(innings_pitched):
+        """Convert baseball innings notation to total outs.
+
+        Baseball notation: 2.1 = 2 full innings + 1 out = 7 outs
+                          3.2 = 3 full innings + 2 outs = 11 outs
+                          0.2 = 2 outs
+
+        Args:
+            innings_pitched: Innings in baseball notation (e.g., 2.1, 3.2)
+
+        Returns:
+            int: Total number of outs, or None if input is None
+        """
+        if innings_pitched is None:
+            return None
+        innings_float = float(innings_pitched)
+        full_innings = int(innings_float)
+        # The decimal part represents outs (0.1 = 1 out, 0.2 = 2 outs)
+        partial = round((innings_float - full_innings) * 10)
+        return full_innings * 3 + partial
+
+    @staticmethod
+    def outs_to_innings(outs):
+        """Convert total outs to baseball innings notation.
+
+        Args:
+            outs: Total number of outs
+
+        Returns:
+            float: Innings in baseball notation (e.g., 7 -> 2.1, 11 -> 3.2)
+                   or None if input is None
+        """
+        if outs is None:
+            return None
+        full_innings = outs // 3
+        remaining_outs = outs % 3
+        return full_innings + (remaining_outs / 10.0)
+
+    @staticmethod
+    def format_innings_from_outs(outs):
+        """Format outs as innings display string.
+
+        Args:
+            outs: Total number of outs
+
+        Returns:
+            str: Formatted innings (e.g., 7 -> "2.1", 9 -> "3", 11 -> "3.2")
+        """
+        if outs is None:
+            return '-'
+        full_innings = outs // 3
+        remaining_outs = outs % 3
+        if remaining_outs == 0:
+            return str(full_innings)
+        return f"{full_innings}.{remaining_outs}"
 
     @property
     def stat_line(self):

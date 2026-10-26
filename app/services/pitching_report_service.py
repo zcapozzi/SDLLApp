@@ -33,7 +33,7 @@ class PitcherSummary:
     total_strikes: int
     pitches_with_strike_data: int  # Pitches from games where strikes were recorded
     games_without_strikes: int  # Number of games where strikes were NULL
-    total_innings: float
+    total_outs: int  # Total outs recorded (for accurate aggregation)
     strike_pct: Optional[float]
     total_strikeouts: int
     total_walks: int
@@ -137,6 +137,7 @@ class PitchingReportService:
             PitchingStats.pitch_count,
             PitchingStats.strikes,
             PitchingStats.innings_pitched,
+            PitchingStats.outs_recorded,
             PitchingStats.strikeouts,
             PitchingStats.walks,
             Game.game_date,
@@ -178,7 +179,7 @@ class PitchingReportService:
                     'total_strikes': 0,
                     'pitches_with_strike_data': 0,
                     'games_without_strikes': 0,
-                    'total_innings': 0.0,
+                    'total_outs': 0,  # Sum of outs for accurate aggregation
                     'total_strikeouts': 0,
                     'total_walks': 0,
                 }
@@ -188,7 +189,13 @@ class PitchingReportService:
 
             agg['appearances'] += 1
             agg['total_pitches'] += pitch_count
-            agg['total_innings'] += float(row.innings_pitched or 0)
+            # Use outs_recorded for aggregation; fall back to converting innings_pitched
+            # for backward compatibility with existing data
+            if row.outs_recorded is not None:
+                agg['total_outs'] += int(row.outs_recorded)
+            elif row.innings_pitched is not None:
+                # Convert innings notation to outs for legacy data
+                agg['total_outs'] += PitchingStats.innings_to_outs(row.innings_pitched) or 0
             agg['total_strikeouts'] += int(row.strikeouts or 0)
             agg['total_walks'] += int(row.walks or 0)
 
@@ -227,7 +234,7 @@ class PitchingReportService:
                 total_strikes=agg['total_strikes'],
                 pitches_with_strike_data=agg['pitches_with_strike_data'],
                 games_without_strikes=agg['games_without_strikes'],
-                total_innings=round(agg['total_innings'], 1),  # Round to 1 decimal to avoid floating point artifacts
+                total_outs=agg['total_outs'],
                 strike_pct=strike_pct,
                 total_strikeouts=agg['total_strikeouts'],
                 total_walks=agg['total_walks'],

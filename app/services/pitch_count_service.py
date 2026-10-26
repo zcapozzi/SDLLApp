@@ -106,6 +106,8 @@ class PitchCountService:
             stats.pitch_count = pitch_count
             stats.strikes = data.get('strikes')
             stats.innings_pitched = data.get('innings_pitched')
+            # Convert innings to outs for accurate aggregation
+            stats.outs_recorded = PitchingStats.innings_to_outs(data.get('innings_pitched'))
             stats.batters_faced = data.get('batters_faced')
             stats.hits_allowed = data.get('hits_allowed')
             stats.walks = data.get('walks')
