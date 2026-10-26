@@ -70,8 +70,10 @@ class PitchingReportService:
         if not league_id:
             return []
 
-        # Get all teams in this league
-        teams = TeamSeason.query.filter(
+        # Get all teams in this league (eager load coaches for display)
+        teams = TeamSeason.query.options(
+            joinedload(TeamSeason.coaches)
+        ).filter(
             TeamSeason.year == year,
             TeamSeason.is_spring == is_spring,
             TeamSeason.league_id == league_id,

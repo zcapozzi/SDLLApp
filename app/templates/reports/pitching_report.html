@@ -153,7 +153,13 @@
     {% for team_summary in pitching_data %}
     <div class="team-section" id="team-{{ team_summary.team.team_ID }}">
         <div class="team-header">
-            {{ team_summary.team.computed_display_name }}
+            {% set team_name = team_summary.team.computed_display_name %}
+            {% set coach_name = team_summary.team.get_display_name('coach') %}
+            {% if coach_name and coach_name != team_name %}
+                {{ team_name }} ({{ coach_name }})
+            {% else %}
+                {{ team_name }}
+            {% endif %}
         </div>
         <div class="team-table-container">
             {% if team_summary.pitchers %}
