@@ -152,13 +152,20 @@
 {% if pitching_data %}
     {% for team_summary in pitching_data %}
     <div class="team-section" id="team-{{ team_summary.team.team_ID }}">
-        <div class="team-header">
-            {% set team_name = team_summary.team.computed_display_name %}
-            {% set coach_name = team_summary.team.get_display_name('coach') %}
-            {% if coach_name and coach_name != team_name %}
-                {{ team_name }} ({{ coach_name }})
-            {% else %}
-                {{ team_name }}
+        <div class="team-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>
+                {% set team_name = team_summary.team.computed_display_name %}
+                {% set coach_name = team_summary.team.get_display_name('coach') %}
+                {% if coach_name and coach_name != team_name %}
+                    {{ team_name }} ({{ coach_name }})
+                {% else %}
+                    {{ team_name }}
+                {% endif %}
+            </span>
+            {% if not team_summary.games_without_reports and not team_summary.has_incomplete_strike_data %}
+            <span style="background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: normal;">
+                &#10003; All Games Submitted
+            </span>
             {% endif %}
         </div>
         <div class="team-table-container">

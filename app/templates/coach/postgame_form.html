@@ -339,14 +339,20 @@
 
                 <!-- Actions -->
                 <div class="postgame-actions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
-                    <button type="submit" name="action" value="not_played" class="btn btn-outline" style="border-color: #888; color: #888;">
+                    <button type="submit" name="action" value="not_played" id="btn-not-played" class="btn btn-outline" style="border-color: #888; color: #888;" onclick="showSubmitting(this)">
                         Game Was Not Played
                     </button>
-                    <button type="submit" name="action" value="submit" class="btn btn-primary" style="padding: 12px 30px;">
+                    <button type="submit" name="action" value="submit" id="btn-submit-manual" class="btn btn-primary" style="padding: 12px 30px;" onclick="showSubmitting(this)">
                         Submit Report
                     </button>
                 </div>
             </form>
+            <script>
+            function showSubmitting(btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span style="display: inline-block; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle;"></span>Submitting...';
+            }
+            </script>
         </div>
         {% endif %}
 
@@ -550,8 +556,8 @@
                                 <th style="width: 60px; text-align: center; padding: 8px;">Pitches</th>
                                 <th style="width: 50px; text-align: center; padding: 8px;" title="Strikes Thrown">Strikes</th>
                                 <th style="width: 50px; text-align: center; padding: 8px;">IP</th>
-                                <th class="pitch-optional" style="width: 40px; text-align: center; padding: 8px;">K</th>
                                 <th class="pitch-optional" style="width: 40px; text-align: center; padding: 8px;">BB</th>
+                                <th class="pitch-optional" style="width: 40px; text-align: center; padding: 8px;">K</th>
                             </tr>
                         </thead>
                         <tbody id="gc-pitching-tbody">
@@ -1108,19 +1114,6 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
     tdIP.appendChild(inputIP);
     row.appendChild(tdIP);
 
-    // K (strikeouts)
-    var tdK = document.createElement('td');
-    tdK.className = 'pitch-optional';
-    tdK.style.padding = '4px';
-    var inputK = document.createElement('input');
-    inputK.type = 'number';
-    inputK.name = 'pitcher_k_' + idx;
-    inputK.value = (data && data.strikeouts) || '';
-    inputK.style.cssText = 'width: 35px; text-align: center; padding: 4px;';
-    inputK.min = '0';
-    tdK.appendChild(inputK);
-    row.appendChild(tdK);
-
     // BB (walks)
     var tdBB = document.createElement('td');
     tdBB.className = 'pitch-optional';
@@ -1133,6 +1126,19 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
     inputBB.min = '0';
     tdBB.appendChild(inputBB);
     row.appendChild(tdBB);
+
+    // K (strikeouts)
+    var tdK = document.createElement('td');
+    tdK.className = 'pitch-optional';
+    tdK.style.padding = '4px';
+    var inputK = document.createElement('input');
+    inputK.type = 'number';
+    inputK.name = 'pitcher_k_' + idx;
+    inputK.value = (data && data.strikeouts) || '';
+    inputK.style.cssText = 'width: 35px; text-align: center; padding: 4px;';
+    inputK.min = '0';
+    tdK.appendChild(inputK);
+    row.appendChild(tdK);
 
     tbody.appendChild(row);
 }
@@ -1287,6 +1293,11 @@ function resetScreenshot() {
 // Handle screenshot form submission
 document.getElementById('screenshot-submit-form').addEventListener('submit', function(e) {
     e.preventDefault();
+
+    // Show visual feedback immediately
+    var submitBtn = document.getElementById('gc-submit-btn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span style="display: inline-block; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle;"></span>Submitting...';
 
     var form = e.target;
     var formData = new FormData();
