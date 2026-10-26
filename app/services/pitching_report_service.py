@@ -84,15 +84,14 @@ class PitchingReportService:
         team_ids = {t.team_ID for t in teams}
         team_lookup = {t.team_ID: t for t in teams}
 
-        # Get all completed games for these teams (exclude cancelled/rainout/postponed)
+        # Get all completed games for these teams (only games marked as completed)
         all_games = Game.query.filter(
             Game.year == year,
             Game.is_spring == is_spring,
             Game.league_id == league_id,
             Game.active == 1,
-            Game.game_date < db.func.now(),
             Game.game_type.in_(['regular', 'playoff']),
-            ~Game.status.in_(['cancelled', 'rainout', 'postponed']),
+            Game.status == 'completed',
             db.or_(
                 Game.home_ID.in_(team_ids),
                 Game.away_ID.in_(team_ids)
