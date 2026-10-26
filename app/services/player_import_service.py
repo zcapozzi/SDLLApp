@@ -261,7 +261,8 @@ class PlayerImportService:
 
     def import_registration_csv(self, filepath: str, program: str,
                                   create_parent_users: bool = True,
-                                  column_mapping: dict = None) -> dict:
+                                  column_mapping: dict = None,
+                                  match_decisions: dict = None) -> dict:
         """Import player registration data from enrollment CSV.
 
         Expected columns:
@@ -279,6 +280,8 @@ class PlayerImportService:
             create_parent_users: If True, creates User records for parents
             column_mapping: Optional dict mapping internal names to CSV column names.
                           If None, uses exact column names.
+            match_decisions: Dict of row_num -> {'action': 'link'|'create_new', 'player_id': int}
+                           for potential duplicate decisions from review step.
 
         Returns:
             dict with import statistics
@@ -289,6 +292,7 @@ class PlayerImportService:
 
         self.program = program
         self.column_mapping = column_mapping
+        self.match_decisions = match_decisions or {}
         self._hash_for_lookup = hash_for_lookup  # Cache function reference
         self._generate_password_hash = generate_password_hash
 
@@ -311,6 +315,7 @@ class PlayerImportService:
         self.stats = {
             'players_created': 0,
             'players_updated': 0,
+            'players_linked': 0,  # Players linked via match decision
             'parent_users_created': 0,
             'season_records_created': 0,
             'evaluations_created': 0,
@@ -355,6 +360,7 @@ class PlayerImportService:
         self._new_users = []
         self._new_seasons = []
         self._player_code_counts = {}
+        self._secondary_email_updates = []  # (player_id, email) pairs to add secondary emails
 
         # Track which new players need linking to users (by index)
         self._player_user_links = []  # (player_index, email_hash)
@@ -382,7 +388,7 @@ class PlayerImportService:
             for i, row in enumerate(rows):
                 row_num = i + 2
                 try:
-                    self._collect_row_data(row, create_parent_users)
+                    self._collect_row_data(row, create_parent_users, row_num)
                 except Exception as e:
                     self.stats['errors'].append(f"Row {row_num}: {str(e)}")
 
@@ -405,8 +411,14 @@ class PlayerImportService:
 
         return self.stats
 
-    def _collect_row_data(self, row: dict, create_parent_users: bool):
-        """Collect row data into insert lists (no DB operations)."""
+    def _collect_row_data(self, row: dict, create_parent_users: bool, row_num: int = 0):
+        """Collect row data into insert lists (no DB operations).
+
+        Args:
+            row: CSV row dict
+            create_parent_users: Whether to create parent user accounts
+            row_num: Row number in CSV (for match decision lookup)
+        """
         # Extract fields using mapping
         parent_email = self._get_field(row, 'User Email')
         first_name = self._get_field(row, 'Player First Name')
@@ -440,11 +452,24 @@ class PlayerImportService:
         name_hash = self._fast_hash(name_normalized)
         cache_key = (email_hash, name_hash)
 
-        # Check if player exists
+        # Check for match decision from review step
+        match_decision = self.match_decisions.get(row_num)
+        linked_player_id = None
+        if match_decision and match_decision.get('action') == 'link':
+            # User decided to link to existing player
+            linked_player_id = match_decision.get('player_id')
+
+        # Check if player exists (by email+name exact match)
         existing_player_id = self._player_cache.get(cache_key)
 
-        if existing_player_id:
-            # Existing player - just need to maybe create season record
+        if linked_player_id:
+            # User decided to link to an existing player from review
+            self.stats['players_linked'] += 1
+            player_id = linked_player_id
+            # Add new email as secondary email via update
+            self._add_secondary_email_update(linked_player_id, parent_email)
+        elif existing_player_id:
+            # Exact match - existing player
             self.stats['players_updated'] += 1
             player_id = existing_player_id
         else:
@@ -526,6 +551,10 @@ class PlayerImportService:
             }
 
         self.stats['season_records_created'] += 1
+
+    def _add_secondary_email_update(self, player_id: int, email: str):
+        """Queue a secondary email update for a linked player."""
+        self._secondary_email_updates.append((player_id, email))
 
     def _bulk_insert_all(self):
         """Perform bulk inserts for all collected data."""
@@ -616,6 +645,21 @@ class PlayerImportService:
             t1 = time.time()
             db.session.execute(insert(PlayerSeason), self._new_seasons)
             bulk_timings['season_insert'] = time.time() - t1
+
+        # Update secondary emails for linked players
+        if self._secondary_email_updates:
+            t1 = time.time()
+            for player_id, email in self._secondary_email_updates:
+                # Load player and add secondary email
+                player = Player.query.get(player_id)
+                if player:
+                    # Add new email as secondary if not already set
+                    if not player.secondary_email:
+                        player.secondary_email = email
+                    elif email.lower() not in player.secondary_email.lower():
+                        # Append to existing secondary emails
+                        player.secondary_email = f"{player.secondary_email}, {email}"
+            bulk_timings['secondary_email_update'] = time.time() - t1
 
         bulk_timings['total'] = time.time() - t0
         print(f"[BULK INSERT TIMING] {bulk_timings}")

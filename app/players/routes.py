@@ -516,10 +516,17 @@ def import_preview():
 
     # Pre-load existing players and users for fast lookup
     existing_players = Player.query.all()
-    player_cache = {}
+    player_cache = {}  # (email_hash, name_hash) -> Player
+    player_by_name_birth = {}  # (name_hash, birth_date) -> [Player, ...]
     for p in existing_players:
         key = (p.parent_email_hash, p.name_hash)
         player_cache[key] = p
+        # Also index by name + birthdate for potential match detection
+        if p.birth_date:
+            nb_key = (p.name_hash, p.birth_date)
+            if nb_key not in player_by_name_birth:
+                player_by_name_birth[nb_key] = []
+            player_by_name_birth[nb_key].append(p)
 
     existing_users = User.query.all()
     user_cache = {u.email_hash: u for u in existing_users if u.email_hash}
@@ -533,6 +540,7 @@ def import_preview():
 
     # Parse and validate ALL rows for accurate counts
     preview_rows = []
+    potential_matches = []  # Rows that have potential matches needing review
     errors = []
 
     # Track unique emails for parent counts
@@ -541,6 +549,7 @@ def import_preview():
     returning_parents = 0
     new_players = 0
     returning_players = 0
+    potential_match_count = 0
 
     for i, row in enumerate(rows, start=2):
         email = get_field(row, 'User Email')
@@ -567,7 +576,7 @@ def import_preview():
             errors.append(f'Row {i}: Invalid birth date "{birth_date_str}"')
             continue
 
-        # Check if player exists using cache
+        # Check if player exists using cache (exact match: email + name)
         email_hash = hash_for_lookup(email)
         name_normalized = f"{first_name}{last_name}".lower().replace(' ', '').replace('-', '')
         name_hash = hash_for_lookup(name_normalized)
@@ -576,8 +585,21 @@ def import_preview():
         existing_player = player_cache.get(player_key)
         player_exists = existing_player is not None
 
+        # Check for potential matches (same name + birthdate, different email)
+        potential_match_players = []
+        if not player_exists and birth_date:
+            nb_key = (name_hash, birth_date)
+            candidates = player_by_name_birth.get(nb_key, [])
+            # Filter out any that have the same email (those would be exact matches)
+            potential_match_players = [
+                p for p in candidates
+                if p.parent_email_hash != email_hash
+            ]
+
         if player_exists:
             returning_players += 1
+        elif potential_match_players:
+            potential_match_count += 1
         else:
             new_players += 1
 
@@ -589,6 +611,26 @@ def import_preview():
             else:
                 new_parents += 1
 
+        # Track potential matches for review
+        if potential_match_players:
+            potential_matches.append({
+                'row_num': i,
+                'email': email,
+                'first_name': first_name,
+                'last_name': last_name,
+                'birth_date': birth_date,
+                'division': division,
+                'candidates': [
+                    {
+                        'id': p.id,
+                        'code': p.player_code,
+                        'parent_email': p.parent_email,
+                        'seasons': len(p.seasons) if hasattr(p, 'seasons') else 0
+                    }
+                    for p in potential_match_players
+                ]
+            })
+
         # Only include first 100 rows in preview table
         if len(preview_rows) < 100:
             preview_rows.append({
@@ -599,13 +641,18 @@ def import_preview():
                 'birth_date': birth_date,
                 'division': division,
                 'exists': player_exists,
-                'player_id': existing_player.id if existing_player else None
+                'player_id': existing_player.id if existing_player else None,
+                'has_potential_match': len(potential_match_players) > 0
             })
+
+    # Store potential matches in session for review step
+    session['import_potential_matches'] = potential_matches
 
     # Build stats dict
     import_stats = {
         'new_players': new_players,
         'returning_players': returning_players,
+        'potential_matches': potential_match_count,
         'new_parents': new_parents,
         'returning_parents': returning_parents,
         'unique_emails': len(emails_seen)
@@ -620,7 +667,64 @@ def import_preview():
                            total_errors=len(errors),
                            columns=reader.fieldnames,
                            create_users=create_users,
-                           import_stats=import_stats)
+                           import_stats=import_stats,
+                           potential_match_count=potential_match_count)
+
+
+@players_bp.route('/import/registration/review-matches', methods=['GET', 'POST'])
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def import_review_matches():
+    """Review potential duplicate matches before import."""
+    from flask import session
+
+    # Check session data exists
+    csv_content = session.get('import_csv')
+    potential_matches = session.get('import_potential_matches', [])
+    season_id = session.get('import_season_id')
+
+    if not csv_content or not season_id:
+        flash('Import session expired. Please upload the file again.', 'error')
+        return redirect(url_for('players.import_registration'))
+
+    org_season = OrgSeason.query.get(season_id)
+    if not org_season:
+        flash('Invalid season.', 'error')
+        return redirect(url_for('players.import_registration'))
+
+    if not potential_matches:
+        # No matches to review, go to confirm
+        return redirect(url_for('players.import_preview'))
+
+    if request.method == 'POST':
+        # Process the decisions
+        match_decisions = {}  # row_num -> 'link_to_ID' or 'create_new'
+
+        for match in potential_matches:
+            row_num = match['row_num']
+            decision = request.form.get(f'decision_{row_num}')
+
+            if decision and decision.startswith('link_'):
+                # Link to existing player
+                player_id = int(decision.replace('link_', ''))
+                match_decisions[row_num] = {'action': 'link', 'player_id': player_id}
+            else:
+                # Create as new player
+                match_decisions[row_num] = {'action': 'create_new'}
+
+        # Store decisions in session
+        session['import_match_decisions'] = match_decisions
+        # Clear potential matches since they've been reviewed
+        session['import_potential_matches'] = []
+
+        flash(f'Reviewed {len(match_decisions)} potential matches.', 'success')
+        return redirect(url_for('players.import_preview'))
+
+    # GET - show review form
+    return render_template('players/import_review_matches.html',
+                           org_season=org_season,
+                           potential_matches=potential_matches,
+                           program=session.get('import_program'))
 
 
 @players_bp.route('/import/registration/confirm', methods=['POST'])
@@ -638,8 +742,10 @@ def import_registration_confirm():
     program = session.pop('import_program', None)
     create_users = session.pop('import_create_users', False)
     column_mapping = session.pop('import_column_mapping', None)
+    match_decisions = session.pop('import_match_decisions', {})
     # Clean up other session keys
     session.pop('import_csv_headers', None)
+    session.pop('import_potential_matches', None)
 
     if not csv_content or not season_id or not program:
         flash('Import session expired. Please upload the file again.', 'error')
@@ -667,14 +773,16 @@ def import_registration_confirm():
                 temp_path,
                 program=program,
                 create_parent_users=create_users,
-                column_mapping=column_mapping
+                column_mapping=column_mapping,
+                match_decisions=match_decisions
             )
         finally:
             os.unlink(temp_path)
 
         # Show results
+        linked_msg = f', linked {stats.get("players_linked", 0)} to existing records' if stats.get('players_linked') else ''
         flash(f'Import complete! Created {stats["players_created"]} players, '
-              f'updated {stats["players_updated"]}, '
+              f'updated {stats["players_updated"]}{linked_msg}, '
               f'created {stats["parent_users_created"]} parent accounts.', 'success')
 
         if stats['errors']:

@@ -909,8 +909,14 @@ def postgame_gc_unusable(game_id, team_id):
     # Get or create report
     report = PostGameReport.query.filter_by(game_id=game_id, team_id=team_id).first()
     if not report:
-        flash('No report found for this game.', 'error')
-        return redirect(url_for('coach.postgame_form', game_id=game_id, team_id=team_id))
+        # Create a draft report so we can mark the GC data issue
+        report = PostGameReport(
+            game_id=game_id,
+            team_id=team_id,
+            submitted_by_id=current_user.ID,
+            status=PostGameReport.STATUS_DRAFT
+        )
+        db.session.add(report)
 
     reason = request.form.get('reason', '').strip()
     report.gc_data_unusable = True

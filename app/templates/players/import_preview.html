@@ -37,6 +37,12 @@
                 <div style="font-size: 24px; font-weight: bold; color: #1565c0;">{{ import_stats.new_players }}</div>
                 <div style="font-size: 12px; color: #1565c0;">New</div>
             </div>
+            {% if import_stats.potential_matches > 0 %}
+            <div style="flex: 1; text-align: center; padding: 15px; background: #fff3e0; border-radius: 6px;">
+                <div style="font-size: 24px; font-weight: bold; color: #e65100;">{{ import_stats.potential_matches }}</div>
+                <div style="font-size: 12px; color: #e65100;">Needs Review</div>
+            </div>
+            {% endif %}
         </div>
     </div>
 
@@ -63,6 +69,30 @@
 {% if preview_rows|length < total_rows %}
 <div style="background: #fff3e0; border: 1px solid #ffcc02; border-radius: 6px; padding: 12px 15px; margin-bottom: 20px; font-size: 14px; color: #856404;">
     Showing preview of first {{ preview_rows|length }} rows. All {{ total_rows }} rows will be processed on import.
+</div>
+{% endif %}
+
+<!-- Potential Matches Warning -->
+{% if potential_match_count and potential_match_count > 0 %}
+<div class="card" style="margin-bottom: 20px; border-left: 4px solid #e65100; background: #fff8f0;">
+    <h3 style="margin-top: 0; color: #e65100;">
+        Potential Duplicate Players Found ({{ potential_match_count }})
+    </h3>
+    <p style="margin-bottom: 15px; color: #555;">
+        <strong>{{ potential_match_count }} player(s)</strong> have the same name and birth date as existing players
+        but are being registered with a different email address. This may happen when a different parent
+        registers the same child.
+    </p>
+    <p style="margin-bottom: 15px; color: #555;">
+        You must review these potential matches before importing. For each one, you'll decide whether to:
+    </p>
+    <ul style="margin: 0 0 15px 20px; color: #555; font-size: 14px;">
+        <li><strong>Link to existing player</strong> - Add this season's data to their existing record</li>
+        <li><strong>Create as new player</strong> - Treat as a different person (e.g., siblings with same name)</li>
+    </ul>
+    <a href="{{ url_for('players.import_review_matches') }}" class="btn btn-primary" style="background: #e65100;">
+        Review Potential Matches
+    </a>
 </div>
 {% endif %}
 
@@ -100,6 +130,31 @@
 </div>
 
 <!-- Confirm Form - Placed prominently before preview table -->
+{% if potential_match_count and potential_match_count > 0 %}
+<div class="card" style="margin-bottom: 20px; background: #f5f5f5; border: 2px solid #ccc;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <p style="margin: 0; color: #666; font-size: 16px;">
+                Review required before importing
+            </p>
+            <p style="margin: 5px 0 0 0; color: #888; font-size: 13px;">
+                {{ potential_match_count }} potential duplicate(s) need your review first.
+            </p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <a href="{{ url_for('players.import_column_mapping') }}" class="btn btn-outline" style="font-size: 13px;">
+                Edit Mapping
+            </a>
+            <a href="{{ url_for('players.import_registration') }}" class="btn btn-outline">
+                Start Over
+            </a>
+            <a href="{{ url_for('players.import_review_matches') }}" class="btn btn-primary" style="background: #e65100;">
+                Review Matches
+            </a>
+        </div>
+    </div>
+</div>
+{% else %}
 <div class="card" style="margin-bottom: 20px; background: #f0f7f0; border: 2px solid rgb(34, 139, 34);">
     <form method="POST" action="{{ url_for('players.import_registration_confirm') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -130,6 +185,7 @@
         </div>
     </form>
 </div>
+{% endif %}
 
 <!-- Errors -->
 {% if errors %}
@@ -167,11 +223,13 @@
             </thead>
             <tbody>
                 {% for row in preview_rows %}
-                <tr>
+                <tr{% if row.has_potential_match %} style="background: #fff8f0;"{% endif %}>
                     <td>{{ row.row_num }}</td>
                     <td>
                         {% if row.exists %}
                             <span class="badge badge-update">Update</span>
+                        {% elif row.has_potential_match %}
+                            <span class="badge badge-review">Review</span>
                         {% else %}
                             <span class="badge badge-new">New</span>
                         {% endif %}
@@ -208,6 +266,10 @@
     color: #1565c0;
 }
 .badge-update {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+.badge-review {
     background: #fff3e0;
     color: #e65100;
 }

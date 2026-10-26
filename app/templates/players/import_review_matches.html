@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+
+{% block title %}Review Potential Matches{% endblock %}
+
+{% block extra_css %}
+<style>
+    .match-card {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        overflow: hidden;
+    }
+    .match-header {
+        background: #fff3e0;
+        padding: 15px 20px;
+        border-bottom: 1px solid #ddd;
+    }
+    .match-header h4 {
+        margin: 0 0 5px 0;
+        color: #e65100;
+    }
+    .match-body {
+        padding: 20px;
+    }
+    .player-info {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+    .player-panel {
+        padding: 15px;
+        border-radius: 6px;
+    }
+    .player-panel.new-player {
+        background: #e3f2fd;
+        border: 1px solid #90caf9;
+    }
+    .player-panel.existing-player {
+        background: #e8f5e9;
+        border: 1px solid #a5d6a7;
+    }
+    .player-panel h5 {
+        margin: 0 0 10px 0;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .player-panel.new-player h5 {
+        color: #1565c0;
+    }
+    .player-panel.existing-player h5 {
+        color: #2e7d32;
+    }
+    .player-detail {
+        display: flex;
+        justify-content: space-between;
+        padding: 5px 0;
+        font-size: 14px;
+        border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    .player-detail:last-child {
+        border-bottom: none;
+    }
+    .player-detail .label {
+        color: #666;
+    }
+    .player-detail .value {
+        font-weight: 500;
+    }
+    .decision-section {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 6px;
+    }
+    .decision-section h5 {
+        margin: 0 0 15px 0;
+        font-size: 14px;
+        color: #333;
+    }
+    .decision-options {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .decision-option {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 15px;
+        background: white;
+        border: 2px solid #ddd;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .decision-option:hover {
+        border-color: #999;
+    }
+    .decision-option.selected {
+        border-color: rgb(34, 139, 34);
+        background: #f0fff0;
+    }
+    .decision-option input[type="radio"] {
+        margin-top: 2px;
+    }
+    .decision-option .option-content {
+        flex: 1;
+    }
+    .decision-option .option-title {
+        font-weight: 500;
+        color: #333;
+    }
+    .decision-option .option-desc {
+        font-size: 12px;
+        color: #666;
+        margin-top: 2px;
+    }
+    .summary-bar {
+        background: #e3f2fd;
+        padding: 15px 20px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .nav-buttons {
+        display: flex;
+        gap: 10px;
+    }
+    .progress-indicator {
+        display: flex;
+        gap: 5px;
+        margin-top: 5px;
+    }
+    .progress-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #ccc;
+    }
+    .progress-dot.done {
+        background: rgb(34, 139, 34);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <div>
+        <h1>Review Potential Matches</h1>
+        <p style="color: #666; margin-top: 5px;">
+            These players may already exist with a different parent email
+        </p>
+    </div>
+    <a href="{{ url_for('players.import_preview') }}" class="btn btn-outline">Back to Preview</a>
+</div>
+
+<div class="summary-bar">
+    <div>
+        <strong>{{ potential_matches|length }} potential match(es)</strong> to review for
+        <strong>{{ org_season.season_desc }}</strong> ({{ program|capitalize }})
+    </div>
+</div>
+
+<form method="POST" id="review-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {% for match in potential_matches %}
+    <div class="match-card" id="match-{{ match.row_num }}">
+        <div class="match-header">
+            <h4>Row {{ match.row_num }}: {{ match.first_name }} {{ match.last_name }}</h4>
+            <span style="font-size: 13px; color: #856404;">
+                Born {{ match.birth_date.strftime('%m/%d/%Y') if match.birth_date else 'Unknown' }}
+                {% if match.division %} - {{ match.division }}{% endif %}
+            </span>
+        </div>
+        <div class="match-body">
+            <div class="player-info">
+                <!-- New Registration -->
+                <div class="player-panel new-player">
+                    <h5>From Import (New Email)</h5>
+                    <div class="player-detail">
+                        <span class="label">Name</span>
+                        <span class="value">{{ match.first_name }} {{ match.last_name }}</span>
+                    </div>
+                    <div class="player-detail">
+                        <span class="label">Birth Date</span>
+                        <span class="value">{{ match.birth_date.strftime('%m/%d/%Y') if match.birth_date else '-' }}</span>
+                    </div>
+                    <div class="player-detail">
+                        <span class="label">Parent Email</span>
+                        <span class="value" style="font-size: 12px;">{{ match.email }}</span>
+                    </div>
+                    <div class="player-detail">
+                        <span class="label">Division</span>
+                        <span class="value">{{ match.division or '-' }}</span>
+                    </div>
+                </div>
+
+                <!-- Existing Player Candidates -->
+                <div class="player-panel existing-player">
+                    <h5>Existing Player Record(s)</h5>
+                    {% for candidate in match.candidates %}
+                    <div style="{% if not loop.first %}margin-top: 15px; padding-top: 15px; border-top: 1px solid #a5d6a7;{% endif %}">
+                        <div class="player-detail">
+                            <span class="label">Player Code</span>
+                            <span class="value" style="font-family: monospace;">{{ candidate.code }}</span>
+                        </div>
+                        <div class="player-detail">
+                            <span class="label">Parent Email</span>
+                            <span class="value" style="font-size: 12px;">{{ candidate.parent_email or 'None' }}</span>
+                        </div>
+                        <div class="player-detail">
+                            <span class="label">Previous Seasons</span>
+                            <span class="value">{{ candidate.seasons }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Decision Options -->
+            <div class="decision-section">
+                <h5>What should we do with this registration?</h5>
+                <div class="decision-options">
+                    {% for candidate in match.candidates %}
+                    <label class="decision-option" onclick="selectOption(this)">
+                        <input type="radio" name="decision_{{ match.row_num }}" value="link_{{ candidate.id }}"
+                               {% if loop.first %}checked{% endif %}>
+                        <div class="option-content">
+                            <div class="option-title">
+                                Link to existing player {{ candidate.code }}
+                            </div>
+                            <div class="option-desc">
+                                Add this season's registration to the existing player record.
+                                The new parent email ({{ match.email }}) will be added as a secondary contact.
+                            </div>
+                        </div>
+                    </label>
+                    {% endfor %}
+
+                    <label class="decision-option" onclick="selectOption(this)">
+                        <input type="radio" name="decision_{{ match.row_num }}" value="create_new">
+                        <div class="option-content">
+                            <div class="option-title">
+                                Create as new player
+                            </div>
+                            <div class="option-desc">
+                                This is a different person (e.g., sibling with same name, or unrelated).
+                                A new player record will be created.
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <div class="card" style="background: #f0f7f0; border: 2px solid rgb(34, 139, 34); position: sticky; bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <p style="margin: 0; font-size: 16px; color: #333;">
+                    Ready to continue with import?
+                </p>
+                <p style="margin: 5px 0 0 0; font-size: 13px; color: #666;">
+                    Your decisions will be applied during the import process.
+                </p>
+            </div>
+            <div class="nav-buttons">
+                <a href="{{ url_for('players.import_preview') }}" class="btn btn-outline">
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-primary" id="submit-btn">
+                    Save Decisions & Continue
+                </button>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+function selectOption(label) {
+    // Remove selected class from siblings
+    var parent = label.closest('.decision-options');
+    parent.querySelectorAll('.decision-option').forEach(function(opt) {
+        opt.classList.remove('selected');
+    });
+    // Add selected class to clicked option
+    label.classList.add('selected');
+}
+
+// Initialize selected states
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('input[type="radio"]:checked').forEach(function(radio) {
+        radio.closest('.decision-option').classList.add('selected');
+    });
+
+    // Add loading state on submit
+    document.getElementById('review-form').addEventListener('submit', function() {
+        var btn = document.getElementById('submit-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Saving...';
+    });
+});
+</script>
+
+<style>
+.spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+</style>
+{% endblock %}
