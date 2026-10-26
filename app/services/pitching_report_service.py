@@ -22,6 +22,7 @@ class GameNeedingData:
     team_id: int
     game_date: date
     opponent_name: str
+    gc_data_unusable: bool = False  # True if GameChanger data marked as bad
 
 
 @dataclass
@@ -133,6 +134,7 @@ class PitchingReportService:
         stats_records = db.session.query(
             PostGameReport.team_id,
             PostGameReport.game_id,
+            PostGameReport.gc_data_unusable,
             PitchingStats.player_id,
             PitchingStats.pitch_count,
             PitchingStats.strikes,
@@ -167,7 +169,7 @@ class PitchingReportService:
         # Aggregate stats by team and player, tracking strike data availability
         # Key: (team_id, player_id) -> aggregated data
         aggregated: Dict[tuple, dict] = {}
-        # Track games missing strike data per team: team_id -> set of (game_id, game_date, opponent_id)
+        # Track games missing strike data per team: team_id -> set of (game_id, team_id, game_date, opponent_id, gc_data_unusable)
         games_missing_per_team: Dict[int, Set[tuple]] = {tid: set() for tid in team_ids}
 
         for row in stats_records:
@@ -209,7 +211,7 @@ class PitchingReportService:
                 # Determine opponent: if team is home, opponent is away and vice versa
                 opponent_id = row.away_ID if row.team_id == row.home_ID else row.home_ID
                 games_missing_per_team[row.team_id].add(
-                    (row.game_id, row.team_id, row.game_date, opponent_id)
+                    (row.game_id, row.team_id, row.game_date, opponent_id, row.gc_data_unusable or False)
                 )
 
         # Build pitcher summaries grouped by team
@@ -257,14 +259,15 @@ class PitchingReportService:
             # Build list of games missing strike data with opponent names
             games_missing = []
             if has_incomplete:
-                for game_id, team_id, game_date, opponent_id in games_missing_per_team.get(team.team_ID, []):
+                for game_id, team_id, game_date, opponent_id, gc_unusable in games_missing_per_team.get(team.team_ID, []):
                     opponent = team_lookup.get(opponent_id)
                     opponent_name = opponent.computed_display_name if opponent else 'Unknown'
                     games_missing.append(GameNeedingData(
                         game_id=game_id,
                         team_id=team_id,
                         game_date=game_date,
-                        opponent_name=opponent_name
+                        opponent_name=opponent_name,
+                        gc_data_unusable=gc_unusable
                     ))
                 # Sort by game date
                 games_missing.sort(key=lambda g: g.game_date)

@@ -191,11 +191,18 @@
                 </p>
                 <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                     {% for game in team_summary.games_missing_strikes %}
+                    {% if game.gc_data_unusable %}
+                    <span style="display: inline-block; padding: 4px 10px; background: #e9ecef; border: 1px solid #ced4da; border-radius: 4px; color: #6c757d; font-size: 12px; text-decoration: line-through;"
+                          title="GameChanger data marked as unusable - coach needs to fix in GameChanger">
+                        {{ game.game_date.strftime('%m/%d') }} vs {{ game.opponent_name }} (GC unusable)
+                    </span>
+                    {% else %}
                     <a href="{{ url_for('coach.postgame_form', game_id=game.game_id, team_id=game.team_id) }}?tab=screenshot"
                        style="display: inline-block; padding: 4px 10px; background: #fff; border: 1px solid #f0e6c0; border-radius: 4px; color: #856404; text-decoration: none; font-size: 12px;"
                        title="Upload GameChanger screenshot for this game">
                         {{ game.game_date.strftime('%m/%d') }} vs {{ game.opponent_name }}
                     </a>
+                    {% endif %}
                     {% endfor %}
                 </div>
             </div>

@@ -85,6 +85,12 @@ class PostGameReport(db.Model):
     is_flagged = db.Column(db.Boolean, default=False)
     flag_reason = db.Column(db.String(200))
 
+    # GameChanger data quality flag
+    # When True, GC data is unusable (e.g., coach forgot to change pitcher)
+    # and screenshot upload should not be offered for this game
+    gc_data_unusable = db.Column(db.Boolean, default=False)
+    gc_data_unusable_reason = db.Column(db.String(200))
+
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)

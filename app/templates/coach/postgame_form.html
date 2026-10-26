@@ -234,15 +234,19 @@
                 <!-- Umpire Section -->
                 <h3 style="border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">Umpire Evaluation</h3>
 
-                {% if not sdll_provided_umpire %}
+                {% if not umpire_rating_required %}
                 <div style="background: rgba(100, 100, 100, 0.1); padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #666;">
+                    {% if game_is_old and sdll_provided_umpire %}
+                    <strong>Note:</strong> Since this game was more than 72 hours ago, umpire feedback is optional.
+                    {% else %}
                     <strong>Note:</strong> SDLL did not provide the umpire for this game, but if you would like to share feedback, we may pass it along.
+                    {% endif %}
                 </div>
                 {% endif %}
 
                 <div class="form-group">
-                    <label for="umpire_rating">Rating{% if sdll_provided_umpire %} <span style="color: #c33;">*</span>{% else %} (optional){% endif %}</label>
-                    <select id="umpire_rating" name="umpire_rating" class="form-control"{% if sdll_provided_umpire %} required{% endif %}>
+                    <label for="umpire_rating">Rating{% if umpire_rating_required %} <span style="color: #c33;">*</span>{% else %} (optional){% endif %}</label>
+                    <select id="umpire_rating" name="umpire_rating" class="form-control"{% if umpire_rating_required %} required{% endif %}>
                         <option value="">Select a rating...</option>
                         {% for rating in ratings %}
                         <option value="{{ rating }}" {% if (form_data.get('umpire_rating') == rating) or (report and report.umpire_rating == rating) %}selected{% endif %}>{{ rating_labels[rating] }}</option>
@@ -349,6 +353,24 @@
         <!-- Screenshot Tab -->
         {% if show_pitching %}
         <div id="tab-screenshot" class="postgame-tab-content active">
+            {% if report and report.gc_data_unusable %}
+            <!-- GC Data Unusable Notice -->
+            <div style="background: rgba(220, 53, 69, 0.1); padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #dc3545;">
+                <strong style="color: #c33;">GameChanger Data Marked as Unusable</strong>
+                <p style="margin: 10px 0;">
+                    {{ report.gc_data_unusable_reason or 'The GameChanger data for this game has been marked as incorrect.' }}
+                </p>
+                <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">
+                    If you've corrected the data in GameChanger, you can clear this flag and try uploading again.
+                </p>
+                <form method="POST" action="{{ url_for('coach.postgame_gc_clear_unusable', game_id=game.ID, team_id=team.team_ID) }}" style="margin-top: 15px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline" style="border-color: #dc3545; color: #dc3545;">
+                        Clear Flag &amp; Allow Upload
+                    </button>
+                </form>
+            </div>
+            {% else %}
             {% if not can_manual_entry %}
             <!-- Edit window expired notice -->
             <div style="background: rgba(23, 162, 184, 0.1); padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #17a2b8;">
@@ -435,7 +457,47 @@
                     </button>
                     {% endif %}
                 </div>
+                <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
+                    <p style="margin: 0 0 10px 0; font-size: 13px; color: #666;">
+                        If your GameChanger data is incorrect (e.g., forgot to record pitcher changes), you can mark it as unusable:
+                    </p>
+                    <button type="button" class="btn btn-outline" style="font-size: 12px; padding: 6px 12px;" onclick="showGcUnusableForm()">
+                        Mark GC Data as Unusable
+                    </button>
+                </div>
             </div>
+
+            <!-- GC Unusable Form (hidden by default) -->
+            <div id="gc-unusable-form" style="display: none; background: #fff3cd; padding: 20px; border-radius: 8px; margin-top: 15px;">
+                <strong>Mark GameChanger Data as Unusable</strong>
+                <p style="margin: 10px 0; font-size: 14px;">
+                    This will prevent screenshot uploads for this game until you clear the flag.
+                    Use this if you need to fix the data in GameChanger first.
+                </p>
+                <form method="POST" action="{{ url_for('coach.postgame_gc_unusable', game_id=game.ID, team_id=team.team_ID) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="form-group">
+                        <label for="gc_unusable_reason">Reason (optional)</label>
+                        <input type="text" id="gc_unusable_reason" name="reason" class="form-control"
+                               placeholder="e.g., Forgot to change pitcher in GameChanger">
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button type="submit" class="btn btn-primary">Confirm</button>
+                        <button type="button" class="btn btn-outline" onclick="hideGcUnusableForm()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <script>
+            function showGcUnusableForm() {
+                document.getElementById('gc-unusable-form').style.display = 'block';
+                document.getElementById('screenshot-error').style.display = 'none';
+            }
+            function hideGcUnusableForm() {
+                document.getElementById('gc-unusable-form').style.display = 'none';
+                document.getElementById('screenshot-error').style.display = 'block';
+            }
+            </script>
 
             <!-- Parsed Results Form -->
             <div id="screenshot-results" class="screenshot-results">
@@ -544,18 +606,22 @@
                     <div id="umpire-section" style="display: none; margin-bottom: 20px; background: #fafafa; padding: 20px; border-radius: 8px; border: 1px solid #ddd;">
                         <h3 style="margin: 0 0 15px 0; border-bottom: 2px solid rgb(34, 139, 34); padding-bottom: 10px;">
                             Umpire Evaluation
-                            {% if sdll_provided_umpire %}<span style="color: #c33; font-size: 12px; margin-left: 10px;">Required</span>{% else %}<span style="color: #666; font-size: 12px; margin-left: 10px;">Optional</span>{% endif %}
+                            {% if umpire_rating_required %}<span style="color: #c33; font-size: 12px; margin-left: 10px;">Required</span>{% else %}<span style="color: #666; font-size: 12px; margin-left: 10px;">Optional</span>{% endif %}
                         </h3>
 
-                        {% if not sdll_provided_umpire %}
+                        {% if not umpire_rating_required %}
                         <div style="background: rgba(100, 100, 100, 0.1); padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #666;">
+                            {% if game_is_old and sdll_provided_umpire %}
+                            <strong>Note:</strong> Since this game was more than 72 hours ago, umpire feedback is optional.
+                            {% else %}
                             <strong>Note:</strong> SDLL did not provide the umpire for this game.
+                            {% endif %}
                         </div>
                         {% endif %}
 
                         <div class="form-group">
-                            <label for="gc_umpire_rating">Rating{% if sdll_provided_umpire %} <span style="color: #c33;">*</span>{% endif %}</label>
-                            <select id="gc_umpire_rating" name="umpire_rating" class="form-control" onchange="updateSubmitState()"{% if sdll_provided_umpire %} required{% endif %}>
+                            <label for="gc_umpire_rating">Rating{% if umpire_rating_required %} <span style="color: #c33;">*</span>{% endif %}</label>
+                            <select id="gc_umpire_rating" name="umpire_rating" class="form-control" onchange="updateSubmitState()"{% if umpire_rating_required %} required{% endif %}>
                                 <option value="">Select a rating...</option>
                                 {% for rating in ratings %}
                                 <option value="{{ rating }}">{{ rating_labels[rating] }}</option>
@@ -590,6 +656,8 @@
                     </div>
                 </form>
             </div>
+
+            {% endif %} {# end gc_data_unusable else #}
 
             <!-- Hidden data -->
             <script>
@@ -1092,7 +1160,7 @@ function calculateInningsFielded() {
 }
 
 // Certification and submission flow
-var umpireRequired = {{ 'true' if sdll_provided_umpire else 'false' }};
+var umpireRequired = {{ 'true' if umpire_rating_required else 'false' }};
 
 function validateStatsComplete() {
     // Check scores

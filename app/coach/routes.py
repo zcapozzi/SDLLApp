@@ -1,5 +1,6 @@
 """Coach routes - post-game reports and coach-specific features."""
 
+from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
@@ -161,6 +162,15 @@ def postgame_form(game_id, team_id):
         game.umpire_count_override != 0
     )
 
+    # Check if game is more than 72 hours old - umpire feedback is optional after that
+    game_is_old = False
+    if game.game_date:
+        hours_since_game = (datetime.utcnow() - game.game_date).total_seconds() / 3600
+        game_is_old = hours_since_game > 72
+
+    # Umpire rating is required only if SDLL provided umpire AND game is within 72 hours
+    umpire_rating_required = sdll_provided_umpire and not game_is_old
+
     if request.method == 'POST':
         action = request.form.get('action')
 
@@ -197,8 +207,8 @@ def postgame_form(game_id, team_id):
             if not innings_fielded:
                 errors.append('Innings fielded is required')
 
-            # Umpire rating is only required if SDLL provided the umpire
-            if sdll_provided_umpire:
+            # Umpire rating is required if SDLL provided umpire AND game is within 72 hours
+            if umpire_rating_required:
                 if not umpire_rating:
                     errors.append('Umpire rating is required')
                 elif umpire_rating not in PostGameReport.RATINGS:
@@ -222,6 +232,8 @@ def postgame_form(game_id, team_id):
                                        roster_json=roster_json,
                                        existing_pitching_stats=existing_pitching_stats,
                                        sdll_provided_umpire=sdll_provided_umpire,
+                                       umpire_rating_required=umpire_rating_required,
+                                       game_is_old=game_is_old,
                                        ratings=PostGameReport.RATINGS,
                                        rating_labels=PostGameReport.RATING_LABELS,
                                        can_manual_entry=can_manual_entry,
@@ -274,6 +286,8 @@ def postgame_form(game_id, team_id):
                                        roster_json=roster_json,
                                        existing_pitching_stats=existing_pitching_stats,
                                        sdll_provided_umpire=sdll_provided_umpire,
+                                       umpire_rating_required=umpire_rating_required,
+                                       game_is_old=game_is_old,
                                        ratings=PostGameReport.RATINGS,
                                        rating_labels=PostGameReport.RATING_LABELS,
                                        can_manual_entry=can_manual_entry,
@@ -295,6 +309,8 @@ def postgame_form(game_id, team_id):
                            roster_json=roster_json,
                            existing_pitching_stats=existing_pitching_stats,
                            sdll_provided_umpire=sdll_provided_umpire,
+                                       umpire_rating_required=umpire_rating_required,
+                                       game_is_old=game_is_old,
                            ratings=PostGameReport.RATINGS,
                            rating_labels=PostGameReport.RATING_LABELS,
                            can_manual_entry=can_manual_entry,
@@ -875,3 +891,51 @@ def postgame_screenshot_abandon(game_id, team_id):
             GCScreenshotService.mark_abandoned(session)
 
     return jsonify({'success': True})
+
+
+@coach_bp.route('/postgame/<int:game_id>/<int:team_id>/gc-unusable', methods=['POST'])
+@login_required
+def postgame_gc_unusable(game_id, team_id):
+    """Mark GameChanger data as unusable for this game.
+
+    Used when coach realizes GC data is bad (e.g., forgot to change pitcher).
+    """
+    # Check authorization
+    can_submit, role, error = post_game_service.can_user_submit(current_user.ID, game_id, team_id)
+    if not can_submit:
+        flash(f'Access denied: {error}', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    # Get or create report
+    report = PostGameReport.query.filter_by(game_id=game_id, team_id=team_id).first()
+    if not report:
+        flash('No report found for this game.', 'error')
+        return redirect(url_for('coach.postgame_form', game_id=game_id, team_id=team_id))
+
+    reason = request.form.get('reason', '').strip()
+    report.gc_data_unusable = True
+    report.gc_data_unusable_reason = reason or 'GameChanger data is incorrect'
+    db.session.commit()
+
+    flash('GameChanger data marked as unusable. You can fix it in GameChanger and return later.', 'info')
+    return redirect(url_for('coach.postgame_success', game_id=game_id, team_id=team_id))
+
+
+@coach_bp.route('/postgame/<int:game_id>/<int:team_id>/gc-clear-unusable', methods=['POST'])
+@login_required
+def postgame_gc_clear_unusable(game_id, team_id):
+    """Clear the gc_data_unusable flag to allow upload again."""
+    # Check authorization
+    can_submit, role, error = post_game_service.can_user_submit(current_user.ID, game_id, team_id)
+    if not can_submit:
+        flash(f'Access denied: {error}', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    report = PostGameReport.query.filter_by(game_id=game_id, team_id=team_id).first()
+    if report:
+        report.gc_data_unusable = False
+        report.gc_data_unusable_reason = None
+        db.session.commit()
+        flash('GameChanger upload is now allowed again.', 'success')
+
+    return redirect(url_for('coach.postgame_form', game_id=game_id, team_id=team_id))
