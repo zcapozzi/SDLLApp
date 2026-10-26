@@ -262,10 +262,12 @@ def manage_teams(year, is_spring):
             team_id = int(request.form.get('team_id'))
             coach_name = request.form.get('coach_name', '').strip() or None
             team_name = request.form.get('team_name', '').strip() or None
+            gamechanger_name = request.form.get('gamechanger_name', '').strip() or None
             team = TeamSeason.query.get(team_id)
             if team and team.year == year and team.is_spring == is_spring:
                 team.coach_name = coach_name
                 team.team_name = team_name
+                team.gameChangerName = gamechanger_name
 
                 # Collect selected practice days (checkboxes)
                 practice_days = []

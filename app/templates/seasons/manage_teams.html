@@ -245,7 +245,7 @@
                                     + Coach
                                 </button>
                                 <button type="button" class="btn btn-outline btn-sm"
-                                        onclick="setTeamSettings({{ team.team_ID }}, '{{ team.coach_name|e if team.coach_name else '' }}', '{{ team.team_name|e if team.team_name else '' }}', '{{ team.display_name }}', '{{ team.practice_days or '' }}')">
+                                        onclick="setTeamSettings({{ team.team_ID }}, '{{ team.coach_name|e if team.coach_name else '' }}', '{{ team.team_name|e if team.team_name else '' }}', '{{ team.gameChangerName|e if team.gameChangerName else '' }}', '{{ team.display_name }}', '{{ team.practice_days or '' }}')">
                                     Edit
                                 </button>
                                 {% if team.schedule_token and not team.is_placeholder %}
@@ -313,7 +313,7 @@
                                 + Coach
                             </button>
                             <button type="button" class="btn btn-outline btn-sm"
-                                    onclick="setTeamSettings({{ team.team_ID }}, '{{ team.coach_name|e if team.coach_name else '' }}', '{{ team.team_name|e if team.team_name else '' }}', '{{ team.display_name }}', '{{ team.practice_days or '' }}')">
+                                    onclick="setTeamSettings({{ team.team_ID }}, '{{ team.coach_name|e if team.coach_name else '' }}', '{{ team.team_name|e if team.team_name else '' }}', '{{ team.gameChangerName|e if team.gameChangerName else '' }}', '{{ team.display_name }}', '{{ team.practice_days or '' }}')">
                                 Edit
                             </button>
                             {% if team.schedule_token and not team.is_placeholder %}
@@ -430,6 +430,15 @@
             </div>
 
             <div class="form-group">
+                <label for="gamechanger_name">GameChanger Name</label>
+                <input type="text" id="gamechanger_name" name="gamechanger_name" class="form-control"
+                       placeholder="e.g., Blue Thunder">
+                <p class="text-muted text-small" style="margin-top: 5px;">
+                    Team name as it appears in GameChanger exports.
+                </p>
+            </div>
+
+            <div class="form-group">
                 <label>Practice Days</label>
                 <p class="text-muted text-small" style="margin-top: 0; margin-bottom: 8px;">
                     Select specific practice days for this team, or leave unchecked to use league default.
@@ -468,10 +477,11 @@
 </div>
 
 <script>
-function setTeamSettings(teamId, coachName, teamName, placeholder, practiceDays) {
+function setTeamSettings(teamId, coachName, teamName, gamechangerName, placeholder, practiceDays) {
     document.getElementById('name-team-id').value = teamId;
     document.getElementById('coach_name').value = coachName;
     document.getElementById('team_name').value = teamName;
+    document.getElementById('gamechanger_name').value = gamechangerName;
     document.getElementById('modal-placeholder').textContent = placeholder;
 
     // Clear all practice day checkboxes first
