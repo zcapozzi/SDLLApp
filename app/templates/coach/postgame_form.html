@@ -407,6 +407,13 @@
                 <img id="screenshot-preview" class="screenshot-preview" alt="Screenshot preview">
             </div>
 
+            <!-- Mark as Unusable Link (always visible) -->
+            <div id="gc-unusable-link" style="margin-top: 15px; text-align: center;">
+                <a href="#" onclick="showGcUnusableForm(); return false;" style="color: #666; font-size: 13px; text-decoration: underline;">
+                    GameChanger data is incorrect? Mark as unusable
+                </a>
+            </div>
+
             <!-- Spinner -->
             <div id="screenshot-spinner" class="screenshot-spinner">
                 <div style="text-align: center;">
@@ -491,11 +498,15 @@
             <script>
             function showGcUnusableForm() {
                 document.getElementById('gc-unusable-form').style.display = 'block';
-                document.getElementById('screenshot-error').style.display = 'none';
+                document.getElementById('gc-unusable-link').style.display = 'none';
+                document.getElementById('screenshot-upload-zone').style.display = 'none';
+                var errorEl = document.getElementById('screenshot-error');
+                if (errorEl) errorEl.style.display = 'none';
             }
             function hideGcUnusableForm() {
                 document.getElementById('gc-unusable-form').style.display = 'none';
-                document.getElementById('screenshot-error').style.display = 'block';
+                document.getElementById('gc-unusable-link').style.display = 'block';
+                document.getElementById('screenshot-upload-zone').style.display = 'block';
             }
             </script>
 
