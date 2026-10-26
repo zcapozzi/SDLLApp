@@ -88,7 +88,7 @@ class PitchingReportService:
         team_ids = {t.team_ID for t in teams}
         team_lookup = {t.team_ID: t for t in teams}
 
-        # Get all past games for these teams (exclude cancelled/rainout/postponed)
+        # Get all past games for these teams (exclude cancelled/rainout/postponed/scrimmages)
         all_games = Game.query.filter(
             Game.year == year,
             Game.is_spring == is_spring,
@@ -97,6 +97,8 @@ class PitchingReportService:
             Game.game_date < db.func.now(),
             Game.game_type.in_(['regular', 'playoff']),
             ~Game.status.in_(['cancelled', 'rainout', 'postponed']),
+            # Exclude scrimmages (is_scrimmage=1 means it's a scrimmage even if game_type is regular)
+            db.or_(Game.is_scrimmage == 0, Game.is_scrimmage.is_(None)),
             db.or_(
                 Game.home_ID.in_(team_ids),
                 Game.away_ID.in_(team_ids)
