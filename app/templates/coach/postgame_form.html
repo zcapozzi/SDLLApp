@@ -171,18 +171,21 @@
     <!-- Tab Navigation -->
     <div class="card">
         <div class="postgame-tabs">
-            <button type="button" class="postgame-tab active" onclick="switchTab('manual')">
-                Manual Entry
-            </button>
             {% if show_pitching %}
-            <button type="button" class="postgame-tab" onclick="switchTab('screenshot')">
-                Via GC Screenshot <span class="beta-badge">BETA</span>
+            <button type="button" class="postgame-tab active" onclick="switchTab('screenshot')">
+                Via GC Screenshot
+            </button>
+            {% endif %}
+            {% if can_manual_entry %}
+            <button type="button" class="postgame-tab{% if not show_pitching %} active{% endif %}" onclick="switchTab('manual')">
+                Manual Entry
             </button>
             {% endif %}
         </div>
 
+        {% if can_manual_entry %}
         <!-- Manual Entry Tab -->
-        <div id="tab-manual" class="postgame-tab-content active">
+        <div id="tab-manual" class="postgame-tab-content{% if not show_pitching %} active{% endif %}">
             <form method="POST" action="{{ url_for('coach.postgame_form', game_id=game.ID, team_id=team.team_ID) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
@@ -341,10 +344,21 @@
                 </div>
             </form>
         </div>
+        {% endif %}
 
         <!-- Screenshot Tab -->
         {% if show_pitching %}
-        <div id="tab-screenshot" class="postgame-tab-content">
+        <div id="tab-screenshot" class="postgame-tab-content active">
+            {% if not can_manual_entry %}
+            <!-- Edit window expired notice -->
+            <div style="background: rgba(23, 162, 184, 0.1); padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #17a2b8;">
+                <strong>Adding Pitching Data</strong>
+                <p style="margin: 10px 0 0 0;">
+                    The 24-hour edit window for this report has passed. You can still upload a GameChanger screenshot to add or update pitching statistics.
+                </p>
+            </div>
+            {% endif %}
+
             <!-- Instructions -->
             <div style="background: rgba(255, 140, 0, 0.1); padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid rgb(255, 140, 0);">
                 <strong>How to use:</strong>
@@ -387,15 +401,17 @@
                     The image analysis service is responding slowly. This sometimes happens during high traffic periods.
                 </p>
                 <p style="margin: 0 0 15px 0; color: #856404; font-size: 14px;">
-                    You can wait a bit longer, or switch to manual entry.
+                    You can wait a bit longer{% if can_manual_entry %}, or switch to manual entry{% endif %}.
                 </p>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <button type="button" class="btn btn-outline" style="border-color: #856404; color: #856404;" onclick="continueWaiting()">
                         Keep Waiting
                     </button>
+                    {% if can_manual_entry %}
                     <button type="button" class="btn btn-primary" onclick="switchToManualFromSlow()">
                         Switch to Manual Entry
                     </button>
+                    {% endif %}
                 </div>
             </div>
             <style>
@@ -413,9 +429,11 @@
                     <button type="button" class="btn btn-outline" style="margin-right: 10px;" onclick="retryScreenshot()">
                         Try Again
                     </button>
+                    {% if can_manual_entry %}
                     <button type="button" class="btn btn-outline" onclick="switchTab('manual')">
                         Use Manual Entry
                     </button>
+                    {% endif %}
                 </div>
             </div>
 
@@ -580,6 +598,7 @@
             var teamId = {{ team.team_ID }};
             var csrfToken = '{{ csrf_token() }}';
             var gcSessionUuid = null;
+            var canManualEntry = {{ 'true' if can_manual_entry else 'false' }};
 
             // Response time threshold for slow service detection (in seconds)
             {% if response_time_info and response_time_info.has_data %}
@@ -740,8 +759,10 @@ function uploadScreenshot(file) {
 
             // Show/hide retry options based on can_retry
             var retryOptions = document.getElementById('screenshot-retry-options');
-            if (data.can_retry === false) {
+            if (data.can_retry === false && canManualEntry) {
                 retryOptions.innerHTML = '<button type="button" class="btn btn-primary" onclick="switchTab(\'manual\')">Use Manual Entry</button>';
+            } else if (data.can_retry === false) {
+                retryOptions.innerHTML = '<button type="button" class="btn btn-outline" onclick="retryScreenshot()">Try Again</button>';
             }
         } else {
             // Success - populate form

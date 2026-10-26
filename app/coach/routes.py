@@ -122,10 +122,9 @@ def postgame_form(game_id, team_id):
     # Get existing report if any
     report = PostGameReport.query.filter_by(game_id=game_id, team_id=team_id).first()
 
-    # Check if edit window expired
-    if report and report.edit_window_expired:
-        flash('The edit window for this report has expired (24 hours after submission).', 'warning')
-        return redirect(url_for('coach.postgame_success', game_id=game_id, team_id=team_id))
+    # Check if manual entry is allowed (within 24-hour window)
+    # Screenshot upload is always allowed for adding pitching data
+    can_manual_entry = not (report and report.edit_window_expired)
 
     # Check if league is kid-pitch and baseball (softball doesn't have pitch count rules)
     league = League.get_by_name(game.league)
@@ -225,6 +224,7 @@ def postgame_form(game_id, team_id):
                                        sdll_provided_umpire=sdll_provided_umpire,
                                        ratings=PostGameReport.RATINGS,
                                        rating_labels=PostGameReport.RATING_LABELS,
+                                       can_manual_entry=can_manual_entry,
                                        form_data=request.form)
 
             # Submit directly
@@ -276,6 +276,7 @@ def postgame_form(game_id, team_id):
                                        sdll_provided_umpire=sdll_provided_umpire,
                                        ratings=PostGameReport.RATINGS,
                                        rating_labels=PostGameReport.RATING_LABELS,
+                                       can_manual_entry=can_manual_entry,
                                        form_data=request.form)
 
     # GET request - show form
@@ -296,6 +297,7 @@ def postgame_form(game_id, team_id):
                            sdll_provided_umpire=sdll_provided_umpire,
                            ratings=PostGameReport.RATINGS,
                            rating_labels=PostGameReport.RATING_LABELS,
+                           can_manual_entry=can_manual_entry,
                            response_time_info=response_time_info,
                            form_data={})
 
