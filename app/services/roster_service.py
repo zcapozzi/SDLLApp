@@ -349,11 +349,12 @@ class RosterService:
         if not org_season:
             return []
 
-        query = TeamSeason.query.filter_by(
-            year=org_season.year,
-            is_spring=org_season.is_spring,
-            active=1,
-            is_placeholder=0
+        query = TeamSeason.query.filter(
+            TeamSeason.year == org_season.year,
+            TeamSeason.is_spring == org_season.is_spring,
+            TeamSeason.active == 1,
+            # Handle both is_placeholder=0 and is_placeholder=NULL (both mean not a placeholder)
+            db.or_(TeamSeason.is_placeholder == 0, TeamSeason.is_placeholder.is_(None))
         ).options(
             joinedload(TeamSeason.league_rel)
         )

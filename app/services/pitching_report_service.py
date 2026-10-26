@@ -77,7 +77,8 @@ class PitchingReportService:
             TeamSeason.year == year,
             TeamSeason.is_spring == is_spring,
             TeamSeason.league_id == league_id,
-            TeamSeason.is_placeholder == 0,
+            # Handle both is_placeholder=0 and is_placeholder=NULL
+            db.or_(TeamSeason.is_placeholder == 0, TeamSeason.is_placeholder.is_(None)),
             TeamSeason.active == 1
         ).order_by(TeamSeason.display_name).all()
 
