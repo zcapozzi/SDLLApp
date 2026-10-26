@@ -167,6 +167,40 @@ class Player(db.Model):
         return cls.query.filter_by(player_code=player_code).first()
 
     @classmethod
+    def find_potential_matches(cls, first_name, last_name, birth_date, exclude_email=None):
+        """Find potential matching players by name + birth_date.
+
+        Used to detect possible duplicates when a different parent registers
+        the same child. Returns players with matching name_hash and birth_date
+        but different parent_email.
+
+        Args:
+            first_name: Player's first name
+            last_name: Player's last name
+            birth_date: Player's birth date
+            exclude_email: Email to exclude (the current registration's email)
+
+        Returns:
+            List of potentially matching Player records
+        """
+        from app.utils.encryption import hash_for_lookup
+
+        name_normalized = f"{first_name}{last_name}".lower().replace(' ', '').replace('-', '')
+        name_h = hash_for_lookup(name_normalized)
+
+        query = cls.query.filter(
+            cls.name_hash == name_h,
+            cls.birth_date == birth_date
+        )
+
+        # Exclude records with the same email (those are exact matches, not potential)
+        if exclude_email:
+            email_hash = hash_for_lookup(exclude_email)
+            query = query.filter(cls.parent_email_hash != email_hash)
+
+        return query.all()
+
+    @classmethod
     def generate_player_code(cls, first_name, last_name, birth_date):
         """Generate player code like 'bennluk1810' (last4 + first3 + MMYY).
 
@@ -236,6 +270,93 @@ class Player(db.Model):
         """Link this player to a parent user account."""
         self.parent_user_id = user.ID
         self.parent_user = user
+
+    def merge_from(self, other_player):
+        """Merge another player record into this one.
+
+        Moves all related records (seasons, evaluations, stats) from other_player
+        to this player, then deletes other_player.
+
+        Args:
+            other_player: The Player record to merge into this one
+
+        Returns:
+            dict with merge statistics
+        """
+        from app.models.pitching_stats import PitchingStats
+
+        stats = {
+            'seasons_moved': 0,
+            'evaluations_moved': 0,
+            'pitching_stats_moved': 0,
+            'email_added': False
+        }
+
+        # Add other player's email as secondary if we don't have one
+        if other_player.parent_email:
+            if not self.secondary_email:
+                self.secondary_email = other_player.parent_email
+                stats['email_added'] = True
+            elif not self._emails_match(self.secondary_email, other_player.parent_email):
+                # If secondary is already set to a different email, we can't add another
+                # Just log it - the email won't be preserved
+                pass
+
+        # Move PlayerSeason records
+        for season in other_player.seasons:
+            # Check if this player already has a record for this season
+            existing = PlayerSeason.query.filter_by(
+                player_id=self.id,
+                org_season_id=season.org_season_id
+            ).first()
+            if existing:
+                # Merge: keep existing, but copy over any data that's missing
+                if season.team_id and not existing.team_id:
+                    existing.team_id = season.team_id
+                if season.placed_league_id and not existing.placed_league_id:
+                    existing.placed_league_id = season.placed_league_id
+                if season.prior_league_id and not existing.prior_league_id:
+                    existing.prior_league_id = season.prior_league_id
+                # Delete the duplicate season record
+                db.session.delete(season)
+            else:
+                # Move the season record to this player
+                season.player_id = self.id
+            stats['seasons_moved'] += 1
+
+        # Move PlayerEvaluation records
+        for evaluation in other_player.evaluations:
+            # Check if this player already has an evaluation for this season
+            existing = PlayerEvaluation.query.filter_by(
+                player_id=self.id,
+                org_season_id=evaluation.org_season_id
+            ).first()
+            if existing:
+                # Keep the existing evaluation (first one wins)
+                db.session.delete(evaluation)
+            else:
+                evaluation.player_id = self.id
+            stats['evaluations_moved'] += 1
+
+        # Move PitchingStats records
+        pitching_stats = PitchingStats.query.filter_by(player_id=other_player.id).all()
+        for ps in pitching_stats:
+            ps.player_id = self.id
+            stats['pitching_stats_moved'] += 1
+
+        # Flush to ensure FK constraints are satisfied before delete
+        db.session.flush()
+
+        # Delete the merged player
+        db.session.delete(other_player)
+
+        return stats
+
+    def _emails_match(self, email1, email2):
+        """Check if two emails are the same (case-insensitive)."""
+        if not email1 or not email2:
+            return False
+        return email1.lower().strip() == email2.lower().strip()
 
 
 class PlayerSeason(db.Model):

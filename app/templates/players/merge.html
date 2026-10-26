@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Player Merge Tool{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Player Merge Tool</h1>
+    <p style="color: #666; margin-top: 5px;">Find and merge duplicate player records</p>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <h2>Find Potential Duplicates</h2>
+    <p style="margin-bottom: 15px;">
+        <a href="{{ url_for('players.api_find_duplicates') }}" target="_blank" class="btn btn-outline">
+            Scan for Duplicates (JSON)
+        </a>
+        <span style="color: #666; margin-left: 10px;">Finds players with same name + birth date but different emails</span>
+    </p>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <h2>Search Players</h2>
+    <form method="GET" action="{{ url_for('players.player_merge') }}">
+        <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+            <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+                <label for="name">Player Name</label>
+                <input type="text" id="name" name="name" class="form-control"
+                       value="{{ search_name }}" placeholder="Search by name...">
+            </div>
+            <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+                <label for="code">Player Code</label>
+                <input type="text" id="code" name="code" class="form-control"
+                       value="{{ search_code }}" placeholder="e.g., smitjoh0512">
+            </div>
+            <button type="submit" class="btn btn-primary">Search</button>
+        </div>
+    </form>
+</div>
+
+{% if players %}
+<div class="card">
+    <h2>Search Results ({{ players|length }})</h2>
+    <p style="color: #666; margin-bottom: 15px;">Select two players to compare and merge:</p>
+
+    <form method="GET" action="{{ url_for('players.player_merge_compare') }}" id="compare-form">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th style="width: 50px;">Select</th>
+                    <th>Name</th>
+                    <th>Player Code</th>
+                    <th>Birth Date</th>
+                    <th>Parent Email</th>
+                    <th>Seasons</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for player in players %}
+                <tr>
+                    <td style="text-align: center;">
+                        <input type="checkbox" name="player_select" value="{{ player.id }}"
+                               onchange="updateCompareButton()">
+                    </td>
+                    <td><strong>{{ player.full_name }}</strong></td>
+                    <td><code>{{ player.player_code }}</code></td>
+                    <td>{{ player.birth_date.strftime('%m/%d/%Y') if player.birth_date else '-' }}</td>
+                    <td>{{ player.parent_email or '-' }}</td>
+                    <td>{{ player.seasons|length }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div style="margin-top: 20px;">
+            <button type="submit" id="compare-btn" class="btn btn-primary" disabled>
+                Compare Selected Players
+            </button>
+            <span id="select-hint" style="color: #888; margin-left: 10px;">Select exactly 2 players</span>
+        </div>
+    </form>
+</div>
+
+<script>
+function updateCompareButton() {
+    var checkboxes = document.querySelectorAll('input[name="player_select"]:checked');
+    var btn = document.getElementById('compare-btn');
+    var hint = document.getElementById('select-hint');
+
+    if (checkboxes.length === 2) {
+        btn.disabled = false;
+        hint.textContent = '';
+
+        // Update form action with selected player IDs
+        var form = document.getElementById('compare-form');
+        var ids = Array.from(checkboxes).map(cb => cb.value);
+        form.action = '{{ url_for("players.player_merge_compare") }}?player1=' + ids[0] + '&player2=' + ids[1];
+    } else {
+        btn.disabled = true;
+        hint.textContent = checkboxes.length === 0 ? 'Select exactly 2 players' :
+                          checkboxes.length === 1 ? 'Select 1 more player' :
+                          'Select only 2 players';
+    }
+}
+</script>
+{% elif search_name or search_code %}
+<div class="card">
+    <p style="text-align: center; color: #666; padding: 40px;">
+        No players found matching your search.
+    </p>
+</div>
+{% endif %}
+
+{% endblock %}

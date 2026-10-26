@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}Compare Players for Merge{% endblock %}
+
+{% block extra_css %}
+<style>
+    .compare-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+    .player-card {
+        background: white;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .player-card.selected {
+        border-color: rgb(34, 139, 34);
+    }
+    .player-card-header {
+        background: #f8f9fa;
+        padding: 15px;
+        border-bottom: 1px solid #ddd;
+    }
+    .player-card-body {
+        padding: 15px;
+    }
+    .player-card h3 {
+        margin: 0 0 5px 0;
+    }
+    .player-card .code {
+        color: #666;
+        font-family: monospace;
+    }
+    .stat-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .stat-row:last-child {
+        border-bottom: none;
+    }
+    .stat-label {
+        color: #666;
+    }
+    .stat-value {
+        font-weight: 500;
+    }
+    .merge-direction {
+        text-align: center;
+        padding: 20px;
+        background: #fffbeb;
+        border: 1px solid #f0e6c0;
+        border-radius: 8px;
+        margin: 20px 0;
+    }
+    .merge-arrow {
+        font-size: 24px;
+        color: rgb(34, 139, 34);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Compare Players</h1>
+        <p style="color: #666; margin-top: 5px;">Review and merge duplicate player records</p>
+    </div>
+    <a href="{{ url_for('players.player_merge') }}" class="btn btn-outline">Back to Search</a>
+</div>
+
+<div class="compare-grid">
+    <!-- Player 1 -->
+    <div class="player-card" id="card-{{ player1.id }}">
+        <div class="player-card-header">
+            <h3>{{ player1.full_name }}</h3>
+            <span class="code">{{ player1.player_code }}</span>
+        </div>
+        <div class="player-card-body">
+            <div class="stat-row">
+                <span class="stat-label">Birth Date</span>
+                <span class="stat-value">{{ player1.birth_date.strftime('%m/%d/%Y') if player1.birth_date else '-' }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Parent Email</span>
+                <span class="stat-value">{{ player1.parent_email or '-' }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Secondary Email</span>
+                <span class="stat-value">{{ player1.secondary_email or '-' }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Seasons</span>
+                <span class="stat-value">{{ player1.seasons|length }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Evaluations</span>
+                <span class="stat-value">{{ player1.evaluations|length }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Pitching Stats</span>
+                <span class="stat-value">{{ player1_pitching }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Created</span>
+                <span class="stat-value">{{ player1.created_at.strftime('%m/%d/%Y') if player1.created_at else '-' }}</span>
+            </div>
+
+            {% if player1.seasons %}
+            <h4 style="margin: 15px 0 10px 0; font-size: 14px; color: #666;">Season History</h4>
+            {% for season in player1.seasons %}
+            <div class="stat-row">
+                <span class="stat-label">{{ season.org_season.season_name if season.org_season else 'Unknown' }}</span>
+                <span class="stat-value">{{ season.team.computed_display_name if season.team else 'Unassigned' }}</span>
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Player 2 -->
+    <div class="player-card" id="card-{{ player2.id }}">
+        <div class="player-card-header">
+            <h3>{{ player2.full_name }}</h3>
+            <span class="code">{{ player2.player_code }}</span>
+        </div>
+        <div class="player-card-body">
+            <div class="stat-row">
+                <span class="stat-label">Birth Date</span>
+                <span class="stat-value">{{ player2.birth_date.strftime('%m/%d/%Y') if player2.birth_date else '-' }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Parent Email</span>
+                <span class="stat-value">{{ player2.parent_email or '-' }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Secondary Email</span>
+                <span class="stat-value">{{ player2.secondary_email or '-' }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Seasons</span>
+                <span class="stat-value">{{ player2.seasons|length }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Evaluations</span>
+                <span class="stat-value">{{ player2.evaluations|length }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Pitching Stats</span>
+                <span class="stat-value">{{ player2_pitching }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Created</span>
+                <span class="stat-value">{{ player2.created_at.strftime('%m/%d/%Y') if player2.created_at else '-' }}</span>
+            </div>
+
+            {% if player2.seasons %}
+            <h4 style="margin: 15px 0 10px 0; font-size: 14px; color: #666;">Season History</h4>
+            {% for season in player2.seasons %}
+            <div class="stat-row">
+                <span class="stat-label">{{ season.org_season.season_name if season.org_season else 'Unknown' }}</span>
+                <span class="stat-value">{{ season.team.computed_display_name if season.team else 'Unassigned' }}</span>
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="merge-direction">
+    <p style="margin: 0 0 10px 0;"><strong>Select which player record to KEEP:</strong></p>
+    <p style="margin: 0; color: #666; font-size: 14px;">
+        The other player's seasons, evaluations, and stats will be moved to the kept player.
+        The merged player record will be deleted.
+    </p>
+</div>
+
+<div class="card">
+    <h2>Execute Merge</h2>
+
+    <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 20px; align-items: center; margin-bottom: 20px;">
+        <!-- Keep Player 1 -->
+        <form method="POST" action="{{ url_for('players.player_merge_execute') }}" style="text-align: center;">
+            <input type="hidden" name="keep_id" value="{{ player1.id }}">
+            <input type="hidden" name="merge_id" value="{{ player2.id }}">
+            <button type="submit" class="btn btn-primary" style="width: 100%;"
+                    onclick="return confirm('Are you sure? This will merge {{ player2.full_name }} into {{ player1.full_name }} and delete the duplicate record.');">
+                Keep {{ player1.full_name }}<br>
+                <small style="font-weight: normal;">Merge {{ player2.player_code }} → {{ player1.player_code }}</small>
+            </button>
+        </form>
+
+        <div style="color: #666; font-size: 24px;">OR</div>
+
+        <!-- Keep Player 2 -->
+        <form method="POST" action="{{ url_for('players.player_merge_execute') }}" style="text-align: center;">
+            <input type="hidden" name="keep_id" value="{{ player2.id }}">
+            <input type="hidden" name="merge_id" value="{{ player1.id }}">
+            <button type="submit" class="btn btn-primary" style="width: 100%;"
+                    onclick="return confirm('Are you sure? This will merge {{ player1.full_name }} into {{ player2.full_name }} and delete the duplicate record.');">
+                Keep {{ player2.full_name }}<br>
+                <small style="font-weight: normal;">Merge {{ player1.player_code }} → {{ player2.player_code }}</small>
+            </button>
+        </form>
+    </div>
+
+    <p style="text-align: center; color: #888; font-size: 13px;">
+        Tip: Usually you want to keep the <strong>older</strong> record (the one created first)
+        so the player code stays consistent.
+    </p>
+</div>
+
+{% endblock %}

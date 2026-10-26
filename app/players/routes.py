@@ -1793,3 +1793,176 @@ def api_eligible_players_for_callup(game_id):
         'total_available': len(available_players),
         'total_with_conflicts': len(conflicting_players)
     })
+
+
+# =============================================================================
+# Player Merge Tool
+# =============================================================================
+
+@players_bp.route('/merge')
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def player_merge():
+    """Player merge tool - find and merge duplicate player records."""
+    from sqlalchemy.orm import joinedload
+
+    # Get search parameters
+    search_name = request.args.get('name', '').strip()
+    search_code = request.args.get('code', '').strip()
+
+    players = []
+    if search_name or search_code:
+        query = Player.query.options(
+            joinedload(Player.seasons)
+        )
+
+        if search_code:
+            query = query.filter(Player.player_code.ilike(f'%{search_code}%'))
+        elif search_name:
+            # Search by decrypted name - need to load all and filter
+            # This is inefficient but necessary due to encryption
+            all_players = query.limit(500).all()
+            search_lower = search_name.lower()
+            players = [
+                p for p in all_players
+                if search_lower in (p.first_name or '').lower()
+                or search_lower in (p.last_name or '').lower()
+                or search_lower in p.full_name.lower()
+            ]
+        else:
+            players = query.limit(100).all()
+
+        if search_code:
+            players = query.limit(100).all()
+
+    return render_template('players/merge.html',
+                           players=players,
+                           search_name=search_name,
+                           search_code=search_code)
+
+
+@players_bp.route('/merge/compare')
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def player_merge_compare():
+    """Compare two players for potential merge."""
+    from sqlalchemy.orm import joinedload
+    from app.models.pitching_stats import PitchingStats
+
+    player1_id = request.args.get('player1', type=int)
+    player2_id = request.args.get('player2', type=int)
+
+    if not player1_id or not player2_id:
+        flash('Please select two players to compare.', 'error')
+        return redirect(url_for('players.player_merge'))
+
+    if player1_id == player2_id:
+        flash('Cannot merge a player with themselves.', 'error')
+        return redirect(url_for('players.player_merge'))
+
+    player1 = Player.query.options(
+        joinedload(Player.seasons).joinedload(PlayerSeason.team),
+        joinedload(Player.evaluations)
+    ).get(player1_id)
+
+    player2 = Player.query.options(
+        joinedload(Player.seasons).joinedload(PlayerSeason.team),
+        joinedload(Player.evaluations)
+    ).get(player2_id)
+
+    if not player1 or not player2:
+        flash('One or both players not found.', 'error')
+        return redirect(url_for('players.player_merge'))
+
+    # Get pitching stats counts
+    player1_pitching = PitchingStats.query.filter_by(player_id=player1_id).count()
+    player2_pitching = PitchingStats.query.filter_by(player_id=player2_id).count()
+
+    return render_template('players/merge_compare.html',
+                           player1=player1,
+                           player2=player2,
+                           player1_pitching=player1_pitching,
+                           player2_pitching=player2_pitching)
+
+
+@players_bp.route('/merge/execute', methods=['POST'])
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def player_merge_execute():
+    """Execute the player merge."""
+    keep_id = request.form.get('keep_id', type=int)
+    merge_id = request.form.get('merge_id', type=int)
+
+    if not keep_id or not merge_id:
+        flash('Invalid merge request.', 'error')
+        return redirect(url_for('players.player_merge'))
+
+    if keep_id == merge_id:
+        flash('Cannot merge a player with themselves.', 'error')
+        return redirect(url_for('players.player_merge'))
+
+    keep_player = Player.query.get(keep_id)
+    merge_player = Player.query.get(merge_id)
+
+    if not keep_player or not merge_player:
+        flash('One or both players not found.', 'error')
+        return redirect(url_for('players.player_merge'))
+
+    try:
+        # Execute the merge
+        stats = keep_player.merge_from(merge_player)
+        db.session.commit()
+
+        flash(f'Successfully merged {merge_player.full_name} into {keep_player.full_name}. '
+              f'Moved {stats["seasons_moved"]} season records, '
+              f'{stats["evaluations_moved"]} evaluations, '
+              f'{stats["pitching_stats_moved"]} pitching stats.',
+              'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error merging players: {str(e)}', 'error')
+
+    return redirect(url_for('players.player_merge'))
+
+
+@players_bp.route('/api/find-duplicates')
+@login_required
+@role_required('admin', 'BBPlayerAgent', 'SBPlayerAgent')
+def api_find_duplicates():
+    """Find potential duplicate players (same name + birthdate, different email)."""
+    from sqlalchemy import func
+
+    # Find players with duplicate name_hash + birth_date combinations
+    duplicates = db.session.query(
+        Player.name_hash,
+        Player.birth_date,
+        func.count(Player.id).label('count')
+    ).group_by(
+        Player.name_hash,
+        Player.birth_date
+    ).having(
+        func.count(Player.id) > 1
+    ).all()
+
+    results = []
+    for name_hash, birth_date, count in duplicates:
+        players = Player.query.filter_by(
+            name_hash=name_hash,
+            birth_date=birth_date
+        ).all()
+
+        if len(players) > 1:
+            results.append({
+                'players': [
+                    {
+                        'id': p.id,
+                        'name': p.full_name,
+                        'code': p.player_code,
+                        'parent_email': p.parent_email,
+                        'birth_date': p.birth_date.isoformat() if p.birth_date else None
+                    }
+                    for p in players
+                ]
+            })
+
+    return jsonify({'duplicates': results, 'count': len(results)})
