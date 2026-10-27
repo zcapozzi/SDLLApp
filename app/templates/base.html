@@ -228,21 +228,11 @@
                     <a href="{{ url_for('seasons.manage_teams', year=current_season_year, is_spring=current_season_is_spring) }}">Manage Teams</a>
                     <a href="{{ url_for('seasons.manage_leagues', year=current_season_year, is_spring=current_season_is_spring) }}">Manage Leagues</a>
                     <div class="dropdown-divider"></div>
-                    <a href="{{ url_for('seasons.schedule_settings', year=current_season_year, is_spring=current_season_is_spring) }}">Div. Days & Dates</a>
-                    <a href="{{ url_for('leagues.field_rules') }}">Div. Field Pref.</a>
-                    <a href="{{ url_for('seasons.blackout_dates', year=current_season_year, is_spring=current_season_is_spring) }}">Blackout Dates</a>
-                    <a href="{{ url_for('seasons.practice_pairings', year=current_season_year, is_spring=current_season_is_spring) }}">Practice Pairings</a>
-                    <div class="dropdown-divider"></div>
                     <a href="{{ url_for('fields.properties') }}">Field Properties</a>
-                    <a href="{{ url_for('fields.availability') }}">Field Availability</a>
-                    <a href="{{ url_for('fields.manage_allocations', year=current_season_year, is_spring=current_season_is_spring) }}">Field Allocations</a>
-                    <div class="dropdown-divider"></div>
-                    <a href="{{ url_for('scheduler.index', year=current_season_year, is_spring=current_season_is_spring) }}">Generate Schedule</a>
                     <a href="{{ url_for('scheduler.review', year=current_season_year, is_spring=current_season_is_spring) }}">Review Proposal</a>
-                    <div class="dropdown-divider"></div>
-                    <a href="{{ url_for('seasons.org_events', year=current_season_year, is_spring=current_season_is_spring) }}">Org Events</a>
-                    <a href="{{ url_for('seasons.manage_leagues', year=current_season_year, is_spring=current_season_is_spring) }}">Playoffs</a>
+                    <a href="{{ url_for('seasons.manage_playoffs', year=current_season_year, is_spring=current_season_is_spring, league_name='') }}">Playoffs</a>
                     {% if current_user.is_admin() %}
+                    <div class="dropdown-divider"></div>
                     <a href="{{ url_for('seasons.reset_season', year=current_season_year, is_spring=current_season_is_spring) }}" style="color: #c33;">Reset Season</a>
                     {% endif %}
                 </div>
@@ -252,50 +242,52 @@
             <div class="nav-item">
                 <a href="#" class="nav-link" onclick="toggleDropdown(this, event)">Schedule ▾</a>
                 <div class="dropdown-menu">
-                    <a href="{{ url_for('main.master_schedule') }}">Upcoming Games</a>
                     {% if current_user.can_edit_schedule() and current_season_year %}
-                    <a href="{{ url_for('games.manage', year=current_season_year, is_spring=current_season_is_spring) }}">
-                        <strong>Manage Games</strong>
-                    </a>
+                    {# Day-to-day operations #}
                     <a href="{{ url_for('games.calendar_today', year=current_season_year, is_spring=current_season_is_spring) }}">
-                        Calendar View
+                        Day View
                     </a>
                     <a href="{{ url_for('games.rainout', year=current_season_year, is_spring=current_season_is_spring) }}">
-                        Handle Rainout
+                        Rainout Handler
                     </a>
-                    <a href="{{ url_for('games.league_practice', year=current_season_year, is_spring=current_season_is_spring) }}">
-                        Add Division-Practice
-                    </a>
+                    {% endif %}
+                    {% if current_user.has_role('admin', 'scheduler', 'SBPlayerAgent', 'BBPlayerAgent') %}
+                    <a href="{{ url_for('scheduler.email_coaches') }}">Email Coaches</a>
+                    {% endif %}
+                    {% if current_user.can_edit_schedule() and current_season_year %}
                     <a href="{{ url_for('seasons.org_events', year=current_season_year, is_spring=current_season_is_spring) }}">
                         Org Events
                     </a>
-                    {% endif %}
-                    {% if current_user.can_edit_schedule() and current_season_year %}
+                    {# Schedule creation section #}
                     <div class="dropdown-divider"></div>
                     <a href="{{ url_for('scheduler.index', year=current_season_year, is_spring=current_season_is_spring) }}">
-                        <strong>Generate {{ current_season_name }}</strong>
+                        Generate Schedule
                     </a>
                     <a href="{{ url_for('seasons.schedule_settings', year=current_season_year, is_spring=current_season_is_spring) }}">
-                        Settings: {{ current_season_name }}
+                        Schedule Settings
                     </a>
                     <a href="{{ url_for('seasons.blackout_dates', year=current_season_year, is_spring=current_season_is_spring) }}">
                         Blackout Dates
                     </a>
-                    {% if current_user.is_admin() %}
+                    <a href="{{ url_for('fields.availability') }}">
+                        Field Dates
+                    </a>
+                    <a href="{{ url_for('fields.manage_allocations', year=current_season_year, is_spring=current_season_is_spring) }}">
+                        Field Allocations
+                    </a>
                     <a href="{{ url_for('seasons.release_schedule', year=current_season_year, is_spring=current_season_is_spring) }}">
                         Release Schedule
                     </a>
-                    {% endif %}
+                    <a href="{{ url_for('seasons.practice_pairings', year=current_season_year, is_spring=current_season_is_spring) }}">
+                        Practice Pairings
+                    </a>
+                    {# Reference/static section #}
                     <div class="dropdown-divider"></div>
-                    <a href="{{ url_for('scheduler.picker') }}">Other Seasons...</a>
+                    <a href="{{ url_for('leagues.field_rules') }}">Div. Field Pref.</a>
                     {% elif current_user.can_edit_schedule() %}
                     <div class="dropdown-divider"></div>
                     <a href="{{ url_for('scheduler.picker') }}">Schedule Generator</a>
                     <a href="{{ url_for('seasons.schedule_settings_picker') }}">Schedule Settings</a>
-                    {% endif %}
-                    {% if current_user.has_role('admin', 'scheduler', 'SBPlayerAgent', 'BBPlayerAgent') %}
-                    <div class="dropdown-divider"></div>
-                    <a href="{{ url_for('scheduler.email_coaches') }}">Email Coaches</a>
                     {% endif %}
                 </div>
             </div>
