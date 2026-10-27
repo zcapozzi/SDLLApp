@@ -551,10 +551,11 @@
 
                     <table id="gc-pitching-table" style="font-size: 13px; margin-bottom: 10px; width: 100%; table-layout: fixed;">
                         <colgroup>
-                            <col style="width: 38%;">
-                            <col style="width: 14%;">
-                            <col style="width: 13%;">
-                            <col style="width: 11%;">
+                            <col style="width: 34%;">
+                            <col style="width: 12%;">
+                            <col style="width: 12%;">
+                            <col style="width: 10%;">
+                            <col class="pitch-optional" style="width: 8%;">
                             <col class="pitch-optional" style="width: 12%;">
                             <col class="pitch-optional" style="width: 12%;">
                         </colgroup>
@@ -564,6 +565,7 @@
                                 <th style="text-align: center; padding: 6px;">Pitches</th>
                                 <th style="text-align: center; padding: 6px;" title="Strikes Thrown">Strikes</th>
                                 <th style="text-align: center; padding: 6px;">IP</th>
+                                <th class="pitch-optional" style="text-align: center; padding: 6px;" title="Batters Faced">BF</th>
                                 <th class="pitch-optional" style="text-align: center; padding: 6px;">BB</th>
                                 <th class="pitch-optional" style="text-align: center; padding: 6px;">K</th>
                             </tr>
@@ -1006,7 +1008,7 @@ function populatePitchingTable(pitchers, roster) {
         var row = document.createElement('tr');
         row.id = 'no-pitchers-msg';
         var td = document.createElement('td');
-        td.colSpan = 5;
+        td.colSpan = 7;
         td.style.padding = '20px';
         td.style.textAlign = 'center';
         td.style.color = '#666';
@@ -1127,6 +1129,19 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
     inputIP.addEventListener('input', calculateInningsFielded);
     tdIP.appendChild(inputIP);
     row.appendChild(tdIP);
+
+    // BF (batters faced)
+    var tdBF = document.createElement('td');
+    tdBF.className = 'pitch-optional';
+    tdBF.style.padding = '2px';
+    var inputBF = document.createElement('input');
+    inputBF.type = 'number';
+    inputBF.name = 'pitcher_bf_' + idx;
+    inputBF.value = (data && data.batters_faced) || '';
+    inputBF.style.cssText = 'width: 100%; text-align: center; padding: 3px 2px; font-size: 13px; box-sizing: border-box;';
+    inputBF.min = '0';
+    tdBF.appendChild(inputBF);
+    row.appendChild(tdBF);
 
     // BB (walks)
     var tdBB = document.createElement('td');
@@ -1384,6 +1399,7 @@ document.getElementById('screenshot-submit-form').addEventListener('submit', fun
         var pitchInput = row.querySelector('input[name^="pitcher_pitches_"]');
         var strikesInput = row.querySelector('input[name^="pitcher_strikes_"]');
         var ipInput = row.querySelector('input[name^="pitcher_ip_"]');
+        var bfInput = row.querySelector('input[name^="pitcher_bf_"]');
         var kInput = row.querySelector('input[name^="pitcher_k_"]');
         var bbInput = row.querySelector('input[name^="pitcher_bb_"]');
 
@@ -1401,6 +1417,9 @@ document.getElementById('screenshot-submit-form').addEventListener('submit', fun
                 }
                 if (ipInput && ipInput.value) {
                     formData.append('innings_code_' + playerCode, ipInput.value);
+                }
+                if (bfInput && bfInput.value) {
+                    formData.append('batters_code_' + playerCode, bfInput.value);
                 }
                 if (kInput && kInput.value) {
                     formData.append('strikeouts_code_' + playerCode, kInput.value);
