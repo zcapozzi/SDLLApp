@@ -725,6 +725,7 @@ def postgame_screenshot_upload(game_id, team_id):
         'data': {
             'our_score': parsed_data.our_score,
             'opponent_score': parsed_data.opponent_score,
+            'innings_batted': parsed_data.innings_batted,
             'pitchers': pitchers_response
         },
         'confidence': parsed_data.confidence,
@@ -799,6 +800,23 @@ def postgame_screenshot_submit(game_id, team_id):
             player_by_code[ps.player.player_code] = ps.player
 
     pitch_data = []
+
+    # Validate pitching data - both pitches and strikes required if either is provided
+    pitching_errors = []
+    for key in request.form.keys():
+        if key.startswith('pitch_code_'):
+            player_code = key.replace('pitch_code_', '')
+            player = player_by_code.get(player_code)
+            if player:
+                pitch_count_str = request.form.get(key, '').strip()
+                strikes_str = request.form.get(f'strikes_code_{player_code}', '').strip()
+
+                # If pitches has value but strikes is empty, that's an error
+                if pitch_count_str and not strikes_str:
+                    pitching_errors.append(f'{player.full_name}: Strikes is required (enter 0 if none)')
+
+    if pitching_errors:
+        return jsonify({'error': '; '.join(pitching_errors)}), 400
 
     # Process pitch data sent by player_code (from screenshot form)
     for key in request.form.keys():

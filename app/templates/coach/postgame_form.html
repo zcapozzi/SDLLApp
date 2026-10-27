@@ -549,15 +549,23 @@
                         Review and adjust the extracted pitching data. Match players to roster if needed.
                     </p>
 
-                    <table id="gc-pitching-table" style="font-size: 14px; margin-bottom: 10px; width: 100%;">
+                    <table id="gc-pitching-table" style="font-size: 13px; margin-bottom: 10px; width: 100%; table-layout: fixed;">
+                        <colgroup>
+                            <col style="width: auto;">
+                            <col style="width: 55px;">
+                            <col style="width: 50px;">
+                            <col style="width: 45px;">
+                            <col class="pitch-optional" style="width: 45px;">
+                            <col class="pitch-optional" style="width: 40px;">
+                        </colgroup>
                         <thead>
                             <tr style="background: #f5f5f5;">
-                                <th style="text-align: left; padding: 8px;">Player</th>
-                                <th style="width: 60px; text-align: center; padding: 8px;">Pitches</th>
-                                <th style="width: 50px; text-align: center; padding: 8px;" title="Strikes Thrown">Strikes</th>
-                                <th style="width: 50px; text-align: center; padding: 8px;">IP</th>
-                                <th class="pitch-optional" style="width: 40px; text-align: center; padding: 8px;">BB</th>
-                                <th class="pitch-optional" style="width: 40px; text-align: center; padding: 8px;">K</th>
+                                <th style="text-align: left; padding: 6px;">Player</th>
+                                <th style="text-align: center; padding: 6px;">Pitches</th>
+                                <th style="text-align: center; padding: 6px;" title="Strikes Thrown">Strikes</th>
+                                <th style="text-align: center; padding: 6px;">IP</th>
+                                <th class="pitch-optional" style="text-align: center; padding: 6px;">BB</th>
+                                <th class="pitch-optional" style="text-align: center; padding: 6px;">K</th>
                             </tr>
                         </thead>
                         <tbody id="gc-pitching-tbody">
@@ -858,6 +866,11 @@ function uploadScreenshot(file) {
             document.getElementById('gc_our_score').value = data.data.our_score || '';
             document.getElementById('gc_opponent_score').value = data.data.opponent_score || '';
 
+            // Auto-populate innings batted if extracted from line score
+            if (data.data.innings_batted && data.data.innings_batted >= 1 && data.data.innings_batted <= 7) {
+                document.getElementById('gc_innings_batted').value = data.data.innings_batted;
+            }
+
             // Show warnings if any
             var warningsSection = document.getElementById('warnings-section');
             var warningsList = document.getElementById('warnings-list');
@@ -1033,12 +1046,13 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
 
     // Player dropdown
     var tdPlayer = document.createElement('td');
-    tdPlayer.style.padding = '6px 8px';
+    tdPlayer.style.padding = '4px 6px';
+    tdPlayer.style.overflow = 'hidden';
 
     var select = document.createElement('select');
     select.name = 'pitcher_player_' + idx;
     select.className = 'form-control pitcher-select';
-    select.style.width = '100%';
+    select.style.cssText = 'width: 100%; font-size: 12px; padding: 4px 2px;';
 
     var optNone = document.createElement('option');
     optNone.value = '';
@@ -1075,12 +1089,12 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
 
     // Pitches
     var tdPitches = document.createElement('td');
-    tdPitches.style.padding = '4px';
+    tdPitches.style.padding = '2px';
     var inputPitches = document.createElement('input');
     inputPitches.type = 'number';
     inputPitches.name = 'pitcher_pitches_' + idx;
     inputPitches.value = (data && data.pitches_thrown) || '';
-    inputPitches.style.cssText = 'width: 50px; text-align: center; padding: 4px;';
+    inputPitches.style.cssText = 'width: 100%; text-align: center; padding: 3px 2px; font-size: 13px; box-sizing: border-box;';
     inputPitches.min = '0';
     inputPitches.max = '150';
     tdPitches.appendChild(inputPitches);
@@ -1088,12 +1102,12 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
 
     // Strikes
     var tdStrikes = document.createElement('td');
-    tdStrikes.style.padding = '4px';
+    tdStrikes.style.padding = '2px';
     var inputStrikes = document.createElement('input');
     inputStrikes.type = 'number';
     inputStrikes.name = 'pitcher_strikes_' + idx;
     inputStrikes.value = (data && data.strikes_thrown) || '';
-    inputStrikes.style.cssText = 'width: 45px; text-align: center; padding: 4px;';
+    inputStrikes.style.cssText = 'width: 100%; text-align: center; padding: 3px 2px; font-size: 13px; box-sizing: border-box;';
     inputStrikes.min = '0';
     inputStrikes.max = '150';
     tdStrikes.appendChild(inputStrikes);
@@ -1101,13 +1115,13 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
 
     // IP
     var tdIP = document.createElement('td');
-    tdIP.style.padding = '4px';
+    tdIP.style.padding = '2px';
     var inputIP = document.createElement('input');
     inputIP.type = 'text';
     inputIP.name = 'pitcher_ip_' + idx;
     inputIP.className = 'pitcher-ip';
     inputIP.value = (data && data.innings_pitched) || '';
-    inputIP.style.cssText = 'width: 40px; text-align: center; padding: 4px;';
+    inputIP.style.cssText = 'width: 100%; text-align: center; padding: 3px 2px; font-size: 13px; box-sizing: border-box;';
     inputIP.placeholder = '0.0';
     inputIP.addEventListener('change', calculateInningsFielded);
     inputIP.addEventListener('input', calculateInningsFielded);
@@ -1117,12 +1131,12 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
     // BB (walks)
     var tdBB = document.createElement('td');
     tdBB.className = 'pitch-optional';
-    tdBB.style.padding = '4px';
+    tdBB.style.padding = '2px';
     var inputBB = document.createElement('input');
     inputBB.type = 'number';
     inputBB.name = 'pitcher_bb_' + idx;
     inputBB.value = (data && data.walks) || '';
-    inputBB.style.cssText = 'width: 35px; text-align: center; padding: 4px;';
+    inputBB.style.cssText = 'width: 100%; text-align: center; padding: 3px 2px; font-size: 13px; box-sizing: border-box;';
     inputBB.min = '0';
     tdBB.appendChild(inputBB);
     row.appendChild(tdBB);
@@ -1130,12 +1144,12 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
     // K (strikeouts)
     var tdK = document.createElement('td');
     tdK.className = 'pitch-optional';
-    tdK.style.padding = '4px';
+    tdK.style.padding = '2px';
     var inputK = document.createElement('input');
     inputK.type = 'number';
     inputK.name = 'pitcher_k_' + idx;
     inputK.value = (data && data.strikeouts) || '';
-    inputK.style.cssText = 'width: 35px; text-align: center; padding: 4px;';
+    inputK.style.cssText = 'width: 100%; text-align: center; padding: 3px 2px; font-size: 13px; box-sizing: border-box;';
     inputK.min = '0';
     tdK.appendChild(inputK);
     row.appendChild(tdK);
@@ -1294,8 +1308,49 @@ function resetScreenshot() {
 document.getElementById('screenshot-submit-form').addEventListener('submit', function(e) {
     e.preventDefault();
 
-    // Show visual feedback immediately
     var submitBtn = document.getElementById('gc-submit-btn');
+
+    // Validate pitcher data before submission
+    var tbody = document.getElementById('gc-pitching-tbody');
+    var rows = tbody.querySelectorAll('tr.pitcher-row');
+    var validationErrors = [];
+
+    rows.forEach(function(row, idx) {
+        var select = row.querySelector('select');
+        var pitchInput = row.querySelector('input[name^="pitcher_pitches_"]');
+        var strikesInput = row.querySelector('input[name^="pitcher_strikes_"]');
+
+        // Skip rows without a player selected
+        if (!select || !select.value || select.value.startsWith('_unmatched_')) return;
+
+        var playerName = select.options[select.selectedIndex].text;
+        var pitches = pitchInput ? pitchInput.value.trim() : '';
+        var strikes = strikesInput ? strikesInput.value.trim() : '';
+
+        // If either field has data, both must be filled
+        if (pitches !== '' || strikes !== '') {
+            if (pitches === '') {
+                validationErrors.push(playerName + ': Pitches is required (enter 0 if none)');
+                if (pitchInput) pitchInput.style.border = '2px solid #dc3545';
+            } else if (pitchInput) {
+                pitchInput.style.border = '';
+            }
+
+            if (strikes === '') {
+                validationErrors.push(playerName + ': Strikes is required (enter 0 if none)');
+                if (strikesInput) strikesInput.style.border = '2px solid #dc3545';
+            } else if (strikesInput) {
+                strikesInput.style.border = '';
+            }
+        }
+    });
+
+    if (validationErrors.length > 0) {
+        alert('Please fix the following errors:\n\n' + validationErrors.join('\n'));
+        return;
+    }
+
+    // Show visual feedback immediately
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span style="display: inline-block; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle;"></span>Submitting...';
 

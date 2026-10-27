@@ -43,6 +43,7 @@ class ParsedGameData:
     pitchers: List[ParsedPitcher]
     confidence: float
     warnings: List[str]
+    innings_batted: Optional[int] = None
 
 
 class GCScreenshotService:
@@ -247,18 +248,22 @@ CONTEXT:
 EXTRACT:
 1. Final score for both teams
 2. Pitching statistics for OUR team's pitchers only
+3. Innings batted by our team (from line score if visible)
 
 IMPORTANT:
 - Match pitcher names to our roster and include the player_code
 - If you can't confidently match a name, include the name as-is with player_code: null
 - Only extract data that is clearly visible in the screenshot
 - Set confidence based on image quality and clarity
+- A pitcher CAN have 0 innings pitched but still have walks/pitches (they walked batters but recorded no outs before being pulled) - this is VALID data, do NOT ignore it
+- For innings_batted: count how many inning columns in the line score show a number (including 0) for OUR team's row. If an inning column shows a dash or is blank, our team did not bat that inning.
 
 RESPOND WITH VALID JSON ONLY (no markdown, no explanation):
 {{
   "game": {{
     "our_score": <integer>,
-    "opponent_score": <integer>
+    "opponent_score": <integer>,
+    "innings_batted": <integer or null if line score not visible - count of innings where our team has a score listed>
   }},
   "pitchers": [
     {{
@@ -456,7 +461,8 @@ RESPOND WITH VALID JSON ONLY (no markdown, no explanation):
                 opponent_score=game_data.get('opponent_score', 0),
                 pitchers=pitchers,
                 confidence=parsed.get('confidence', 0.5),
-                warnings=parsed.get('warnings', [])
+                warnings=parsed.get('warnings', []),
+                innings_batted=game_data.get('innings_batted')
             )
 
             # Store parsed JSON
