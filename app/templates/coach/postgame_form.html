@@ -1097,7 +1097,7 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
     var inputPitches = document.createElement('input');
     inputPitches.type = 'number';
     inputPitches.name = 'pitcher_pitches_' + idx;
-    inputPitches.value = (data && data.pitches_thrown) || '';
+    inputPitches.value = (data && data.pitches_thrown != null) ? data.pitches_thrown : '';
     inputPitches.style.cssText = 'width: 100%; text-align: center; padding: 3px 2px; font-size: 13px; box-sizing: border-box;';
     inputPitches.min = '0';
     inputPitches.max = '150';
@@ -1110,7 +1110,7 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
     var inputStrikes = document.createElement('input');
     inputStrikes.type = 'number';
     inputStrikes.name = 'pitcher_strikes_' + idx;
-    inputStrikes.value = (data && data.strikes_thrown) || '';
+    inputStrikes.value = (data && data.strikes_thrown != null) ? data.strikes_thrown : '';
     inputStrikes.style.cssText = 'width: 100%; text-align: center; padding: 3px 2px; font-size: 13px; box-sizing: border-box;';
     inputStrikes.min = '0';
     inputStrikes.max = '150';
@@ -1124,7 +1124,7 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
     inputIP.type = 'text';
     inputIP.name = 'pitcher_ip_' + idx;
     inputIP.className = 'pitcher-ip';
-    inputIP.value = (data && data.innings_pitched) || '';
+    inputIP.value = (data && data.innings_pitched != null) ? data.innings_pitched : '';
     inputIP.style.cssText = 'width: 100%; text-align: center; padding: 3px 2px; font-size: 13px; box-sizing: border-box;';
     inputIP.placeholder = '0.0';
     inputIP.addEventListener('change', calculateInningsFielded);
@@ -1139,7 +1139,7 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
     var inputBF = document.createElement('input');
     inputBF.type = 'number';
     inputBF.name = 'pitcher_bf_' + idx;
-    inputBF.value = (data && data.batters_faced) || '';
+    inputBF.value = (data && data.batters_faced != null) ? data.batters_faced : '';
     inputBF.style.cssText = 'width: 100%; text-align: center; padding: 3px 2px; font-size: 13px; box-sizing: border-box;';
     inputBF.min = '0';
     tdBF.appendChild(inputBF);
@@ -1152,7 +1152,7 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
     var inputRA = document.createElement('input');
     inputRA.type = 'number';
     inputRA.name = 'pitcher_ra_' + idx;
-    inputRA.value = (data && data.runs_allowed) || '';
+    inputRA.value = (data && data.runs_allowed != null) ? data.runs_allowed : '';
     inputRA.style.cssText = 'width: 100%; text-align: center; padding: 3px 2px; font-size: 13px; box-sizing: border-box;';
     inputRA.min = '0';
     tdRA.appendChild(inputRA);
@@ -1165,7 +1165,7 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
     var inputBB = document.createElement('input');
     inputBB.type = 'number';
     inputBB.name = 'pitcher_bb_' + idx;
-    inputBB.value = (data && data.walks) || '';
+    inputBB.value = (data && data.walks != null) ? data.walks : '';
     inputBB.style.cssText = 'width: 100%; text-align: center; padding: 3px 2px; font-size: 13px; box-sizing: border-box;';
     inputBB.min = '0';
     tdBB.appendChild(inputBB);
@@ -1178,7 +1178,7 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
     var inputK = document.createElement('input');
     inputK.type = 'number';
     inputK.name = 'pitcher_k_' + idx;
-    inputK.value = (data && data.strikeouts) || '';
+    inputK.value = (data && data.strikeouts != null) ? data.strikeouts : '';
     inputK.style.cssText = 'width: 100%; text-align: center; padding: 3px 2px; font-size: 13px; box-sizing: border-box;';
     inputK.min = '0';
     tdK.appendChild(inputK);
@@ -1428,22 +1428,22 @@ document.getElementById('screenshot-submit-form').addEventListener('submit', fun
             var player = rosterByCode[playerCode];
             if (player) {
                 formData.append('pitch_code_' + playerCode, pitchInput.value);
-                if (strikesInput && strikesInput.value) {
+                if (strikesInput && strikesInput.value !== '') {
                     formData.append('strikes_code_' + playerCode, strikesInput.value);
                 }
-                if (ipInput && ipInput.value) {
+                if (ipInput && ipInput.value !== '') {
                     formData.append('innings_code_' + playerCode, ipInput.value);
                 }
-                if (bfInput && bfInput.value) {
+                if (bfInput && bfInput.value !== '') {
                     formData.append('batters_code_' + playerCode, bfInput.value);
                 }
-                if (raInput && raInput.value) {
+                if (raInput && raInput.value !== '') {
                     formData.append('runs_code_' + playerCode, raInput.value);
                 }
-                if (kInput && kInput.value) {
+                if (kInput && kInput.value !== '') {
                     formData.append('strikeouts_code_' + playerCode, kInput.value);
                 }
-                if (bbInput && bbInput.value) {
+                if (bbInput && bbInput.value !== '') {
                     formData.append('walks_code_' + playerCode, bbInput.value);
                 }
             }
