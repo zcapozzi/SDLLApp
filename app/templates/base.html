@@ -229,7 +229,6 @@
                     <a href="{{ url_for('seasons.manage_leagues', year=current_season_year, is_spring=current_season_is_spring) }}">Manage Leagues</a>
                     <div class="dropdown-divider"></div>
                     <a href="{{ url_for('fields.properties') }}">Field Properties</a>
-                    <a href="{{ url_for('scheduler.review', year=current_season_year, is_spring=current_season_is_spring) }}">Review Proposal</a>
                     <a href="{{ url_for('seasons.manage_playoffs', year=current_season_year, is_spring=current_season_is_spring, league_name='') }}">Playoffs</a>
                     {% if current_user.is_admin() %}
                     <div class="dropdown-divider"></div>
@@ -243,7 +242,7 @@
                 <a href="#" class="nav-link" onclick="toggleDropdown(this, event)">Schedule ▾</a>
                 <div class="dropdown-menu">
                     {% if current_user.can_edit_schedule() and current_season_year %}
-                    {# Day-to-day operations #}
+                    <div class="dropdown-header">In-Season</div>
                     <a href="{{ url_for('games.calendar_today', year=current_season_year, is_spring=current_season_is_spring) }}">
                         Day View
                     </a>
@@ -258,11 +257,7 @@
                     <a href="{{ url_for('seasons.org_events', year=current_season_year, is_spring=current_season_is_spring) }}">
                         Org Events
                     </a>
-                    {# Schedule creation section #}
-                    <div class="dropdown-divider"></div>
-                    <a href="{{ url_for('scheduler.index', year=current_season_year, is_spring=current_season_is_spring) }}">
-                        Generate Schedule
-                    </a>
+                    <div class="dropdown-header">Schedule Inputs</div>
                     <a href="{{ url_for('seasons.schedule_settings', year=current_season_year, is_spring=current_season_is_spring) }}">
                         Schedule Settings
                     </a>
@@ -275,18 +270,24 @@
                     <a href="{{ url_for('fields.manage_allocations', year=current_season_year, is_spring=current_season_is_spring) }}">
                         Field Allocations
                     </a>
-                    <a href="{{ url_for('seasons.release_schedule', year=current_season_year, is_spring=current_season_is_spring) }}">
-                        Release Schedule
-                    </a>
                     <a href="{{ url_for('seasons.practice_pairings', year=current_season_year, is_spring=current_season_is_spring) }}">
                         Practice Pairings
                     </a>
-                    {# Reference/static section #}
-                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-header">Schedule Proposal</div>
+                    <a href="{{ url_for('scheduler.index', year=current_season_year, is_spring=current_season_is_spring) }}">
+                        Generate
+                    </a>
+                    <a href="{{ url_for('scheduler.review', year=current_season_year, is_spring=current_season_is_spring) }}">
+                        Review
+                    </a>
+                    <a href="{{ url_for('seasons.release_schedule', year=current_season_year, is_spring=current_season_is_spring) }}">
+                        Release
+                    </a>
+                    <div class="dropdown-header">Reference</div>
                     <a href="{{ url_for('leagues.field_rules') }}">Div. Field Pref.</a>
                     {% elif current_user.can_edit_schedule() %}
-                    <div class="dropdown-divider"></div>
-                    <a href="{{ url_for('scheduler.picker') }}">Schedule Generator</a>
+                    <div class="dropdown-header">Schedule Proposal</div>
+                    <a href="{{ url_for('scheduler.picker') }}">Generate</a>
                     <a href="{{ url_for('seasons.schedule_settings_picker') }}">Schedule Settings</a>
                     {% endif %}
                 </div>
