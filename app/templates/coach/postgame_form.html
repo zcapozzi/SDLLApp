@@ -551,12 +551,13 @@
 
                     <table id="gc-pitching-table" style="font-size: 13px; margin-bottom: 10px; width: 100%; table-layout: fixed;">
                         <colgroup>
-                            <col style="width: 34%;">
-                            <col style="width: 12%;">
-                            <col style="width: 12%;">
-                            <col style="width: 10%;">
+                            <col style="width: 30%;">
+                            <col style="width: 11%;">
+                            <col style="width: 11%;">
+                            <col style="width: 9%;">
                             <col class="pitch-optional" style="width: 8%;">
-                            <col class="pitch-optional" style="width: 12%;">
+                            <col class="pitch-optional" style="width: 8%;">
+                            <col class="pitch-optional" style="width: 11%;">
                             <col class="pitch-optional" style="width: 12%;">
                         </colgroup>
                         <thead>
@@ -566,6 +567,7 @@
                                 <th style="text-align: center; padding: 6px;" title="Strikes Thrown">Strikes</th>
                                 <th style="text-align: center; padding: 6px;">IP</th>
                                 <th class="pitch-optional" style="text-align: center; padding: 6px;" title="Batters Faced">BF</th>
+                                <th class="pitch-optional" style="text-align: center; padding: 6px;" title="Runs Allowed">RA</th>
                                 <th class="pitch-optional" style="text-align: center; padding: 6px;">BB</th>
                                 <th class="pitch-optional" style="text-align: center; padding: 6px;">K</th>
                             </tr>
@@ -1008,7 +1010,7 @@ function populatePitchingTable(pitchers, roster) {
         var row = document.createElement('tr');
         row.id = 'no-pitchers-msg';
         var td = document.createElement('td');
-        td.colSpan = 7;
+        td.colSpan = 8;
         td.style.padding = '20px';
         td.style.textAlign = 'center';
         td.style.color = '#666';
@@ -1142,6 +1144,19 @@ function addPitcherRowWithData(roster, matchedPlayer, data, excludeSelected) {
     inputBF.min = '0';
     tdBF.appendChild(inputBF);
     row.appendChild(tdBF);
+
+    // RA (runs allowed)
+    var tdRA = document.createElement('td');
+    tdRA.className = 'pitch-optional';
+    tdRA.style.padding = '2px';
+    var inputRA = document.createElement('input');
+    inputRA.type = 'number';
+    inputRA.name = 'pitcher_ra_' + idx;
+    inputRA.value = (data && data.runs_allowed) || '';
+    inputRA.style.cssText = 'width: 100%; text-align: center; padding: 3px 2px; font-size: 13px; box-sizing: border-box;';
+    inputRA.min = '0';
+    tdRA.appendChild(inputRA);
+    row.appendChild(tdRA);
 
     // BB (walks)
     var tdBB = document.createElement('td');
@@ -1400,6 +1415,7 @@ document.getElementById('screenshot-submit-form').addEventListener('submit', fun
         var strikesInput = row.querySelector('input[name^="pitcher_strikes_"]');
         var ipInput = row.querySelector('input[name^="pitcher_ip_"]');
         var bfInput = row.querySelector('input[name^="pitcher_bf_"]');
+        var raInput = row.querySelector('input[name^="pitcher_ra_"]');
         var kInput = row.querySelector('input[name^="pitcher_k_"]');
         var bbInput = row.querySelector('input[name^="pitcher_bb_"]');
 
@@ -1420,6 +1436,9 @@ document.getElementById('screenshot-submit-form').addEventListener('submit', fun
                 }
                 if (bfInput && bfInput.value) {
                     formData.append('batters_code_' + playerCode, bfInput.value);
+                }
+                if (raInput && raInput.value) {
+                    formData.append('runs_code_' + playerCode, raInput.value);
                 }
                 if (kInput && kInput.value) {
                     formData.append('strikeouts_code_' + playerCode, kInput.value);

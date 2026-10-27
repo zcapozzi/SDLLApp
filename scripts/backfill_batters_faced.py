@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Backfill batters_faced from GC screenshot sessions.
+"""Backfill batters_faced and runs_allowed from GC screenshot sessions.
 
 This script re-parses existing GameChanger screenshots to extract batters_faced
-data that was not originally captured, and updates the corresponding PitchingStats records.
+and runs_allowed data that was not originally captured, and updates the
+corresponding PitchingStats records.
 
 Usage:
     cd SDLLApp
@@ -85,21 +86,29 @@ def backfill_session(session: GCScreenshotSession, dry_run: bool = False) -> dic
         result['error'] = 'No pitching stats for this report'
         return result
 
-    # Check if parsed_json already has batters_faced
+    # Check if parsed_json already has batters_faced or runs_allowed
     # If so, we can use that instead of re-parsing
     parsed_json = session.get_parsed_data()
     pitchers_data = parsed_json.get('pitchers', []) if parsed_json else []
 
-    # Check if any pitcher has batters_faced data
-    has_bf_data = any(p.get('batters_faced') is not None for p in pitchers_data)
+    # Check if any pitcher has batters_faced or runs_allowed data
+    has_data = any(
+        p.get('batters_faced') is not None or p.get('runs_allowed') is not None
+        for p in pitchers_data
+    )
 
-    if has_bf_data:
+    if has_data:
         # Use existing parsed data
         for p in pitchers_data:
             player_code = p.get('player_code')
             bf = p.get('batters_faced')
+            ra = p.get('runs_allowed')
 
-            if not player_code or bf is None:
+            if not player_code:
+                continue
+
+            # Skip if neither field has data
+            if bf is None and ra is None:
                 continue
 
             # Find the player
@@ -115,11 +124,19 @@ def backfill_session(session: GCScreenshotSession, dry_run: bool = False) -> dic
                 continue
 
             # Check if batters_faced needs updating
-            if stats.batters_faced is None or stats.batters_faced != bf:
+            if bf is not None and (stats.batters_faced is None or stats.batters_faced != bf):
                 old_val = stats.batters_faced
                 if not dry_run:
                     stats.batters_faced = bf
-                result['details'].append(f"{player_code}: {old_val} -> {bf}")
+                result['details'].append(f"{player_code} BF: {old_val} -> {bf}")
+                result['updated'] += 1
+
+            # Check if runs_allowed needs updating
+            if ra is not None and (stats.runs_allowed is None or stats.runs_allowed != ra):
+                old_val = stats.runs_allowed
+                if not dry_run:
+                    stats.runs_allowed = ra
+                result['details'].append(f"{player_code} RA: {old_val} -> {ra}")
                 result['updated'] += 1
 
         if not dry_run and result['updated'] > 0:
@@ -160,9 +177,13 @@ def backfill_session(session: GCScreenshotSession, dry_run: bool = False) -> dic
         result['error'] = f'Parse error: {parse_error}'
         return result
 
-    # Update pitching stats with batters_faced
+    # Update pitching stats with batters_faced and runs_allowed
     for p in parsed_data.pitchers:
-        if not p.player_code or p.batters_faced is None:
+        if not p.player_code:
+            continue
+
+        # Skip if neither field has data
+        if p.batters_faced is None and p.runs_allowed is None:
             continue
 
         # Find the player
@@ -178,11 +199,19 @@ def backfill_session(session: GCScreenshotSession, dry_run: bool = False) -> dic
             continue
 
         # Update batters_faced
-        if stats.batters_faced is None or stats.batters_faced != p.batters_faced:
+        if p.batters_faced is not None and (stats.batters_faced is None or stats.batters_faced != p.batters_faced):
             old_val = stats.batters_faced
             if not dry_run:
                 stats.batters_faced = p.batters_faced
-            result['details'].append(f"{p.player_code}: {old_val} -> {p.batters_faced}")
+            result['details'].append(f"{p.player_code} BF: {old_val} -> {p.batters_faced}")
+            result['updated'] += 1
+
+        # Update runs_allowed
+        if p.runs_allowed is not None and (stats.runs_allowed is None or stats.runs_allowed != p.runs_allowed):
+            old_val = stats.runs_allowed
+            if not dry_run:
+                stats.runs_allowed = p.runs_allowed
+            result['details'].append(f"{p.player_code} RA: {old_val} -> {p.runs_allowed}")
             result['updated'] += 1
 
     if not dry_run and result['updated'] > 0:
@@ -193,7 +222,7 @@ def backfill_session(session: GCScreenshotSession, dry_run: bool = False) -> dic
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Backfill batters_faced from GC screenshots')
+    parser = argparse.ArgumentParser(description='Backfill batters_faced and runs_allowed from GC screenshots')
     parser.add_argument('--dry-run', action='store_true', help='Show what would be updated')
     parser.add_argument('--limit', type=int, help='Process only N sessions')
     args = parser.parse_args()

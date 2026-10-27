@@ -830,6 +830,7 @@ def postgame_screenshot_submit(game_id, team_id):
                     innings = _parse_innings(request.form.get(f'innings_code_{player_code}', ''))
                     strikes = _parse_int(request.form.get(f'strikes_code_{player_code}', ''))
                     batters_faced = _parse_int(request.form.get(f'batters_code_{player_code}', ''))
+                    runs_allowed = _parse_int(request.form.get(f'runs_code_{player_code}', ''))
                     strikeouts = _parse_int(request.form.get(f'strikeouts_code_{player_code}', ''))
                     walks = _parse_int(request.form.get(f'walks_code_{player_code}', ''))
 
@@ -839,6 +840,7 @@ def postgame_screenshot_submit(game_id, team_id):
                         'strikes': strikes,
                         'innings_pitched': innings,
                         'batters_faced': batters_faced,
+                        'runs_allowed': runs_allowed,
                         'strikeouts': strikeouts,
                         'walks': walks,
                     })
@@ -851,6 +853,7 @@ def postgame_screenshot_submit(game_id, team_id):
                         'strikes_thrown': strikes,
                         'innings_pitched': innings,
                         'batters_faced': batters_faced,
+                        'runs_allowed': runs_allowed,
                         'strikeouts': strikeouts,
                         'walks': walks
                     })
