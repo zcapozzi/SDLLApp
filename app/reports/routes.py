@@ -767,19 +767,23 @@ def standings():
         Game.active == 1
     ).all()
 
+    # Fetch all post-game reports for these games in ONE query (avoid N+1)
+    game_ids = [g.ID for g in completed_games]
+    all_reports = []
+    if game_ids:
+        all_reports = PostGameReport.query.filter(
+            PostGameReport.game_id.in_(game_ids),
+            PostGameReport.status == PostGameReport.STATUS_SUBMITTED
+        ).all()
+
+    # Build lookup: (game_id, team_id) -> report
+    report_lookup = {(r.game_id, r.team_id): r for r in all_reports}
+
     mismatched_scores = []
     for game in completed_games:
-        # Get reports for both teams
-        home_report = PostGameReport.query.filter_by(
-            game_id=game.ID,
-            team_id=game.home_ID,
-            status=PostGameReport.STATUS_SUBMITTED
-        ).first()
-        away_report = PostGameReport.query.filter_by(
-            game_id=game.ID,
-            team_id=game.away_ID,
-            status=PostGameReport.STATUS_SUBMITTED
-        ).first()
+        # Look up reports from pre-fetched data
+        home_report = report_lookup.get((game.ID, game.home_ID))
+        away_report = report_lookup.get((game.ID, game.away_ID))
 
         if home_report and away_report:
             # Check if scores match
