@@ -941,8 +941,9 @@ def _generate_single_elimination_rounds(num_teams: int, teams: list) -> list:
 
         rounds.append({'name': 'Quarterfinals', 'matchups': first_round})
 
-        # Semifinals: QF1 winner vs QF4 winner, QF2 winner vs QF3 winner
-        sf_pairs = [(0, 3), (1, 2)]  # Indices into qf_winners
+        # Semifinals: QF1 winner vs QF2 winner (top half), QF3 winner vs QF4 winner (bottom half)
+        # For 6 teams: #1 vs W(4/5), W(3/6) vs #2
+        sf_pairs = [(0, 1), (2, 3)]  # Indices into qf_winners
         for sf_idx, (qf1_idx, qf2_idx) in enumerate(sf_pairs):
             high_team = qf_winners[qf1_idx]
             low_team = qf_winners[qf2_idx]
