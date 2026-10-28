@@ -637,11 +637,20 @@ def pitching_report(year, is_spring, league):
 def standings():
     """League standings page with proposed playoff brackets.
 
+    Access: Admin, scheduler, BB_VP, SB_VP, product_admin only.
     Shows standings for all leagues, defaulting to the user's league if they're a coach.
     Includes projected playoff bracket based on league's tournament format.
+
+    Rankings: Teams ranked by winning percentage (ties = 0.5 W + 0.5 L).
+    Tiebreaker: Runs allowed per defensive inning (lower is better).
     """
     from app.services.standings_service import StandingsService
     from app.models.org_season import OrgSeason
+
+    # Check access - only scheduler, league admins, product admin
+    if not current_user.has_role('admin', 'scheduler', 'BB_VP', 'SB_VP', 'product_admin'):
+        flash('You do not have permission to view standings.', 'error')
+        return redirect(url_for('main.dashboard'))
 
     log_authenticated_view('reports_standings')
 
@@ -691,6 +700,10 @@ def standings():
 
         league = ls.league_rel
 
+        # Skip Tee Ball leagues - no standings for tee ball
+        if league.pitch_type == 'tee_ball':
+            continue
+
         # Get standings for this league
         standings_list = StandingsService.get_league_standings(year, is_spring, league.ID)
 
@@ -716,6 +729,80 @@ def standings():
 
     season_name = 'Spring' if is_spring else 'Fall'
 
+    # Find games with missing or mismatched scores
+    from datetime import datetime, timedelta
+    from app.models.post_game_report import PostGameReport
+    from sqlalchemy.orm import joinedload
+
+    today = datetime.now().date()
+
+    # Games that are past their date, still scheduled, no scores (exclude tee ball)
+    missing_scores_games = Game.query.options(
+        joinedload(Game.home_team),
+        joinedload(Game.away_team),
+        joinedload(Game.league_rel)
+    ).join(League, Game.league_id == League.ID).filter(
+        Game.year == year,
+        Game.is_spring == is_spring,
+        Game.status == 'scheduled',
+        Game.game_type.in_(['regular', 'playoff']),
+        db.func.date(Game.game_date) < today,
+        League.pitch_type != 'tee_ball',
+        Game.active == 1
+    ).order_by(Game.game_date.desc()).all()
+
+    # Games where both teams submitted reports but scores don't match
+    # First, get completed games with scores
+    completed_games = Game.query.options(
+        joinedload(Game.home_team),
+        joinedload(Game.away_team),
+        joinedload(Game.league_rel)
+    ).join(League, Game.league_id == League.ID).filter(
+        Game.year == year,
+        Game.is_spring == is_spring,
+        Game.status == 'completed',
+        Game.home_score.isnot(None),
+        Game.away_score.isnot(None),
+        League.pitch_type != 'tee_ball',
+        Game.active == 1
+    ).all()
+
+    mismatched_scores = []
+    for game in completed_games:
+        # Get reports for both teams
+        home_report = PostGameReport.query.filter_by(
+            game_id=game.ID,
+            team_id=game.home_ID,
+            status=PostGameReport.STATUS_SUBMITTED
+        ).first()
+        away_report = PostGameReport.query.filter_by(
+            game_id=game.ID,
+            team_id=game.away_ID,
+            status=PostGameReport.STATUS_SUBMITTED
+        ).first()
+
+        if home_report and away_report:
+            # Check if scores match
+            # Home team reports: our_score (home), opponent_score (away)
+            # Away team reports: our_score (away), opponent_score (home)
+            home_says_home = home_report.our_score
+            home_says_away = home_report.opponent_score
+            away_says_away = away_report.our_score
+            away_says_home = away_report.opponent_score
+
+            if (home_says_home != away_says_home or home_says_away != away_says_away):
+                mismatched_scores.append({
+                    'game': game,
+                    'home_report': {
+                        'home_score': home_says_home,
+                        'away_score': home_says_away
+                    },
+                    'away_report': {
+                        'home_score': away_says_home,
+                        'away_score': away_says_away
+                    }
+                })
+
     return render_template(
         'reports/standings.html',
         leagues_data=leagues_data,
@@ -724,7 +811,9 @@ def standings():
         season_name=season_name,
         selected_league_id=selected_league_id,
         has_admin_access=has_admin_access,
-        user_league_id=user_league_id
+        user_league_id=user_league_id,
+        missing_scores_games=missing_scores_games,
+        mismatched_scores=mismatched_scores
     )
 
 
@@ -771,40 +860,131 @@ def _generate_single_elimination_rounds(num_teams: int, teams: list) -> list:
     """Generate single elimination bracket rounds.
 
     Standard seeding: 1v8, 4v5, 3v6, 2v7 (for 8 teams)
+    Shows actual team names where known. Teams with byes advance automatically.
     """
     rounds = []
 
-    # Generate first round matchups with proper seeding
-    first_round = []
+    def get_team_name(seed):
+        """Get team name for a seed number."""
+        if seed <= len(teams):
+            return teams[seed - 1].team.computed_display_name
+        return f'#{seed}'
 
     if num_teams == 2:
-        first_round.append({'high_seed': 1, 'low_seed': 2, 'round_name': 'Championship'})
-    elif num_teams <= 4:
-        # 1v4, 2v3 → winners play in championship
-        first_round.append({'high_seed': 1, 'low_seed': 4, 'round_name': 'Semifinals'})
-        first_round.append({'high_seed': 2, 'low_seed': 3, 'round_name': 'Semifinals'})
-        rounds.append({'name': 'Semifinals', 'matchups': first_round})
-        rounds.append({'name': 'Championship', 'matchups': [{'high_seed': 'W1', 'low_seed': 'W2'}]})
-        return rounds
-    elif num_teams <= 8:
-        # Standard 8-team bracket: 1v8, 4v5, 3v6, 2v7
-        matchups = [(1, 8), (4, 5), (3, 6), (2, 7)]
-        for high, low in matchups:
-            if low <= num_teams:
-                first_round.append({'high_seed': high, 'low_seed': low})
-            else:
-                # Bye for high seed
-                first_round.append({'high_seed': high, 'low_seed': 'BYE'})
-        rounds.append({'name': 'Quarterfinals', 'matchups': first_round})
-        rounds.append({'name': 'Semifinals', 'matchups': [
-            {'high_seed': 'W1', 'low_seed': 'W4'},
-            {'high_seed': 'W2', 'low_seed': 'W3'}
-        ]})
-        rounds.append({'name': 'Championship', 'matchups': [{'high_seed': 'SF1', 'low_seed': 'SF2'}]})
+        # Championship only
+        rounds.append({
+            'name': 'Championship',
+            'matchups': [{
+                'high_seed': get_team_name(1),
+                'low_seed': get_team_name(2),
+                'high_seed_num': 1,
+                'low_seed_num': 2
+            }]
+        })
         return rounds
 
-    # Default case
-    rounds.append({'name': 'First Round', 'matchups': first_round})
+    elif num_teams <= 4:
+        # 4 teams: 1v4, 2v3 → Championship
+        first_round = []
+        for high, low in [(1, 4), (2, 3)]:
+            if low <= num_teams:
+                first_round.append({
+                    'high_seed': get_team_name(high),
+                    'low_seed': get_team_name(low),
+                    'high_seed_num': high,
+                    'low_seed_num': low
+                })
+            else:
+                # Bye - high seed advances
+                first_round.append({
+                    'high_seed': get_team_name(high),
+                    'low_seed': 'BYE',
+                    'high_seed_num': high,
+                    'is_bye': True
+                })
+        rounds.append({'name': 'Semifinals', 'matchups': first_round})
+        rounds.append({'name': 'Championship', 'matchups': [{
+            'high_seed': 'SF1 Winner',
+            'low_seed': 'SF2 Winner'
+        }]})
+        return rounds
+
+    elif num_teams <= 8:
+        # 5-8 teams: Quarterfinals with possible byes, then Semifinals, Championship
+        # Standard bracket: 1v8, 4v5, 3v6, 2v7
+        qf_matchups = [(1, 8), (4, 5), (3, 6), (2, 7)]
+        first_round = []
+        sf_matchups = []
+
+        # Track which seeds advance from each QF slot
+        qf_winners = []  # Will hold seed number or 'W#' for actual games
+
+        for i, (high, low) in enumerate(qf_matchups):
+            if low <= num_teams:
+                # Actual game
+                first_round.append({
+                    'high_seed': get_team_name(high),
+                    'low_seed': get_team_name(low),
+                    'high_seed_num': high,
+                    'low_seed_num': low
+                })
+                qf_winners.append(f'QF{i+1} Winner')
+            else:
+                # Bye - high seed advances automatically
+                first_round.append({
+                    'high_seed': get_team_name(high),
+                    'low_seed': 'BYE',
+                    'high_seed_num': high,
+                    'is_bye': True
+                })
+                qf_winners.append(high)  # Seed number advances
+
+        rounds.append({'name': 'Quarterfinals', 'matchups': first_round})
+
+        # Semifinals: QF1 winner vs QF4 winner, QF2 winner vs QF3 winner
+        sf_pairs = [(0, 3), (1, 2)]  # Indices into qf_winners
+        for sf_idx, (qf1_idx, qf2_idx) in enumerate(sf_pairs):
+            high_team = qf_winners[qf1_idx]
+            low_team = qf_winners[qf2_idx]
+
+            # If both are seed numbers (byes), show actual team names
+            if isinstance(high_team, int) and isinstance(low_team, int):
+                sf_matchups.append({
+                    'high_seed': get_team_name(high_team),
+                    'low_seed': get_team_name(low_team),
+                    'high_seed_num': high_team,
+                    'low_seed_num': low_team
+                })
+            elif isinstance(high_team, int):
+                # High seed had bye, low is a winner
+                sf_matchups.append({
+                    'high_seed': get_team_name(high_team),
+                    'low_seed': low_team,
+                    'high_seed_num': high_team
+                })
+            elif isinstance(low_team, int):
+                # Low seed had bye, high is a winner
+                sf_matchups.append({
+                    'high_seed': high_team,
+                    'low_seed': get_team_name(low_team),
+                    'low_seed_num': low_team
+                })
+            else:
+                # Both are game winners
+                sf_matchups.append({
+                    'high_seed': high_team,
+                    'low_seed': low_team
+                })
+
+        rounds.append({'name': 'Semifinals', 'matchups': sf_matchups})
+        rounds.append({'name': 'Championship', 'matchups': [{
+            'high_seed': 'SF1 Winner',
+            'low_seed': 'SF2 Winner'
+        }]})
+        return rounds
+
+    # Default case for larger brackets
+    rounds.append({'name': 'First Round', 'matchups': []})
     return rounds
 
 

@@ -124,7 +124,9 @@ class StandingsService:
         standings: List[TeamStanding] = []
         for team_id, data in stats.items():
             total_games = data['wins'] + data['losses'] + data['ties']
-            win_pct = data['wins'] / total_games if total_games > 0 else 0.0
+            # Ties count as 0.5 wins and 0.5 losses for winning percentage
+            effective_wins = data['wins'] + (data['ties'] * 0.5)
+            win_pct = effective_wins / total_games if total_games > 0 else 0.0
 
             innings = innings_by_team.get(team_id)
             ra_per_inn = None
@@ -144,8 +146,16 @@ class StandingsService:
                 runs_allowed_per_inning=round(ra_per_inn, 2) if ra_per_inn is not None else None
             ))
 
-        # Sort by win_pct desc, wins desc, run_diff desc
-        standings.sort(key=lambda s: (-s.win_pct, -s.wins, -s.run_diff))
+        # Sort by:
+        # 1. win_pct desc (primary)
+        # 2. runs_allowed_per_inning asc (tiebreaker - lower is better)
+        # 3. run_diff desc (secondary tiebreaker)
+        def sort_key(s: TeamStanding):
+            # Use high value for RA/Inn if not available (sorts to bottom of tiebreaker)
+            ra_inn = s.runs_allowed_per_inning if s.runs_allowed_per_inning is not None else 999.0
+            return (-s.win_pct, ra_inn, -s.run_diff)
+
+        standings.sort(key=sort_key)
 
         return standings
 
