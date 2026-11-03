@@ -938,7 +938,7 @@ def postgame_gc_unusable(game_id, team_id):
             game_id=game_id,
             team_id=team_id,
             submitted_by_id=current_user.ID,
-            status=PostGameReport.STATUS_DRAFT
+            status=PostGameReport.STATUS_PENDING
         )
         db.session.add(report)
 
