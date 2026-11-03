@@ -415,12 +415,17 @@
                 if (result.notifications_queued > 0) {
                     showNotification(`${result.notifications_queued} notifications queued`, 'info');
                 }
+                closeMoveModal(false);
+            } else if (result.requires_confirmation && result.confirmation_type === 'extend_season') {
+                // Show season extension confirmation
+                closeMoveModal(false);
+                showSeasonExtendConfirmation(result, data);
             } else {
                 // Revert on failure
                 pendingMove.fromContainer.appendChild(pendingMove.element);
                 showNotification(result.message || 'Failed to move game', 'error');
+                closeMoveModal(false);
             }
-            closeMoveModal(false);
         })
         .catch(function(error) {
             console.error('Error moving game:', error);
@@ -428,6 +433,58 @@
             showNotification('Error moving game', 'error');
             closeMoveModal(false);
         });
+    }
+
+    /**
+     * Show season extend confirmation dialog
+     */
+    function showSeasonExtendConfirmation(result, originalData) {
+        var confirmed = confirm(result.message + '\n\nClick OK to extend the season end date and proceed.');
+
+        if (confirmed) {
+            // Retry the request with extend_season_confirmed flag
+            originalData.extend_season_confirmed = true;
+
+            fetch('/games/api/move-game', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify(originalData)
+            })
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(retryResult) {
+                if (retryResult.success) {
+                    if (pendingMove) {
+                        updateGameElement(pendingMove.element, pendingMove);
+                    }
+                    showNotification('Game moved and season extended', 'success');
+                } else {
+                    if (pendingMove) {
+                        pendingMove.fromContainer.appendChild(pendingMove.element);
+                    }
+                    showNotification(retryResult.message || 'Failed to move game', 'error');
+                }
+                pendingMove = null;
+            })
+            .catch(function(error) {
+                console.error('Error moving game:', error);
+                if (pendingMove) {
+                    pendingMove.fromContainer.appendChild(pendingMove.element);
+                }
+                showNotification('Error moving game', 'error');
+                pendingMove = null;
+            });
+        } else {
+            // User cancelled - revert the UI
+            if (pendingMove) {
+                pendingMove.fromContainer.appendChild(pendingMove.element);
+            }
+            pendingMove = null;
+        }
     }
 
     /**

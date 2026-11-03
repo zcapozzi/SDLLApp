@@ -313,3 +313,45 @@ class OrgSeason(db.Model):
             # Log but don't fail if campaign generation fails
             print(f"Warning: Failed to generate campaigns for {self.season_name}: {e}")
             return []
+
+    def check_date_past_season_end(self, game_date):
+        """Check if a game date is past the season end date.
+
+        Args:
+            game_date: date or datetime object to check
+
+        Returns:
+            tuple: (is_past_end: bool, season_end_date: date or None)
+        """
+        from datetime import date, datetime
+
+        # Normalize to date
+        if isinstance(game_date, datetime):
+            game_date = game_date.date()
+
+        season_end = self.get_season_end_date()
+        if not season_end:
+            return (False, None)
+
+        return (game_date > season_end, season_end)
+
+    def extend_season_end_date(self, new_end_date):
+        """Extend the season end date to accommodate a later game.
+
+        Args:
+            new_end_date: date or datetime object for new end date
+
+        Returns:
+            The new season end date
+        """
+        from datetime import date, datetime
+        from app.extensions import db
+
+        # Normalize to date
+        if isinstance(new_end_date, datetime):
+            new_end_date = new_end_date.date()
+
+        self.season_end_date = new_end_date
+        db.session.commit()
+
+        return new_end_date

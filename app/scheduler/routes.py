@@ -933,6 +933,27 @@ def api_add_event(year, is_spring):
         from datetime import datetime as dt
         game_datetime = dt.strptime(f'{date_str} {time_str}', '%Y-%m-%d %H:%M')
 
+        # Check if game date is past season end date
+        from app.models.org_season import OrgSeason
+        org_season = OrgSeason.query.filter_by(year=year, is_spring=is_spring).first()
+        extend_season_confirmed = data.get('extend_season_confirmed', False)
+
+        if org_season:
+            is_past_end, season_end = org_season.check_date_past_season_end(game_datetime)
+            if is_past_end and not extend_season_confirmed:
+                return jsonify({
+                    'success': False,
+                    'requires_confirmation': True,
+                    'confirmation_type': 'extend_season',
+                    'message': f'This game date ({date_str}) is after the season end date ({season_end.strftime("%m/%d/%Y")}). Do you want to extend the season?',
+                    'season_end_date': season_end.strftime('%Y-%m-%d'),
+                    'new_date': date_str
+                })
+            elif is_past_end and extend_season_confirmed:
+                # Extend the season end date
+                org_season.extend_season_end_date(game_datetime)
+                logger.info(f'API: Extended season end date to {date_str}')
+
         # Check if there's an active proposal
         proposal = ScheduleProposal.get_for_season(year, is_spring)
 

@@ -59,13 +59,37 @@ def api_move_game():
         year = data.get('year')
         is_spring = data.get('is_spring')
 
+        extend_season_confirmed = data.get('extend_season_confirmed', False)
+
         # Check if this is a proposed game (not yet saved to Game table)
         if is_proposed and year is not None and is_spring is not None:
             from app.models.schedule_proposal import ScheduleProposal
+            from app.models.org_season import OrgSeason
+
             proposal = ScheduleProposal.get_for_season(int(year), int(is_spring))
 
             if not proposal:
                 return jsonify({'success': False, 'message': 'No proposal found for this season'}), 404
+
+            # Check if new date is past season end
+            if new_date:
+                from datetime import datetime
+                org_season = OrgSeason.query.filter_by(year=int(year), is_spring=int(is_spring)).first()
+                if org_season:
+                    new_game_date = datetime.strptime(new_date, '%Y-%m-%d')
+                    is_past_end, season_end = org_season.check_date_past_season_end(new_game_date)
+                    if is_past_end and not extend_season_confirmed:
+                        return jsonify({
+                            'success': False,
+                            'requires_confirmation': True,
+                            'confirmation_type': 'extend_season',
+                            'message': f'This game date ({new_date}) is after the season end date ({season_end.strftime("%m/%d/%Y")}). Do you want to extend the season?',
+                            'season_end_date': season_end.strftime('%Y-%m-%d'),
+                            'new_date': new_date
+                        })
+                    elif is_past_end and extend_season_confirmed:
+                        org_season.extend_season_end_date(new_game_date)
+                        logger.info(f'API: Extended season end date to {new_date}')
 
             # Update the game in the proposal
             updated = proposal.update_game(
@@ -90,6 +114,30 @@ def api_move_game():
 
         # Otherwise, update the saved game in the Game table
         from app.services.game_changes import GameChangeService
+        from app.models.game import Game as GameModel
+        from app.models.org_season import OrgSeason
+
+        # Check if new date is past season end
+        if new_date:
+            from datetime import datetime
+            game_obj = GameModel.query.get(int(game_id))
+            if game_obj:
+                org_season = OrgSeason.query.filter_by(year=game_obj.year, is_spring=game_obj.is_spring).first()
+                if org_season:
+                    new_game_date = datetime.strptime(new_date, '%Y-%m-%d')
+                    is_past_end, season_end = org_season.check_date_past_season_end(new_game_date)
+                    if is_past_end and not extend_season_confirmed:
+                        return jsonify({
+                            'success': False,
+                            'requires_confirmation': True,
+                            'confirmation_type': 'extend_season',
+                            'message': f'This game date ({new_date}) is after the season end date ({season_end.strftime("%m/%d/%Y")}). Do you want to extend the season?',
+                            'season_end_date': season_end.strftime('%Y-%m-%d'),
+                            'new_date': new_date
+                        })
+                    elif is_past_end and extend_season_confirmed:
+                        org_season.extend_season_end_date(new_game_date)
+                        logger.info(f'API: Extended season end date to {new_date}')
 
         # Move the game
         game, change, notifications_queued = GameChangeService.move_game(
@@ -291,6 +339,28 @@ def api_add_event(year, is_spring):
 
         # Build datetime
         game_datetime = f'{game_date}T{game_time}:00'
+
+        # Check if game date is past season end date
+        from app.models.org_season import OrgSeason
+        org_season = OrgSeason.query.filter_by(year=year, is_spring=is_spring).first()
+        extend_season_confirmed = data.get('extend_season_confirmed', False)
+
+        if org_season:
+            game_dt_check = datetime.strptime(game_date, '%Y-%m-%d')
+            is_past_end, season_end = org_season.check_date_past_season_end(game_dt_check)
+            if is_past_end and not extend_season_confirmed:
+                return jsonify({
+                    'success': False,
+                    'requires_confirmation': True,
+                    'confirmation_type': 'extend_season',
+                    'message': f'This game date ({game_date}) is after the season end date ({season_end.strftime("%m/%d/%Y")}). Do you want to extend the season?',
+                    'season_end_date': season_end.strftime('%Y-%m-%d'),
+                    'new_date': game_date
+                })
+            elif is_past_end and extend_season_confirmed:
+                # Extend the season end date
+                org_season.extend_season_end_date(game_dt_check)
+                logger.info(f'API: Extended season end date to {game_date}')
 
         # Check if there's an active proposal
         from app.models.schedule_proposal import ScheduleProposal

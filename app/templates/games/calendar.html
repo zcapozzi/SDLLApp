@@ -1028,8 +1028,8 @@ function setLeagueFromTeam(selectElement) {
     }
 }
 
-function submitAddEvent(e) {
-    e.preventDefault();
+function submitAddEvent(e, extendSeasonConfirmed) {
+    e && e.preventDefault();
 
     var leagueId = document.getElementById('add-event-league').value;
     var data = {
@@ -1041,6 +1041,10 @@ function submitAddEvent(e) {
         home_team_id: document.getElementById('add-event-home-team').value || null,
         away_team_id: document.getElementById('add-event-away-team').value || null
     };
+
+    if (extendSeasonConfirmed) {
+        data.extend_season_confirmed = true;
+    }
 
     var year = document.getElementById('season-year').value;
     var isSpring = document.getElementById('season-is-spring').value;
@@ -1059,6 +1063,12 @@ function submitAddEvent(e) {
             closeAddEventModal();
             // Reload page to show new event
             window.location.reload();
+        } else if (result.requires_confirmation && result.confirmation_type === 'extend_season') {
+            // Ask user to confirm extending the season
+            var confirmed = confirm(result.message + '\n\nClick OK to extend the season end date and add the event.');
+            if (confirmed) {
+                submitAddEvent(null, true);
+            }
         } else {
             alert('Error: ' + result.message);
         }
