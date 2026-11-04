@@ -82,6 +82,9 @@ class UmpireAcademyService:
         # Send welcome email with password reset link (async, don't block)
         UmpireAcademyService._send_welcome_email(user, profile)
 
+        # Notify coordinator of new registration
+        UmpireAcademyService._notify_coordinator_of_registration(user, profile)
+
         return user, profile
 
     @staticmethod
@@ -176,6 +179,69 @@ If you have any questions, just reply to this email.
             print(f"Welcome email sent to {user.email[:3]}***")
         except Exception as e:
             print(f"Failed to send welcome email: {e}")
+
+    @staticmethod
+    def _notify_coordinator_of_registration(user, profile):
+        """Notify umpire coordinator of new registration.
+
+        Args:
+            user: The User object
+            profile: The UmpireProfile object
+        """
+        try:
+            email_service = GmailService()
+            if not email_service.is_configured:
+                print("Email service not configured, skipping coordinator notification")
+                return
+
+            coordinator_email = 'umpires@sdll.org'
+            full_name = f"{profile.first_name} {profile.last_name}"
+
+            subject = f'New Umpire Academy Registration: {full_name}'
+            body_text = f"""New umpire registration via Umpire Academy:
+
+Name: {full_name}
+Email: {user.email}
+Phone: {profile.umpire_phone or 'Not provided'}
+
+They will now complete their profile with additional information.
+
+---
+This is an automated notification from the SDLL Umpire Academy.
+"""
+            body_html = f"""
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
+    <div style="background: rgb(34, 139, 34); padding: 15px 20px;">
+        <h2 style="color: white; margin: 0;">New Umpire Registration</h2>
+    </div>
+
+    <div style="padding: 20px; background: #f8f9fa;">
+        <p style="font-size: 16px; color: #333; margin: 0 0 15px;">
+            A new umpire has registered via the Umpire Academy:
+        </p>
+
+        <div style="background: white; border-radius: 8px; padding: 20px; border-left: 4px solid rgb(34, 139, 34);">
+            <p style="margin: 0 0 10px;"><strong>Name:</strong> {full_name}</p>
+            <p style="margin: 0 0 10px;"><strong>Email:</strong> <a href="mailto:{user.email}">{user.email}</a></p>
+            <p style="margin: 0;"><strong>Phone:</strong> {profile.umpire_phone or 'Not provided'}</p>
+        </div>
+
+        <p style="margin: 20px 0 0; font-size: 14px; color: #666;">
+            They will now complete their profile with additional information (birth date, shirt size, etc.).
+        </p>
+    </div>
+</div>
+"""
+            email_service.send_email(
+                to=coordinator_email,
+                subject=subject,
+                body_text=body_text,
+                body_html=body_html,
+                reply_to=user.email
+            )
+            print(f"Coordinator notification sent for new registration: {full_name}")
+        except Exception as e:
+            print(f"Failed to send coordinator notification: {e}")
 
     @staticmethod
     def complete_profile(profile, birth_date=None, parent_first_name=None, parent_last_name=None,
