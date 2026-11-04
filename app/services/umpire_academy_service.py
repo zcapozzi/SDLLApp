@@ -18,6 +18,35 @@ class UmpireAcademyService:
     Phase II: Profile Completion - Collects additional info (birth date, etc.)
     """
 
+    # Fallback email if no umpire coordinators are found
+    FALLBACK_COORDINATOR_EMAIL = 'umpires@sdll.org'
+
+    @staticmethod
+    def get_coordinator_emails():
+        """Get email addresses of all umpire coordinators.
+
+        Returns:
+            list: Email addresses of users with umpire_coordinator role
+        """
+        # Query users with umpire_coordinator role (pipe-delimited)
+        coordinators = User.query.filter(
+            User.active == 1,
+            db.or_(
+                User.role == 'umpire_coordinator',
+                User.role.like('umpire_coordinator|%'),
+                User.role.like('%|umpire_coordinator'),
+                User.role.like('%|umpire_coordinator|%')
+            )
+        ).all()
+
+        emails = [c.email for c in coordinators if c.email]
+
+        # Fallback to default if no coordinators found
+        if not emails:
+            return [UmpireAcademyService.FALLBACK_COORDINATOR_EMAIL]
+
+        return emails
+
     @staticmethod
     def register_interest(first_name, last_name, email, phone=None):
         """Phase I: Register interest - creates User and UmpireProfile.
@@ -194,7 +223,7 @@ If you have any questions, just reply to this email.
                 print("Email service not configured, skipping coordinator notification")
                 return
 
-            coordinator_email = 'umpires@sdll.org'
+            coordinator_emails = UmpireAcademyService.get_coordinator_emails()
             full_name = f"{profile.first_name} {profile.last_name}"
 
             subject = f'New Umpire Academy Registration: {full_name}'
@@ -232,14 +261,15 @@ This is an automated notification from the SDLL Umpire Academy.
     </div>
 </div>
 """
-            email_service.send_email(
-                to=coordinator_email,
-                subject=subject,
-                body_text=body_text,
-                body_html=body_html,
-                reply_to=user.email
-            )
-            print(f"Coordinator notification sent for new registration: {full_name}")
+            for coord_email in coordinator_emails:
+                email_service.send_email(
+                    to=coord_email,
+                    subject=subject,
+                    body_text=body_text,
+                    body_html=body_html,
+                    reply_to=user.email
+                )
+            print(f"Coordinator notification sent for new registration: {full_name} to {len(coordinator_emails)} coordinator(s)")
         except Exception as e:
             print(f"Failed to send coordinator notification: {e}")
 
@@ -320,8 +350,8 @@ This is an automated notification from the SDLL Umpire Academy.
             print("Email service not configured, cannot send contact message")
             raise Exception("Email service not configured")
 
-        # Get umpire coordinator email from organization settings or use default
-        coordinator_email = 'umpires@sdll.org'
+        # Get umpire coordinator emails dynamically
+        coordinator_emails = UmpireAcademyService.get_coordinator_emails()
 
         subject = f'Umpire Academy Question from {name}'
         body_text = f"""New question from the Umpire Academy contact form:
@@ -355,13 +385,14 @@ Reply directly to this email to respond to {name}.
     </div>
 </div>
 """
-        email_service.send_email(
-            to=coordinator_email,
-            subject=subject,
-            body_text=body_text,
-            body_html=body_html,
-            reply_to=email
-        )
+        for coord_email in coordinator_emails:
+            email_service.send_email(
+                to=coord_email,
+                subject=subject,
+                body_text=body_text,
+                body_html=body_html,
+                reply_to=email
+            )
         return True
 
     @staticmethod
