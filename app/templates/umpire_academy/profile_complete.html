@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>You're Registered! - SDLL Umpire Academy</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, rgb(34, 139, 34) 0%, rgb(28, 112, 28) 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+            text-align: center;
+        }
+        .success-icon {
+            width: 100px;
+            height: 100px;
+            background: rgb(34, 139, 34);
+            border-radius: 50%;
+            margin: 0 auto 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 50px;
+        }
+        h1 {
+            color: #333;
+            font-size: 26px;
+            margin-bottom: 10px;
+        }
+        .welcome-message {
+            color: #666;
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+        .info-box {
+            background: #fff3e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+            text-align: left;
+            border-left: 4px solid #ff9800;
+        }
+        .info-box h3 {
+            color: #e65100;
+            font-size: 15px;
+            margin-bottom: 10px;
+        }
+        .info-box p {
+            color: #666;
+            font-size: 14px;
+            margin: 0;
+            line-height: 1.5;
+        }
+        .next-steps {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+            text-align: left;
+        }
+        .next-steps h3 {
+            color: #333;
+            font-size: 15px;
+            margin-bottom: 12px;
+        }
+        .next-steps ol {
+            padding-left: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+        .next-steps li {
+            padding: 5px 0;
+        }
+        .btn {
+            display: inline-block;
+            padding: 14px 32px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.2s;
+            background: rgb(34, 139, 34);
+            color: white;
+        }
+        .btn:hover {
+            background: rgb(28, 112, 28);
+            transform: translateY(-1px);
+        }
+        .contact-info {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        .contact-info h4 {
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .contact-info p {
+            font-size: 13px;
+            color: #666;
+            margin: 0;
+        }
+        .contact-info a {
+            color: rgb(34, 139, 34);
+            text-decoration: none;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #999;
+            font-size: 13px;
+        }
+        .footer a {
+            color: rgb(34, 139, 34);
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon">&#10003;</div>
+        <h1>You're Registered!</h1>
+
+        <p class="welcome-message">
+            {% if profile %}
+            Thanks, {{ profile.first_name }}! We're excited to have you join the umpire team.
+            {% else %}
+            Thanks! We're excited to have you join the umpire team.
+            {% endif %}
+        </p>
+
+        <div class="info-box">
+            <h3>Training Required</h3>
+            <p>
+                You must attend the umpire training session before you can work games.
+                We'll email you with the date and details.
+            </p>
+        </div>
+
+        <div class="next-steps">
+            <h3>What Happens Next</h3>
+            <ol>
+                <li>Watch for an email with training details</li>
+                <li>Attend the training session</li>
+                <li>After training, you can start picking up games!</li>
+            </ol>
+        </div>
+
+        <a href="{{ url_for('umpire_portal.dashboard') }}" class="btn">
+            Go to Umpire Dashboard
+        </a>
+
+        <div class="contact-info">
+            <h4>Questions?</h4>
+            <p>
+                Contact our umpire coordinator at
+                <a href="mailto:umpires@sdll.org">umpires@sdll.org</a>
+            </p>
+        </div>
+
+        <div class="footer">
+            <p>South Durham Little League</p>
+            <p><a href="https://southdurhamlittleleague.org">southdurhamlittleleague.org</a></p>
+        </div>
+    </div>
+</body>
+</html>

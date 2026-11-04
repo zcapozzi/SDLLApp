@@ -1,6 +1,7 @@
 """UmpireProfile model - umpire-specific data linked to User accounts."""
 
-from datetime import datetime, date
+import secrets
+from datetime import datetime, date, timedelta
 from app.extensions import db
 from app.utils.encryption import encrypt_value, decrypt_value, hash_for_lookup
 
@@ -71,6 +72,17 @@ class UmpireProfile(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
 
+    # Umpire Academy registration fields
+    registration_token = db.Column(db.String(64), index=True)
+    registration_token_expires = db.Column(db.DateTime)
+    shirt_size = db.Column(db.String(10))  # XS, S, M, L, XL, XXL
+    seasons_played = db.Column(db.SmallInteger)  # Number of LL seasons played
+    highest_level_played = db.Column(db.String(50))  # Highest LL division played
+    interested_sports = db.Column(db.String(20))  # 'baseball', 'softball', 'both'
+    kid_pitch_interest = db.Column(db.SmallInteger)  # 1-5 scale
+    availability_notes = db.Column(db.Text)  # Free-form availability info
+    registration_completed_at = db.Column(db.DateTime)  # When Phase III was completed
+
     # Relationships
     user = db.relationship('User', backref=db.backref('umpire_profile', uselist=False))
     assignments = db.relationship('GameUmpire', back_populates='umpire',
@@ -79,9 +91,11 @@ class UmpireProfile(db.Model):
                                         foreign_keys=[target_org_season_id])
 
     # Status constants - Lead statuses
+    STATUS_LEAD = 'lead'                # New lead from Umpire Academy - needs to complete registration
     STATUS_PROSPECTIVE = 'prospective'  # New lead - interested but not confirmed
     STATUS_CONTACTED = 'contacted'      # Lead has been contacted about training
     STATUS_DECLINED = 'declined'        # Lead declined to participate
+    STATUS_PENDING_REVIEW = 'pending_review'  # Completed registration, awaiting admin review
 
     # Status constants - Confirmed umpire statuses
     STATUS_ACTIVE = 'active'            # Confirmed, trained, can be assigned games
@@ -89,7 +103,7 @@ class UmpireProfile(db.Model):
     STATUS_RETIRED = 'retired'          # No longer umpiring
 
     # All statuses grouped by type
-    LEAD_STATUSES = [STATUS_PROSPECTIVE, STATUS_CONTACTED, STATUS_DECLINED]
+    LEAD_STATUSES = [STATUS_LEAD, STATUS_PROSPECTIVE, STATUS_CONTACTED, STATUS_DECLINED, STATUS_PENDING_REVIEW]
     CONFIRMED_STATUSES = [STATUS_ACTIVE, STATUS_INACTIVE, STATUS_RETIRED]
     STATUSES = LEAD_STATUSES + CONFIRMED_STATUSES
 
@@ -98,12 +112,14 @@ class UmpireProfile(db.Model):
     LEAD_SOURCE_REFERRAL = 'referral'
     LEAD_SOURCE_MANUAL = 'manual'
     LEAD_SOURCE_RETURNING = 'returning'
+    LEAD_SOURCE_UMPIRE_ACADEMY = 'umpire_academy'
 
     LEAD_SOURCES = [
         (LEAD_SOURCE_WEBSITE, 'Website Form'),
         (LEAD_SOURCE_REFERRAL, 'Referral'),
         (LEAD_SOURCE_MANUAL, 'Manual Entry'),
         (LEAD_SOURCE_RETURNING, 'Returning Umpire'),
+        (LEAD_SOURCE_UMPIRE_ACADEMY, 'Umpire Academy'),
     ]
 
     def __repr__(self):
@@ -646,3 +662,60 @@ class UmpireProfile(db.Model):
         db.session.add(profile)
         db.session.commit()
         return profile
+
+    # Umpire Academy registration methods
+
+    def generate_registration_token(self):
+        """Generate a registration token valid for 48 hours.
+
+        Returns:
+            str: The generated token.
+        """
+        self.registration_token = secrets.token_urlsafe(32)
+        self.registration_token_expires = datetime.utcnow() + timedelta(hours=48)
+        db.session.commit()
+        return self.registration_token
+
+    def is_registration_token_valid(self):
+        """Check if the registration token is still valid.
+
+        Returns:
+            bool: True if token exists and hasn't expired.
+        """
+        if not self.registration_token or not self.registration_token_expires:
+            return False
+        return datetime.utcnow() < self.registration_token_expires
+
+    def clear_registration_token(self):
+        """Clear the registration token after use."""
+        self.registration_token = None
+        self.registration_token_expires = None
+        db.session.commit()
+
+    @classmethod
+    def get_by_registration_token(cls, token):
+        """Find umpire profile by registration token.
+
+        Args:
+            token: The registration token to look up.
+
+        Returns:
+            UmpireProfile or None if not found.
+        """
+        if not token:
+            return None
+        return cls.query.filter_by(registration_token=token).first()
+
+    @classmethod
+    def get_by_umpire_email_hash(cls, email):
+        """Find umpire profile by umpire email hash.
+
+        Args:
+            email: The email address to look up.
+
+        Returns:
+            UmpireProfile or None if not found.
+        """
+        from app.utils.encryption import hash_for_lookup
+        email_hash = hash_for_lookup(email)
+        return cls.query.filter_by(umpire_email_hash=email_hash).first()

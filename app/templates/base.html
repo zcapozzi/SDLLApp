@@ -344,7 +344,6 @@
                     <a href="{{ url_for('umpire_portal.dashboard') }}"><strong>My Dashboard</strong></a>
                     <a href="{{ url_for('umpire_portal.available') }}">Available Games</a>
                     <a href="{{ url_for('umpire_portal.my_games') }}">My Games</a>
-                    <a href="{{ url_for('umpire_portal.pay') }}">Pay History</a>
                     {% endif %}
                     {% if current_user.can_manage_umpires() %}
                     {% if current_user.is_umpire() %}

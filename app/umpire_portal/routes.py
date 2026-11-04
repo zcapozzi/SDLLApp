@@ -149,18 +149,29 @@ def dashboard():
     # Get count of available games
     available_count = _get_available_games_query(profile).count()
 
-    # Get recent pay info
-    pending_payment = UmpirePayment.query.filter_by(
+    # Get count of completed games
+    completed_count = GameUmpire.query.filter_by(
         umpire_profile_id=profile.id,
-        status='pending'
-    ).first()
+        status='completed'
+    ).count()
+
+    # Get eligible leagues for display
+    eligible_leagues = []
+    for league in League.get_all_active():
+        if not league.needs_umpires:
+            continue
+        if not league.can_use_sdll_umpires():
+            continue
+        if profile.is_eligible_for_league(league):
+            eligible_leagues.append(league)
 
     return render_template(
         'umpire_portal/dashboard.html',
         profile=profile,
         my_games=my_games,
         available_count=available_count,
-        pending_payment=pending_payment,
+        completed_count=completed_count,
+        eligible_leagues=eligible_leagues,
         accessible_profiles=profile_ctx['accessible_profiles'],
         has_multiple_profiles=profile_ctx['has_multiple_profiles']
     )
@@ -178,18 +189,18 @@ def _get_available_games_query(profile):
     2. Active and scheduled
     3. Needs umpires (not tee-ball, has umpire_count > 0)
     4. No current umpire assigned (or unfilled slot)
-    5. Umpire is eligible (kid-pitch certification if required)
+    5. Umpire is eligible based on league age_rank limits
     """
     # Get leagues that need umpires and umpire is eligible for
     eligible_leagues = []
     for league in League.get_all_active():
         if not league.needs_umpires:
             continue
-        # Check kid-pitch eligibility
-        if league.requires_kid_pitch and not profile.is_kid_pitch_eligible:
-            continue
         # Check if SDLL umpires can work this league
         if not league.can_use_sdll_umpires():
+            continue
+        # Check umpire eligibility using age_rank limits
+        if not profile.is_eligible_for_league(league):
             continue
         eligible_leagues.append(league.ID)
 

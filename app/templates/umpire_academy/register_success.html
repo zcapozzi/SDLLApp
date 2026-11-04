@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registration Started - SDLL Umpire Academy</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, rgb(34, 139, 34) 0%, rgb(28, 112, 28) 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+            text-align: center;
+        }
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: rgb(34, 139, 34);
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 40px;
+        }
+        h1 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+        .message {
+            color: #666;
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+        .email-notice {
+            background: #e8f5e9;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        .email-notice h3 {
+            color: rgb(34, 139, 34);
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        .email-notice p {
+            color: #666;
+            font-size: 14px;
+            margin: 0;
+        }
+        .no-email-notice {
+            background: #fff3e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        .no-email-notice h3 {
+            color: #e65100;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        .no-email-notice p {
+            color: #666;
+            font-size: 14px;
+            margin: 0;
+        }
+        .next-steps {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: left;
+            margin-bottom: 25px;
+        }
+        .next-steps h3 {
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 12px;
+        }
+        .next-steps ol {
+            padding-left: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+        .next-steps li {
+            padding: 5px 0;
+        }
+        .footer {
+            color: #999;
+            font-size: 13px;
+        }
+        .footer a {
+            color: rgb(34, 139, 34);
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon">&#10003;</div>
+        <h1>You're On Your Way!</h1>
+
+        {% if has_email %}
+        <p class="message">
+            Thanks for starting your umpire registration! We're excited to have you join the team.
+        </p>
+
+        <div class="email-notice">
+            <h3>Check Your Email</h3>
+            <p>
+                We've sent you an email with a link to complete your registration.
+                The link will expire in 48 hours.
+            </p>
+        </div>
+
+        <div class="next-steps">
+            <h3>Next Steps</h3>
+            <ol>
+                <li>Check your email (including spam folder)</li>
+                <li>Click the link to set your password</li>
+                <li>Complete your umpire profile</li>
+                <li>Attend a training session</li>
+            </ol>
+        </div>
+        {% else %}
+        <p class="message">
+            Thanks for your interest in becoming an umpire!
+        </p>
+
+        <div class="no-email-notice">
+            <h3>No Email Provided</h3>
+            <p>
+                Since you didn't provide an email address, our umpire coordinator will reach out to you directly.
+                If you'd like to complete registration online, please start over and include your email.
+            </p>
+        </div>
+
+        <div class="next-steps">
+            <h3>What Happens Next</h3>
+            <ol>
+                <li>Our umpire coordinator will contact you</li>
+                <li>You'll get information about training sessions</li>
+                <li>Complete your registration in person</li>
+            </ol>
+        </div>
+        {% endif %}
+
+        <div class="footer">
+            <p>South Durham Little League</p>
+            <p><a href="https://southdurhamlittleleague.org">southdurhamlittleleague.org</a></p>
+        </div>
+    </div>
+</body>
+</html>

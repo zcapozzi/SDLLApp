@@ -73,6 +73,7 @@ def create_app(config_name=None):
     from .knowledge import knowledge_bp
     from .players import players_bp
     from .draft import draft_bp
+    from .umpire_academy import umpire_academy_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(main_bp)
@@ -96,6 +97,7 @@ def create_app(config_name=None):
     app.register_blueprint(knowledge_bp)  # Knowledge base and onboarding (no prefix - routes start with /kb, /admin, etc)
     app.register_blueprint(players_bp)  # Player management, evaluations, metrics
     app.register_blueprint(draft_bp)  # Draft management system
+    app.register_blueprint(umpire_academy_bp, url_prefix='/umpire-academy')  # Umpire Academy registration
 
     # User loader for Flask-Login
     from .models.user import User

@@ -32,7 +32,12 @@
         <div style="font-size: 48px; font-weight: bold; color: var(--primary-color);">
             {{ available_count }}
         </div>
-        <div style="color: var(--text-muted); margin-bottom: 15px;">Available Games</div>
+        <div style="color: var(--text-muted); margin-bottom: 10px;">Available Games</div>
+        {% if eligible_leagues %}
+        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">
+            Eligible: {{ eligible_leagues|map(attribute='display_name')|join(', ') }}
+        </div>
+        {% endif %}
         <a href="{{ url_for('umpire_portal.available') }}" class="btn btn-primary">
             View & Claim
         </a>
@@ -49,19 +54,12 @@
     </div>
 
     <div class="card" style="text-align: center; padding: 30px;">
-        {% if pending_payment %}
-        <div style="font-size: 36px; font-weight: bold; color: var(--warning-color);">
-            ${{ "%.2f"|format(pending_payment.total_amount|float) }}
+        <div style="font-size: 48px; font-weight: bold; color: var(--info-color);">
+            {{ completed_count }}
         </div>
-        <div style="color: var(--text-muted); margin-bottom: 15px;">Pending Payment</div>
-        {% else %}
-        <div style="font-size: 36px; font-weight: bold; color: var(--text-muted);">
-            $0.00
-        </div>
-        <div style="color: var(--text-muted); margin-bottom: 15px;">No Pending Pay</div>
-        {% endif %}
-        <a href="{{ url_for('umpire_portal.pay') }}" class="btn btn-outline">
-            Pay History
+        <div style="color: var(--text-muted); margin-bottom: 15px;">Games Worked</div>
+        <a href="{{ url_for('umpire_portal.history') }}" class="btn btn-outline">
+            Game History
         </a>
     </div>
 </div>
