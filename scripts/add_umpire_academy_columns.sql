@@ -2,6 +2,10 @@
 -- Run with: mysql --force database < scripts/add_umpire_academy_columns.sql
 -- Note: Using plain ALTER TABLE (MySQL compatible), not IF NOT EXISTS (MariaDB only)
 
+-- Encrypted name fields for umpires (especially minors/leads)
+ALTER TABLE sdll_umpire_profiles ADD COLUMN _first_name VARCHAR(500) DEFAULT NULL;
+ALTER TABLE sdll_umpire_profiles ADD COLUMN _last_name VARCHAR(500) DEFAULT NULL;
+
 -- Registration token for completing multi-phase registration
 ALTER TABLE sdll_umpire_profiles ADD COLUMN registration_token VARCHAR(64) DEFAULT NULL;
 ALTER TABLE sdll_umpire_profiles ADD COLUMN registration_token_expires DATETIME DEFAULT NULL;
