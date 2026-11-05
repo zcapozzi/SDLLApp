@@ -91,7 +91,9 @@
             {% for lead in new_registrations %}
             <tr id="lead-{{ lead.id }}">
                 <td>
-                    <strong>{{ lead.name or 'Unknown' }}</strong>
+                    <a href="{{ url_for('umpires.view', id=lead.id) }}" style="text-decoration: none; color: inherit;">
+                        <strong>{{ lead.name or 'Unknown' }}</strong>
+                    </a>
                     {% if lead.age %}
                     <span style="color: var(--text-muted); font-size: 12px;">({{ lead.age }} yrs)</span>
                     {% endif %}
@@ -197,7 +199,9 @@
             {% for lead in prospective %}
             <tr id="lead-{{ lead.id }}">
                 <td>
-                    <strong>{{ lead.name or 'Unknown' }}</strong>
+                    <a href="{{ url_for('umpires.view', id=lead.id) }}" style="text-decoration: none; color: inherit;">
+                        <strong>{{ lead.name or 'Unknown' }}</strong>
+                    </a>
                     {% if lead.age %}
                     <span style="color: var(--text-muted); font-size: 12px;">({{ lead.age }} yrs)</span>
                     {% endif %}
@@ -294,7 +298,9 @@
             {% for lead in contacted %}
             <tr id="lead-{{ lead.id }}">
                 <td>
-                    <strong>{{ lead.name or 'Unknown' }}</strong>
+                    <a href="{{ url_for('umpires.view', id=lead.id) }}" style="text-decoration: none; color: inherit;">
+                        <strong>{{ lead.name or 'Unknown' }}</strong>
+                    </a>
                 </td>
                 <td>
                     {% if lead.umpire_email or lead.umpire_phone %}
