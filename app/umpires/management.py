@@ -397,10 +397,10 @@ def edit(id):
 
         # Eligibility by sport/age_rank
         max_bb = request.form.get('max_baseball_age_rank', '').strip()
-        profile.max_baseball_age_rank = int(max_bb) if max_bb else None
+        profile.max_baseball_age_rank = int(max_bb) if max_bb and max_bb != 'None' else None
 
         max_sb = request.form.get('max_softball_age_rank', '').strip()
-        profile.max_softball_age_rank = int(max_sb) if max_sb else None
+        profile.max_softball_age_rank = int(max_sb) if max_sb and max_sb != 'None' else None
 
         # Excluded leagues
         excluded_ids = request.form.getlist('excluded_leagues')
