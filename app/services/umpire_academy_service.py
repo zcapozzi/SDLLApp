@@ -26,7 +26,8 @@ class UmpireAcademyService:
         """Get the appropriate season for new umpire registrations.
 
         If the current season's training date has passed, returns the next
-        upcoming season. Otherwise returns the current season.
+        upcoming season. If no next season exists, creates a placeholder.
+        Otherwise returns the current season.
 
         Returns:
             OrgSeason: The target season for new registrations
@@ -56,6 +57,27 @@ class UmpireAcademyService:
 
             if next_season:
                 return next_season
+
+            # No next season exists - create a placeholder
+            # Spring (is_spring=1) -> Fall same year (is_spring=0)
+            # Fall (is_spring=0) -> Spring next year (is_spring=1)
+            if current_season.is_spring == 1:
+                next_year = current_season.year
+                next_is_spring = 0
+            else:
+                next_year = current_season.year + 1
+                next_is_spring = 1
+
+            # Create placeholder season (no dates set - admin will configure later)
+            next_season = OrgSeason.create_season(
+                year=next_year,
+                is_spring=next_is_spring,
+                org_id=current_season.org_id,
+                set_as_current=False,
+                generate_campaigns=False  # No dates set yet, can't generate campaigns
+            )
+            print(f"Created placeholder season: {next_season.season_name}")
+            return next_season
 
         return current_season
 
