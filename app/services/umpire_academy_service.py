@@ -22,6 +22,44 @@ class UmpireAcademyService:
     FALLBACK_COORDINATOR_EMAIL = 'umpires@sdll.org'
 
     @staticmethod
+    def get_target_season():
+        """Get the appropriate season for new umpire registrations.
+
+        If the current season's training date has passed, returns the next
+        upcoming season. Otherwise returns the current season.
+
+        Returns:
+            OrgSeason: The target season for new registrations
+        """
+        current_season = OrgSeason.get_current_season()
+        if not current_season:
+            return None
+
+        # Check if training date has passed
+        training_date = current_season.get_training_date()
+        if training_date and training_date < date.today():
+            # Training has passed - find next season
+            next_season = OrgSeason.query.filter(
+                OrgSeason.org_id == current_season.org_id,
+                OrgSeason.ID != current_season.ID,
+                db.or_(
+                    OrgSeason.year > current_season.year,
+                    db.and_(
+                        OrgSeason.year == current_season.year,
+                        OrgSeason.is_spring > current_season.is_spring
+                    )
+                )
+            ).order_by(
+                OrgSeason.year,
+                OrgSeason.is_spring
+            ).first()
+
+            if next_season:
+                return next_season
+
+        return current_season
+
+    @staticmethod
     def get_coordinator_emails():
         """Get email addresses of all umpire coordinators.
 
@@ -89,15 +127,15 @@ class UmpireAcademyService:
             db.session.add(user)
             db.session.flush()  # Get the user ID
 
-        # Get current season
-        current_season = OrgSeason.get_current_season()
+        # Determine target season based on training date
+        target_season = UmpireAcademyService.get_target_season()
 
         # Create umpire profile
         profile = UmpireProfile(
             user_id=user.ID,
             status=UmpireProfile.STATUS_LEAD,
             lead_source=UmpireProfile.LEAD_SOURCE_UMPIRE_ACADEMY,
-            target_org_season_id=current_season.ID if current_season else None
+            target_org_season_id=target_season.ID if target_season else None
         )
         profile.first_name = first_name
         profile.last_name = last_name
