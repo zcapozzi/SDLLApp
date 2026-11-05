@@ -326,6 +326,9 @@ class UmpireProfile(db.Model):
         else:
             self.excluded_leagues = ','.join(str(x) for x in ids)
 
+    # Default eligibility: machine-pitch leagues (Tee Ball=1, Rookie=2)
+    DEFAULT_AGE_RANK = 2
+
     def is_eligible_for_league(self, league):
         """Check if this umpire is eligible for a specific league.
 
@@ -334,6 +337,10 @@ class UmpireProfile(db.Model):
 
         Returns:
             bool: True if eligible.
+
+        Note:
+            If max_baseball_age_rank or max_softball_age_rank is None,
+            defaults to machine-pitch eligibility (age_rank <= 2).
         """
         if not league:
             return True
@@ -343,15 +350,14 @@ class UmpireProfile(db.Model):
             return False
 
         # Check sport eligibility by age_rank
+        # Default to machine-pitch (age_rank 2) if not specified
         if league.is_baseball:
-            if self.max_baseball_age_rank is None:
-                return False  # Not eligible for any baseball
-            if league.age_rank and league.age_rank > self.max_baseball_age_rank:
+            max_rank = self.max_baseball_age_rank if self.max_baseball_age_rank is not None else self.DEFAULT_AGE_RANK
+            if league.age_rank and league.age_rank > max_rank:
                 return False  # League is above their max level
         elif league.is_softball:
-            if self.max_softball_age_rank is None:
-                return False  # Not eligible for any softball
-            if league.age_rank and league.age_rank > self.max_softball_age_rank:
+            max_rank = self.max_softball_age_rank if self.max_softball_age_rank is not None else self.DEFAULT_AGE_RANK
+            if league.age_rank and league.age_rank > max_rank:
                 return False  # League is above their max level
 
         return True
@@ -386,26 +392,29 @@ class UmpireProfile(db.Model):
     @property
     def eligibility_display(self):
         """Human-readable eligibility description."""
+        from app.models.league import League
         parts = []
 
-        if self.max_baseball_age_rank is not None:
-            from app.models.league import League
-            bb_leagues = League.get_baseball_leagues()
-            eligible = [l for l in bb_leagues if l.age_rank and l.age_rank <= self.max_baseball_age_rank]
-            if eligible:
-                max_league = max(eligible, key=lambda l: l.age_rank)
-                parts.append(f"BB up to {max_league.display_name.replace('BB ', '')}")
+        # Baseball eligibility (default to machine-pitch if None)
+        bb_rank = self.max_baseball_age_rank if self.max_baseball_age_rank is not None else self.DEFAULT_AGE_RANK
+        bb_leagues = League.get_baseball_leagues()
+        bb_eligible = [l for l in bb_leagues if l.age_rank and l.age_rank <= bb_rank]
+        if bb_eligible:
+            max_league = max(bb_eligible, key=lambda l: l.age_rank)
+            suffix = " (default)" if self.max_baseball_age_rank is None else ""
+            parts.append(f"BB up to {max_league.display_name.replace('BB ', '')}{suffix}")
 
-        if self.max_softball_age_rank is not None:
-            from app.models.league import League
-            sb_leagues = League.get_softball_leagues()
-            eligible = [l for l in sb_leagues if l.age_rank and l.age_rank <= self.max_softball_age_rank]
-            if eligible:
-                max_league = max(eligible, key=lambda l: l.age_rank)
-                parts.append(f"SB up to {max_league.display_name.replace('SB ', '')}")
+        # Softball eligibility (default to machine-pitch if None)
+        sb_rank = self.max_softball_age_rank if self.max_softball_age_rank is not None else self.DEFAULT_AGE_RANK
+        sb_leagues = League.get_softball_leagues()
+        sb_eligible = [l for l in sb_leagues if l.age_rank and l.age_rank <= sb_rank]
+        if sb_eligible:
+            max_league = max(sb_eligible, key=lambda l: l.age_rank)
+            suffix = " (default)" if self.max_softball_age_rank is None else ""
+            parts.append(f"SB up to {max_league.display_name.replace('SB ', '')}{suffix}")
 
         if not parts:
-            return "No eligibility set"
+            return "Machine-pitch only (default)"
 
         return ", ".join(parts)
 
