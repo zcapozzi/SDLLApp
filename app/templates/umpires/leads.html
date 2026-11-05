@@ -51,10 +51,14 @@
 {% endif %}
 
 <!-- Stats -->
-<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px;">
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px;">
+    <div class="card" style="text-align: center; padding: 20px;">
+        <div style="font-size: 32px; font-weight: bold; color: #4caf50;">{{ new_registrations|length }}</div>
+        <div style="color: var(--text-muted);">Academy Signups</div>
+    </div>
     <div class="card" style="text-align: center; padding: 20px;">
         <div style="font-size: 32px; font-weight: bold; color: var(--primary-color);">{{ prospective|length }}</div>
-        <div style="color: var(--text-muted);">New Leads</div>
+        <div style="color: var(--text-muted);">Other Leads</div>
     </div>
     <div class="card" style="text-align: center; padding: 20px;">
         <div style="font-size: 32px; font-weight: bold; color: #2196F3;">{{ contacted|length }}</div>
@@ -65,6 +69,115 @@
         <div style="color: var(--text-muted);">Declined</div>
     </div>
 </div>
+
+<!-- Umpire Academy Registrations -->
+{% if new_registrations %}
+<div class="card" style="margin-bottom: 20px; border-left: 4px solid #4caf50;">
+    <h3 style="margin-top: 0;">
+        Umpire Academy Signups
+        <span style="color: var(--text-muted); font-weight: normal;">({{ new_registrations|length }})</span>
+    </h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Contact</th>
+                <th>Details</th>
+                <th>Status</th>
+                <th style="width: 180px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for lead in new_registrations %}
+            <tr id="lead-{{ lead.id }}">
+                <td>
+                    <strong>{{ lead.name or 'Unknown' }}</strong>
+                    {% if lead.age %}
+                    <span style="color: var(--text-muted); font-size: 12px;">({{ lead.age }} yrs)</span>
+                    {% endif %}
+                    {% if lead.birth_date %}
+                    <br><span style="font-size: 11px; color: var(--text-muted);">DOB: {{ lead.birth_date.strftime('%b %d, %Y') }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if lead.umpire_email or lead.umpire_phone %}
+                    <div style="margin-bottom: 5px;">
+                        <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Umpire:</span>
+                        {% if lead.umpire_email %}
+                        <br><a href="mailto:{{ lead.umpire_email }}">{{ lead.umpire_email }}</a>
+                        {% endif %}
+                        {% if lead.umpire_phone %}
+                        <br><span>{{ lead.umpire_phone }}</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    {% if lead.parent_name or lead.parent_email or lead.parent_phone %}
+                    <div>
+                        <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Parent:</span>
+                        {% if lead.parent_name %}
+                        <br><strong style="font-size: 12px;">{{ lead.parent_name }}</strong>
+                        {% endif %}
+                        {% if lead.parent_email %}
+                        <br><a href="mailto:{{ lead.parent_email }}">{{ lead.parent_email }}</a>
+                        {% endif %}
+                        {% if lead.parent_phone %}
+                        <br><span>{{ lead.parent_phone }}</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </td>
+                <td style="font-size: 12px;">
+                    {% if lead.interested_sports %}
+                    <div><strong>Sports:</strong> {{ lead.interested_sports|title }}</div>
+                    {% endif %}
+                    {% if lead.shirt_size %}
+                    <div><strong>Shirt:</strong> {{ lead.shirt_size }}</div>
+                    {% endif %}
+                    {% if lead.seasons_played is not none %}
+                    <div><strong>LL Experience:</strong> {{ lead.seasons_played }} season{% if lead.seasons_played != 1 %}s{% endif %}</div>
+                    {% endif %}
+                    {% if lead.availability_notes %}
+                    <div style="margin-top: 5px; color: var(--text-muted); font-style: italic;">{{ lead.availability_notes[:100] }}{% if lead.availability_notes|length > 100 %}...{% endif %}</div>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if lead.status == 'lead' %}
+                    <span class="source-badge" style="background: #fff3e0; color: #f57c00;">Incomplete</span>
+                    {% elif lead.status == 'pending_review' %}
+                    <span class="source-badge" style="background: #e8f5e9; color: #388e3c;">Ready for Training</span>
+                    {% endif %}
+                    {% if lead.registration_completed_at %}
+                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 3px;">
+                        Completed {{ lead.registration_completed_at.strftime('%b %d') }}
+                    </div>
+                    {% endif %}
+                </td>
+                <td>
+                    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <form method="POST" action="{{ url_for('umpires.lead_status', org_season_id=org_season.ID, id=lead.id) }}" style="margin: 0;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="status" value="active">
+                            <button type="submit" class="btn btn-primary" style="padding: 3px 10px; font-size: 12px;">Convert to Active</button>
+                        </form>
+                        {% if available_seasons %}
+                        <form method="POST" action="{{ url_for('umpires.lead_move', org_season_id=org_season.ID, id=lead.id) }}" style="margin: 0;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <select name="new_season_id" onchange="this.form.submit()" style="padding: 3px 8px; font-size: 12px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">
+                                <option value="">Move to...</option>
+                                {% for season in available_seasons %}
+                                <option value="{{ season.ID }}">{{ season.season_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
 
 <!-- Prospective Leads -->
 {% if prospective %}
@@ -272,7 +385,7 @@
 {% endif %}
 
 <!-- No Leads -->
-{% if not prospective and not contacted and not declined %}
+{% if not new_registrations and not prospective and not contacted and not declined %}
 <div class="card" style="text-align: center; padding: 40px;">
     <p style="color: var(--text-muted); margin-bottom: 20px;">
         No leads found for {{ org_season.season_name }}.

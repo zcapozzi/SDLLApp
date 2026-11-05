@@ -68,6 +68,7 @@ def leads(org_season_id):
     ).order_by(UmpireProfile.created_at.desc()).all()
 
     # Group by status
+    new_registrations = [l for l in leads_list if l.status in (UmpireProfile.STATUS_LEAD, UmpireProfile.STATUS_PENDING_REVIEW)]
     prospective = [l for l in leads_list if l.status == UmpireProfile.STATUS_PROSPECTIVE]
     contacted = [l for l in leads_list if l.status == UmpireProfile.STATUS_CONTACTED]
     declined = [l for l in leads_list if l.status == UmpireProfile.STATUS_DECLINED]
@@ -75,6 +76,7 @@ def leads(org_season_id):
     return render_template(
         'umpires/leads.html',
         org_season=org_season,
+        new_registrations=new_registrations,
         prospective=prospective,
         contacted=contacted,
         declined=declined,
