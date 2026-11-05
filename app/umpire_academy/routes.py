@@ -126,8 +126,10 @@ def profile():
 
         errors = []
 
-        # Check if minor and validate parent info
-        if birth_date:
+        # Birth date is required
+        if not birth_date:
+            errors.append('Date of birth is required')
+        else:
             from datetime import datetime
             try:
                 bd = datetime.strptime(birth_date, '%Y-%m-%d').date()

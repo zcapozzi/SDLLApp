@@ -223,8 +223,8 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
             <div class="form-group">
-                <label for="birth_date">Date of Birth <span class="optional">(optional)</span></label>
-                <input type="date" id="birth_date" name="birth_date"
+                <label for="birth_date" class="required">Date of Birth</label>
+                <input type="date" id="birth_date" name="birth_date" required
                        value="{{ form_data.get('birth_date') or (profile.birth_date.strftime('%Y-%m-%d') if profile.birth_date else '') }}"
                        onchange="checkAge()">
             </div>
