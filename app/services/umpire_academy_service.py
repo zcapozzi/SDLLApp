@@ -25,12 +25,15 @@ class UmpireAcademyService:
     def get_target_season():
         """Get the appropriate season for new umpire registrations.
 
-        If the current season's training date has passed, returns the next
-        upcoming season. If no next season exists, creates a placeholder.
+        If the current season's training date has passed, looks for:
+        1. A season with setup_mode=1 (being prepared for next)
+        2. The next season by season_started_at date
+        3. Returns None if no valid next season (registration will be orphaned)
+
         Otherwise returns the current season.
 
         Returns:
-            OrgSeason: The target season for new registrations
+            OrgSeason: The target season for new registrations, or None if orphaned
         """
         current_season = OrgSeason.get_current_season()
         if not current_season:
@@ -39,45 +42,33 @@ class UmpireAcademyService:
         # Check if training date has passed
         training_date = current_season.get_training_date()
         if training_date and training_date < date.today():
-            # Training has passed - find next season
-            next_season = OrgSeason.query.filter(
+            # Training has passed - first look for a season in setup_mode
+            setup_season = OrgSeason.query.filter(
                 OrgSeason.org_id == current_season.org_id,
-                OrgSeason.ID != current_season.ID,
-                db.or_(
-                    OrgSeason.year > current_season.year,
-                    db.and_(
-                        OrgSeason.year == current_season.year,
-                        OrgSeason.is_spring > current_season.is_spring
-                    )
-                )
-            ).order_by(
-                OrgSeason.year,
-                OrgSeason.is_spring
+                OrgSeason.setup_mode == 1
             ).first()
 
-            if next_season:
-                return next_season
+            if setup_season:
+                return setup_season
 
-            # No next season exists - create a placeholder
-            # Spring (is_spring=1) -> Fall same year (is_spring=0)
-            # Fall (is_spring=0) -> Spring next year (is_spring=1)
-            if current_season.is_spring == 1:
-                next_year = current_season.year
-                next_is_spring = 0
-            else:
-                next_year = current_season.year + 1
-                next_is_spring = 1
+            # No setup_mode season - look for next season by season_started_at
+            if current_season.season_started_at:
+                next_season = OrgSeason.query.filter(
+                    OrgSeason.org_id == current_season.org_id,
+                    OrgSeason.ID != current_season.ID,
+                    OrgSeason.season_started_at > current_season.season_started_at
+                ).order_by(
+                    OrgSeason.season_started_at
+                ).first()
 
-            # Create placeholder season (no dates set - admin will configure later)
-            next_season = OrgSeason.create_season(
-                year=next_year,
-                is_spring=next_is_spring,
-                org_id=current_season.org_id,
-                set_as_current=False,
-                generate_campaigns=False  # No dates set yet, can't generate campaigns
-            )
-            print(f"Created placeholder season: {next_season.season_name}")
-            return next_season
+                if next_season:
+                    return next_season
+
+            # No valid next season found - return None (registration will be orphaned)
+            print(f"Warning: No valid next season found for umpire registration. "
+                  f"Current season {current_season.season_name} training date has passed "
+                  f"but no setup_mode=1 or future season_started_at exists.")
+            return None
 
         return current_season
 

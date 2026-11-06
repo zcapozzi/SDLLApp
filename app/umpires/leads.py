@@ -58,13 +58,16 @@ def leads(org_season_id):
             flash(f'Training for {org_season.season_desc} has passed. Showing {next_season.season_desc} leads.', 'info')
             return redirect(url_for('umpires.leads', org_season_id=next_season.ID))
 
-    # Get leads for this season or unassigned leads
+    # Get leads for this season
     leads_list = UmpireProfile.query.filter(
         UmpireProfile.status.in_(UmpireProfile.LEAD_STATUSES),
-        db.or_(
-            UmpireProfile.target_org_season_id == org_season_id,
-            UmpireProfile.target_org_season_id.is_(None)
-        )
+        UmpireProfile.target_org_season_id == org_season_id
+    ).order_by(UmpireProfile.created_at.desc()).all()
+
+    # Get orphaned leads (no target season - happens when training passed but no next season exists)
+    orphaned_leads = UmpireProfile.query.filter(
+        UmpireProfile.status.in_(UmpireProfile.LEAD_STATUSES),
+        UmpireProfile.target_org_season_id.is_(None)
     ).order_by(UmpireProfile.created_at.desc()).all()
 
     # Group by status
@@ -80,6 +83,7 @@ def leads(org_season_id):
         prospective=prospective,
         contacted=contacted,
         declined=declined,
+        orphaned_leads=orphaned_leads,
         lead_sources=UmpireProfile.LEAD_SOURCES,
         training_passed=training_passed,
         training_date=training_date,
@@ -397,8 +401,8 @@ def lead_move(org_season_id, id):
     """Move a lead to a different season."""
     profile = UmpireProfile.query.get_or_404(id)
 
-    # Verify this lead belongs to the current season view
-    if profile.target_org_season_id and profile.target_org_season_id != org_season_id:
+    # Verify this lead belongs to the current season view OR is orphaned (None)
+    if profile.target_org_season_id is not None and profile.target_org_season_id != org_season_id:
         flash('Lead not found.', 'error')
         return redirect(url_for('umpires.leads', org_season_id=org_season_id))
 

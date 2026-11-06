@@ -51,7 +51,13 @@
 {% endif %}
 
 <!-- Stats -->
-<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px;">
+<div style="display: grid; grid-template-columns: repeat({% if orphaned_leads %}5{% else %}4{% endif %}, 1fr); gap: 15px; margin-bottom: 20px;">
+    {% if orphaned_leads %}
+    <div class="card" style="text-align: center; padding: 20px; background: #ffebee; border: 1px solid #ffcdd2;">
+        <div style="font-size: 32px; font-weight: bold; color: #d32f2f;">{{ orphaned_leads|length }}</div>
+        <div style="color: #c62828;">Orphaned</div>
+    </div>
+    {% endif %}
     <div class="card" style="text-align: center; padding: 20px;">
         <div style="font-size: 32px; font-weight: bold; color: #4caf50;">{{ new_registrations|length }}</div>
         <div style="color: var(--text-muted);">Academy Signups</div>
@@ -69,6 +75,83 @@
         <div style="color: var(--text-muted);">Declined</div>
     </div>
 </div>
+
+<!-- Orphaned Leads Warning -->
+{% if orphaned_leads %}
+<div class="card" style="margin-bottom: 20px; background: #ffebee; border-left: 4px solid #d32f2f;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div>
+            <h3 style="margin-top: 0; color: #c62828;">
+                Orphaned Registrations
+                <span style="font-weight: normal; color: #d32f2f;">({{ orphaned_leads|length }})</span>
+            </h3>
+            <p style="margin: 0 0 15px 0; color: #c62828;">
+                These registrations came in after the current season's training date passed, but no next season exists.
+                <strong>Please create the next season or assign them manually.</strong>
+            </p>
+            <a href="{{ url_for('admin.seasons') }}" class="btn btn-primary" style="background: #d32f2f; border-color: #d32f2f;">
+                Create New Season
+            </a>
+        </div>
+    </div>
+
+    <table style="margin-top: 15px;">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Contact</th>
+                <th>Registered</th>
+                <th style="width: 200px;">Assign to Season</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for lead in orphaned_leads %}
+            <tr id="orphan-{{ lead.id }}">
+                <td>
+                    <a href="{{ url_for('umpires.view', id=lead.id) }}" style="text-decoration: none; color: inherit;">
+                        <strong>{{ lead.name or 'Unknown' }}</strong>
+                    </a>
+                    {% if lead.age %}
+                    <span style="color: var(--text-muted); font-size: 12px;">({{ lead.age }} yrs)</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if lead.umpire_email %}
+                    <a href="mailto:{{ lead.umpire_email }}">{{ lead.umpire_email }}</a>
+                    {% elif lead.parent_email %}
+                    <a href="mailto:{{ lead.parent_email }}">{{ lead.parent_email }}</a> <span style="font-size: 10px; color: var(--text-muted);">(parent)</span>
+                    {% else %}
+                    <span style="color: var(--text-muted);">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if lead.created_at %}
+                    {{ lead.created_at.strftime('%b %d, %Y') }}
+                    {% else %}
+                    <span style="color: var(--text-muted);">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if available_seasons %}
+                    <form method="POST" action="{{ url_for('umpires.lead_move', org_season_id=org_season.ID, id=lead.id) }}" style="margin: 0;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <select name="new_season_id" onchange="this.form.submit()" style="padding: 5px 10px; font-size: 13px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; width: 100%;">
+                            <option value="">Select season...</option>
+                            {% for season in available_seasons %}
+                            <option value="{{ season.ID }}">{{ season.season_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                    {% else %}
+                    <span style="color: #d32f2f; font-size: 12px;">No seasons available - create one first</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
 
 <!-- Umpire Academy Registrations -->
 {% if new_registrations %}
@@ -391,7 +474,7 @@
 {% endif %}
 
 <!-- No Leads -->
-{% if not new_registrations and not prospective and not contacted and not declined %}
+{% if not new_registrations and not prospective and not contacted and not declined and not orphaned_leads %}
 <div class="card" style="text-align: center; padding: 40px;">
     <p style="color: var(--text-muted); margin-bottom: 20px;">
         No leads found for {{ org_season.season_name }}.
