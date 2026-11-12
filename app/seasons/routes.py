@@ -1133,6 +1133,22 @@ def schedule_settings(year, is_spring):
                     has_scrimmages = request.form.get(f'league_{config.ID}_has_scrimmages') == '1'
                     config.has_scrimmages = has_scrimmages
 
+                    # Update ramp-up schedule settings
+                    ramp_up_weeks = request.form.get(f'league_{config.ID}_ramp_up_weeks', '0')
+                    config.ramp_up_weeks = int(ramp_up_weeks) if ramp_up_weeks else 0
+
+                    ramp_up_games = request.form.get(f'league_{config.ID}_ramp_up_games', '1')
+                    config.ramp_up_games_per_week = int(ramp_up_games) if ramp_up_games else 1
+
+                    full_games = request.form.get(f'league_{config.ID}_full_games', '2')
+                    config.full_schedule_games_per_week = int(full_games) if full_games else 2
+
+                    ramp_up_practices = request.form.get(f'league_{config.ID}_ramp_up_practices', '2')
+                    config.ramp_up_practices_per_week = int(ramp_up_practices) if ramp_up_practices else 2
+
+                    full_practices = request.form.get(f'league_{config.ID}_full_practices', '1')
+                    config.full_schedule_practices_per_week = int(full_practices) if full_practices else 1
+
                     updated_count += 1
 
             if validation_errors:

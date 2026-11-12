@@ -123,6 +123,78 @@
         border-color: #dc3545 !important;
         background-color: #fff5f5 !important;
     }
+    /* Ramp-up button styles */
+    .btn-sm {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+    .ramp-up-btn {
+        min-width: 45px;
+    }
+    /* Ramp-up modal styles */
+    .ramp-up-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+    }
+    .ramp-up-modal.visible {
+        display: flex;
+    }
+    .ramp-up-modal-content {
+        background: white;
+        padding: 25px;
+        border-radius: 8px;
+        max-width: 450px;
+        width: 90%;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .ramp-up-modal h3 {
+        margin-top: 0;
+        margin-bottom: 20px;
+        border-bottom: 2px solid rgb(34, 139, 34);
+        padding-bottom: 10px;
+    }
+    .ramp-up-row {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 15px;
+        align-items: center;
+    }
+    .ramp-up-row label {
+        flex: 1;
+        font-weight: 500;
+    }
+    .ramp-up-row select, .ramp-up-row input {
+        width: 80px;
+        padding: 6px;
+    }
+    .ramp-up-section {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 6px;
+        margin-bottom: 15px;
+    }
+    .ramp-up-section h4 {
+        margin: 0 0 12px 0;
+        font-size: 13px;
+        color: #666;
+        text-transform: uppercase;
+    }
+    .ramp-up-buttons {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 20px;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+    }
 </style>
 {% endblock %}
 
@@ -188,6 +260,7 @@
                     <th style="width: 125px;">Reg. Season End</th>
                     <th style="width: 125px;">Season End</th>
                     <th style="width: 80px; text-align: center;">Scrimmages</th>
+                    <th style="width: 110px; text-align: center;">Ramp-Up</th>
                     <th style="width: 100px;">Status</th>
                 </tr>
             </thead>
@@ -262,6 +335,38 @@
                                onchange="markDirty({{ config.ID }})"
                                title="Enable pre-season scrimmages for this league">
                     </td>
+                    <td style="text-align: center;">
+                        <button type="button" class="btn btn-outline btn-sm ramp-up-btn"
+                                onclick="toggleRampUp({{ config.ID }})"
+                                title="Configure ramp-up schedule (gradual increase in games)">
+                            {% if config.ramp_up_weeks and config.ramp_up_weeks > 0 %}
+                            {{ config.ramp_up_weeks }}wk
+                            {% else %}
+                            Off
+                            {% endif %}
+                        </button>
+                        <!-- Hidden inputs for ramp-up settings -->
+                        <input type="hidden" name="league_{{ config.ID }}_ramp_up_weeks"
+                               id="ramp-up-weeks-{{ config.ID }}"
+                               value="{{ config.ramp_up_weeks or 0 }}"
+                               data-original="{{ config.ramp_up_weeks or 0 }}">
+                        <input type="hidden" name="league_{{ config.ID }}_ramp_up_games"
+                               id="ramp-up-games-{{ config.ID }}"
+                               value="{{ config.ramp_up_games_per_week or 1 }}"
+                               data-original="{{ config.ramp_up_games_per_week or 1 }}">
+                        <input type="hidden" name="league_{{ config.ID }}_full_games"
+                               id="full-games-{{ config.ID }}"
+                               value="{{ config.full_schedule_games_per_week or 2 }}"
+                               data-original="{{ config.full_schedule_games_per_week or 2 }}">
+                        <input type="hidden" name="league_{{ config.ID }}_ramp_up_practices"
+                               id="ramp-up-practices-{{ config.ID }}"
+                               value="{{ config.ramp_up_practices_per_week or 2 }}"
+                               data-original="{{ config.ramp_up_practices_per_week or 2 }}">
+                        <input type="hidden" name="league_{{ config.ID }}_full_practices"
+                               id="full-practices-{{ config.ID }}"
+                               value="{{ config.full_schedule_practices_per_week or 1 }}"
+                               data-original="{{ config.full_schedule_practices_per_week or 1 }}">
+                    </td>
                     <td>
                         {% if config.schedule_ready %}
                         <span class="status-ready">Ready</span>
@@ -283,6 +388,56 @@
         </div>
     </div>
 </form>
+
+<!-- Ramp-Up Settings Modal -->
+<div class="ramp-up-modal" id="ramp-up-modal" onclick="closeRampUpModal(event)">
+    <div class="ramp-up-modal-content" onclick="event.stopPropagation()">
+        <h3>Ramp-Up Schedule Settings</h3>
+        <p class="text-muted" style="margin-bottom: 20px; font-size: 13px;">
+            Configure a gradual ramp-up where teams play fewer games per week at the start of the season.
+        </p>
+
+        <div class="ramp-up-row">
+            <label for="modal-ramp-weeks">Ramp-up duration:</label>
+            <select id="modal-ramp-weeks">
+                <option value="0">Off (no ramp-up)</option>
+                <option value="1">1 week</option>
+                <option value="2">2 weeks</option>
+                <option value="3">3 weeks</option>
+                <option value="4">4 weeks</option>
+            </select>
+        </div>
+
+        <div class="ramp-up-section" id="ramp-up-details" style="display: none;">
+            <h4>During Ramp-Up (first weeks)</h4>
+            <div class="ramp-up-row">
+                <label for="modal-ramp-games">Games per week:</label>
+                <input type="number" id="modal-ramp-games" min="0" max="3" value="1">
+            </div>
+            <div class="ramp-up-row">
+                <label for="modal-ramp-practices">Practices per week:</label>
+                <input type="number" id="modal-ramp-practices" min="0" max="4" value="2">
+            </div>
+        </div>
+
+        <div class="ramp-up-section">
+            <h4>Full Schedule (after ramp-up)</h4>
+            <div class="ramp-up-row">
+                <label for="modal-full-games">Games per week:</label>
+                <input type="number" id="modal-full-games" min="1" max="3" value="2">
+            </div>
+            <div class="ramp-up-row">
+                <label for="modal-full-practices">Practices per week:</label>
+                <input type="number" id="modal-full-practices" min="0" max="4" value="1">
+            </div>
+        </div>
+
+        <div class="ramp-up-buttons">
+            <button type="button" class="btn btn-outline" onclick="closeRampUpModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="saveRampUpSettings()">Apply</button>
+        </div>
+    </div>
+</div>
 
 <script>
 var dirtyLeagues = new Set();
@@ -369,6 +524,22 @@ function resetChanges() {
     // Reset date inputs
     document.querySelectorAll('input[type="date"]').forEach(function(input) {
         input.value = input.dataset.original;
+    });
+
+    // Reset checkbox inputs
+    document.querySelectorAll('input[type="checkbox"]').forEach(function(input) {
+        input.checked = input.dataset.original === '1';
+    });
+
+    // Reset ramp-up hidden inputs and button text
+    document.querySelectorAll('input[type="hidden"][data-original]').forEach(function(input) {
+        input.value = input.dataset.original;
+    });
+    document.querySelectorAll('.ramp-up-btn').forEach(function(btn) {
+        var row = btn.closest('tr');
+        var configId = row.dataset.leagueId;
+        var weeks = document.getElementById('ramp-up-weeks-' + configId).dataset.original;
+        btn.textContent = parseInt(weeks) > 0 ? weeks + 'wk' : 'Off';
     });
 
     // Clear dirty state
@@ -475,5 +646,90 @@ cycleDay = function(configId, dayIndex, element) {
     originalCycleDay(configId, dayIndex, element);
     checkOpeningDayMismatch(configId);
 };
+
+// ============== Ramp-Up Modal Functions ==============
+var currentRampUpConfigId = null;
+
+function toggleRampUp(configId) {
+    currentRampUpConfigId = configId;
+
+    // Load current values into modal
+    var weeksInput = document.getElementById('ramp-up-weeks-' + configId);
+    var rampGamesInput = document.getElementById('ramp-up-games-' + configId);
+    var fullGamesInput = document.getElementById('full-games-' + configId);
+    var rampPracticesInput = document.getElementById('ramp-up-practices-' + configId);
+    var fullPracticesInput = document.getElementById('full-practices-' + configId);
+
+    document.getElementById('modal-ramp-weeks').value = weeksInput.value;
+    document.getElementById('modal-ramp-games').value = rampGamesInput.value;
+    document.getElementById('modal-full-games').value = fullGamesInput.value;
+    document.getElementById('modal-ramp-practices').value = rampPracticesInput.value;
+    document.getElementById('modal-full-practices').value = fullPracticesInput.value;
+
+    // Show/hide ramp-up details based on weeks value
+    updateRampUpDetailsVisibility();
+
+    // Show modal
+    document.getElementById('ramp-up-modal').classList.add('visible');
+}
+
+function updateRampUpDetailsVisibility() {
+    var weeks = parseInt(document.getElementById('modal-ramp-weeks').value) || 0;
+    var details = document.getElementById('ramp-up-details');
+    details.style.display = weeks > 0 ? 'block' : 'none';
+}
+
+// Listen for changes to weeks dropdown
+document.getElementById('modal-ramp-weeks').addEventListener('change', updateRampUpDetailsVisibility);
+
+function closeRampUpModal(event) {
+    // If event exists, only close if clicking on overlay (not modal content)
+    if (event && event.target !== document.getElementById('ramp-up-modal')) {
+        return;
+    }
+    document.getElementById('ramp-up-modal').classList.remove('visible');
+    currentRampUpConfigId = null;
+}
+
+function saveRampUpSettings() {
+    if (!currentRampUpConfigId) return;
+
+    var configId = currentRampUpConfigId;
+
+    // Get values from modal
+    var weeks = document.getElementById('modal-ramp-weeks').value;
+    var rampGames = document.getElementById('modal-ramp-games').value;
+    var fullGames = document.getElementById('modal-full-games').value;
+    var rampPractices = document.getElementById('modal-ramp-practices').value;
+    var fullPractices = document.getElementById('modal-full-practices').value;
+
+    // Update hidden inputs
+    document.getElementById('ramp-up-weeks-' + configId).value = weeks;
+    document.getElementById('ramp-up-games-' + configId).value = rampGames;
+    document.getElementById('full-games-' + configId).value = fullGames;
+    document.getElementById('ramp-up-practices-' + configId).value = rampPractices;
+    document.getElementById('full-practices-' + configId).value = fullPractices;
+
+    // Update button text
+    var btn = document.querySelector('#league-' + configId + ' .ramp-up-btn');
+    if (parseInt(weeks) > 0) {
+        btn.textContent = weeks + 'wk';
+    } else {
+        btn.textContent = 'Off';
+    }
+
+    // Mark as dirty
+    markDirty(configId);
+
+    // Close modal
+    closeRampUpModal();
+}
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeRampUpModal();
+    }
+});
 </script>
 {% endblock %}

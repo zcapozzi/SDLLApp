@@ -2425,9 +2425,9 @@ class ScheduleGenerator:
                     })
 
         # Assign games to slots, using existing game records if available
-        # For P/G leagues, limit to 2 games per team per week
+        # For P/G leagues, apply weekly game limits (supports ramp-up scheduling)
         if config.has_pg_days:
-            self._assign_games_to_slots(config, matchups, slots_by_date, league, existing_slots, start_fresh, max_games_per_week=2)
+            self._assign_games_to_slots(config, matchups, slots_by_date, league, existing_slots, start_fresh, use_weekly_game_limit=True)
         else:
             self._assign_games_to_slots(config, matchups, slots_by_date, league, existing_slots, start_fresh)
 
@@ -2476,11 +2476,11 @@ class ScheduleGenerator:
                     current_date += timedelta(days=1)
                     continue
                 if is_pg_league:
-                    # For P/G leagues, pass weekly limit constraint
+                    # For P/G leagues, apply weekly limit (supports ramp-up scheduling)
                     self._assign_practices_for_date(
                         config, teams, league, all_slots, current_date,
                         practice_slots, start_fresh, is_pre_opening=False,
-                        max_practices_per_week=1
+                        use_weekly_practice_limit=True
                     )
                 else:
                     self._assign_practices_for_date(config, teams, league, all_slots, current_date, practice_slots, start_fresh)
@@ -3134,14 +3134,15 @@ class ScheduleGenerator:
 
         return assigned_team_ids
 
-    def _assign_practices_for_date(self, config, teams, league, all_slots, practice_date, existing_slots=None, start_fresh=False, is_pre_opening=False, max_practices_per_week=None, force_sharing=False):
+    def _assign_practices_for_date(self, config, teams, league, all_slots, practice_date, existing_slots=None, start_fresh=False, is_pre_opening=False, use_weekly_practice_limit=False, force_sharing=False):
         """Assign practices for all teams on a given date.
 
         Args:
             is_pre_opening: If True, schedule practices on ALL activity days (game + practice),
                            not just practice days. Used for pre-opening period before games start.
-            max_practices_per_week: If set, limits practices per team to this number per week.
-                                   Used for P/G leagues (typically 1 practice per week).
+            use_weekly_practice_limit: If True, limits practices per team based on league config.
+                                      Supports ramp-up scheduling (e.g., 2 practices during ramp-up,
+                                      1 practice after). Used for P/G leagues.
             force_sharing: If True, skip Pass 1 (solo field preference) and go straight to
                           Pass 2 (sharing allowed). Used when other leagues need slots.
         """
@@ -3149,7 +3150,7 @@ class ScheduleGenerator:
 
         # For weekly limiting, get the week number relative to opening day
         week_num = None
-        if max_practices_per_week and config.opening_day_date:
+        if use_weekly_practice_limit and config.opening_day_date:
             week_num = self._get_week_number(practice_date, config.opening_day_date)
 
         # Get available slots for this day
@@ -3277,10 +3278,11 @@ class ScheduleGenerator:
                 # Team already has a game or practice today, skip
                 continue
 
-            # For P/G leagues, check weekly practice limit
-            if max_practices_per_week and week_num is not None:
+            # For P/G leagues, check weekly practice limit (supports ramp-up scheduling)
+            if use_weekly_practice_limit and week_num is not None:
                 team_week_key = (team.team_ID, week_num)
-                if self._team_week_practices[team_week_key] >= max_practices_per_week:
+                max_practices = config.get_max_practices_for_week(week_num)
+                if self._team_week_practices[team_week_key] >= max_practices:
                     # Team already has max practices this week, skip
                     continue
 
@@ -3369,7 +3371,7 @@ class ScheduleGenerator:
             self._team_practice_counts[team.team_ID] += 1
 
             # Update weekly practice counter for P/G leagues
-            if max_practices_per_week and week_num is not None:
+            if use_weekly_practice_limit and week_num is not None:
                 team_week_key = (team.team_ID, week_num)
                 self._team_week_practices[team_week_key] += 1
 
@@ -3769,7 +3771,7 @@ class ScheduleGenerator:
 
         return True
 
-    def _assign_games_to_slots(self, config, matchups, slots_by_date, league, existing_game_records=None, start_fresh=False, max_games_per_week=None):
+    def _assign_games_to_slots(self, config, matchups, slots_by_date, league, existing_game_records=None, start_fresh=False, use_weekly_game_limit=False):
         """Assign game matchups to available slots.
 
         Scheduling strategy:
@@ -3783,7 +3785,9 @@ class ScheduleGenerator:
         - A 4-hour slot can hold 2 sequential games
 
         Args:
-            max_games_per_week: For P/G leagues, limit each team to this many games per week (typically 2)
+            use_weekly_game_limit: For P/G leagues, limit games per team per week.
+                                  Supports ramp-up scheduling (e.g., 1 game during ramp-up,
+                                  2 games after). Reads limits from league config.
         """
         existing_idx = 0
         games_per_team = config.regular_season_games or 10
@@ -3857,7 +3861,7 @@ class ScheduleGenerator:
 
             # For weekly limiting in P/G leagues, calculate week number relative to opening day
             week_num = None
-            if max_games_per_week and config.opening_day_date:
+            if use_weekly_game_limit and config.opening_day_date:
                 week_num = self._get_week_number(game_date, config.opening_day_date)
 
             # Filter out slots already used by other leagues (duration-aware)
@@ -3898,11 +3902,12 @@ class ScheduleGenerator:
                 team_day_key = (team_id, date_str)
                 if team_day_key not in self._team_day_usage:
                     if team_game_counts[team_id] < games_per_team:
-                        # For P/G leagues, also check weekly game limit
-                        if max_games_per_week and week_num is not None:
+                        # For P/G leagues, also check weekly game limit (supports ramp-up scheduling)
+                        if use_weekly_game_limit and week_num is not None:
                             team_week_key = (team_id, week_num)
-                            if self._team_week_games[team_week_key] >= max_games_per_week:
-                                unavailable_teams.append(f'Team {team_id} hit weekly limit ({max_games_per_week} games)')
+                            max_games_this_week = config.get_max_games_for_week(week_num)
+                            if self._team_week_games[team_week_key] >= max_games_this_week:
+                                unavailable_teams.append(f'Team {team_id} hit weekly limit ({max_games_this_week} games)')
                                 continue
                         available_teams.add(team_id)
                     else:
@@ -4150,7 +4155,7 @@ class ScheduleGenerator:
                 last_scheduled_pair = pair_key
 
                 # Update weekly game counter for P/G leagues
-                if max_games_per_week and week_num is not None:
+                if use_weekly_game_limit and week_num is not None:
                     self._team_week_games[(home.team_ID, week_num)] += 1
                     self._team_week_games[(away.team_ID, week_num)] += 1
 
@@ -4209,13 +4214,14 @@ class ScheduleGenerator:
                 if home_day_key in self._team_day_usage or away_day_key in self._team_day_usage:
                     continue
 
-                # For P/G leagues, check weekly game limit
-                if max_games_per_week and config.opening_day_date:
+                # For P/G leagues, check weekly game limit (supports ramp-up scheduling)
+                if use_weekly_game_limit and config.opening_day_date:
                     catch_up_week_num = self._get_week_number(game_date, config.opening_day_date)
+                    max_games_this_week = config.get_max_games_for_week(catch_up_week_num)
                     home_week_key = (home.team_ID, catch_up_week_num)
                     away_week_key = (away.team_ID, catch_up_week_num)
-                    if (self._team_week_games[home_week_key] >= max_games_per_week or
-                            self._team_week_games[away_week_key] >= max_games_per_week):
+                    if (self._team_week_games[home_week_key] >= max_games_this_week or
+                            self._team_week_games[away_week_key] >= max_games_this_week):
                         continue
 
                 # Collect available slots for this date, separated by early/late
@@ -4344,7 +4350,7 @@ class ScheduleGenerator:
                 last_scheduled_pair = pair_key
 
                 # Update weekly game counter for P/G leagues
-                if max_games_per_week and config.opening_day_date:
+                if use_weekly_game_limit and config.opening_day_date:
                     catch_up_week_num = self._get_week_number(game_date, config.opening_day_date)
                     self._team_week_games[(home.team_ID, catch_up_week_num)] += 1
                     self._team_week_games[(away.team_ID, catch_up_week_num)] += 1

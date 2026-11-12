@@ -50,6 +50,13 @@ class LeagueSeason(db.Model):
     # Post-game reporting settings
     postgame_enabled = db.Column(db.Boolean, default=False)  # Enable post-game reports for this league
 
+    # Ramp-up schedule settings (gradual increase in games during season start)
+    ramp_up_weeks = db.Column(db.Integer, default=0)  # Number of weeks at start with reduced schedule (0 = no ramp-up)
+    ramp_up_games_per_week = db.Column(db.Integer, default=1)  # Max games per team per week during ramp-up
+    full_schedule_games_per_week = db.Column(db.Integer, default=2)  # Max games per team per week after ramp-up
+    ramp_up_practices_per_week = db.Column(db.Integer, default=2)  # Max practices per team per week during ramp-up
+    full_schedule_practices_per_week = db.Column(db.Integer, default=1)  # Max practices per team per week after ramp-up
+
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
     updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(),
                           onupdate=db.func.current_timestamp())
@@ -276,7 +283,13 @@ class LeagueSeason(db.Model):
                     friday_type=source.friday_type,
                     saturday_type=source.saturday_type,
                     sunday_type=source.sunday_type,
-                    has_scrimmages=source.has_scrimmages
+                    has_scrimmages=source.has_scrimmages,
+                    # Copy ramp-up schedule settings
+                    ramp_up_weeks=source.ramp_up_weeks,
+                    ramp_up_games_per_week=source.ramp_up_games_per_week,
+                    full_schedule_games_per_week=source.full_schedule_games_per_week,
+                    ramp_up_practices_per_week=source.ramp_up_practices_per_week,
+                    full_schedule_practices_per_week=source.full_schedule_practices_per_week
                 )
                 db.session.add(new_config)
                 new_configs.append(new_config)
@@ -448,6 +461,34 @@ class LeagueSeason(db.Model):
         if issues:
             return ", ".join(issues)
         return "Ready"
+
+    def get_max_games_for_week(self, week_num):
+        """Get the maximum games per team for a given week number.
+
+        Args:
+            week_num: 0-indexed week number relative to opening day
+
+        Returns:
+            int: Maximum games per team for this week
+        """
+        ramp_up = self.ramp_up_weeks or 0
+        if ramp_up > 0 and week_num < ramp_up:
+            return self.ramp_up_games_per_week or 1
+        return self.full_schedule_games_per_week or 2
+
+    def get_max_practices_for_week(self, week_num):
+        """Get the maximum practices per team for a given week number.
+
+        Args:
+            week_num: 0-indexed week number relative to opening day
+
+        Returns:
+            int: Maximum practices per team for this week
+        """
+        ramp_up = self.ramp_up_weeks or 0
+        if ramp_up > 0 and week_num < ramp_up:
+            return self.ramp_up_practices_per_week or 2
+        return self.full_schedule_practices_per_week or 1
 
     def lock_schedule(self, user_id):
         """Lock the schedule to prevent regeneration.
